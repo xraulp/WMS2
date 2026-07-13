@@ -1,0 +1,235 @@
+{% load wms_filters %}
+{% if msg %}<div class="msg-success" style="margin-bottom:12px">✓ {{ msg }}</div>{% endif %}
+
+<!-- Create user form -->
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:10px">Create New User</div>
+  <form hx-post="{% url 'user_management' %}" hx-target="#users-content" hx-swap="innerHTML"
+        style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+    {% csrf_token %}<input type="hidden" name="action" value="create">
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Username</label>
+      <input type="text" name="username" required style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:130px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Password</label>
+      <input type="text" name="password" required style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:130px" placeholder="Visible for reference">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Role</label>
+      <select name="role" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+        <option value="superadmin">Super Admin</option>
+        <option value="manager">Manager</option>
+        <option value="staff" selected>Staff</option>
+        <option value="customer">Customer</option>
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Link to Customer</label>
+      <div style="position:relative;min-width:160px">
+        <input type="text" id="new-cust-input" placeholder="Type customer name..." autocomplete="off"
+               style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:100%"
+               oninput="userCustFilter('new')" onfocus="userCustOpen('new')"
+               onblur="setTimeout(()=>{const d=document.getElementById('new-cust-drop');if(d)d.style.display='none'},200)">
+        <input type="hidden" name="customer_id" id="new-cust-id">
+        <div id="new-cust-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #0ea5e9;border-top:none;border-radius:0 0 6px 6px;z-index:999;max-height:140px;overflow-y:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)"></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Delete Password</label>
+      <input type="text" name="delete_password" placeholder="Optional"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:130px">
+    </div>
+    <button type="submit" class="btn btn-p" style="height:28px">+ Create User</button>
+  </form>
+</div>
+
+<!-- Users table with horizontal scroll -->
+<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:20px">
+<table style="min-width:900px">
+  <thead>
+    <tr>
+      <th>Username</th>
+      <th>Password</th>
+      <th>Role</th>
+      <th>Customer Link</th>
+      <th>Delete Pwd</th>
+      <th>Last Login</th>
+      <th style="min-width:320px">Edit</th>
+      <th>Remove</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    {% with p=profiles|get_item:u.pk %}
+    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+      <!-- Username (not editable) -->
+      <td>
+        <strong>{{ u.username }}</strong>
+        {% if u.is_superuser %}<span class="badge" style="background:#fef3c7;color:#92400e;margin-left:4px">Super</span>{% endif %}
+      </td>
+
+      <!-- Password -->
+      <td>
+        <form hx-post="{% url 'user_management' %}" hx-target="#users-content" hx-swap="innerHTML"
+              style="display:flex;gap:4px;align-items:center">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="change_password">
+          <input type="hidden" name="user_id" value="{{ u.pk }}">
+          <input type="text" name="new_password" value="{{ p.plain_password|default:'' }}"
+                 placeholder="New pwd"
+                 style="height:22px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;width:90px">
+          <button type="submit" class="btn btn-g btn-sm">Set</button>
+        </form>
+      </td>
+
+      <!-- Role badge -->
+      <td>
+        <span class="badge {% if not p or p.role in 'superadmin manager' %}b-entry{% elif p.role == 'staff' %}b-sent{% else %}b-exit{% endif %}">
+          {{ p.role|default:"manager" }}
+        </span>
+      </td>
+
+      <!-- Customer link -->
+      <td style="font-size:12px">{{ p.customer.name|default:"—" }}</td>
+
+      <!-- Delete password -->
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#94a3b8">
+        {{ p.delete_password|default:"—" }}
+      </td>
+
+      <!-- Last login -->
+      <td style="color:#94a3b8;font-size:11px">{{ u.last_login|date:"Y-m-d"|default:"Never" }}</td>
+
+      <!-- Edit: role + customer + delete_password (username excluded) -->
+      <td style="min-width:320px">
+        <form hx-post="{% url 'user_management' %}" hx-target="#users-content" hx-swap="innerHTML"
+              style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update_role">
+          <input type="hidden" name="user_id" value="{{ u.pk }}">
+
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <label style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Role</label>
+            <select name="role" style="height:24px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px">
+              <option value="superadmin" {% if p and p.role == 'superadmin' %}selected{% endif %}>SuperAdmin</option>
+              <option value="manager"    {% if not p or p.role == 'manager' %}selected{% endif %}>Manager</option>
+              <option value="staff"      {% if p and p.role == 'staff' %}selected{% endif %}>Staff</option>
+              <option value="customer"   {% if p and p.role == 'customer' %}selected{% endif %}>Customer</option>
+            </select>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:2px;position:relative">
+            <label style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Customer</label>
+            <input type="text" id="edit-cust-input-{{ u.pk }}" autocomplete="off"
+                   value="{{ p.customer.name|default:'' }}" placeholder="Customer..."
+                   style="height:24px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;width:120px"
+                   oninput="userCustFilter('edit-{{ u.pk }}')" onfocus="userCustOpen('edit-{{ u.pk }}')"
+                   onblur="setTimeout(()=>{const d=document.getElementById('edit-cust-drop-{{ u.pk }}');if(d)d.style.display='none'},200)">
+            <input type="hidden" name="customer_id" id="edit-cust-id-{{ u.pk }}" value="{{ p.customer_id|default:'' }}">
+            <div id="edit-cust-drop-{{ u.pk }}" style="display:none;position:absolute;top:100%;left:0;width:200px;background:#fff;border:1px solid #0ea5e9;border-top:none;border-radius:0 0 6px 6px;z-index:999;max-height:130px;overflow-y:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)"></div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <label style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Del. Pwd</label>
+            <input type="text" name="delete_password" value="{{ p.delete_password|default:'' }}"
+                   placeholder="Del.Pwd"
+                   style="height:24px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;width:80px">
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <label style="font-size:9px;color:transparent">Save</label>
+            <button type="submit" class="btn btn-p btn-sm">Save</button>
+          </div>
+        </form>
+      </td>
+
+      <!-- Delete user -->
+      <td>
+        {% if u != request.user %}
+        <form hx-post="{% url 'user_management' %}" hx-target="#users-content" hx-swap="innerHTML" style="display:inline">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="user_id" value="{{ u.pk }}">
+          <button type="submit" class="btn btn-d btn-sm"
+                  onclick="return confirm('Delete user {{ u.username }}? This cannot be undone.')">Del</button>
+        </form>
+        {% else %}
+        <span style="color:#94a3b8;font-size:11px">—</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<!-- Deletion Log -->
+<div style="margin-top:20px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:8px;padding-left:8px;border-left:3px solid #ef4444">
+    Deletion Log (last 50)
+  </div>
+  {% if deletion_log %}
+  <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px">
+  <table>
+    <thead>
+      <tr><th>Deleted At</th><th>Custom ID</th><th>Type</th><th>Op. Date</th><th>Customer</th><th>Deleted By</th></tr>
+    </thead>
+    <tbody>
+      {% for log in deletion_log %}
+      <tr style="background:{% cycle '#fff5f5' '#fff' %}">
+        <td style="font-size:11px;color:#94a3b8">{{ log.deleted_at|date:"Y-m-d H:i" }}</td>
+        <td class="mono" style="color:#ef4444">{{ log.custom_id }}</td>
+        <td>{{ log.operation_type }}</td>
+        <td>{{ log.operation_date|date:"Y-m-d"|default:"—" }}</td>
+        <td>{{ log.customer_name|default:"—" }}</td>
+        <td><strong>{{ log.deleted_by.username|default:"—" }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p style="color:#94a3b8;font-size:12px;padding:8px">No deletions recorded yet.</p>
+  {% endif %}
+</div>
+
+<script>
+function userCustRender(prefix, items) {
+  const isEdit = prefix.startsWith('edit-');
+  const uid    = isEdit ? prefix.slice(5) : null;
+  const dropId = isEdit ? 'edit-cust-drop-'+uid : 'new-cust-drop';
+  const drop   = document.getElementById(dropId);
+  if (!drop) return;
+  drop.innerHTML = items.length
+    ? items.map(i=>`<div style="padding:5px 9px;cursor:pointer;font-size:12px;color:#0f172a"
+        onmousedown="userCustSelect('${prefix}',${i.id},'${i.name.replace(/'/g,"\\'")}')"
+        onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background=''">
+        ${i.name}</div>`).join('')
+    : '<div style="padding:5px 9px;font-size:11px;color:#94a3b8;font-style:italic">No matches</div>';
+  drop.style.display = 'block';
+}
+function userCustOpen(prefix) {
+  fetch('/debug/catalog/').then(r=>r.json()).then(d=>userCustRender(prefix, d.customers||[]));
+}
+function userCustFilter(prefix) {
+  const isEdit = prefix.startsWith('edit-');
+  const uid    = isEdit ? prefix.slice(5) : null;
+  const inputId = isEdit ? 'edit-cust-input-'+uid : 'new-cust-input';
+  const q = (document.getElementById(inputId)?.value||'').toLowerCase().trim();
+  fetch('/debug/catalog/').then(r=>r.json()).then(d=>
+    userCustRender(prefix, (d.customers||[]).filter(i=>i.name.toLowerCase().includes(q))));
+}
+function userCustSelect(prefix, id, name) {
+  const isEdit  = prefix.startsWith('edit-');
+  const uid     = isEdit ? prefix.slice(5) : null;
+  const inputId  = isEdit ? 'edit-cust-input-'+uid  : 'new-cust-input';
+  const hiddenId = isEdit ? 'edit-cust-id-'+uid     : 'new-cust-id';
+  const dropId   = isEdit ? 'edit-cust-drop-'+uid   : 'new-cust-drop';
+  document.getElementById(inputId).value  = name;
+  document.getElementById(hiddenId).value = id;
+  const d = document.getElementById(dropId);
+  if (d) d.style.display = 'none';
+}
+</script>

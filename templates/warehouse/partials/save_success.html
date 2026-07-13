@@ -1,0 +1,11 @@
+<div class="status-msg status-success">
+  ✓ Operation <strong>{{ operation.custom_id }}</strong> saved successfully.
+  <a href="#" @click.prevent="$dispatch('switch-tab', 'database')" style="margin-left:8px; color:#065f46; font-weight:600; text-decoration:underline;" x-data>View in database →</a>
+</div>
+<script>
+  // Reset form after success
+  document.getElementById('operation-form').reset();
+  // Set today's date again
+  const dateField = document.querySelector('input[type=date]');
+  if (dateField) dateField.value = new Date().toISOString().split('T')[0];
+</script>

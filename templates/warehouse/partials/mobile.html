@@ -1,0 +1,609 @@
+{% load wms_filters %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>WMS Mobile</title>
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+<script>
+  document.addEventListener('htmx:beforeSwap', function(evt) {
+    if (evt.detail.xhr.status === 422) { evt.detail.shouldSwap = true; evt.detail.isError = false; }
+  });
+</script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0f172a;--soft:#64748b;--faint:#94a3b8;--bg:#f1f5f9;--bdr:#e2e8f0;--accent:#0ea5e9;--asoft:#e0f2fe;--adark:#0284c7;--green:#10b981;--gsoft:#d1fae5;--red:#ef4444;--rsoft:#fee2e2;--white:#fff;--r:10px;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;min-height:100vh;padding-bottom:80px}
+.topbar{background:var(--ink);display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:52px;position:sticky;top:0;z-index:100}
+.brand{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;color:#fff;display:flex;align-items:center;gap:8px}
+.brand-dot{width:8px;height:8px;background:var(--accent);border-radius:50%}
+.topbar-right{font-size:12px;color:var(--faint)}
+.topbar-right strong{color:#fff}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--bdr);display:flex;z-index:100;box-shadow:0 -2px 12px rgba(0,0,0,.08);overflow-x:auto}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;background:none;border:none;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:500;color:var(--faint);transition:color .15s;gap:2px;min-width:55px}
+.nav-btn.on{color:var(--accent)}
+.nav-btn .icon{font-size:20px;line-height:1}
+.nav-logout{flex:0 0 50px;display:flex;align-items:center;justify-content:center;background:none;border:none;border-left:1px solid var(--bdr);cursor:pointer;font-size:11px;color:var(--faint);font-family:inherit;padding:8px}
+.nav-logout:hover{color:var(--red)}
+.pg{padding:14px}
+.panel{display:none}.panel.on{display:block}
+.card{background:#fff;border:1px solid #cbd5e1;border-radius:var(--r);padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.card-title{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:14px;padding-left:8px;border-left:3px solid var(--accent)}
+.form-row{margin-bottom:14px}
+.form-row label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0f172a;margin-bottom:6px}
+.form-input{width:100%;padding:11px 14px;border:2px solid #cbd5e1;border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:#0f172a;background:#ffffff;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none;appearance:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--asoft)}
+select.form-input{height:48px;color:#0f172a}
+textarea.form-input{resize:none;height:80px}
+/* #5: Mobile combobox — catalog-only, no free text */
+.cb{position:relative}
+.cb-input{width:100%;padding:11px 14px;border:2px solid #cbd5e1;border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:#0f172a;background:#ffffff;outline:none;-webkit-appearance:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.cb-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--asoft)}
+.cb-drop{display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--accent);border-top:none;border-radius:0 0 var(--r) var(--r);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.12)}
+.cb-drop.open{display:block}
+.cb-opt{padding:12px 14px;cursor:pointer;font-size:15px;color:var(--ink);border-bottom:1px solid var(--bdr)}
+.cb-opt:last-child{border-bottom:none}
+.cb-opt:active{background:var(--asoft);color:var(--adark)}
+.cb-empty{padding:12px 14px;font-size:13px;color:var(--faint);font-style:italic}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;border:none;transition:all .15s;text-decoration:none;margin-bottom:10px}
+.btn-p{background:var(--accent);color:#fff}.btn-p:active{background:var(--adark)}
+.btn-g{background:#fff;color:var(--soft);border:1px solid var(--bdr)}.btn-g:active{background:var(--bg)}
+.btn-cam{background:var(--green);color:#fff}.btn-cam:active{background:#059669}
+.btn-row{display:flex;gap:10px}
+.btn-row .btn{margin-bottom:0}
+.photo-area{border:2px dashed var(--bdr);border-radius:var(--r);padding:20px;text-align:center;margin-bottom:14px;background:var(--bg)}
+.photo-preview{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.photo-preview img{width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--bdr)}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--bdr)}
+.toggle-label{font-size:15px;color:var(--ink)}
+.toggle-sw{position:relative;width:48px;height:26px}
+.toggle-sw input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:var(--bdr);border-radius:99px;transition:.2s;cursor:pointer}
+.toggle-slider::before{content:'';position:absolute;width:20px;height:20px;background:#fff;border-radius:50%;bottom:3px;left:3px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+input:checked + .toggle-slider{background:var(--green)}
+input:checked + .toggle-slider::before{transform:translateX(22px)}
+.msg-s{padding:12px 16px;border-radius:var(--r);background:var(--gsoft);color:#065f46;font-size:14px;margin-bottom:12px}
+.msg-e{padding:12px 16px;border-radius:var(--r);background:var(--rsoft);color:#991b1b;font-size:14px;margin-bottom:12px}
+.file-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.file-card{border:1px solid var(--bdr);border-radius:8px;overflow:hidden;background:#fff;text-align:center}
+.file-thumb{height:70px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden}
+.file-thumb img{width:100%;height:70px;object-fit:cover}
+.file-name{font-size:9px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 4px 0}
+.file-date{font-size:8px;color:var(--faint);padding:2px 4px 4px}
+.file-acts{display:flex;border-top:1px solid var(--bdr)}
+.file-acts a{flex:1;padding:6px;font-size:12px;text-decoration:none;text-align:center}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.b-entry{background:var(--gsoft);color:var(--green)}
+.b-exit{background:var(--rsoft);color:var(--red)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{width:18px;height:18px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+.htmx-indicator{display:none}.htmx-request .htmx-indicator{display:flex}
+/* DB table mobile */
+.tw{overflow-x:auto;border-radius:8px;border:1px solid var(--bdr)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{background:var(--ink)}
+thead th{padding:7px 8px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--bdr)}
+tbody td{padding:6px 8px;font-size:11px;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
+.mono{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="brand-dot"></span>WMS</div>
+  <div class="topbar-right">
+    <strong>{{ request.user.username }}</strong>
+    <span style="font-size:10px;opacity:.7"> [{{ profile.role|upper }}]</span>
+  </div>
+</div>
+
+<div class="pg">
+
+{% if profile|can_see_tab:'form' %}
+<!-- ══════ NEW OPERATION ══════ -->
+<div class="panel on" id="panel-new">
+  <div class="card">
+    <div class="card-title">New Operation</div>
+    <div id="mob-form-msg"></div>
+
+    <form id="mob-op-form"
+          hx-post="{% url 'operation_create' %}"
+          hx-target="#mob-form-msg"
+          hx-swap="innerHTML"
+          hx-encoding="multipart/form-data"
+          hx-on::after-request="onMobSave(event)">
+      {% csrf_token %}
+
+      <div class="form-row">
+        <label>Date</label>
+        <input type="date" name="date" id="mob-date" class="form-input">
+      </div>
+
+      <!-- #5: All dropdowns are catalog-only (cb-only — no free text allowed) -->
+      <div class="form-row">
+        <label>Customer <span style="color:#ef4444">*</span></label>
+        <div class="cb" id="mob-cb-customer">
+          <input type="text" class="cb-input" id="mob-cb-customer-input"
+                 placeholder="Tap to select customer..." autocomplete="off" readonly
+                 onclick="mobCbOpen('customer')">
+          <input type="hidden" name="customer_id"   id="mob-cb-customer-id">
+          <input type="hidden" name="customer_text" id="mob-cb-customer-text">
+          <div class="cb-drop" id="mob-cb-customer-drop"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>Type of Operation <span style="color:#ef4444">*</span></label>
+        <select name="operation_type" id="mob-op-type" class="form-input" onchange="mobOnTypeChange(this.value)">
+          <option value="">— Select —</option>
+          <option value="ENTRY">Entry (Goods Receipt)</option>
+          <option value="EXIT">Exit (Goods Dispatch)</option>
+        </select>
+      </div>
+
+      <div class="form-row" id="mob-ed-row" style="display:none">
+        <label>Entries Dispatched</label>
+        <input type="text" name="entry_dispatched" id="mob-ed" class="form-input"
+               placeholder="Auto-filled from selection below..." readonly>
+        <div id="mob-entries-list" style="margin-top:8px"></div>
+      </div>
+
+      <div class="form-row">
+        <label>Shipper</label>
+        <div class="cb" id="mob-cb-shipper">
+          <input type="text" class="cb-input" id="mob-cb-shipper-input"
+                 placeholder="Tap to select shipper..." autocomplete="off" readonly
+                 onclick="mobCbOpen('shipper')">
+          <input type="hidden" name="shipper_id"   id="mob-cb-shipper-id">
+          <input type="hidden" name="shipper_text" id="mob-cb-shipper-text">
+          <div class="cb-drop" id="mob-cb-shipper-drop"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>Invoice</label>
+        <input type="text" name="invoice" class="form-input" placeholder="Invoice number...">
+      </div>
+
+      <div class="form-row">
+        <label>PO / Order</label>
+        <input type="text" name="po_order" id="mob-po-order" class="form-input" placeholder="PO / ORD...">
+      </div>
+
+      <div class="form-row">
+        <label>Carrier</label>
+        <div class="cb" id="mob-cb-carrier">
+          <input type="text" class="cb-input" id="mob-cb-carrier-input"
+                 placeholder="Tap to select carrier..." autocomplete="off" readonly
+                 onclick="mobCbOpen('carrier')">
+          <input type="hidden" name="carrier_id"   id="mob-cb-carrier-id">
+          <input type="hidden" name="carrier_text" id="mob-cb-carrier-text">
+          <div class="cb-drop" id="mob-cb-carrier-drop"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>Bundle Type</label>
+        <div class="cb" id="mob-cb-bundle_type">
+          <input type="text" class="cb-input" id="mob-cb-bundle_type-input"
+                 placeholder="Tap to select bundle type..." autocomplete="off" readonly
+                 onclick="mobCbOpen('bundle_type')">
+          <input type="hidden" name="bundle_type_id"   id="mob-cb-bundle_type-id">
+          <input type="hidden" name="bundle_type_text" id="mob-cb-bundle_type-text">
+          <div class="cb-drop" id="mob-cb-bundle_type-drop"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>Bundle Qty <span style="color:#ef4444">*</span></label>
+        <input type="number" name="bundle_qty" class="form-input" placeholder="0" min="0" inputmode="numeric">
+      </div>
+
+      <div class="form-row">
+        <label>Weight LBS <span style="color:#ef4444">*</span></label>
+        <input type="number" name="weight_lbs" id="mob-lbs" class="form-input"
+               placeholder="0.00" step="0.01" inputmode="decimal"
+               oninput="if(this.value)document.getElementById('mob-kgs').value=(parseFloat(this.value)*0.453592).toFixed(2)">
+      </div>
+
+      <div class="form-row">
+        <label>Weight KGS</label>
+        <input type="number" name="weight_kgs" id="mob-kgs" class="form-input"
+               placeholder="0.00" step="0.01" inputmode="decimal"
+               oninput="if(this.value)document.getElementById('mob-lbs').value=(parseFloat(this.value)/0.453592).toFixed(2)">
+      </div>
+
+      <div class="form-row">
+        <label>Description <span style="color:#ef4444">*</span></label>
+        <textarea name="description" class="form-input" placeholder="Merchandise description..."></textarea>
+      </div>
+
+      <div class="form-row">
+        <label>Note</label>
+        <textarea name="note" class="form-input" placeholder="Additional notes..."></textarea>
+      </div>
+
+      <div class="toggle-row" style="margin-bottom:14px">
+        <span class="toggle-label">Damage</span>
+        <label class="toggle-sw">
+          <input type="checkbox" name="damage" id="mob-dmg"
+                 onchange="document.getElementById('mob-dmg-desc').style.display=this.checked?'block':'none'">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="form-row" id="mob-dmg-desc" style="display:none">
+        <label>Damage Description</label>
+        <textarea name="damage_description" class="form-input" placeholder="Describe the damage..."></textarea>
+      </div>
+
+      <div class="form-row">
+        <label>Photos &amp; Documents</label>
+        <div class="btn-row" style="margin-bottom:10px">
+          <button type="button" class="btn btn-cam"
+                  onclick="document.getElementById('mob-cam').click()">
+            📷 Camera
+          </button>
+          <button type="button" class="btn btn-g"
+                  onclick="document.getElementById('mob-files').click()">
+            📁 Files
+          </button>
+        </div>
+        <!-- Single unified input that accumulates all files -->
+        <input type="file" id="mob-all-files" name="photos" multiple
+               style="display:none">
+        <!-- Camera trigger (no name — transfers to unified input) -->
+        <input type="file" id="mob-cam" accept="image/*" capture="environment"
+               style="display:none" onchange="mobAddFiles(this)">
+        <!-- Gallery/doc trigger (no name — transfers to unified input) -->
+        <input type="file" id="mob-files" multiple
+               style="display:none" onchange="mobAddFiles(this)">
+        <div id="mob-previews" class="photo-preview"></div>
+        <div id="mob-file-count" style="font-size:11px;color:#64748b;margin-top:4px"></div>
+      </div>
+
+      <!-- #4: WhatsApp checked by default -->
+      <div class="toggle-row" style="margin-bottom:16px">
+        <span class="toggle-label">Send WhatsApp notification</span>
+        <label class="toggle-sw">
+          <input type="checkbox" name="send_whatsapp" value="1" id="mob-wa" checked>
+          <span class="toggle-slider" style="background:var(--green)"></span>
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-p">
+        <span class="htmx-indicator spin"></span>Save Operation
+      </button>
+      <button type="button" class="btn btn-g" onclick="resetMobForm()">Clear</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════ DATABASE ══════ -->
+<div class="panel {% if not profile|can_see_tab:'form' %}on{% endif %}" id="panel-database">
+  <div class="card">
+    <div class="card-title">Database</div>
+    <input type="text" id="mob-db-q" class="form-input" placeholder="Search..."
+           style="margin-bottom:10px"
+           hx-get="{% url 'operations_search' %}" hx-target="#mob-ops-table"
+           hx-trigger="keyup changed delay:400ms" name="q">
+    <div id="mob-ops-table">
+      {% include 'warehouse/partials/operations_table.html' %}
+    </div>
+  </div>
+</div>
+
+<!-- ══════ DIGITAL ══════ -->
+<div class="panel" id="panel-digital">
+  <div class="card">
+    <div class="card-title">Digital — Loading &amp; Unloading</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <input type="text" id="mob-digi-q" class="form-input" placeholder="Enter Custom ID..."
+             style="flex:1" onkeydown="if(event.key==='Enter')mobDigiSearch()">
+      <button onclick="mobDigiSearch()" class="btn btn-p" style="width:auto;padding:11px 18px;margin:0">Search</button>
+    </div>
+    <div id="mob-digital-content">
+      <div style="text-align:center;padding:32px;color:var(--faint);font-size:14px">Enter a Custom ID to load files.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ REPORT GENERATOR ══════ -->
+<div class="panel" id="panel-reports">
+  <div class="card">
+    <div class="card-title">Report Generator</div>
+    <div id="report-content"
+         hx-get="{% url 'report_generator' %}"
+         hx-trigger="intersect once"
+         hx-swap="innerHTML">
+      <div style="color:var(--faint);font-size:13px;padding:20px">Loading…</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /pg -->
+
+<!-- BOTTOM NAV — tabs shown based on role (#23) -->
+<div class="bottom-nav">
+  {% if profile|can_see_tab:'form' %}
+  <button class="nav-btn on" id="nav-new" onclick="mobShowTab('new')">
+    <span class="icon">📦</span>New Op
+  </button>
+  {% endif %}
+  <button class="nav-btn {% if not profile|can_see_tab:'form' %}on{% endif %}" id="nav-database" onclick="mobShowTab('database')">
+    <span class="icon">🗄️</span>Database
+  </button>
+  <button class="nav-btn" id="nav-digital" onclick="mobShowTab('digital')">
+    <span class="icon">📁</span>Digital
+  </button>
+  <button class="nav-btn" id="nav-reports" onclick="mobShowTab('reports')">
+    <span class="icon">📊</span>Reports
+  </button>
+    <a href="#" class="nav-logout" onclick="confirmLogout(event)">
+    <span style="font-size:20px">🚪</span>
+    </a>
+</div>
+
+<script>
+const MOB_CAT = {customer:[],shipper:[],carrier:[],bundle_type:[]};
+fetch('/debug/catalog/').then(r=>r.json()).then(d=>{
+  MOB_CAT.customer    = d.customers    || [];
+  MOB_CAT.shipper     = d.shippers     || [];
+  MOB_CAT.carrier     = d.carriers     || [];
+  MOB_CAT.bundle_type = d.bundle_types || [];
+});
+
+// Tab names for all panels
+const MOB_PANELS = ['new','database','digital','reports'];
+function mobShowTab(t) {
+  MOB_PANELS.forEach(n=>{
+    const p=document.getElementById('panel-'+n);
+    const b=document.getElementById('nav-'+n);
+    if(p)p.classList.toggle('on',n===t);
+    if(b)b.classList.toggle('on',n===t);
+  });
+  if(t!=='digital'){
+    const dc=document.getElementById('mob-digital-content');
+    if(dc)dc.innerHTML='<div style="text-align:center;padding:32px;color:var(--faint);font-size:14px">Enter a Custom ID to load files.</div>';
+    const dq=document.getElementById('mob-digi-q');
+    if(dq)dq.value='';
+  }
+  if(t==='reports'){
+    htmx.ajax('GET','{% url "report_generator" %}',{target:'#report-content',swap:'innerHTML'});
+  }
+}
+
+// #5: Mobile combobox — catalog-only, readonly input, tap to show all options
+function mobCbOpen(name) {
+  // Close other dropdowns
+  Object.keys(MOB_CAT).forEach(n=>{
+    if(n!==name){const d=document.getElementById('mob-cb-'+n+'-drop');if(d)d.classList.remove('open');}
+  });
+  const items = MOB_CAT[name] || [];
+  const drop = document.getElementById('mob-cb-'+name+'-drop');
+  if(!drop)return;
+  if(items.length===0){
+    drop.innerHTML='<div class="cb-empty">No entries in catalog</div>';
+  } else {
+    drop.innerHTML=items.map(i=>
+      `<div class="cb-opt" onclick="mobCbSelect('${name}',${i.id},'${i.name.replace(/'/g,"\\'")}')">${i.name}</div>`
+    ).join('');
+  }
+  drop.classList.add('open');
+}
+function mobCbSelect(name, id, label) {
+  document.getElementById('mob-cb-'+name+'-input').value  = label;
+  document.getElementById('mob-cb-'+name+'-id').value     = id;
+  document.getElementById('mob-cb-'+name+'-text').value   = label;
+  document.getElementById('mob-cb-'+name+'-drop').classList.remove('open');
+  if(name==='customer')mobOnCustomerSelect(id);
+}
+// Close dropdowns when tapping outside
+document.addEventListener('click',function(e){
+  Object.keys(MOB_CAT).forEach(name=>{
+    const wrap=document.getElementById('mob-cb-'+name);
+    const drop=document.getElementById('mob-cb-'+name+'-drop');
+    if(drop&&wrap&&!wrap.contains(e.target))drop.classList.remove('open');
+  });
+});
+
+// EXIT entries
+let mobSelEntries=[], mobCustomerId='';
+function mobOnCustomerSelect(id){
+  mobCustomerId=String(id);
+  if(document.getElementById('mob-op-type')&&document.getElementById('mob-op-type').value==='EXIT')mobLoadEntries();
+}
+function mobOnTypeChange(val){
+  const row=document.getElementById('mob-ed-row');
+  row.style.display=val==='EXIT'?'block':'none';
+  if(val==='EXIT'&&mobCustomerId)mobLoadEntries();
+  else{mobSelEntries=[];document.getElementById('mob-ed').value='';}
+}
+function mobLoadEntries(){
+  if(!mobCustomerId)return;
+  fetch('/operations/free-entries/?customer_id='+mobCustomerId)
+    .then(r=>r.json()).then(data=>{
+      const c=document.getElementById('mob-entries-list');
+      if(!data.length){c.innerHTML='<div style="color:var(--faint);font-size:13px;padding:8px 0">No free entries for this customer.</div>';return;}
+      c.innerHTML=data.map(e=>`
+        <div id="mei-${e.custom_id}" onclick="mobToggleEntry('${e.custom_id}')"
+             style="display:flex;justify-content:space-between;align-items:center;
+                    padding:10px 12px;background:#fff;border:1px solid var(--bdr);
+                    border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px;
+                    ${mobSelEntries.includes(e.custom_id)?'border-color:var(--green);background:var(--gsoft);color:#065f46':''}">
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12px">${e.custom_id}</div>
+            <div style="font-size:11px;color:var(--faint)">${e.date}${e.po_order?' · PO:'+e.po_order:''}</div>
+          </div>
+          <span style="font-size:18px">${mobSelEntries.includes(e.custom_id)?'✓':'+'}</span>
+        </div>`).join('');
+    });
+}
+function mobToggleEntry(id){
+  const idx=mobSelEntries.indexOf(id);
+  if(idx===-1)mobSelEntries.push(id); else mobSelEntries.splice(idx,1);
+  document.getElementById('mob-ed').value=mobSelEntries.join(', ');
+  mobLoadEntries();
+  // Autofill from entries
+  if(mobSelEntries.length>0){
+    fetch('/operations/exit-totals/?ids='+encodeURIComponent(mobSelEntries.join(',')))
+      .then(r=>r.json()).then(d=>{
+        const lbs=document.getElementById('mob-lbs'),kgs=document.getElementById('mob-kgs');
+        const bqty=document.querySelector('[name="bundle_qty"]'),desc=document.querySelector('[name="description"]');
+        const po=document.getElementById('mob-po-order');
+        if(lbs&&d.weight_lbs>0){lbs.value=d.weight_lbs;if(kgs)kgs.value=(d.weight_lbs*0.453592).toFixed(2);}
+        if(bqty&&d.bundle_qty>0)bqty.value=d.bundle_qty;
+        if(desc&&d.description)desc.value=d.description;
+        if(po&&d.po_order)po.value=d.po_order;
+        // Shipper
+        if(d.shipper){
+          const m=MOB_CAT.shipper.find(s=>s.name===d.shipper);
+          if(m)mobCbSelect('shipper',m.id,m.name);
+        }
+        // Bundle type
+        if(d.bundle_type){
+          const bt=d.bundle_type.split(',')[0].trim();
+          const m=MOB_CAT.bundle_type.find(s=>s.name===bt);
+          if(m)mobCbSelect('bundle_type',m.id,m.name);
+        }
+      });
+  }
+}
+
+// Accumulated files store
+let mobAllFiles = [];
+
+function mobAddFiles(input) {
+  const dt = new DataTransfer();
+  // Add existing accumulated files
+  for (const f of mobAllFiles) dt.items.add(f);
+  // Add new files from this input
+  for (const f of input.files) {
+    dt.items.add(f);
+    mobAllFiles.push(f);
+  }
+  // Set unified input
+  const unified = document.getElementById('mob-all-files');
+  if (unified) unified.files = dt.files;
+  // Update preview
+  const prev = document.getElementById('mob-previews');
+  for (const f of input.files) {
+    if (f.type.startsWith('image/')) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      prev.appendChild(img);
+    }
+  }
+  // Update count
+  const cnt = document.getElementById('mob-file-count');
+  if (cnt) cnt.textContent = mobAllFiles.length + ' file(s) selected';
+  // Clear trigger input so same file can be re-selected
+  input.value = '';
+}
+
+function showPreviews(input){
+  mobAddFiles(input);
+}
+
+// #22: After save — stay on New Operation screen (do NOT redirect to database)
+function onMobSave(e){
+  if(e.detail.xhr&&e.detail.xhr.status===422)return; // error — keep form
+  if(e.detail.successful){
+    // Scroll to top to show success message — DO NOT switch tabs
+    window.scrollTo(0,0);
+    // Auto-hide message after 5s
+    setTimeout(()=>{
+      const m=document.getElementById('mob-form-msg');
+      if(m)m.innerHTML='';
+    },5000);
+    // Reset form fields but stay on this tab
+    resetMobForm();
+  }
+}
+
+function resetMobForm(){
+  document.getElementById('mob-op-form').reset();
+  document.getElementById('mob-date').value=new Date().toISOString().split('T')[0];
+  ['customer','shipper','carrier','bundle_type'].forEach(n=>{
+    document.getElementById('mob-cb-'+n+'-input').value='';
+    document.getElementById('mob-cb-'+n+'-id').value='';
+    document.getElementById('mob-cb-'+n+'-text').value='';
+  });
+  document.getElementById('mob-previews').innerHTML='';
+  document.getElementById('mob-dmg-desc').style.display='none';
+  document.getElementById('mob-ed-row').style.display='none';
+  mobSelEntries=[]; mobCustomerId='';
+  // Re-check WhatsApp default
+  const wa=document.getElementById('mob-wa');if(wa)wa.checked=true;
+  // Clear accumulated files
+  mobAllFiles = [];
+  const prev=document.getElementById('mob-previews');if(prev)prev.innerHTML='';
+  const cnt=document.getElementById('mob-file-count');if(cnt)cnt.textContent='';
+  const uni=document.getElementById('mob-all-files');if(uni){const dt=new DataTransfer();uni.files=dt.files;}
+}
+
+function mobDigiSearch(){
+  const q=document.getElementById('mob-digi-q').value.trim();
+  if(!q)return;
+  htmx.ajax('GET','/digital/search/?q='+encodeURIComponent(q),{target:'#mob-digital-content',swap:'innerHTML'});
+}
+
+window.addEventListener('load',()=>{
+  const d=document.getElementById('mob-date');
+  if(d)d.value=new Date().toISOString().split('T')[0];
+});
+
+// ── Funciones para acciones (View, Edit, Delete) ─────────────────────────────
+
+function openModal(url) {
+    window.location.href = url;
+}
+
+function openEditModal(pk) {
+    window.location.href = '/operations/' + pk + '/edit/';
+}
+
+function confirmDelete(pk, customId) {
+    if (confirm('¿Eliminar la operación ' + customId + '?\nEsta acción no se puede deshacer.')) {
+        const password = prompt('Ingresa tu contraseña para confirmar:');
+        if (password) {
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+            const formData = new FormData();
+            formData.append('confirm_password', password);
+            formData.append('csrfmiddlewaretoken', csrf);
+
+            fetch('/operations/' + pk + '/delete-confirm/', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(response => response.text())
+            .then(() => {
+                alert('Operación eliminada correctamente.');
+                location.reload();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al eliminar. Verifica tu contraseña.');
+            });
+        }
+    }
+}
+
+// ── Confirmar logout antes de salir ──────────────────────────────────────────
+function confirmLogout(event) {
+    event.preventDefault();
+    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+        window.location.href = "{% url 'logout' %}";
+    }
+    return false;
+}
+</script>
+</body>
+</html>

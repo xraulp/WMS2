@@ -1,0 +1,10 @@
+<div class="status-msg status-error">
+  ✗ Please correct the following errors:
+  <ul style="margin-top:8px; padding-left:16px;">
+    {% for field in catalog_form %}
+      {% for error in field.errors %}
+        <li>{{ field.label }}: {{ error }}</li>
+      {% endfor %}
+    {% endfor %}
+  </ul>
+</div>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#f8fafc;margin:0;padding:0;color:#0f172a}
+    .wrap{max-width:300px;margin:28px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+    .hdr{background:#C62034;padding:24px 28px}
+    .hdr h1{color:#fff;font-size:18px;margin:0 0 3px}
+    .hdr p{color:#fff;font-size:12px;margin:0}
+    .badge{display:inline-block;padding:4px 14px;border-radius:99px;font-size:12px;font-weight:700;letter-spacing:.06em;margin-top:10px}
+    .badge-entry{background:#11d191;color:#fff}
+    .badge-exit{background:#C62034;color:#fff}
+    .body{padding:28px}
+    /* IMPORTANT MESSAGE — yellow bg, red bold caps */
+    .important{background:#fef08a;border-left:4px solid #ef4444;padding:14px 18px;margin-bottom:20px;border-radius:6px}
+    .important p{color:#ef4444;font-weight:700;font-size:18px;text-transform:uppercase;margin:0;font-family:serif}
+    .greeting{font-size:14px;line-height:1.7;color:#334155;margin-bottom:18px}
+    .greeting b{color:#0f172a}
+    .fields{border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:20px}
+    .field{display:flex;padding:9px 14px;font-size:13px;border-bottom:1px solid #e2e8f0}
+    .field:last-child{border-bottom:none}
+    .field:nth-child(even){background:#f8fafc}
+    .field-label{font-weight:600;color:#64748b;width:140px;flex-shrink:0;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding-top:1px}
+    .field-value{color:#0f172a}
+    .signature{margin-top:24px;padding-top:18px;border-top:1px solid #e2e8f0;text-align:center}
+    /* Signature image: place your image file at:
+       warehouse_system/static/img/email_signature.png
+       Then it will appear here automatically */
+    .sig-img{max-width:300px;height:auto}
+    .footer{padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center}
+  </style>
+</head>
+
+<body style="margin:0; padding:0; background:#fff;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;">
+    <tr>
+      <td align="center" style="padding:20px;">
+        <!-- Tabla principal con ancho fijo (450px) -->
+        <table width="450" cellpadding="0" cellspacing="0" border="0" style="width:450px; background:#fff; border-radius:12px; box-shadow:0 4px 24px rgba(0,0,0,.08);">
+          <tr>
+            <td style="padding:0;">
+              <!-- ========== CONTENIDO EXISTENTE (sin cambios) ========== -->
+              <div class="hdr" style="background:C62034; padding:24px 28px; border-radius:12px 12px 0 0;">
+                <h1 style="color:#fff; font-size:18px; margin:0 0 3px;">Warehouse Management System</h1>
+                <p style="color:#fff; font-size:12px; margin:0;">
+                  {% if operation.operation_type == 'ENTRY' %}Informe operativo: Entrada de Mercancías{% else %}Informe operativo: Envió de Mercancías{% endif %}
+                </p>
+                <span class="badge {% if operation.operation_type == 'ENTRY' %}badge-entry{% else %}badge-exit{% endif %}" style="display:inline-block; padding:4px 14px; border-radius:99px; font-size:12px; font-weight:700; letter-spacing:.06em; margin-top:10px; background:{% if operation.operation_type == 'ENTRY' %}#10b981{% else %}#ef4444{% endif %}; color:#fff;">
+                  {% if operation.operation_type == 'ENTRY' %}Reporte de Entrada{% else %}Reporte de Salida{% endif %}
+                </span>
+              </div>
+
+              <div class="body" style="padding:28px;">
+                {% if message_body %}
+                <div class="important" style="background:#fef08a; border-left:4px solid #ef4444; padding:14px 18px; margin-bottom:20px; border-radius:6px;">
+                  <p style="color:#ef4444; font-weight:700; font-size:18px; text-transform:uppercase; margin:0;">"{{ message_body }}"</p>
+                </div>
+                {% endif %}
+
+                <div class="greeting" style="font-size:14px; line-height:1.7; color:#334155; margin-bottom:18px;">
+                  Apreciado Socio Comercial!<br><br>
+                  {% if operation.operation_type == 'ENTRY' %}
+                  Adjunto al presente mail encontrará el informe de  <b>Recepción de Mercancías</b>, las fotografias y los documentos correspondientes.<br>
+                  {% else %}
+                  Adjunto al presente mail encontrará el informe de <b>Despacho de Mercancías</b>, las fotografias y los documentos correspondientes.<br>
+                  {% endif %}
+                  Información General:
+                </div>
+
+                <div class="fields" style="border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; margin-bottom:20px;">
+                  <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#fff;">
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase; letter-spacing:.05em;">{% if operation.operation_type == 'ENTRY' %}Entry No.{% else %}Exit No.{% endif %}</div>
+                    <div class="field-value" style="color:#0f172a;"><b>{{ operation.custom_id }}</b></div>
+                  </div>
+                  <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Date</div>
+                    <div class="field-value" style="color:#0f172a;">{{ operation.date|date:"F j, Y" }}</div>
+                  </div>
+                  <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#fff;">
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Customer</div>
+                    <div class="field-value" style="color:#0f172a;"><b>{{ operation.get_customer_display }}</b></div>
+                  </div>
+                  <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Bundle Qty</div>
+                    <div class="field-value" style="color:#0f172a;"><b>{{ operation.bundle_qty|default:"—" }}</b></div>
+                  </div>
+                  <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#fff;">
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Bundle Type</div>
+                    <div class="field-value" style="color:#0f172a;"><b>{{ operation.get_bundle_type_display_name }}</b></div>
+                  </div>
+                  <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Weight</div>
+                    <div class="field-value" style="color:#0f172a;">
+                      <b>{{ operation.weight_lbs|default:"—" }}</b> LBS
+                      {% if operation.weight_kgs %}/ <b>{{ operation.weight_kgs }}</b> KGS{% endif %}
+                    </div>
+                  </div>
+                  <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#fff;">
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Shipper</div>
+                    <div class="field-value" style="color:#0f172a;"><b>{{ operation.get_shipper_display }}</b></div>
+                  </div>
+                  {% if operation.invoice %}
+                  <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Invoice</div>
+                    <div class="field-value" style="color:#0f172a;">{{ operation.invoice }}</div>
+                  </div>
+                  {% endif %}
+                  {% if operation.po_order %}
+                  <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#fff;">
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase;">PO / Order</div>
+                    <div class="field-value" style="color:#0f172a;">{{ operation.po_order }}</div>
+                  </div>
+                  {% endif %}
+                  {% if operation.description %}
+                  <div class="field" style="display:flex; padding:9px 14px; font-size:13px; background:#f8fafc;">
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Description</div>
+                    <div class="field-value" style="color:#0f172a;">{{ operation.description }}</div>
+                  </div>
+                  {% endif %}
+                </div>
+
+                <div class="greeting" style="font-size:14px; line-height:1.7; color:#334155; margin-bottom:18px;">
+                  {% if operation.operation_type == 'ENTRY' %}
+                  <b>*** FAVOR DE ENVIAR LA(S)FACTURA, BOL Y DEMAS DOCUMENTACION NECESARIA PARA LA CORRESPONDIENTE OPERACION ***</b><br><br>
+                  {% endif %}
+                  Saludos Cordiales.
+                </div>
+
+                <div class="signature" style="margin-top:24px; padding-top:18px; border-top:1px solid #e2e8f0; text-align:center;">
+                  <!-- Signature image si deseas -->
+                </div>
+              </div>
+
+              <div class="footer" style="padding:16px 28px; background:#f8fafc; border-top:1px solid #e2e8f0; font-size:11px; color:#94a3b8; text-align:center;">
+                Mensaje automático del Sistema de Gestión de Almacenes de DYSER Group LLC.   · {{ operation.custom_id }} · Provider for RDL Systems LLC.
+              </div>
+              <!-- ========== FIN CONTENIDO ========== -->
+            </td>
+          </td>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+
+</html>

@@ -1,0 +1,355 @@
+{% if upload_success %}
+<div class="msg-success" style="margin-bottom:10px">✓ {{ upload_success }}</div>
+{% endif %}
+
+{% if operation %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+  <div>
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:#0f172a">{{ operation.custom_id }}</span>
+    <span style="margin-left:10px;font-size:12px;color:#64748b">{{ operation.date|date:"Y-m-d" }} · {{ operation.get_customer_display }}</span>
+  </div>
+  <div style="display:flex;gap:8px">
+    <a href="{% url 'operation_download_all' operation.pk %}" class="btn btn-g btn-sm">⬇ Download All</a>
+    <button onclick="clearDigital()" class="btn btn-d btn-sm">✕ Clear</button>
+  </div>
+</div>
+
+<!-- SECCIÓN DE SELECCIÓN MASIVA (solo para usuarios con permiso) -->
+{% if is_home %}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; background:#f8fafc; padding:8px 12px; border-radius:8px; border:1px solid #e2e8f0;">
+  <div style="display:flex; align-items:center; gap:12px;">
+    <label style="display:flex; align-items:center; gap:4px; font-size:12px; cursor:pointer; color:#334155;">
+      <input type="checkbox" id="select-all-files" onchange="toggleAllFiles(this.checked)" style="width:15px; height:15px;">
+      Seleccionar todos
+    </label>
+    <span style="font-size:11px; color:#94a3b8;" id="selected-count">0 seleccionados</span>
+  </div>
+  <button onclick="deleteSelectedFiles()"
+          id="btn-delete-selected"
+          style="padding:4px 14px; background:#ef4444; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer; display:none; transition:background 0.2s; font-weight:500;">
+    🗑 Eliminar seleccionados
+  </button>
+</div>
+{% endif %}
+
+<form id="digital-upload-form"
+      hx-post="{% url 'digital_upload' operation.pk %}"
+      hx-target="#digital-content"
+      hx-swap="innerHTML"
+      hx-encoding="multipart/form-data"
+      style="margin-bottom:16px">
+  {% csrf_token %}
+  <div id="drop-zone"
+       style="border:2px dashed #e2e8f0;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s"
+       ondragover="event.preventDefault();event.stopPropagation();this.style.borderColor='#0ea5e9';this.style.background='#e0f2fe'"
+       ondragleave="event.stopPropagation();this.style.borderColor='#e2e8f0';this.style.background=''"
+       ondrop="handleDrop(event)"
+       onclick="document.getElementById('digi-file-input').click()">
+    <div style="font-size:28px;margin-bottom:6px">📁</div>
+    <div style="font-size:13px;font-weight:500;color:#334155;margin-bottom:4px">Click to select files or drag &amp; drop here</div>
+    <div style="font-size:11px;color:#94a3b8">Any file type accepted · Names auto-generated: DDMMYY-1, DDMMYY-2…</div>
+  </div>
+
+  <!-- Camera button for mobile (#15) -->
+  <div style="display:flex;gap:8px;margin-top:10px;justify-content:center">
+    <button type="button"
+            onclick="document.getElementById('digi-file-input').click()"
+            style="padding:8px 16px;background:#0ea5e9;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px">
+      📂 Select Files
+    </button>
+    <button type="button"
+            onclick="document.getElementById('digi-camera-input').click()"
+            style="padding:8px 16px;background:#10b981;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px">
+      📷 Take Photo
+    </button>
+  </div>
+
+  <!-- Standard file input (gallery + files) -->
+  <input type="file" name="files" id="digi-file-input" multiple style="display:none"
+         onchange="submitUpload()">
+  <!-- Camera-only input (#15) -->
+  <input type="file" name="files" id="digi-camera-input" accept="image/*" capture="environment" style="display:none"
+         onchange="submitCameraUpload()">
+
+  <div id="digi-status" style="display:none;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:#64748b;justify-content:center">
+    <div style="width:12px;height:12px;border:2px solid #e2e8f0;border-top-color:#0ea5e9;border-radius:50%;animation:spin .6s linear infinite"></div>
+    Uploading files…
+  </div>
+</form>
+
+{% if operation.documents.all %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px">
+  {% for doc in operation.documents.all %}
+  <!--<div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff;text-align:center">-->
+  <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff;text-align:center;position:relative;">
+  <!-- Checkbox para selección -->
+  <div style="position:absolute; top:4px; left:4px; z-index:5;">
+    <input type="checkbox" class="file-checkbox" value="{{ doc.pk }}" onchange="updateDeleteButton()">
+  </div>
+    <div style="height:80px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:32px;overflow:hidden">
+      {% if doc.file_type == 'PHOTO' %}
+        <img src="{{ doc.file.url }}" style="width:100%;height:80px;object-fit:cover" onerror="this.parentElement.innerHTML='📷'">
+      {% elif doc.file_type == 'VIDEO' %}🎬
+      {% elif doc.file_type == 'DOCUMENT' %}📄
+      {% else %}📎{% endif %}
+    </div>
+    <div style="padding:5px 4px">
+      <div style="font-size:10px;font-weight:600;color:#0f172a;font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ doc.original_name }}">
+        {{ doc.digital_name|default:doc.original_name|default:"file" }}
+      </div>
+      <div style="font-size:9px;color:#94a3b8">{{ doc.uploaded_at|date:"Y-m-d" }}</div>
+      <div style="font-size:8px;color:#ef4444;font-family:monospace;">ID: {{ doc.pk }}</div>
+    </div>
+    <div style="display:flex;border-top:1px solid #e2e8f0">
+      <a href="{{ doc.file.url }}" target="_blank" download="{{ doc.original_name }}"
+         style="flex:1;padding:4px;font-size:10px;color:#0ea5e9;text-decoration:none;text-align:center">⬇</a>
+      <a href="{{ doc.file.url }}" target="_blank"
+         style="flex:1;padding:4px;font-size:10px;color:#64748b;text-decoration:none;text-align:center;border-left:1px solid #e2e8f0">👁</a>
+      {% if is_home %}
+
+      <!--<button hx-post="{% url 'digital_delete_file' doc.pk %}"-->
+      <!--        hx-target="#digital-content" hx-swap="innerHTML"-->
+      <!--        hx-confirm="Delete {{ doc.digital_name|default:doc.original_name }}?"-->
+      <!--        hx-include="[name=csrfmiddlewaretoken]"-->
+      <!--        style="flex:1;padding:4px;font-size:10px;color:#ef4444;background:none;border:none;border-left:1px solid #e2e8f0;cursor:pointer">✕</button>-->
+
+    <button onclick="confirmDeleteFile({{ doc.pk }}, '{{ doc.original_name|escapejs }}')"
+        style="flex:1;padding:4px;font-size:10px;color:#ef4444;background:none;border:none;border-left:1px solid #e2e8f0;cursor:pointer">✕</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div style="text-align:center;padding:30px;color:#94a3b8;font-size:13px">No files attached yet. Upload above.</div>
+{% endif %}
+
+<script>
+function handleDrop(e) {
+  e.preventDefault(); e.stopPropagation();
+  const dz = document.getElementById('drop-zone');
+  dz.style.borderColor = '#e2e8f0'; dz.style.background = '';
+  const input = document.getElementById('digi-file-input');
+  const dt = new DataTransfer();
+  for (const f of e.dataTransfer.files) dt.items.add(f);
+  input.files = dt.files;
+  submitUpload();
+}
+function submitUpload() {
+  const form = document.getElementById('digital-upload-form');
+  const input = document.getElementById('digi-file-input');
+  const status = document.getElementById('digi-status');
+  if (!input || input.files.length === 0) return;
+  if (status) status.style.display = 'flex';
+  const fd = new FormData();
+  const csrf = form.querySelector('[name=csrfmiddlewaretoken]');
+  if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+  for (const f of input.files) fd.append('files', f);
+  const url = form.getAttribute('hx-post');
+  fetch(url, { method: 'POST', body: fd })
+    .then(r => r.text())
+    .then(html => {
+      const target = document.getElementById('digital-content');
+      if (target) { target.innerHTML = html; htmx.process(target); }
+      if (status) status.style.display = 'none';
+      input.value = '';
+      // Reload digital content to show new files
+      reloadDigitalContent();
+    })
+    .catch(err => {
+      if (status) status.style.display = 'none';
+      console.error('Upload error:', err);
+    });
+}
+function submitCameraUpload() {
+  const cam = document.getElementById('digi-camera-input');
+  if (!cam || cam.files.length === 0) return;
+  // Use native FormData + fetch so mobile camera files upload reliably
+  const form = document.getElementById('digital-upload-form');
+  const status = document.getElementById('digi-status');
+  if (status) status.style.display = 'flex';
+  const fd = new FormData();
+  // Add CSRF token
+  const csrf = form.querySelector('[name=csrfmiddlewaretoken]');
+  if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+  // Add camera files under the name 'files'
+  for (const f of cam.files) fd.append('files', f);
+  // Get the POST URL from the form's hx-post attribute
+  const url = form.getAttribute('hx-post');
+  fetch(url, { method: 'POST', body: fd })
+    .then(r => r.text())
+    .then(html => {
+      const target = document.getElementById('digital-content');
+      if (target) { target.innerHTML = html; htmx.process(target); }
+      if (status) status.style.display = 'none';
+      cam.value = '';
+      // Reload digital content to show new files
+      reloadDigitalContent();
+    })
+    .catch(err => {
+      if (status) status.style.display = 'none';
+      console.error('Upload error:', err);
+    });
+}
+function reloadDigitalContent() {
+  // Re-fetch the digital panel with the current custom_id to show updated files
+  const qInput = document.getElementById('digital-q') || document.getElementById('mob-digi-q');
+  const customId = qInput ? qInput.value.trim() : '';
+  if (!customId) return;
+  const target = document.getElementById('digital-content') || document.getElementById('mob-digital-content');
+  if (!target) return;
+  fetch('/digital/search/?q=' + encodeURIComponent(customId))
+    .then(r => r.text())
+    .then(html => {
+      target.innerHTML = html;
+      htmx.process(target);
+    })
+    .catch(err => console.error('Reload error:', err));
+}
+
+function clearDigital() {
+  document.getElementById('digital-content').innerHTML =
+    '<div style="text-align:center;padding:40px;color:#94a3b8;font-size:13px">Enter a Custom ID above to load files.</div>';
+  const dq = document.getElementById('digital-q');
+  if (dq) dq.value = '';
+}
+
+// Eliminar archivo en Digital con confirmación de contraseña
+function confirmDeleteFile(docId, fileName) {
+    if (confirm('¿Eliminar el archivo "' + fileName + '"?\nEsta acción no se puede deshacer.')) {
+        const password = prompt('Ingresa tu contraseña para confirmar la eliminación:');
+        if (password) {
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+            const formData = new FormData();
+            formData.append('confirm_password', password);
+            formData.append('csrfmiddlewaretoken', csrf);
+
+            fetch('/digital/file/' + docId + '/delete/', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(response => response.text())
+            .then(html => {
+                // Recargar el contenido digital
+                const digitalContent = document.getElementById('digital-content');
+                if (digitalContent) {
+                    digitalContent.innerHTML = html;
+                    if (typeof htmx !== 'undefined') htmx.process(digitalContent);
+                }
+                alert('Archivo eliminado correctamente.');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al eliminar el archivo. Verifica tu contraseña.');
+            });
+        }
+    }
+}
+
+// Seleccionar / deseleccionar todos
+function toggleAllFiles(checked) {
+  document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = checked);
+  updateDeleteButton();
+}
+
+// Mostrar/ocultar botón de eliminar seleccionados
+function updateDeleteButton() {
+  const checked = document.querySelectorAll('.file-checkbox:checked').length;
+  const btn = document.getElementById('btn-delete-selected');
+  if (btn) {
+    btn.style.display = checked > 0 ? 'inline-block' : 'none';
+    btn.textContent = '🗑 Eliminar seleccionados (' + checked + ')';
+  }
+}
+
+// Eliminar archivos seleccionados
+// Eliminar archivos seleccionados
+function deleteSelectedFiles() {
+  const selected = document.querySelectorAll('.file-checkbox:checked');
+  if (selected.length === 0) {
+    alert('No hay archivos seleccionados.');
+    return;
+  }
+
+  const ids = Array.from(selected).map(cb => cb.value);
+  const confirmMsg = '¿Eliminar ' + ids.length + ' archivo(s)?\nEsta acción no se puede deshacer.';
+  if (!confirm(confirmMsg)) return;
+
+  const password = prompt('Ingresa tu contraseña de eliminación para confirmar:');
+  if (!password) return;
+
+  const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+  const formData = new FormData();
+  formData.append('ids', ids.join(','));
+  formData.append('confirm_password', password);
+  formData.append('csrfmiddlewaretoken', csrf);
+
+  // Mostrar indicador de carga (opcional)
+  const btn = document.getElementById('btn-delete-selected');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Eliminando...';
+  }
+
+  fetch('/digital/delete-multiple/', {
+    method: 'POST',
+    body: formData,
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(response => {
+    // Verificar si la respuesta es exitosa
+    if (!response.ok) {
+      return response.text().then(text => {
+        throw new Error('Error ' + response.status + ': ' + text.substring(0, 100));
+      });
+    }
+    return response.text();
+  })
+  .then(html => {
+    // Restaurar botón
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🗑 Eliminar seleccionados';
+    }
+
+    const content = document.getElementById('digital-content');
+    if (content) {
+      content.innerHTML = html;
+      if (typeof htmx !== 'undefined') htmx.process(content);
+    }
+
+    // Extraer mensaje de éxito o error del HTML
+    const successMatch = html.match(/msg-success[^>]*>([^<]*)</);
+    const errorMatch = html.match(/msg-error[^>]*>([^<]*)</);
+    if (successMatch) {
+      alert('✅ ' + successMatch[1].trim());
+    } else if (errorMatch) {
+      alert('❌ ' + errorMatch[1].trim());
+    } else {
+      // Si no hay mensaje específico, asumimos éxito si no hubo error
+      alert('✓ ' + ids.length + ' archivo(s) eliminado(s) correctamente.');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🗑 Eliminar seleccionados';
+    }
+    alert('❌ Error al eliminar los archivos: ' + error.message);
+  });
+}
+
+// Función auxiliar para extraer mensaje de error del HTML
+function extractError(html) {
+  const match = html.match(/msg-error[^>]*>([^<]*)</);
+  return match ? match[1].trim() : 'Error desconocido.';
+}
+</script>
+
+{% elif query %}
+<div class="msg-error">No operation found for "{{ query }}".</div>
+{% else %}
+<div style="text-align:center;padding:40px;color:#94a3b8;font-size:13px">Enter a Custom ID above to load files.</div>
+{% endif %}

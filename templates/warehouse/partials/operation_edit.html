@@ -1,0 +1,61 @@
+{% load wms_filters %}
+<div class="mo-hd">
+  <span class="mo-ti">Edit — {{ operation.custom_id }}</span>
+  <button class="mo-x" onclick="closeModal()">✕</button>
+</div>
+
+<form method="post" action="{% url 'operation_edit' operation.pk %}" style="display:grid;gap:10px">
+  {% csrf_token %}
+
+  {% if profile.is_customer %}
+  <!-- Customer can only edit customer_notes -->
+  <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:8px 12px;font-size:12px;color:#92400e;margin-bottom:8px">
+    As a Customer you can only add notes to this record.
+  </div>
+  <div>
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">Customer Notes</label>
+    <textarea name="customer_notes" rows="4"
+              style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;resize:vertical">{{ operation.customer_notes|default:'' }}</textarea>
+  </div>
+  {% else %}
+  <!-- Full edit for staff/manager/admin -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    {% for label, fname, value in edit_fields %}
+    <div>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">{{ label }}</label>
+      {% if fname == 'operation_type' %}
+        <select name="{{ fname }}" style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
+          <option value="ENTRY" {% if value == 'ENTRY' %}selected{% endif %}>Entry</option>
+          <option value="EXIT"  {% if value == 'EXIT'  %}selected{% endif %}>Exit</option>
+        </select>
+      {% elif fname == 'description' or fname == 'note' or fname == 'damage_description' %}
+        <textarea name="{{ fname }}" rows="2"
+                  style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;resize:vertical">{{ value|default:'' }}</textarea>
+      {% else %}
+        <input type="{% if fname == 'date' %}date{% elif fname in 'bundle_qty weight_lbs weight_kgs' %}number{% else %}text{% endif %}"
+               name="{{ fname }}"
+               value="{{ value|default:'' }}"
+               style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
+      {% endif %}
+    </div>
+    {% endfor %}
+    <div>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">Damage</label>
+      <select name="damage" style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
+        <option value="0" {% if not operation.damage %}selected{% endif %}>No</option>
+        <option value="1" {% if operation.damage %}selected{% endif %}>Yes</option>
+      </select>
+    </div>
+    <div style="grid-column:span 2">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">Customer Notes</label>
+      <textarea name="customer_notes" rows="2"
+                style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;resize:vertical">{{ operation.customer_notes|default:'' }}</textarea>
+    </div>
+  </div>
+  {% endif %}
+
+  <div style="display:flex;gap:8px;margin-top:6px">
+    <button type="submit" style="flex:1;padding:8px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer">Save Changes</button>
+    <button type="button" onclick="closeModal()" style="flex:1;padding:8px;background:transparent;color:#64748b;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;cursor:pointer">Cancel</button>
+  </div>
+</form>

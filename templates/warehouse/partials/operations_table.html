@@ -1,0 +1,266 @@
+{% load wms_filters %}
+{% if delete_error %}<div class="msg-error" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">⚠ {{ delete_error }}<button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#991b1b">✕</button></div>{% endif %}
+{% if delete_success %}<div class="msg-success" style="margin-bottom:8px">✓ {{ delete_success }}</div>{% endif %}
+{% if import_success %}<div class="msg-success" style="margin-bottom:8px">✓ {{ import_success }}</div>{% endif %}
+{% if import_error %}<div class="msg-error" style="margin-bottom:8px">⚠ {{ import_error }}</div>{% endif %}
+
+<!-- Import / Download Layout bar -->
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+  <form hx-post="{% url 'operations_import' %}" hx-target="#ops-table" hx-swap="innerHTML"
+        hx-encoding="multipart/form-data" style="display:flex;gap:6px;align-items:center">
+    {% csrf_token %}
+    <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Import Excel:</label>
+    <input type="file" name="import_file" accept=".xlsx,.xls" required
+           style="font-size:11px;height:26px;border:1px solid #e2e8f0;border-radius:6px;padding:2px 6px;background:#fff">
+    <button type="submit" class="btn btn-g btn-sm" style="color:#10b981;border-color:#10b981">⬆ Import</button>
+  </form>
+  <a href="{% url 'operations_layout' %}" class="btn btn-g btn-sm" style="color:#0ea5e9;border-color:#0ea5e9">⬇ Download Layout</a>
+</div>
+
+{% if operations %}
+<div style="position:relative;">
+
+  <!-- Contenedor SCROLLABLE de la tabla (scroll horizontal nativo) -->
+  <div id="table-scroll-wrap" style="overflow-x:auto; overflow-y:visible;">
+    <table id="ops-table-inner" style="min-width:2200px; width:100%; border-collapse:collapse; table-layout:auto;">
+      <thead>
+        <tr>
+          <th style="background:#1e293b; color:#94a3b8; white-space:nowrap;">#</th>
+          <th style="white-space:nowrap;">Date</th>
+          <th style="white-space:nowrap;">Custom ID</th>
+          <th style="white-space:nowrap;">Entries Disp.</th>
+          <th style="white-space:nowrap;">Type</th>
+          <th style="background:#1e3a5f; color:#7dd3fc; white-space:nowrap;">Status</th>
+          <th style="white-space:nowrap;">Customer</th>
+          <th style="white-space:nowrap;">Shipper</th>
+          <th style="white-space:nowrap;">Invoice</th>
+          <th style="white-space:nowrap;">PO/Order</th>
+          <th style="white-space:nowrap;">Seal</th>
+          <th style="white-space:nowrap;">Carrier</th>
+          <th style="white-space:nowrap;">PRO</th>
+          <th style="white-space:nowrap;">Trailer</th>
+          <th style="white-space:nowrap;">Bundle Type</th>
+          <th style="white-space:nowrap;">Qty</th>
+          <th style="white-space:nowrap;">LBS</th>
+          <th style="white-space:nowrap;">KGS</th>
+          <th style="white-space:nowrap;">Description</th>
+          <th style="white-space:nowrap;">Note</th>
+          <th style="white-space:nowrap;">Damage</th>
+          <th style="white-space:nowrap;">REF AA</th>
+          <th style="white-space:nowrap;">DYS</th>
+          <th style="white-space:nowrap;">PED</th>
+          <th style="white-space:nowrap;">Email</th>
+          <th style="white-space:nowrap;">Created By</th>
+          <th style="background:#1e293b; color:#94a3b8; white-space:nowrap;">Actions</th>
+          <th style="background:#1e293b; color:#94a3b8; white-space:nowrap;">#</th>
+
+        </tr>
+      </thead>
+      <tbody>
+        {% for op in operations %}
+        <tr style="background:{% cycle '#ffffff' '#f8fafc' %};">
+          <td style="color:#94a3b8; font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">{{ op.pk }}</td>
+          <td style="white-space:nowrap;">{{ op.date|date:"Y-m-d" }}</td>
+          <td class="mono" style="white-space:nowrap;">{{ op.custom_id }}</td>
+          <td style="white-space:nowrap;" title="{{ op.entry_dispatched }}">{{ op.entry_dispatched|default:"—"|truncatechars:20 }}</td>
+          <td style="white-space:nowrap;">
+            {% if op.operation_type == 'ENTRY' %}
+              <span class="badge b-entry">Entry</span>
+            {% else %}
+              <span class="badge b-exit">Exit</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            {% if op.operation_type == 'ENTRY' %}
+              {% if op.status == 'Released Goods' %}
+                <span class="badge" style="background:#d1fae5;color:#065f46;font-size:9px;">✓ Released</span>
+              {% else %}
+                <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:9px;">⬛ In Warehouse</span>
+              {% endif %}
+            {% else %}
+              <span style="color:#94a3b8;font-size:11px;">—</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;" title="{{ op.get_customer_display }}">{{ op.get_customer_display|truncatechars:20 }}</td>
+          <td style="white-space:nowrap;" title="{{ op.get_shipper_display }}">{{ op.get_shipper_display|truncatechars:20 }}</td>
+          <td style="white-space:nowrap;">{{ op.invoice|default:"—" }}</td>
+          <td style="white-space:nowrap;">{{ op.po_order|default:"—" }}</td>
+          <td style="white-space:nowrap;">{{ op.seal|default:"—" }}</td>
+          <td style="white-space:nowrap;" title="{{ op.get_carrier_display }}">{{ op.get_carrier_display|truncatechars:18 }}</td>
+          <td style="white-space:nowrap;">{{ op.pro|default:"—" }}</td>
+          <td style="white-space:nowrap;">{{ op.trailer|default:"—" }}</td>
+          <td style="white-space:nowrap;" title="{{ op.get_bundle_type_display_name }}">{{ op.get_bundle_type_display_name|truncatechars:18 }}</td>
+          <td style="white-space:nowrap;">{{ op.bundle_qty|default:"—" }}</td>
+          <td style="white-space:nowrap;">{{ op.weight_lbs|default:"—" }}</td>
+          <td style="white-space:nowrap;">{{ op.weight_kgs|default:"—" }}</td>
+          <td style="white-space:nowrap;" title="{{ op.description }}">{{ op.description|default:"—"|truncatechars:25 }}</td>
+          <td style="white-space:nowrap;" title="{{ op.note }}">{{ op.note|default:"—"|truncatechars:18 }}</td>
+          <td style="white-space:nowrap;">{% if op.damage %}<span class="badge" style="background:#fee2e2;color:#991b1b;">⚠ Yes</span>{% else %}—{% endif %}</td>
+          <td style="white-space:nowrap;">{{ op.ref_aa|default:"—" }}</td>
+          <td style="white-space:nowrap;">{{ op.ref_dys|default:"—" }}</td>
+          <td style="white-space:nowrap;">{{ op.pedimento|default:"—" }}</td>
+          <td style="white-space:nowrap;">{% if op.email_sent %}<span class="badge b-sent">✓</span>{% else %}—{% endif %}</td>
+          <td style="white-space:nowrap;">{{ op.created_by.username|default:"—" }}</td>
+          <td style="white-space:nowrap;">
+            <div style="display:flex; gap:4px; align-items:center;">
+              <button class="btn-action" onclick="openModal('{% url 'operation_detail' op.pk %}')">View</button>
+              <button class="btn-action" onclick="openEditModal({{ op.pk }})">Edit</button>
+              <a class="btn-action" href="{% url 'operation_pdf' op.pk %}" target="_blank">PDF</a>
+              <button class="btn-action" onclick="openDigitalWithId('{{ op.custom_id }}')">📱 Digital</button> <!-- agregado 061026-->
+              {% if profile and not profile.is_customer %}
+              <button class="btn-action btn-action-danger" onclick="confirmDelete({{ op.pk }}, '{{ op.custom_id }}')">Delete</button>
+              {% endif %}
+            </div>
+          </td>
+          <td style="color:#94a3b8; font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">{{ op.pk }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- BARRA DE SCROLL FIJA EN LA PARTE INFERIOR DE LA PANTALLA (sticky) -->
+  <div id="fixed-hscroll-bar"
+       style="position:sticky; bottom:0; left:0; right:0; height:16px; overflow-x:auto; overflow-y:hidden; background:#e2e8f0; border-top:1px solid #cbd5e1; z-index:100; opacity:0; transition:opacity 0.2s;">
+    <div id="fixed-hscroll-inner" style="height:1px;"></div>
+  </div>
+</div>
+
+<style>
+.btn-action {
+  display:inline-flex;
+  align-items:center;
+  padding:3px 10px;
+  border:1px solid #e2e8f0;
+  border-radius:5px;
+  background:#fff;
+  font-size:11px;
+  cursor:pointer;
+  white-space:nowrap;
+  color:#475569;
+  font-family:inherit;
+  text-decoration:none;
+}
+.btn-action-danger {
+  border-color:#fca5a5;
+  color:#ef4444;
+}
+.btn-action:hover {
+  background:#f1f5f9;
+}
+.btn-action-danger:hover {
+  background:#fef2f2;
+}
+</style>
+
+<script>
+(function() {
+  const wrap = document.getElementById('table-scroll-wrap');
+  const fakeScroll = document.getElementById('fixed-hscroll-bar');
+  const inner = document.getElementById('fixed-hscroll-inner');
+  const table = document.getElementById('ops-table-inner');
+
+  if (!wrap || !fakeScroll || !inner || !table) return;
+
+  // Ajustar el ancho del scroll falso al ancho real de la tabla
+  function updateFakeScrollWidth() {
+    const tableWidth = table.scrollWidth;
+    inner.style.width = tableWidth + 'px';
+  }
+  updateFakeScrollWidth();
+  window.addEventListener('resize', updateFakeScrollWidth);
+
+  let syncing = false;
+
+  // Cuando el usuario hace scroll en la tabla REAL -> mover la barra fija
+  wrap.addEventListener('scroll', function() {
+    if (syncing) return;
+    syncing = true;
+    fakeScroll.scrollLeft = wrap.scrollLeft;
+    syncing = false;
+  });
+
+  // Cuando el usuario mueve la barra fija -> mover la tabla REAL
+  fakeScroll.addEventListener('scroll', function() {
+    if (syncing) return;
+    syncing = true;
+    wrap.scrollLeft = fakeScroll.scrollLeft;
+    syncing = false;
+  });
+
+  // Mostrar la barra fija SOLO cuando el contenedor necesita scroll horizontal
+  function checkIfScrollNeeded() {
+    const needsScroll = wrap.scrollWidth > wrap.clientWidth;
+    if (needsScroll) {
+      fakeScroll.style.opacity = '1';
+      // Sincronizar posiciones iniciales
+      fakeScroll.scrollLeft = wrap.scrollLeft;
+    } else {
+      fakeScroll.style.opacity = '0';
+    }
+  }
+
+  // Detectar cambios en la tabla (cuando se carga nueva data via HTMX)
+  const observer = new ResizeObserver(function() {
+    updateFakeScrollWidth();
+    checkIfScrollNeeded();
+  });
+  observer.observe(table);
+  observer.observe(wrap);
+
+  checkIfScrollNeeded();
+})();
+</script>
+
+{% else %}
+<div class="es">
+  <h3>No operations found</h3>
+  <p>{% if search_query %}No results for "{{ search_query }}"{% else %}Register your first operation.{% endif %}</p>
+</div>
+{% endif %}
+
+<!-- Modal para eliminar con contraseña -->
+{% if profile and not profile.is_customer %}
+<div id="del-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:12px; padding:24px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:700; margin-bottom:10px; color:#0f172a;">🗑 Confirm Delete</div>
+    <p style="font-size:14px; color:#64748b; margin-bottom:8px;">Operation: <strong id="del-id" style="color:#ef4444;"></strong></p>
+    <p style="font-size:12px; color:#94a3b8; margin-bottom:20px;">Enter your password to permanently delete this record.</p>
+    <form id="del-form" method="POST" hx-post="" hx-target="#ops-table" hx-swap="innerHTML" hx-on::after-request="closeDel()">
+      {% csrf_token %}
+      <div style="position:relative; margin-bottom:16px;">
+        <input type="password" name="confirm_password" id="del-pwd"
+               style="width:100%; padding:10px 40px 10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;"
+               placeholder="Your password" required autocomplete="off">
+        <button type="button" onclick="toggleDelPw()"
+                style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:16px;">👁</button>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" style="flex:1; padding:10px; background:#ef4444; color:#fff; border:none; border-radius:8px; font-weight:600; cursor:pointer;">Yes, Delete</button>
+        <button type="button" onclick="closeDel()" style="flex:1; padding:10px; background:#e2e8f0; border:none; border-radius:8px; cursor:pointer;">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function confirmDelete(pk, customId) {
+  const modal = document.getElementById('del-modal');
+  if (!modal) return;
+  document.getElementById('del-id').innerText = customId;
+  document.getElementById('del-pwd').value = '';
+  const form = document.getElementById('del-form');
+  form.setAttribute('hx-post', '/operations/' + pk + '/delete-confirm/');
+  htmx.process(form);
+  modal.style.display = 'flex';
+}
+function closeDel() {
+  const modal = document.getElementById('del-modal');
+  if (modal) modal.style.display = 'none';
+}
+function toggleDelPw() {
+  const pwd = document.getElementById('del-pwd');
+  if (pwd) pwd.type = pwd.type === 'password' ? 'text' : 'password';
+}
+</script>
+{% endif %}

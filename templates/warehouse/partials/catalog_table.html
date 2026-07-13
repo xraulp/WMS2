@@ -1,0 +1,80 @@
+{% if edit_success %}<div class="msg-success" style="margin-bottom:8px">✓ {{ edit_success }}</div>{% endif %}
+{% if import_success %}<div class="msg-success" style="margin-bottom:8px">✓ {{ import_success }}</div>{% endif %}
+{% if import_error %}<div class="msg-error" style="margin-bottom:8px">⚠ {{ import_error }}</div>{% endif %}
+
+<!-- Import / Layout bar -->
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+  <form hx-post="{% url 'catalog_import' %}" hx-target="#catalog-table" hx-swap="innerHTML"
+        hx-encoding="multipart/form-data" style="display:flex;gap:6px;align-items:center">
+    {% csrf_token %}
+    <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Import Excel:</label>
+    <input type="file" name="import_file" accept=".xlsx,.xls" required
+           style="font-size:11px;height:26px;border:1px solid #e2e8f0;border-radius:6px;padding:2px 6px;background:#fff">
+    <button type="submit" class="btn btn-g btn-sm" style="color:#10b981;border-color:#10b981">⬆ Import</button>
+  </form>
+  <a href="{% url 'catalog_layout' %}" class="btn btn-g btn-sm" style="color:#0ea5e9;border-color:#0ea5e9">⬇ Download Layout</a>
+</div>
+
+{% if catalog_entries %}
+<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px">
+<table style="min-width:800px">
+  <thead>
+    <tr>
+      <th>Category</th>
+      <th>Name / Value</th>
+      <th>Abreviatura</th>
+      <th>Email</th><th>Phone</th>
+      <th style="color:#7dd3fc">WhatsApp</th>
+      <th>Notes</th><th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for entry in catalog_entries %}
+    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+      <td><span class="badge" style="background:#f1f5f9;color:#475569">{{ entry.get_category_display }}</span></td>
+      <td><strong>{{ entry.name }}</strong></td>
+      <td>{{ entry.abbreviation|default:"—" }}</td>
+      <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis" title="{{ entry.contact_email }}">{{ entry.contact_email|default:"—" }}</td>
+      <td>{{ entry.phone|default:"—" }}</td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#0ea5e9">{{ entry.whatsapp|default:"—" }}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ entry.notes }}">{{ entry.notes|default:"—" }}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-g btn-sm" onclick="openCatalogEdit({{ entry.pk }})">Edit</button>
+        <button class="btn btn-d btn-sm"
+                hx-post="{% url 'catalog_delete' entry.pk %}"
+                hx-target="#catalog-table"
+                hx-swap="innerHTML"
+                hx-confirm="Archive '{{ entry.name }}'? Historical records will NOT be affected."
+                hx-include="[name=csrfmiddlewaretoken]">Archive</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty-state" style="text-align:center;padding:30px;color:#94a3b8">
+  <h3 style="margin-bottom:4px;font-size:14px;color:#64748b">Catalog is empty</h3>
+  <p style="font-size:12px">Add customers, shippers, carriers and bundle types using the form above.</p>
+</div>
+{% endif %}
+
+<!-- Edit modal -->
+<div id="cat-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:10px;padding:20px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">Edit Catalog Entry</span>
+      <button onclick="closeCatalogEdit()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b">✕</button>
+    </div>
+    <div id="cat-edit-body"></div>
+  </div>
+</div>
+<script>
+function openCatalogEdit(pk) {
+  htmx.ajax('GET', '/catalog/'+pk+'/edit/', {target:'#cat-edit-body', swap:'innerHTML'});
+  document.getElementById('cat-edit-modal').style.display = 'flex';
+}
+function closeCatalogEdit() {
+  document.getElementById('cat-edit-modal').style.display = 'none';
+}
+</script>

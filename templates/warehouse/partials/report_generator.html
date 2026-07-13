@@ -1,0 +1,361 @@
+{% load wms_filters %}
+<!-- Search form -->
+<form hx-get="{% url 'report_generator' %}"
+      hx-target="#report-content"
+      hx-swap="innerHTML"
+      style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:14px">
+  <input type="hidden" name="search" value="1">
+
+  <!-- Multi-customer selector -->
+  <div style="display:flex;flex-direction:column;gap:3px;min-width:280px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">
+      Customer(s)
+      <span style="font-weight:400;text-transform:none;color:#94a3b8;font-size:9px">— select one, multiple, or All</span>
+    </label>
+    <div style="border:1px solid #e2e8f0;border-radius:6px;background:#fff;padding:4px 6px;max-height:120px;overflow-y:auto;min-width:280px">
+      <label style="display:flex;align-items:center;gap:6px;padding:3px 2px;cursor:pointer;font-size:12px;font-weight:600;color:#0f172a;border-bottom:1px solid #f1f5f9;margin-bottom:2px">
+        <input type="checkbox" name="all_customers" value="1" id="rpt-all-chk"
+               {% if filters.all_customers %}checked{% endif %}
+               onchange="rptToggleAll(this.checked)"
+               style="width:13px;height:13px">
+        All Customers
+      </label>
+      {% for c in customers %}
+      <label style="display:flex;align-items:center;gap:6px;padding:2px 2px;cursor:pointer;font-size:12px;color:#334155">
+        <input type="checkbox" name="customer_ids" value="{{ c.pk }}"
+               id="rpt-cust-{{ c.pk }}"
+               {% if c.pk|stringformat:'s' in filters.customer_ids_list %}checked{% endif %}
+               onchange="rptCustomerChange()"
+               style="width:12px;height:12px">
+        {{ c.name }}
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- NUEVO: Filtro por usuario creador (Created By) -->
+  {% if profile.is_superadmin or profile.is_home or profile.is_manager %}
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">
+      👤 Created By
+    </label>
+    <select name="created_by" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;min-width:140px">
+      <option value="">— All Users —</option>
+      {% for u in users %}
+      <option value="{{ u.pk }}" {% if filters.created_by_id|add:"0" == u.pk %}selected{% endif %}>
+        {{ u.username }}
+        {% if u.profile.role %}({{ u.profile.role }}){% endif %}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Date From</label>
+    <input type="date" name="date_from" value="{{ filters.date_from|default:'' }}"
+           style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Date To</label>
+    <input type="date" name="date_to" value="{{ filters.date_to|default:'' }}"
+           style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Type</label>
+    <select name="op_type" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+      <option value="">Both</option>
+      <option value="ENTRY" {% if filters.op_type == 'ENTRY' %}selected{% endif %}>Entry only</option>
+      <option value="EXIT"  {% if filters.op_type == 'EXIT'  %}selected{% endif %}>Exit only</option>
+    </select>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Status</label>
+    <select name="status_filter" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+      <option value="">All</option>
+      <option value="In Warehouse"   {% if filters.status_filter == 'In Warehouse'   %}selected{% endif %}>In Warehouse</option>
+      <option value="Released Goods" {% if filters.status_filter == 'Released Goods' %}selected{% endif %}>Released Goods</option>
+    </select>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:6px;padding-bottom:4px">
+    <input type="checkbox" name="undispatched" value="1" id="rpt-und" {% if filters.undispatched %}checked{% endif %}>
+    <label for="rpt-und" style="font-size:12px;cursor:pointer;color:#334155">Entries without dispatch</label>
+  </div>
+
+  <button type="submit" class="btn btn-p" style="height:28px">Search</button>
+</form>
+
+{% if error %}
+<div class="msg-error" style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+  <span>⚠ {{ error }}</span>
+  <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;color:#991b1b">✕</button>
+</div>
+{% endif %}
+
+{% if results is not None %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+  <div style="font-size:12px;color:#64748b">
+    <strong>{{ results|length }}</strong> operations found
+    {% if filters.customer_label %} · <span style="color:#0ea5e9">{{ filters.customer_label }}</span>{% endif %}
+    {% if filters.created_by_name %} · <span style="color:#10b981">User: {{ filters.created_by_name }}</span>{% endif %}
+  </div>
+  {% if results %}
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+    <a href="{% url 'report_generator_pdf' %}?ids={% for op in results %}{{ op.pk }},{% endfor %}&title=Operations+Report"
+     target="_blank" class="btn btn-p btn-sm">📄 PDF (Landscape)</a>
+    <button onclick="sendReportEmail()" class="btn btn-g btn-sm">📧 Send Email</button>
+    <input type="email" id="rpt-email-to" placeholder="Email address (required for multi-customer)"
+         style="height:28px;padding:4px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;min-width:220px">
+    <span id="email-hint" style="font-size:10px;color:#94a3b8;"></span>
+  </div>
+  {% endif %}
+
+  <!--{% if results %}-->
+    <!--<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">-->
+  <!--  <input type="email" id="rpt-extra-email" placeholder="Send to email..." title="Leave blank to skip email"-->
+  <!--         style="height:28px;padding:4px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:200px">-->
+  <!--  <button onclick="sendReportEmail()" class="btn btn-g btn-sm">📧 Email</button>-->
+  <!--  <a href="{% url 'report_generator_pdf' %}?ids={% for op in results %}{{ op.pk }},{% endfor %}&title=Operations+Report"-->
+  <!--     target="_blank" class="btn btn-p btn-sm">📄 PDF</a>-->
+  <!--  <a href="{% url 'report_generator_excel' %}?ids={% for op in results %}{{ op.pk }},{% endfor %}"-->
+  <!--     class="btn btn-g btn-sm" style="color:#10b981;border-color:#10b981">📊 Excel</a>-->
+
+
+
+  <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+  <input type="email" id="rpt-email-to" placeholder="Email address (required for multi-customer)"
+         title="Enter email address(es) separated by commas"
+         style="height:28px;padding:4px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;min-width:220px;flex:1">
+  <button onclick="sendReportEmail()" class="btn btn-p btn-sm">📧 Send Email</button>
+  <span id="email-hint" style="font-size:10px;color:#94a3b8;"></span>
+</div>
+  </div>
+  {% endif %}
+</div>
+<div id="rpt-email-status"></div>
+
+{% if results %}
+<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px">
+<table style="min-width:1000px">
+<!--aqui copie el nuevo codigo <thead></thead>-->
+    <thead>
+    <tr>
+        <th>#</th>
+        <th>Date</th>
+        <th>Custom ID</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Customer</th>
+        <th>Shipper</th>
+        <th>Invoice</th>
+        <th>PO/Order</th>
+        <th>PRO</th>
+        <th>Bundle Type</th>
+        <th>Bundle Qty</th>
+        <th>Weight LBS</th>
+        <th>Description</th>
+        <th>Dispatched</th>
+        <th>Created By</th>
+    </tr>
+    </thead>
+  <!--<thead>-->
+  <!--  <tr>-->
+  <!--    <th>#</th><th>Date</th><th>Custom ID</th><th>Type</th><th>Status</th>-->
+  <!--    <th>Customer</th><th>Shipper</th><th>Invoice</th><th>PO/Order</th>-->
+  <!--    <th>Bundles</th><th>LBS</th><th>Description</th><th>Dispatched</th>-->
+  <!--    <th>Created By</th>-->
+  <!--  </tr>-->
+  <!--</thead>-->
+  <tbody>
+<!--aqui copie el nuevo codigo      -->
+    {% for op in results %}
+    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+        <td style="color:#94a3b8;font-size:10px">{{ op.pk }}</td>
+        <td>{{ op.date|date:"Y-m-d" }}</td>
+        <td class="mono">{{ op.custom_id }}</td>
+        <td>{% if op.operation_type == 'ENTRY' %}<span class="badge b-entry">Entry</span>{% else %}<span class="badge b-exit">Exit</span>{% endif %}</td>
+        <td>
+            {% if op.operation_type == 'ENTRY' %}
+            {% if op.status == 'Released Goods' %}
+                <span class="badge" style="background:#d1fae5;color:#065f46;font-size:9px">✓ Released</span>
+            {% else %}
+                <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:9px">⬛ Warehouse</span>
+            {% endif %}
+        {% else %}
+                <span style="color:#94a3b8;font-size:11px">—</span>
+        {% endif %}
+        </td>
+        <td>{{ op.get_customer_display|truncatechars:18 }}</td>
+        <td>{{ op.get_shipper_display|truncatechars:14 }}</td>
+        <td>{{ op.invoice|default:"—" }}</td>
+        <td>{{ op.po_order|default:"—" }}</td>
+        <td>{{ op.pro|default:"—" }}</td>                                          <!-- PRO -->
+        <td>{{ op.get_bundle_type_display_name|default:"—" }}</td>                <!-- Bundle Type -->
+        <td>{{ op.bundle_qty|default:"—" }}</td>                                  <!-- Bundle Qty -->
+        <td>{{ op.weight_lbs|default:"—" }}</td>                                  <!-- Weight LBS -->
+        <td title="{{ op.description }}">{{ op.description|default:"—"|truncatechars:20 }}</td>
+        <td>{% if op.entry_dispatched %}<span style="color:#10b981;font-size:11px">✓</span>{% else %}—{% endif %}</td>
+        <td style="font-size:11px;color:#64748b">{{ op.created_by.username|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+
+<!--aqui termina el nuevo codigo      -->
+    <!--{% for op in results %}-->
+    <!--<tr style="background:{% cycle '#ffffff' '#f8fafc' %}">-->
+    <!--  <td style="color:#94a3b8;font-size:10px">{{ op.pk }}</td>-->
+    <!--  <td>{{ op.date|date:"Y-m-d" }}</td>-->
+    <!--  <td class="mono">{{ op.custom_id }}</td>-->
+    <!--  <td>{% if op.operation_type == 'ENTRY' %}<span class="badge b-entry">Entry</span>{% else %}<span class="badge b-exit">Exit</span>{% endif %}</td>-->
+    <!--  <td>-->
+    <!--    {% if op.operation_type == 'ENTRY' %}-->
+    <!--      {% if op.status == 'Released Goods' %}-->
+    <!--        <span class="badge" style="background:#d1fae5;color:#065f46;font-size:9px">✓ Released</span>-->
+    <!--      {% else %}-->
+    <!--        <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:9px">⬛ Warehouse</span>-->
+    <!--      {% endif %}-->
+    <!--    {% else %}-->
+    <!--      <span style="color:#94a3b8;font-size:11px">—</span>-->
+    <!--    {% endif %}-->
+    <!--  </td>-->
+    <!--  <td>{{ op.get_customer_display|truncatechars:18 }}</td>-->
+    <!--  <td>{{ op.get_shipper_display|truncatechars:14 }}</td>-->
+    <!--  <td>{{ op.invoice|default:"—" }}</td>-->
+    <!--  <td>{{ op.po_order|default:"—" }}</td>-->
+    <!--  <td>{{ op.bundle_qty|default:"—" }}</td>-->
+    <!--  <td>{{ op.weight_lbs|default:"—" }}</td>-->
+    <!--  <td title="{{ op.description }}">{{ op.description|default:"—"|truncatechars:20 }}</td>-->
+    <!--  <td>{% if op.entry_dispatched %}<span style="color:#10b981;font-size:11px">✓</span>{% else %}—{% endif %}</td>-->
+    <!--  <td style="font-size:11px;color:#64748b">{{ op.created_by.username|default:"—" }}</td>-->
+    <!--</tr>-->
+    <!--{% endfor %}-->
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="es"><h3>No operations match the selected filters.</h3></div>
+{% endif %}
+{% endif %}
+
+<script>
+// Build IDs from table DOM at send time (more reliable than template tag)
+function getRptIds() {
+  const rows = document.querySelectorAll('#report-content table tbody tr');
+  const ids = [];
+  rows.forEach(row => {
+    const first = row.querySelector('td');
+    if (first && first.textContent.trim()) ids.push(first.textContent.trim());
+  });
+  return ids.join(',');
+}
+
+function rptToggleAll(checked) {
+  document.querySelectorAll('input[name="customer_ids"]').forEach(cb => {
+    cb.disabled = checked;
+    if (checked) cb.checked = false;
+  });
+}
+function rptCustomerChange() {
+  const anyChecked = [...document.querySelectorAll('input[name="customer_ids"]')].some(cb => cb.checked);
+  const allChk = document.getElementById('rpt-all-chk');
+  if (allChk && anyChecked) allChk.checked = false;
+}
+// Init state on load
+(function(){
+  const allChk = document.getElementById('rpt-all-chk');
+  if (allChk && allChk.checked) rptToggleAll(true);
+})();
+
+// function sendReportEmail() {
+//   const extra = (document.getElementById('rpt-extra-email')?.value||'').trim();
+//   if (!extra && !confirm('No email address entered. Send to customer default?')) return;
+//   const fd = new FormData();
+//   fd.append('ids', getRptIds());
+//   fd.append('extra_emails', extra);
+//   fd.append('customer_id', '{{ filters.customer_id|default:"" }}');
+//   fd.append('title', 'Operations Report');
+//   fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+//   fetch('{% url "report_generator_email" %}', {method:'POST', body:fd})
+//     .then(r=>r.text())
+//     .then(html => { document.getElementById('rpt-email-status').innerHTML = html; });
+// }
+
+function sendReportEmail() {
+  const emailTo = document.getElementById('rpt-email-to')?.value.trim() || '';
+  const allCustomers = document.getElementById('rpt-all-chk')?.checked || false;
+  const customerIds = [...document.querySelectorAll('input[name="customer_ids"]:checked')].map(cb => cb.value);
+  const isMultiCustomer = allCustomers || customerIds.length > 1;
+
+  // Si es múltiple clientes, el email es obligatorio
+  if (isMultiCustomer && !emailTo) {
+    alert('⚠️ Cuando seleccionas "All Customers" o múltiples clientes, debes ingresar una dirección de email en el campo "Email address".');
+    document.getElementById('rpt-email-to').focus();
+    return;
+  }
+
+  // Si es un solo cliente y no hay email manual, se usará el email del cliente (opcional)
+  if (!isMultiCustomer && !emailTo) {
+    const confirmSend = confirm('No ingresaste un email manual. ¿Deseas enviar el reporte al email del cliente seleccionado?');
+    if (!confirmSend) return;
+  }
+
+  const ids = getRptIds();
+  if (!ids) {
+    alert('No hay registros para enviar.');
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('ids', ids);
+  fd.append('extra_emails', emailTo);
+  fd.append('customer_id', '{{ filters.customer_id|default:"" }}');
+  fd.append('all_customers', allCustomers ? '1' : '0');
+  fd.append('title', 'Operations Report');
+  fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+  fetch('{% url "report_generator_email" %}', {
+    method: 'POST',
+    body: fd
+  })
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById('rpt-email-status').innerHTML = html;
+    // Limpiar el campo después de enviar (opcional)
+    // document.getElementById('rpt-email-to').value = '';
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    document.getElementById('rpt-email-status').innerHTML = '<div class="msg-error">✗ Error al enviar el email.</div>';
+  });
+}
+
+// Mostrar pista sobre emails cuando se seleccionan múltiples clientes
+function updateEmailHint() {
+  const allCustomers = document.getElementById('rpt-all-chk')?.checked || false;
+  const customerIds = [...document.querySelectorAll('input[name="customer_ids"]:checked')].map(cb => cb.value);
+  const isMulti = allCustomers || customerIds.length > 1;
+  const hintSpan = document.getElementById('email-hint');
+  const emailInput = document.getElementById('rpt-email-to');
+
+  if (hintSpan) {
+    if (isMulti) {
+      hintSpan.innerHTML = '⚠️ Email requerido (múltiples clientes)';
+      hintSpan.style.color = '#ef4444';
+      if (emailInput) emailInput.required = true;
+    } else {
+      hintSpan.innerHTML = '💡 Opcional: deja en blanco para usar email del cliente';
+      hintSpan.style.color = '#94a3b8';
+      if (emailInput) emailInput.required = false;
+    }
+  }
+}
+
+// Agregar eventos a los checkboxes
+document.querySelectorAll('input[name="customer_ids"], #rpt-all-chk').forEach(el => {
+  el.addEventListener('change', updateEmailHint);
+});
+
+</script>

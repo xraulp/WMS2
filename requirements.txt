@@ -1,0 +1,8 @@
+Django>=4.2,<5.1
+Pillow>=10.0.0
+reportlab>=4.0.0
+openpyxl>=3.1.0
+twilio>=8.0.0
+gunicorn>=21.0.0
+whitenoise>=6.6.0
+

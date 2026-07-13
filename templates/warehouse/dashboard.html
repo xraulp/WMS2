@@ -1,0 +1,1046 @@
+{% load wms_filters %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>WMS</title>
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+<script>
+////////// MANTENER 061526 PM//////////////////
+  document.addEventListener('htmx:beforeSwap', function(evt) {
+    if (evt.detail.xhr.status === 422) {
+      evt.detail.shouldSwap = true;
+      evt.detail.isError = false;
+    }
+  });
+</script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/*<!--ink#C62034,#0f172a  soft#64748b #4e5a6b*/
+:root{
+  --ink:#0f172a;--soft:#4e5a6b;--faint:#94a3b8;--bg:#f1f5f9;--bdr:#e2e8f0;
+  --accent:#0ea5e9;--asoft:#e0f2fe;--adark:#0284c7;
+  --green:#10b981;--gsoft:#d1fae5;--red:#ef4444;--rsoft:#fee2e2;
+  --white:#fff;--r:6px;--rL:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink);font-size:13px}
+
+.tb{background:var(--ink);display:flex;align-items:center;justify-content:space-between;padding:0 18px;height:44px;position:fixed;top:0;left:0;right:0;z-index:200}
+.tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:#fff;display:flex;align-items:center;gap:7px}
+.tb-dot{width:7px;height:7px;background:var(--accent);border-radius:50%}
+.tb-right{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--faint)}
+.tb-right strong{color:#fff}
+.btn-lo{background:none;border:1px solid #576c8a;color:var(--faint);padding:3px 10px;border-radius:var(--r);cursor:pointer;font-size:11px;font-family:inherit}
+.btn-lo:hover{border-color:var(--red);color:var(--red)}
+
+.tabs{background:#fff;border-bottom:1px solid var(--bdr);display:flex;padding:0 18px;position:fixed;top:44px;left:0;right:0;z-index:199;overflow-x:auto}
+.tab{background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:500;color:var(--soft);padding:9px 14px;transition:all .15s;white-space:nowrap}
+.tab:hover{color:var(--ink)}.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+
+.pg{padding:14px 18px;max-width:1500px;margin:0 auto;margin-top:88px}
+.panel{display:none}.panel.on{display:block}
+.card{background:#fff;border:1px solid var(--bdr);border-radius:var(--rL);padding:14px;margin-bottom:12px}
+.ct{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);margin-bottom:12px;padding-left:8px;border-left:3px solid var(--accent)}
+
+.op-wrap{display:flex;gap:10px;align-items:flex-start}
+.op-col{flex:0 0 270px;min-width:0;max-width:270px}
+.fg{display:grid;grid-template-columns:110px 160px;border:1px solid var(--bdr);border-radius:var(--rL);overflow:visible;width:270px}
+.fl{background:var(--bg);padding:0 10px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;height:30px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--soft);white-space:nowrap;flex-shrink:0}
+.fi{background:#fff;padding:2px 5px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;height:30px;min-width:0;position:relative}
+.fl:last-child,.fi:last-child,.fg .fl:nth-last-child(2),.fg .fi:last-child{border-bottom:none}
+.fi-ta{height:auto;min-height:30px;padding:3px 5px;align-items:flex-start}
+.fi input,.fi select{width:100%;height:22px;padding:2px 6px;border:1px solid var(--bdr);border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:var(--ink);background:#fff;outline:none;transition:border-color .15s}
+.fi input:focus,.fi select:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--asoft)}
+.fi textarea{width:100%;padding:3px 6px;border:1px solid var(--bdr);border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:var(--ink);outline:none;resize:vertical;height:46px}
+.fi textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--asoft)}
+.cb{position:relative;width:100%}
+.cb input[type=text]{width:100%;height:22px;padding:2px 6px;border:1px solid var(--bdr);border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:var(--ink);background:#fff;outline:none}
+.cb input[type=text]:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--asoft)}
+.cb-list{display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--accent);border-top:none;border-radius:0 0 var(--r) var(--r);z-index:9999;max-height:140px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.cb-list.open{display:block}
+.cb-opt{padding:5px 8px;cursor:pointer;font-size:12px}
+.cb-opt:hover,.cb-opt.hi{background:var(--asoft);color:var(--adark)}
+.cb-none{padding:5px 8px;font-size:11px;color:var(--faint);font-style:italic}
+.tog{display:flex;align-items:center;gap:7px}
+.tog input[type=checkbox]{width:28px;height:16px;appearance:none;background:var(--bdr);border-radius:99px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.tog input[type=checkbox]:checked{background:var(--red)}
+.tog input[type=checkbox]::after{content:'';position:absolute;width:12px;height:12px;background:#fff;border-radius:50%;top:2px;left:2px;transition:left .2s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.tog input[type=checkbox]:checked::after{left:14px}
+.ep{width:210px;flex-shrink:0;display:none}
+.ep.on{display:block}
+.ep-in{background:var(--bg);border:1px solid var(--bdr);border-radius:var(--rL);padding:10px}
+.ep-in h4{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-bottom:8px}
+.ei{display:flex;justify-content:space-between;align-items:center;padding:5px 7px;background:#fff;border:1px solid var(--bdr);border-radius:var(--r);margin-bottom:4px;cursor:pointer;font-size:11px;transition:all .12s}
+.ei:hover{border-color:var(--accent);background:var(--asoft)}
+.ei.sel{border-color:var(--green);background:var(--gsoft);color:#065f46}
+.ei-id{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:10px}
+.ei-dt{color:var(--faint);font-size:10px}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all .15s;text-decoration:none}
+.btn-p{background:var(--accent);color:#fff;border-color:var(--accent)}.btn-p:hover{background:var(--adark)}
+.btn-g{background:transparent;color:var(--soft);border-color:var(--bdr)}.btn-g:hover{background:var(--bg);color:var(--ink)}
+.btn-d{background:transparent;color:var(--red);border-color:var(--red)}.btn-d:hover{background:var(--rsoft)}
+.btn-sm{padding:2px 8px;font-size:11px}
+.fa{display:flex;gap:8px;margin-top:10px}
+.badge{display:inline-flex;align-items:center;padding:2px 6px;border-radius:99px;font-size:10px;font-weight:600;font-family:'IBM Plex Mono',monospace;text-transform:uppercase}
+.b-entry{background:var(--gsoft);color:var(--green)}
+.b-exit{background:var(--rsoft);color:var(--red)}
+.b-sent{background:var(--asoft);color:var(--adark)}
+.tw{overflow-x:auto;border-radius:var(--rL);border:1px solid var(--bdr)}
+table{width:100%;border-collapse:collapse}
+thead{background:var(--ink)}
+thead th{padding:7px 9px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--bdr)}
+tbody tr:last-child{border-bottom:none}
+tbody td{padding:6px 9px;font-size:11px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+tbody td:last-child,
+tbody td:has(.btn-action) {
+  max-width: none !important;
+  overflow: visible !important;
+  white-space: normal !important;
+}
+.mono{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600}
+.sb{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.sw{position:relative;max-width:360px;flex:1}
+.sw svg{position:absolute;left:7px;top:50%;transform:translateY(-50%);color:var(--faint)}
+.si{width:100%;padding:6px 9px 6px 26px;border:1px solid var(--bdr);border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:12px;outline:none}
+.si:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--asoft)}
+.cf{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding-bottom:12px;border-bottom:1px solid var(--bdr);margin-bottom:12px}
+.cf-g{display:flex;flex-direction:column;gap:3px}
+.cf-g label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)}
+.cf-i{padding:4px 8px;border:1px solid var(--bdr);border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:var(--ink);outline:none;height:28px;background:#fff}
+.cf-i:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--asoft)}
+.mo{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(2px);z-index:200;align-items:center;justify-content:center}
+.mo.on{display:flex}
+.mo-box{background:#fff;border-radius:var(--rL);padding:20px;max-width:560px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.mo-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.mo-ti{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600}
+.mo-x{background:none;border:none;cursor:pointer;color:var(--faint);font-size:18px;padding:3px;border-radius:4px}
+.mo-x:hover{color:var(--ink);background:var(--bg)}
+.fi-m{width:100%;padding:5px 8px;border:1px solid var(--bdr);border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:12px;outline:none;margin-bottom:8px}
+.fi-m:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--asoft)}
+.msg-success{padding:8px 12px;border-radius:var(--r);font-size:12px;background:var(--gsoft);color:#065f46;margin-bottom:8px}
+.msg-error{padding:8px 12px;border-radius:var(--r);font-size:12px;background:var(--rsoft);color:#991b1b;margin-bottom:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{width:12px;height:12px;border:2px solid var(--bdr);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+.htmx-indicator{display:none}.htmx-request .htmx-indicator{display:inline-flex}
+.es{text-align:center;padding:32px;color:var(--faint)}
+.es h3{font-size:13px;margin-bottom:4px;color:var(--soft)}
+/*<!--PASO 4: Ajustar estilos (opcional)*/
+#btn-delete-selected {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#btn-delete-selected:hover {
+  background: #dc2626;
+}
+
+</style>
+</head>
+<body>
+
+<div class="tb">
+  <div class="tb-brand">
+    <span class="tb-dot"></span>
+    <span style="font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600;">WMS - DYSER GROUP LLC</span>
+  </div>
+  <div class="tb-right">
+    Welcome, <strong>{{ request.user.username }}</strong>
+    <span style="font-size:11px;color:#60718a">[{{ profile.role|upper }}]</span>
+    <a href="{% url 'logout' %}" class="btn-lo">Sign out</a>
+  </div>
+</div>
+
+<div class="tabs">
+  {% if profile|can_see_tab:'form' %}
+  <button class="tab on" id="tab-form" onclick="showTab('form')">New Operation</button>
+  {% endif %}
+  <button class="tab {% if not profile|can_see_tab:'form' %}on{% endif %}" id="tab-database" onclick="showTab('database')">Database</button>
+  {% if profile|can_see_tab:'catalog' %}
+  <button class="tab" id="tab-catalog" onclick="showTab('catalog')">Catalog</button>
+  {% endif %}
+  <button class="tab" id="tab-digital" onclick="showTab('digital')">Digital</button>
+  <button class="tab" id="tab-reports" onclick="showTab('reports')">Report Generator</button>
+  {% if profile.can_manage_users %}
+  <button class="tab" id="tab-users" onclick="showTab('users')">Users</button>
+  {% endif %}
+</div>
+
+<div class="pg">
+
+{% if profile|can_see_tab:'form' %}
+<div class="panel on" id="panel-form">
+  <div class="card">
+    <div class="ct">Register Operation</div>
+    <div id="form-msg-wrap"><div id="form-msg"></div></div>
+    <div id="print-bar" style="display:none;background:var(--asoft);border:1px solid var(--accent);border-radius:var(--rL);padding:10px 14px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:600;color:var(--adark)" id="print-bar-id"></span>
+      <a id="btn-print-report" href="#" target="_blank" class="btn btn-g btn-sm">📄 Full Report PDF</a>
+      <a id="btn-print-label"  href="#" target="_blank" class="btn btn-p btn-sm">🏷 Print Labels</a>
+      <button onclick="document.getElementById('print-bar').style.display='none'" class="btn btn-g btn-sm" style="margin-left:auto">✕ Close</button>
+    </div>
+
+    <form id="op-form"
+          hx-post="{% url 'operation_create' %}"
+          hx-target="#form-msg"
+          hx-swap="innerHTML"
+          hx-on::before-request="clearFormMsg()"
+          hx-encoding="multipart/form-data"
+          hx-on::after-request="onAfterSave(event)">
+      {% csrf_token %}
+      <div class="op-wrap">
+
+        <div class="op-col">
+        <div class="fg">
+          <div class="fl">Date</div>
+          <div class="fi"><input type="date" name="date" id="id_date"></div>
+
+          <div class="fl">Customer <span style="color:#ef4444;">*</span></div>
+          <div class="fi" style="overflow:visible">
+            <div class="cb" id="cb-customer">
+              <input type="text" id="cb-customer-input" placeholder="Type or select..." autocomplete="off"
+                     oninput="cbFilter('customer')" onfocus="cbOpen('customer')" onblur="cbBlur('customer')"
+                     onkeydown="cbKey(event,'customer')">
+              <input type="hidden" name="customer_id"   id="cb-customer-id">
+              <input type="hidden" name="customer_text" id="cb-customer-text">
+              <div class="cb-list" id="cb-customer-list"></div>
+            </div>
+          </div>
+
+          <div class="fl">Type <span style="color:#ef4444;">*</span></div>
+          <div class="fi">
+            <select name="operation_type" id="id_op_type" onchange="onTypeChange(this.value)">
+              <option value="">— Select —</option>
+              <option value="ENTRY">Entry</option>
+              <option value="EXIT">Exit</option>
+            </select>
+          </div>
+
+          <div class="fl">Entries Disp.</div>
+          <div class="fi"><input type="text" name="entry_dispatched" id="id_ed" placeholder="Auto for EXIT..." readonly></div>
+
+          <div class="fl">Shipper <span style="color:#ef4444;">*</span></div>
+          <div class="fi" style="overflow:visible">
+            <div class="cb" id="cb-shipper">
+              <input type="text" id="cb-shipper-input" placeholder="Type or select..." autocomplete="off"
+                     oninput="cbFilter('shipper')" onfocus="cbOpen('shipper')" onblur="cbBlur('shipper')"
+                     onkeydown="cbKey(event,'shipper')">
+              <input type="hidden" name="shipper_id"   id="cb-shipper-id">
+              <input type="hidden" name="shipper_text" id="cb-shipper-text">
+              <div class="cb-list" id="cb-shipper-list"></div>
+            </div>
+          </div>
+
+          <div class="fl">Invoice</div>
+          <div class="fi"><input type="text" name="invoice" placeholder="Invoice #..."></div>
+
+          <div class="fl">PO / Order</div>
+          <div class="fi"><input type="text" name="po_order" id="id_po_order" placeholder="PO / ORD..."></div>
+
+          <div class="fl">Seal</div>
+          <div class="fi"><input type="text" name="seal" placeholder="Seal #..."></div>
+
+          <div class="fl">Carrier <span style="color:#ef4444;">*</span></div>
+          <div class="fi" style="overflow:visible">
+            <div class="cb" id="cb-carrier">
+              <input type="text" id="cb-carrier-input" placeholder="Type or select..." autocomplete="off"
+                     oninput="cbFilter('carrier')" onfocus="cbOpen('carrier')" onblur="cbBlur('carrier')"
+                     onkeydown="cbKey(event,'carrier')">
+              <input type="hidden" name="carrier_id"   id="cb-carrier-id">
+              <input type="hidden" name="carrier_text" id="cb-carrier-text">
+              <div class="cb-list" id="cb-carrier-list"></div>
+            </div>
+          </div>
+
+          <div class="fl">PRO</div>
+          <div class="fi"><input type="text" name="pro" placeholder="PRO #..."></div>
+
+                        <!-- Nuevos campos REF AA, DYS, PEDIMENTO -->
+          <div class="fl">REF AA</div>
+          <div class="fi"><input type="text" name="ref_aa" placeholder="Referencia AA..."></div>
+
+          <div class="fl">DYS</div>
+          <div class="fi"><input type="text" name="ref_dys" placeholder="Referencia DYS...."></div>
+
+          <div class="fl">PEDIMENTO</div>
+          <div class="fi"><input type="text" name="pedimento" placeholder="Número de pedimento..."></div>
+
+         <!-- Nuevos campos REF AA, DYS, PEDIMENTO -->
+        </div>
+        </div>
+
+
+
+        <div class="op-col">
+        <div class="fg">
+          <div class="fl">Trailer</div>
+          <div class="fi"><input type="text" name="trailer" placeholder="Trailer #..."></div>
+
+          <div class="fl">Bundle Type <span style="color:#ef4444;">*</span></div>
+          <div class="fi" style="overflow:visible">
+            <div class="cb" id="cb-bundle_type">
+              <input type="text" id="cb-bundle_type-input" placeholder="Type or select..." autocomplete="off"
+                     oninput="cbFilter('bundle_type')" onfocus="cbOpen('bundle_type')" onblur="cbBlur('bundle_type')"
+                     onkeydown="cbKey(event,'bundle_type')">
+              <input type="hidden" name="bundle_type_id"   id="cb-bundle_type-id">
+              <input type="hidden" name="bundle_type_text" id="cb-bundle_type-text">
+              <div class="cb-list" id="cb-bundle_type-list"></div>
+            </div>
+          </div>
+
+          <div class="fl">Bundle Qty <span style="color:#ef4444;">*</span></div>
+          <div class="fi"><input type="number" name="bundle_qty" placeholder="0" min="0"></div>
+
+          <div class="fl">Weight LBS <span style="color:#ef4444;">*</span></div>
+          <div class="fi"><input type="number" name="weight_lbs" id="id_lbs" placeholder="0.00" step="0.01" oninput="syncKgs(this.value)"></div>
+
+          <div class="fl">Weight KGS</div>
+          <div class="fi"><input type="number" name="weight_kgs" id="id_kgs" placeholder="0.00" step="0.01" oninput="syncLbs(this.value)"></div>
+
+          <div class="fl" style="align-self:flex-start;padding-top:7px">Description<span style="color:#ef4444;">*</span></div>
+          <div class="fi fi-ta"><textarea name="description" placeholder="Merchandise description..."></textarea></div>
+
+          <div class="fl" style="align-self:flex-start;padding-top:7px">Note</div>
+          <div class="fi fi-ta"><textarea name="note" placeholder="Additional notes..."></textarea></div>
+
+          <div class="fl">Damage</div>
+          <div class="fi">
+            <div class="tog">
+              <input type="checkbox" name="damage" id="id_dmg" onchange="toggleDmg(this.checked)">
+              <span id="dmg-label" style="font-size:12px;color:var(--soft)">No</span>
+            </div>
+          </div>
+
+          <div class="fl" id="fl-dmgdesc" style="visibility:hidden;height:0;padding:0;border:none;overflow:hidden">Damage Desc.</div>
+          <div class="fi fi-ta" id="fi-dmgdesc" style="visibility:hidden;height:0;padding:0;border:none;overflow:hidden">
+            <textarea name="damage_description" placeholder="Describe damage..." id="ta-dmgdesc" style="height:0"></textarea>
+          </div>
+
+          <div class="fl" style="align-self:flex-start;padding-top:7px">Photos</div>
+          <div class="fi" style="flex-direction:column;gap:4px;height:auto;padding:6px 5px">
+            <input type="file" name="photos" id="photos-input" multiple accept="image/*,video/*"
+                   style="font-size:11px;width:100%" onchange="previewFiles(this,'photo-prev')">
+            <div id="photo-prev" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:2px"></div>
+          </div>
+
+          <div class="fl" style="align-self:flex-start;padding-top:7px">Documents</div>
+          <div class="fi" style="flex-direction:column;gap:4px;height:auto;padding:6px 5px">
+            <input type="file" name="documents" id="docs-input" multiple
+                   accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+                   style="font-size:11px;width:100%" onchange="previewFiles(this,'doc-prev')">
+            <div id="doc-prev" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:2px"></div>
+          </div>
+        </div>
+        </div>
+
+        <div class="ep" id="ep">
+          <div class="ep-in">
+            <h4>Available Entries <span id="ep-count" style="font-weight:400"></span></h4>
+            <div id="ep-list" style="color:var(--faint);font-size:11px">Select customer + EXIT first...</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="fa" style="flex-wrap:wrap;align-items:center">
+        <button type="button" class="btn btn-p" onclick="submitOperationForm()">
+            <span class="htmx-indicator spin"></span>Save Operation
+        </button>
+        <button type="button" class="btn btn-g" onclick="resetOpForm()">Clear</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-left:8px">
+          <input type="checkbox" name="send_whatsapp" value="1" id="id_wa" checked style="width:14px;height:14px">
+          Send WhatsApp notification
+        </label>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<div class="panel {% if not profile|can_see_tab:'form' %}on{% endif %}" id="panel-database">
+  <div class="card">
+    <div class="ct">Operations Database</div>
+    <div class="sb" style="flex-wrap:wrap;gap:6px">
+      <div class="sw">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" class="si" placeholder="Search ID, customer, invoice, date..."
+               hx-get="{% url 'operations_search' %}" hx-target="#ops-table"
+               hx-trigger="keyup changed delay:400ms" name="q" hx-indicator="#s-spin">
+      </div>
+
+      {% if profile.is_superadmin or profile.is_home or profile.is_manager %}
+      <div style="display:flex; align-items:center; gap:5px;">
+        <label style="font-size:11px; font-weight:600; color:#60718a;">👤 User:</label>
+        <select id="filter-user" onchange="filterByUser(this.value)"
+                style="height:32px; padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px; font-family:inherit; font-size:12px;">
+          <option value="">All Users</option>
+          {% for u in users %}
+          <option value="{{ u.pk }}">{{ u.username }} ({{ u.profile.role|default:'home' }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <select id="status-filter-sel" onchange="filterByStatus(this.value)"
+              style="height:32px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:inherit">
+        <option value="">All Status</option>
+        <option value="In Warehouse">In Warehouse</option>
+        <option value="Released Goods">Released Goods</option>
+      </select>
+      <span class="htmx-indicator spin" id="s-spin"></span>
+    </div>
+    <div id="ops-table">
+      {% include 'warehouse/partials/operations_table.html' %}
+    </div>
+  </div>
+</div>
+
+{% if profile|can_see_tab:'catalog' %}
+<div class="panel" id="panel-catalog">
+  <div class="card">
+    <div class="ct">Catalog</div>
+    <div id="cat-msg"></div>
+    <form id="cat-form"
+          hx-post="{% url 'catalog_create' %}"
+          hx-target="#cat-msg"
+          hx-swap="innerHTML"
+          hx-on::after-request="onAfterCatSave(event)">
+      {% csrf_token %}
+      <div class="cf">
+        <div class="cf-g">
+          <label>Category</label>
+          <select name="category" class="cf-i" style="min-width:150px">
+            <option value="">— Select —</option>
+            <option value="CUSTOMER">Customer</option>
+            <option value="SHIPPER">Shipper</option>
+            <option value="CARRIER">Carrier</option>
+            <option value="BUNDLE_TYPE">Type of Bundle</option>
+            <option value="TYPE_OP">Type of Operation</option>
+            <option value="CC_EMAIL">CC Email</option>
+          </select>
+        </div>
+        <div class="cf-g" style="flex:1;min-width:130px">
+          <label>Name / Value</label>
+          <input type="text" name="name" class="cf-i" placeholder="Name or value...">
+        </div>
+        <div class="cf-g" style="flex:1;min-width:170px">
+          <label>Email(s) — comma separated</label>
+          <input type="text" name="contact_email" class="cf-i" placeholder="a@x.com, b@x.com">
+        </div>
+        <div class="cf-g" style="min-width:100px">
+          <label>Abreviatura</label>
+        <input type="text" name="abbreviation" class="cf-i" placeholder="Ej: LBO, ACME">
+        </div>
+
+        <div class="cf-g" style="min-width:110px">
+          <label>Phone</label>
+          <input type="text" name="phone" class="cf-i" placeholder="+52 xxx...">
+        </div>
+        <div class="cf-g" style="min-width:130px">
+          <label>Address</label>
+          <input type="text" name="address" class="cf-i" placeholder="Address...">
+        </div>
+        <div class="cf-g" style="min-width:110px">
+          <label>Notes</label>
+          <input type="text" name="notes" class="cf-i" placeholder="Notes...">
+        </div>
+        <div class="cf-g" style="min-width:140px">
+          <label>WhatsApp (+521XXXXXXXXXX)</label>
+          <input type="text" name="whatsapp" class="cf-i" placeholder="+521XXXXXXXXXX">
+        </div>
+        <div class="cf-g">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn btn-p" style="height:28px">Save Record</button>
+        </div>
+      </div>
+    </form>
+    <div class="tw" id="catalog-table">
+      {% include 'warehouse/partials/catalog_table.html' %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="panel" id="panel-digital">
+  <div class="card">
+    <div class="ct">Loading and Unloading System</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <input type="text" id="digital-q" class="si" placeholder="Enter Custom ID (e.g. ED260405-0001)..."
+             style="max-width:320px" onkeydown="if(event.key==='Enter')digitalSearch()">
+      <button onclick="digitalSearch()" class="btn btn-p">Search</button>
+    </div>
+    <div id="digital-content">
+      <div style="text-align:center;padding:40px;color:#94a3b8;font-size:13px">Enter a Custom ID above to load files.</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-reports">
+  <div class="card">
+    <div class="ct">Report Generator</div>
+    <div id="report-content"
+         hx-get="{% url 'report_generator' %}"
+         hx-trigger="intersect once"
+         hx-swap="innerHTML">
+      <div style="color:var(--faint);font-size:13px;padding:20px">Loading…</div>
+    </div>
+  </div>
+</div>
+
+{% if profile.can_manage_users %}
+<div class="panel" id="panel-users">
+  <div class="card">
+    <div class="ct">User Management</div>
+    <div id="users-content"
+         hx-get="{% url 'user_management' %}"
+         hx-trigger="intersect once"
+         hx-swap="innerHTML">
+      <div style="color:var(--faint);font-size:13px;padding:20px">Loading…</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+</div>
+
+<div class="mo" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="mo-box"><div id="modal-body"></div></div>
+</div>
+
+<script>
+
+// ============================================================
+// INICIALIZACIÓN ÚNICA - UNIFICADA
+// ============================================================
+
+function initActiveTab() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabFromUrl = urlParams.get('tab');
+
+    // Si la URL tiene 'tab=digital', NO hacemos nada (lo manejará checkUrlParams)
+    if (tabFromUrl === 'digital') {
+        console.log("PC: URL con 'tab=digital', omitiendo pestaña por defecto");
+        return;
+    }
+
+    // Si no, usamos la pestaña por defecto según rol
+    {% if profile|can_see_tab:'form' %}
+        showTab('form');
+    {% else %}
+        showTab('database');
+    {% endif %}
+}
+
+// function checkUrlParams() {
+//     const urlParams = new URLSearchParams(window.location.search);
+//     const tab = urlParams.get('tab');
+//     const q = urlParams.get('q');
+
+//     console.log("PC checkUrlParams - tab:", tab, "q:", q);
+
+//     if (tab === 'digital' && q) {
+//         const searchInput = document.getElementById('digital-q');
+//         if (searchInput) {
+//             searchInput.value = q;
+//             showTab('digital');
+//             digitalSearch();
+//         }
+//     }
+// }
+
+// Variable global para acumular archivos (agregar al inicio del script)
+const CAT = { customer:[], shipper:[], carrier:[], bundle_type:[] };
+let selEntries = [];
+let currentCustomerId = '';
+let accumulatedPhotos = [];
+let accumulatedDocs = [];
+
+function loadCatalog() {
+  fetch('{% url "debug_catalog" %}')
+    .then(r=>r.json())
+    .then(data=>{
+      CAT.customer    = data.customers    || [];
+      CAT.shipper     = data.shippers     || [];
+      CAT.carrier     = data.carriers     || [];
+      CAT.bundle_type = data.bundle_types || [];
+      console.log('Catalog loaded');
+    }).catch(e=>console.error('Catalog load error:',e));
+}
+loadCatalog();
+
+function showTab(t) {
+  const tabs = ['form','database','catalog','digital','reports','users'];
+  tabs.forEach(n=>{
+    const p = document.getElementById('panel-'+n);
+    const b = document.getElementById('tab-'+n);
+    if (p) p.classList.toggle('on', n===t);
+    if (b) b.classList.toggle('on', n===t);
+  });
+  const pb = document.getElementById('print-bar');
+  if (pb) pb.style.display = 'none';
+  if (t === 'users') htmx.ajax('GET','{% url "user_management" %}',{target:'#users-content',swap:'innerHTML'});
+  if (t === 'reports') htmx.ajax('GET','{% url "report_generator" %}',{target:'#report-content',swap:'innerHTML'});
+  if (t !== 'digital') {
+    const dc = document.getElementById('digital-content');
+    if (dc) dc.innerHTML = '<div style="text-align:center;padding:40px;color:var(--faint);font-size:13px">Enter a Custom ID above to load files.</div>';
+    const dq = document.getElementById('digital-q');
+    if (dq) dq.value = '';
+  }
+  localStorage.setItem('activeTab', t);
+}
+
+function filterByStatus(val) {
+  const url = '{% url "operations_search" %}' + (val ? '?status='+encodeURIComponent(val) : '');
+  htmx.ajax('GET', url, {target:'#ops-table', swap:'innerHTML'});
+}
+
+function filterByUser(userId) {
+  if (!userId) {
+    htmx.ajax('GET', '{% url "operations_search" %}', {target:'#ops-table', swap:'innerHTML'});
+  } else {
+    htmx.ajax('GET', '/operations/by-user/' + userId + '/', {target:'#ops-table', swap:'innerHTML'});
+  }
+}
+
+function digitalSearch() {
+  const q = document.getElementById('digital-q').value.trim();
+  if (!q) return;
+  htmx.ajax('GET','{% url "digital_search" %}?q='+encodeURIComponent(q),{target:'#digital-content',swap:'innerHTML'});
+}
+
+const CB = {};
+function cbInit(name){if(!CB[name])CB[name]={hi:-1,open:false,filtered:[...(CAT[name]||[])]};}
+function cbRender(name){
+  cbInit(name);
+  const s=CB[name];
+  const list=document.getElementById('cb-'+name+'-list');
+  if(!list) return;
+  if(!s.filtered.length){list.innerHTML='<div class="cb-none">No matches</div>';}
+  else{list.innerHTML=s.filtered.map((it,i)=>`<div class="cb-opt${i===s.hi?' hi':''}" onmousedown="cbSelect('${name}',${it.id},'${it.name.replace(/'/g,"\\'")}')"> ${it.name}</div>`).join('');}
+}
+function cbOpen(name){
+  cbInit(name);
+  const q=(document.getElementById('cb-'+name+'-input').value||'').trim();
+  if(q.length>0){CB[name].filtered=CAT[name].filter(i=>i.name.toLowerCase().includes(q.toLowerCase()));document.getElementById('cb-'+name+'-list').classList.add('open');cbRender(name);}
+}
+function cbFilter(name){
+  cbInit(name);
+  const q=(document.getElementById('cb-'+name+'-input').value||'').trim();
+  const ql=q.toLowerCase();
+  CB[name].filtered=q?CAT[name].filter(i=>i.name.toLowerCase().includes(ql)):[...(CAT[name]||[])];
+  CB[name].hi=-1;
+  document.getElementById('cb-'+name+'-list').classList.add('open');
+  document.getElementById('cb-'+name+'-text').value=q;
+  const exact=CAT[name].find(i=>i.name.toLowerCase()===ql);
+  if(exact){document.getElementById('cb-'+name+'-id').value=exact.id;if(name==='customer')onCustomerSelected(exact.id);}
+  else{document.getElementById('cb-'+name+'-id').value='';if(name==='customer'){currentCustomerId='';}}
+  cbRender(name);
+}
+function cbBlur(name){
+  setTimeout(()=>{
+    document.getElementById('cb-'+name+'-list').classList.remove('open');
+    const id=document.getElementById('cb-'+name+'-id').value;
+    const input=document.getElementById('cb-'+name+'-input');
+    if(!id&&input.value.trim()){input.value='';document.getElementById('cb-'+name+'-text').value='';document.getElementById('cb-'+name+'-id').value='';}
+    else{document.getElementById('cb-'+name+'-text').value=input.value;}
+  },300);
+}
+function cbSelect(name,id,label){
+  document.getElementById('cb-'+name+'-input').value=label;
+  document.getElementById('cb-'+name+'-id').value=id;
+  document.getElementById('cb-'+name+'-text').value=label;
+  document.getElementById('cb-'+name+'-list').classList.remove('open');
+  if(name==='customer')onCustomerSelected(id);
+}
+function cbKey(e,name){
+  cbInit(name);const s=CB[name];
+  if(e.key==='ArrowDown'){e.preventDefault();s.hi=Math.min(s.hi+1,s.filtered.length-1);cbRender(name);}
+  else if(e.key==='ArrowUp'){e.preventDefault();s.hi=Math.max(s.hi-1,-1);cbRender(name);}
+  else if(e.key==='Enter'){e.preventDefault();if(s.hi>=0&&s.filtered[s.hi]){const it=s.filtered[s.hi];cbSelect(name,it.id,it.name);}}
+  else if(e.key==='Escape'){document.getElementById('cb-'+name+'-list').classList.remove('open');}
+}
+
+function onCustomerSelected(id){
+  currentCustomerId=String(id);
+  if(document.getElementById('id_op_type')&&document.getElementById('id_op_type').value==='EXIT'&&currentCustomerId)loadFreeEntries();
+}
+function onTypeChange(val){
+  const ep=document.getElementById('ep');
+  if(!ep)return;
+  if(val==='EXIT'){
+    ep.classList.add('on');
+    if(currentCustomerId)loadFreeEntries();
+    else document.getElementById('ep-list').innerHTML='<div style="color:var(--faint);font-size:11px;padding:4px 0">Please select a customer first.</div>';
+  }else{ep.classList.remove('on');selEntries=[];document.getElementById('id_ed').value='';}
+}
+function loadFreeEntries(){
+  const url='{% url "free_entries" %}'+(currentCustomerId?'?customer_id='+currentCustomerId:'');
+  fetch(url).then(r=>r.json()).then(data=>{
+    const el=document.getElementById('ep-list');
+    document.getElementById('ep-count').textContent='('+selEntries.length+' sel.)';
+    if(!data.length){el.innerHTML='<div style="color:var(--faint);font-size:11px;padding:4px 0">No free entries found.</div>';return;}
+    el.innerHTML=data.map(e=>`<div class="ei${selEntries.includes(e.custom_id)?' sel':''}" id="ei-${e.custom_id}" onclick="toggleEntry('${e.custom_id}','${(e.po_order||'').replace(/'/g,'\\\\')}')">
+      <div><div class="ei-id">${e.custom_id}</div><div class="ei-dt">${e.date}${e.po_order?' · PO:'+e.po_order:''}</div></div>
+      <span>${selEntries.includes(e.custom_id)?'✓':'+'}</span></div>`).join('');
+  });
+}
+function toggleEntry(id, po) {
+  const idx=selEntries.indexOf(id);
+  if(idx===-1) selEntries.push(id); else selEntries.splice(idx,1);
+  document.getElementById('id_ed').value=selEntries.join(', ');
+  document.getElementById('ep-count').textContent='('+selEntries.length+' sel.)';
+  const el=document.getElementById('ei-'+id);
+  if(el){el.classList.toggle('sel');el.querySelector('span').textContent=selEntries.includes(id)?'✓':'+';}
+  if(selEntries.length>0){autofillExitTotals(selEntries);}
+  else{
+    ['id_lbs','id_kgs'].forEach(i=>{const f=document.getElementById(i);if(f)f.value='';});
+    const b=document.querySelector('[name="bundle_qty"]');if(b)b.value='';
+    const d=document.querySelector('[name="description"]');if(d)d.value='';
+    const po=document.getElementById('id_po_order');if(po)po.value='';
+  }
+}
+
+function syncKgs(v){const f=document.getElementById('id_kgs');if(f&&v)f.value=(parseFloat(v)*0.453592).toFixed(2);}
+function syncLbs(v){const f=document.getElementById('id_lbs');if(f&&v)f.value=(parseFloat(v)/0.453592).toFixed(2);}
+
+function toggleDmg(on){
+  const fl=document.getElementById('fl-dmgdesc'),fi=document.getElementById('fi-dmgdesc'),ta=document.getElementById('ta-dmgdesc');
+  if(on){fl.style.cssText='align-self:flex-start;padding-top:7px;border-bottom:1px solid var(--bdr)';fi.style.cssText='padding:3px 5px;border-bottom:1px solid var(--bdr);display:flex;align-items:flex-start;min-height:30px';ta.style.height='46px';}
+  else{fl.style.cssText='visibility:hidden;height:0;padding:0;border:none;overflow:hidden';fi.style.cssText='visibility:hidden;height:0;padding:0;border:none;overflow:hidden';ta.style.height='0';}
+  document.getElementById('dmg-label').textContent=on?'Yes':'No';
+}
+
+
+
+
+
+function previewFiles(input, previewId) {
+    const prev = document.getElementById(previewId);
+    if (!prev) return;
+    const isImg = previewId === 'photo-prev';
+
+    const newFiles = Array.from(input.files);
+    if (newFiles.length === 0) return;
+
+    if (isImg) {
+        accumulatedPhotos = [...accumulatedPhotos, ...newFiles];
+    } else {
+        accumulatedDocs = [...accumulatedDocs, ...newFiles];
+    }
+
+    const dt = new DataTransfer();
+    const allFiles = isImg ? accumulatedPhotos : accumulatedDocs;
+    allFiles.forEach(f => dt.items.add(f));
+    input.files = dt.files;
+
+    prev.innerHTML = '';
+    allFiles.forEach(f => {
+        const chip = document.createElement('div');
+        chip.style.cssText = 'display:flex;align-items:center;gap:4px;background:#e0f2fe;border:1px solid #bae6fd;border-radius:4px;padding:2px 6px;font-size:10px;color:#0369a1;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+
+        if (isImg && f.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(f);
+            img.style.cssText = 'width:16px;height:16px;object-fit:cover;border-radius:2px;flex-shrink:0';
+            chip.appendChild(img);
+        } else {
+            chip.innerHTML = '📄';
+        }
+
+        const span = document.createElement('span');
+        span.title = f.name;
+        span.textContent = f.name.length > 14 ? f.name.slice(0,12)+'…' : f.name;
+        chip.appendChild(span);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '✕';
+        removeBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#ef4444;margin-left:4px;font-size:10px;padding:2px';
+        removeBtn.onclick = (function(file) {
+            return function() {
+                if (isImg) {
+                    accumulatedPhotos = accumulatedPhotos.filter(x => x !== file);
+                    const dt2 = new DataTransfer();
+                    accumulatedPhotos.forEach(x => dt2.items.add(x));
+                    input.files = dt2.files;
+                } else {
+                    accumulatedDocs = accumulatedDocs.filter(x => x !== file);
+                    const dt2 = new DataTransfer();
+                    accumulatedDocs.forEach(x => dt2.items.add(x));
+                    input.files = dt2.files;
+                }
+                previewFiles(input, previewId);
+            };
+        })(f);
+
+        chip.appendChild(removeBtn);
+        prev.appendChild(chip);
+    });
+
+    console.log(`Total archivos acumulados (${isImg ? 'Photos' : 'Docs'}):`, allFiles.length);
+    input.value = '';
+}
+
+
+
+function resetOpForm() {
+    document.getElementById('op-form').reset();
+    document.getElementById('id_date').value = new Date().toISOString().split('T')[0];
+    ['customer','shipper','carrier','bundle_type'].forEach(n => {
+        const input = document.getElementById('cb-'+n+'-input');
+        if (input) input.value = '';
+        const idField = document.getElementById('cb-'+n+'-id');
+        if (idField) idField.value = '';
+        const textField = document.getElementById('cb-'+n+'-text');
+        if (textField) textField.value = '';
+    });
+    selEntries = [];
+    currentCustomerId = '';
+    const ep = document.getElementById('ep');
+    if (ep) ep.classList.remove('on');
+    const edField = document.getElementById('id_ed');
+    if (edField) edField.value = '';
+    toggleDmg(false);
+    const dmgLabel = document.getElementById('dmg-label');
+    if (dmgLabel) dmgLabel.textContent = 'No';
+    const waCheck = document.getElementById('id_wa');
+    if (waCheck) waCheck.checked = true;
+
+    accumulatedPhotos = [];
+    accumulatedDocs = [];
+
+    const photoPrev = document.getElementById('photo-prev');
+    if (photoPrev) photoPrev.innerHTML = '';
+    const docPrev = document.getElementById('doc-prev');
+    if (docPrev) docPrev.innerHTML = '';
+    const photosInput = document.getElementById('photos-input');
+    if (photosInput) photosInput.value = '';
+    const docsInput = document.getElementById('docs-input');
+    if (docsInput) docsInput.value = '';
+}
+
+
+function onAfterSave(e){
+  if(e.detail.xhr&&e.detail.xhr.status===422)return;
+  if(e.detail.successful){
+    resetOpForm();
+    htmx.ajax('GET','{% url "operations_search" %}',{target:'#ops-table',swap:'innerHTML'});
+    setTimeout(()=>{const msg=document.getElementById('form-msg');if(msg)msg.innerHTML='';},5000);
+  }
+}
+
+function clearFormMsg(){}
+function dismissFormError(){document.getElementById('form-msg').innerHTML='';}
+
+function onAfterCatSave(e){
+  if(e.detail.successful){
+    document.getElementById('cat-form').reset();
+    htmx.ajax('GET','{% url "catalog_list" %}',{target:'#catalog-table',swap:'innerHTML'});
+    loadCatalog();
+  }
+}
+
+function openModal(url){document.getElementById('modal').classList.add('on');htmx.ajax('GET',url,{target:'#modal-body',swap:'innerHTML'});}
+function openEditModal(pk){openModal('/operations/'+pk+'/edit/');}
+function closeModal(){document.getElementById('modal').classList.remove('on');}
+
+// Nueva versión de initActiveTab que respeta la URL//////// 061526
+// function initActiveTab() {
+//     // Si la URL tiene 'tab=digital', no hacemos nada (se fuerza después)
+//     const urlParams = new URLSearchParams(window.location.search);
+//     const tab = urlParams.get('tab');
+
+//     if (tab === 'digital') {
+//         console.log("PC: URL con 'tab=digital', omitiendo initActiveTab");
+//         return;
+//     }
+
+//     // Si no, usamos la pestaña por defecto según rol
+//     {% if profile|can_see_tab:'form' %}
+//         showTab('form');
+//     {% else %}
+//         showTab('database');
+//     {% endif %}
+// }
+
+// Función para mostrar Digital si viene por parámetros///////061526
+// function forceDigitalFromUrl() {
+//     const urlParams = new URLSearchParams(window.location.search);
+//     const tab = urlParams.get('tab');
+//     const q = urlParams.get('q');
+
+//     if (tab === 'digital' && q) {
+//         console.log("🚀 Forzando Digital desde URL");
+//         const searchInput = document.getElementById('digital-q');
+//         if (searchInput) {
+//             searchInput.value = q;
+//             showTab('digital');
+//             digitalSearch();
+//             return true;
+//         }
+//     }
+//     return false;
+// }
+
+
+window.addEventListener('load',()=>{
+  const d=document.getElementById('id_date');
+  if(d)d.value=new Date().toISOString().split('T')[0];
+});
+////////////////// MANTENER 061526 PM ////////////////////////
+document.addEventListener('DOMContentLoaded',function(){
+  const form=document.getElementById('op-form');
+  if(!form)return;
+  form.addEventListener('keydown',function(e){
+    if(e.key!=='Enter')return;
+    e.preventDefault();
+    if(document.activeElement.tagName==='TEXTAREA'){const el=document.activeElement;const start=el.selectionStart;el.value=el.value.substring(0,start)+'\n'+el.value.substring(el.selectionEnd);el.selectionStart=el.selectionEnd=start+1;return;}
+    const focusable=[...form.querySelectorAll('input:not([type=hidden]):not([type=file]):not([type=checkbox]):not([readonly]),select')].filter(el=>!el.disabled&&el.offsetParent!==null);
+    const idx=focusable.indexOf(document.activeElement);
+    if(idx>=0&&idx<focusable.length-1)focusable[idx+1].focus();
+  });
+});
+////////////////// MANTENER 061526 PM ////////////////////////
+
+function autofillExitTotals(selectedEntries){
+  if(!selectedEntries.length)return;
+  fetch('/operations/exit-totals/?ids='+encodeURIComponent(selectedEntries.join(',')))
+    .then(r=>r.json())
+    .then(d=>{
+      const lbs=document.getElementById('id_lbs'),kgs=document.getElementById('id_kgs');
+      const bqty=document.querySelector('[name="bundle_qty"]'),desc=document.querySelector('[name="description"]');
+      const po=document.getElementById('id_po_order');
+      if(lbs&&d.weight_lbs>0){lbs.value=d.weight_lbs;syncKgs(d.weight_lbs);}
+      if(kgs&&d.weight_kgs>0)kgs.value=d.weight_kgs;
+      if(bqty&&d.bundle_qty>0)bqty.value=d.bundle_qty;
+      if(desc&&d.description)desc.value=d.description;
+      if(po&&d.po_order)po.value=d.po_order;
+      if(d.shipper){const si=document.getElementById('cb-shipper-input'),st=document.getElementById('cb-shipper-text'),sid=document.getElementById('cb-shipper-id');if(si)si.value=d.shipper;if(st)st.value=d.shipper;if(sid){const m=CAT.shipper.find(s=>s.name===d.shipper);sid.value=m?m.id:'';}}
+      if(d.bundle_type){const bi=document.getElementById('cb-bundle_type-input'),btt=document.getElementById('cb-bundle_type-text'),bid=document.getElementById('cb-bundle_type-id');if(bi)bi.value=d.bundle_type;if(btt)btt.value=d.bundle_type;if(bid){const m=CAT.bundle_type.find(s=>s.name===d.bundle_type);bid.value=m?m.id:'';}}
+    }).catch(e=>console.error('Exit totals error:',e));
+}
+
+function submitOperationForm() {
+    const form = document.getElementById('op-form');
+    const formData = new FormData(form);
+
+    // Agregar archivos acumulados de FOTOS
+    const photosInput = document.getElementById('photos-input');
+    if (accumulatedPhotos.length > 0) {
+        for (let i = 0; i < accumulatedPhotos.length; i++) {
+            formData.append('photos', accumulatedPhotos[i]);
+        }
+    } else if (photosInput && photosInput.files.length > 0) {
+        for (let i = 0; i < photosInput.files.length; i++) {
+            formData.append('photos', photosInput.files[i]);
+        }
+    }
+
+    // Agregar archivos acumulados de DOCUMENTOS
+    if (accumulatedDocs.length > 0) {
+        for (let i = 0; i < accumulatedDocs.length; i++) {
+            formData.append('documents', accumulatedDocs[i]);
+        }
+    }
+
+    const spinner = document.querySelector('#op-form .htmx-indicator');
+    if (spinner) spinner.style.display = 'inline-flex';
+
+    fetch('/operations/create/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.text())
+    .then(html => {
+        if (spinner) spinner.style.display = 'none';
+        const msgContainer = document.getElementById('form-msg');
+        if (msgContainer) msgContainer.innerHTML = html;
+
+        if (html.includes('msg-success')) {
+            // Limpiar acumuladores después de guardar exitosamente
+            accumulatedPhotos = [];
+            accumulatedDocs = [];
+            resetOpForm();
+            htmx.ajax('GET', '/operations/search/', { target: '#ops-table', swap: 'innerHTML' });
+            setTimeout(() => {
+                if (msgContainer) msgContainer.innerHTML = '';
+            }, 5000);
+        }
+    })
+    .catch(error => {
+        if (spinner) spinner.style.display = 'none';
+        console.error('Error:', error);
+        const msgContainer = document.getElementById('form-msg');
+        if (msgContainer) msgContainer.innerHTML = '<div class="msg-error">✗ Error saving operation.</div>';
+    });
+}
+
+function openDigitalWithId(customId) {
+    showTab('digital');
+    const searchInput = document.getElementById('digital-q');
+    if (searchInput) {
+        searchInput.value = customId;
+        digitalSearch();
+    }
+}
+
+///////////////////////////////////  061526 pm
+// function checkUrlParams() {
+//     const urlParams = new URLSearchParams(window.location.search);
+//     const tab = urlParams.get('tab');
+//     const q = urlParams.get('q');
+
+//     console.log("PC checkUrlParams - tab:", tab, "q:", q);
+
+//     if (tab === 'digital' && q) {
+//         const searchInput = document.getElementById('digital-q');
+//         if (searchInput) {
+//             searchInput.value = q;
+//             showTab('digital');
+//             digitalSearch();
+//         }
+//     }
+// }
+
+console.log("URL completa:", window.location.href);
+console.log("Parámetros:", window.location.search);
+
+// ============================================================
+// INICIALIZACIÓN PRINCIPAL AL CARGAR LA PÁGINA
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Primero, verificar si la URL tiene parámetros 'tab=digital'
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab');
+    const q = urlParams.get('q');
+
+    if (tab === 'digital' && q) {
+        // Si viene del enlace del PDF, vamos directamente a Digital
+        console.log("🎯 Inicialización: detectado 'tab=digital', mostrando Digital");
+        const searchInput = document.getElementById('digital-q');
+        if (searchInput) {
+            searchInput.value = q;
+            showTab('digital');
+            digitalSearch();
+        }
+    } else {
+        // Si no hay parámetros, comportamiento normal (pestaña por defecto)
+        console.log("🏠 Inicialización: sin parámetros, usando pestaña por defecto");
+        // Llamamos a la función initActiveTab que respeta el rol
+        initActiveTab();
+    }
+});
+</script>
+</body>
+</html>

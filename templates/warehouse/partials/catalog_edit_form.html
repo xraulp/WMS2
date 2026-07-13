@@ -1,0 +1,62 @@
+<form hx-post="{% url 'catalog_edit' entry.pk %}"
+      hx-target="#catalog-table"
+      hx-swap="innerHTML"
+      hx-on::after-request="
+        var modalPC = document.getElementById('modal');
+        var modalMobile = document.getElementById('mobile-modal');
+        if (modalPC) modalPC.classList.remove('on');
+        if (modalMobile) modalMobile.style.display = 'none';
+      ">
+  {% csrf_token %}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <!-- Category: read-only -->
+    <div>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Category</label>
+      <input type="text" value="{{ entry.get_category_display }}" readonly
+             style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;background:#f1f5f9;font-size:12px;color:#64748b">
+    </div>
+    <!-- Name: read-only -->
+    <div>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Name</label>
+      <input type="text" value="{{ entry.name }}" readonly
+             style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;background:#f1f5f9;font-size:12px;color:#64748b">
+    </div>
+    <div>
+      <label>Email(s)</label>
+      <input type="text" name="contact_email" value="{{ entry.contact_email|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px">
+    </div>
+    <div>
+      <label>Phone</label>
+      <input type="text" name="phone" value="{{ entry.phone|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px">
+    </div>
+    <div>
+      <label>WhatsApp</label>
+      <input type="text" name="whatsapp" value="{{ entry.whatsapp|default:'' }}" placeholder="+521XXXXXXXXXX" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px">
+    </div>
+    <div>
+      <label>Address</label>
+      <input type="text" name="address" value="{{ entry.address|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px">
+    </div>
+    <div style="grid-column:span 2">
+      <label>Notes</label>
+      <textarea name="notes" rows="2" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px">{{ entry.notes|default:'' }}</textarea>
+    </div>
+    <div>
+      <label>Abreviatura</label>
+      <input type="text" name="abbreviation" value="{{ entry.abbreviation|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px" placeholder="Ej: LBO, ACME">
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button type="submit" style="flex:1;padding:8px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;cursor:pointer">Save Changes</button>
+  <button type="button"
+        onclick="
+          var mm = document.getElementById('mobile-modal');
+          if (mm) mm.style.display = 'none';
+          var mp = document.getElementById('modal');
+          if (mp) mp.classList.remove('on');
+        "
+        style="flex:1;padding:8px;background:#cbd5e1;color:#1e293b;border:1px solid #94a3b8;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;pointer-events:auto;opacity:1;">
+  Cancel
+</button>
+  </div>
+</form>

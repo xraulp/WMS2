@@ -1,0 +1,90 @@
+<div class="mo-hd">
+  <span class="mo-ti">{{ operation.custom_id }}</span>
+  <button class="mo-x" onclick="closeModal()">✕</button>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+  {% for label, value in fields %}
+  <div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:2px">{{ label }}</div>
+    <div style="font-size:13px;color:#0f172a">{{ value|default:"—" }}</div>
+     </div>
+  {% endfor %}
+  {% if operation.damage %}
+  <div style="grid-column:span 2">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:2px">Damage Description</div>
+    <div style="font-size:13px;color:#991b1b;background:#fee2e2;padding:7px 10px;border-radius:6px">{{ operation.damage_description|default:"—" }}</div>
+
+  </div>
+
+  {% endif %}
+</div>
+
+
+{% if operation.documents.all %}
+<div style="margin-bottom:16px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8">Attached Files</div>
+    <a href="{% url 'operation_download_all' operation.pk %}"
+       style="font-size:11px;padding:3px 10px;background:#0ea5e9;color:#fff;border-radius:6px;text-decoration:none;font-weight:500">⬇ Download All</a>
+  </div>
+  {% for doc in operation.documents.all %}
+  <div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #e2e8f0">
+    <span>{% if doc.file_type == 'PHOTO' %}📷{% else %}📄{% endif %}</span>
+    <div style="flex:1">
+      <div style="font-size:12px;font-weight:500">{{ doc.original_name|default:doc.file.name }}</div>
+      <div style="font-size:10px;color:#94a3b8">{{ doc.get_file_type_display }} · {{ doc.uploaded_at|date:"Y-m-d" }}</div>
+    </div>
+    <a href="{{ doc.file.url }}" target="_blank" download="{{ doc.original_name }}" class="btn btn-g btn-sm">⬇</a>
+    <a href="{{ doc.file.url }}" target="_blank" class="btn btn-g btn-sm">View</a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Send email -->
+<div style="border-top:1px solid #e2e8f0;padding-top:14px;margin-bottom:14px">
+  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:10px">Send Report by Email</div>
+  <div id="email-status"></div>
+  <form hx-post="{% url 'operation_send_email' operation.pk %}" hx-target="#email-status" hx-swap="innerHTML">
+    {% csrf_token %}
+    <div style="display:grid;gap:9px">
+      <div>
+        <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">Recipient Email</label>
+        <input type="email" name="recipient_email" class="fi-m" value="{{ customer_email }}" placeholder="recipient@example.com" required>
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">Subject</label>
+        <input type="text" name="subject" class="fi-m" value="{{ email_subject }}" required>
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">Important Message</label>
+        <input type="text" name="message" class="fi-m" placeholder="Optional urgent note...">
+      </div>
+      <button type="submit" class="btn btn-p">📧 Send Report + PDF</button>
+    </div>
+  </form>
+</div>
+
+<!-- Send WhatsApp -->
+{% if is_home %}
+<div style="border-top:1px solid #e2e8f0;padding-top:12px;margin-bottom:14px">
+  <div id="wa-status"></div>
+  <form hx-post="{% url 'operation_send_whatsapp' operation.pk %}" hx-target="#wa-status" hx-swap="innerHTML">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-g" style="color:#25d366;border-color:#25d366">
+      💬 Send WhatsApp Notification
+    </button>
+    {% if operation.customer and operation.customer.whatsapp %}
+    <span style="font-size:11px;color:#94a3b8;margin-left:6px">→ {{ operation.customer.whatsapp }}</span>
+    {% endif %}
+  </form>
+</div>
+{% endif %}
+
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+  <a href="{% url 'operation_pdf' operation.pk %}" target="_blank" class="btn btn-g">📄 Download PDF</a>
+  <a href="{% url 'operation_label' operation.pk %}" target="_blank" class="btn btn-p">
+    🏷 Print Labels{% if operation.bundle_qty and operation.bundle_qty > 1 %} ({{ operation.bundle_qty }}){% endif %}
+  </a>
+</div>
