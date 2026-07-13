@@ -11,8 +11,8 @@ SECRET_KEY = os.environ.get ('SECRET_KEY')
 #DEBUG = os.environ.get ('DEBUG') =='True'
 DEBUG = False  # ¡MUY IMPORTANTE! Desactiva el modo debug
 
-ALLOWED_HOSTS = ['rdeluna.pythonanywhere.com', 'www.rdeluna.pythonanywhere.com', 'localhost', '127.0.0.1']
-
+#ALLOWED_HOSTS = ['rdeluna.pythonanywhere.com', 'www.rdeluna.pythonanywhere.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,.onrender.com').split(',')
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
