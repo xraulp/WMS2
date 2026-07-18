@@ -62,6 +62,7 @@ WSGI_APPLICATION = 'warehouse_system.wsgi.application'
         #'NAME': BASE_DIR / 'db.sqlite3',
    # }
 #}
+
 # Configuración de Base de Datos con fallback seguro
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
@@ -88,7 +89,7 @@ except Exception as e:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-}
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
