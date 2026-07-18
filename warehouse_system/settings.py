@@ -62,12 +62,32 @@ WSGI_APPLICATION = 'warehouse_system.wsgi.application'
         #'NAME': BASE_DIR / 'db.sqlite3',
    # }
 #}
-DATABASES = {
-    'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL'),
-        conn_max_age=600,
-        ssl_require=True  # Recomendado para conexiones seguras
-    )
+# Configuración de Base de Datos con fallback seguro
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+try:
+    # Intenta configurar la base de datos desde DATABASE_URL
+    if DATABASE_URL:
+        DATABASES = {
+            'default': dj_database_url.config(
+                default=DATABASE_URL,
+                conn_max_age=600,
+                ssl_require=True
+            )
+        }
+        print(f"[INFO] Base de datos configurada desde DATABASE_URL.")
+    else:
+        # Si DATABASE_URL no existe, usa SQLite por defecto
+        raise ValueError("DATABASE_URL no está definida en el entorno.")
+except Exception as e:
+    # Si algo falla (URL inválida, variable vacía, etc.), usa SQLite
+    print(f"[WARN] Fallback a SQLite. Razón: {e}")
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 }
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
