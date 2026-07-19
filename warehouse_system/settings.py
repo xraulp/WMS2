@@ -94,15 +94,23 @@ from pathlib import Path
 # ... (el resto de tu código)
 
 # Configuración de base de datos forzada
-DATABASE_URL = os.environ.get('DATABASE_URL')
-print(f"[DEBUG] DATABASE_URL leída: {DATABASE_URL[:30]}...")  # Línea de depuración
+import os
+import dj_database_url
 
-if DATABASE_URL:
+# Obtener la variable de entorno
+raw_url = os.environ.get('DATABASE_URL', '')
+
+# Limpiar: eliminar cualquier prefijo como "DATABASE_URL="
+if raw_url.startswith('DATABASE_URL='):
+    raw_url = raw_url.replace('DATABASE_URL=', '', 1)
+
+# Si la URL es válida, configurar PostgreSQL; si no, usar SQLite
+if raw_url and raw_url.startswith('postgresql://'):
     try:
         DATABASES = {
-            'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)
+            'default': dj_database_url.parse(raw_url, conn_max_age=600, ssl_require=True)
         }
-        print("[INFO] Base de datos configurada desde DATABASE_URL (PostgreSQL)")
+        print("[INFO] Base de datos configurada desde DATABASE_URL")
     except Exception as e:
         print(f"[ERROR] Falló la configuración de PostgreSQL: {e}")
         DATABASES = {
@@ -112,7 +120,7 @@ if DATABASE_URL:
             }
         }
 else:
-    print("[WARN] DATABASE_URL no definida, usando SQLite")
+    print("[WARN] DATABASE_URL no válida, usando SQLite")
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
