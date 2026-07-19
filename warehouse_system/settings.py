@@ -171,6 +171,8 @@ AWS_S3_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400',  # 1 día de caché para los archivos
 }
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.r2.cloudflarestorage.com' if AWS_STORAGE_BUCKET_NAME else None
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 # 3. Configurar el storage backend para archivos multimedia (media)
 #    Esto hace que todos los archivos subidos (fotos, documentos) se guarden en R2.
