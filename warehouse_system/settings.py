@@ -1,18 +1,41 @@
 import os
-import dj_database_url 
+import dj_database_url
 from pathlib import Path
-from dotenv import load_dotenv
-BASE_DIR = Path(__file__).resolve().parent.parent
-env_path = BASE_DIR / '.env'
-load_dotenv(dotenv_path=env_path)
 
-SECRET_KEY = os.environ.get ('SECRET_KEY')
+# ====================================================
+# CARGA DE .env SOLO EN ENTORNO LOCAL (DESARROLLO)
+# ====================================================
+# Render inyecta automáticamente la variable RENDER=True en producción
+IS_PRODUCTION = os.environ.get('RENDER', False)
 
-#DEBUG = os.environ.get ('DEBUG') =='True'
-DEBUG = False  # ¡MUY IMPORTANTE! Desactiva el modo debug
+if not IS_PRODUCTION:
+    # Solo cargar dotenv en desarrollo local
+    try:
+        from dotenv import load_dotenv
+        BASE_DIR = Path(__file__).resolve().parent.parent
+        env_path = BASE_DIR / '.env'
+        load_dotenv(dotenv_path=env_path)
+        print("[INFO] .env cargado desde archivo local")
+    except ImportError:
+        print("[WARN] python-dotenv no instalado, omitiendo carga de .env")
+else:
+    print("[INFO] Entorno de producción (Render), usando variables de entorno del sistema")
 
-#ALLOWED_HOSTS = ['rdeluna.pythonanywhere.com', 'www.rdeluna.pythonanywhere.com', 'localhost', '127.0.0.1']
+# ====================================================
+# CONFIGURACIÓN BASE
+# ====================================================
+# BASE_DIR ya está definido arriba si se cargó .env, pero lo definimos por si acaso
+if 'BASE_DIR' not in locals():
+    BASE_DIR = Path(__file__).resolve().parent.parent
+
+SECRET_KEY = os.environ.get('SECRET_KEY')
+
+# DEBUG: en producción siempre False, en local se puede activar con variable
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+
+# ALLOWED_HOSTS
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,.onrender.com').split(',')
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -21,8 +44,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'warehouse',
+    'storages',  # ← Agrega esta línea para django-storages (R2)
 ]
-
 MIDDLEWARE = [
     
     'django.middleware.security.SecurityMiddleware',
