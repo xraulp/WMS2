@@ -87,25 +87,32 @@ WSGI_APPLICATION = 'warehouse_system.wsgi.application'
 #}
 
 # Configuración de Base de Datos con fallback seguro
-DATABASE_URL = os.environ.get('DATABASE_URL')
+import os
+import dj_database_url
+from pathlib import Path
 
-try:
-    # Intenta configurar la base de datos desde DATABASE_URL
-    if DATABASE_URL:
+# ... (el resto de tu código)
+
+# Configuración de base de datos forzada
+DATABASE_URL = os.environ.get('DATABASE_URL')
+print(f"[DEBUG] DATABASE_URL leída: {DATABASE_URL[:30]}...")  # Línea de depuración
+
+if DATABASE_URL:
+    try:
         DATABASES = {
-            'default': dj_database_url.config(
-                default=DATABASE_URL,
-                conn_max_age=600,
-                ssl_require=True
-            )
+            'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)
         }
-        print(f"[INFO] Base de datos configurada desde DATABASE_URL.")
-    else:
-        # Si DATABASE_URL no existe, usa SQLite por defecto
-        raise ValueError("DATABASE_URL no está definida en el entorno.")
-except Exception as e:
-    # Si algo falla (URL inválida, variable vacía, etc.), usa SQLite
-    print(f"[WARN] Fallback a SQLite. Razón: {e}")
+        print("[INFO] Base de datos configurada desde DATABASE_URL (PostgreSQL)")
+    except Exception as e:
+        print(f"[ERROR] Falló la configuración de PostgreSQL: {e}")
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+else:
+    print("[WARN] DATABASE_URL no definida, usando SQLite")
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
