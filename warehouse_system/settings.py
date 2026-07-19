@@ -181,25 +181,44 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 # ==================================================
 # CONFIGURACIÓN DE ALMACENAMIENTO: CLOUDFLARE R2
 # ==================================================
+# En warehouse_system/settings.py
 
-# 1. Definir las variables de entorno para las credenciales de R2
+# Cloudflare R2
 AWS_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME')
 AWS_S3_ENDPOINT_URL = os.environ.get('R2_ENDPOINT_URL')
+AWS_S3_REGION_NAME = 'auto'
+AWS_S3_SIGNATURE_VERSION = 's3v4'
+AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+AWS_S3_USE_SSL = True
+
+# ⚠️ La URL de desarrollo público (con barra final)
+AWS_S3_CUSTOM_DOMAIN = 'pub-7aa64bbc50bd414e93e88ea59d6561a7.r2.dev'
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+
+
+# 1. Definir las variables de entorno para las credenciales de R2
+#AWS_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')
+#AWS_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY')
+#AWS_STORAGE_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME')
+#AWS_S3_ENDPOINT_URL = os.environ.get('R2_ENDPOINT_URL')
 
 # 2. Configuración adicional requerida por django-storages
-AWS_S3_REGION_NAME = 'auto'  # Cloudflare R2 usa 'auto' para la región
-AWS_S3_OBJECT_PARAMETERS = {
-    'CacheControl': 'max-age=86400',  # 1 día de caché para los archivos
-}
-AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.r2.cloudflarestorage.com' if AWS_STORAGE_BUCKET_NAME else None
-MEDIA_URL = f'https://pub-7aa64bbc50bd414e93e88ea59d6561a7.r2.dev/' 
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+#AWS_S3_REGION_NAME = 'auto'  # Cloudflare R2 usa 'auto' para la región
+#AWS_S3_OBJECT_PARAMETERS = {
+#    'CacheControl': 'max-age=86400',  # 1 día de caché para los archivos
+#}
+#AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.r2.cloudflarestorage.com' if AWS_STORAGE_BUCKET_NAME else None
+#MEDIA_URL = f'https://pub-7aa64bbc50bd414e93e88ea59d6561a7.r2.dev/' 
+#DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 # 3. Configurar el storage backend para archivos multimedia (media)
 #    Esto hace que todos los archivos subidos (fotos, documentos) se guarden en R2.
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+#DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 # 4. (Opcional) Configurar el storage backend para archivos estáticos (static)
 #    Si quieres que tus archivos CSS, JS, etc., también se sirvan desde R2,
