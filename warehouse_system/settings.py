@@ -244,9 +244,6 @@ DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 
 
-
-
-
 # ─── TWILIO WHATSAPP ──────────────────────────────────────────────────────────
 # Get these from console.twilio.com
 TWILIO_ACCOUNT_SID   = os.environ.get ('TWILIO_ACCOUNT_SID')  # Account SID
