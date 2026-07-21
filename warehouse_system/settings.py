@@ -184,7 +184,7 @@ AWS_S3_SIGNATURE_VERSION = 's3v4'
 AWS_S3_USE_SSL = True
 AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
 
-AWS_S3_CUSTOM_DOMAIN = 'pub-7aa64bbc50bd414e93e88ea59d6561a7.r2.dev'
+AWS_S3_CUSTOM_DOMAIN = 'pub-862fc7cb23354925b5bfaf4bc4dd9876.r2.dev' 
 MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
 
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
