@@ -205,3 +205,30 @@ print(f"[DEBUG] DEFAULT_FILE_STORAGE: {DEFAULT_FILE_STORAGE}")
     "MaxAgeSeconds": 3600
   }
 ]
+
+# ====================================================
+# DIAGNÓSTICO DE CONEXIÓN A R2 (TEMPORAL)
+# ====================================================
+try:
+    import boto3
+    from botocore.exceptions import NoCredentialsError, ClientError
+
+    print("[DEBUG] Intentando conectar a R2...")
+    s3 = boto3.client(
+        's3',
+        endpoint_url=AWS_S3_ENDPOINT_URL,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_S3_REGION_NAME
+    )
+    # Intentar listar objetos (solo 1) para verificar credenciales
+    response = s3.list_objects_v2(Bucket=AWS_STORAGE_BUCKET_NAME, MaxKeys=1)
+    print(f"[DEBUG] ✅ Conexión a R2 exitosa. Bucket: {AWS_STORAGE_BUCKET_NAME}")
+    print(f"[DEBUG]   - Contiene {response.get('KeyCount', 0)} objetos.")
+except NoCredentialsError:
+    print("[DEBUG] ❌ No se encontraron credenciales de AWS.")
+except ClientError as e:
+    error_code = e.response['Error']['Code']
+    print(f"[DEBUG] ❌ Error de conexión a R2: {error_code} - {e}")
+except Exception as e:
+    print(f"[DEBUG] ❌ Error inesperado: {e}")
