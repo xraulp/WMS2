@@ -184,7 +184,24 @@ AWS_S3_SIGNATURE_VERSION = 's3v4'
 AWS_S3_USE_SSL = True
 AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
 
-AWS_S3_CUSTOM_DOMAIN = 'pub-862fc7cb23354925b5bfaf4bc4dd9876.r2.dev' 
+AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN')
 MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
 
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+
+# Verificar que la configuración se aplicó (mensajes en logs)
+print(f"[DEBUG] R2_BUCKET_NAME: {AWS_STORAGE_BUCKET_NAME}")
+print(f"[DEBUG] MEDIA_URL: {MEDIA_URL}")
+print(f"[DEBUG] DEFAULT_FILE_STORAGE: {DEFAULT_FILE_STORAGE}")
+
+
+[
+  {
+    "AllowedOrigins": ["*"],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
