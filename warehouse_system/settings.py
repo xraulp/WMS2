@@ -49,7 +49,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'warehouse.middleware.MobileRedirectMiddleware',
+    'warehouse.middleware.TenantMiddleware',          # <--- ¡NUEVO!
+    'warehouse.middleware.TenantPermissionsMiddleware', # <--- ¡NUEVO!
+    'warehouse.middleware.TenantContextMiddleware',    # <--- ¡NUEVO!
 ]
 
 ROOT_URLCONF = 'warehouse_system.urls'
@@ -71,6 +73,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'warehouse_system.wsgi.application'
+
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '.onrender.com',  # Permite cualquier subdominio de Render
+    '.tudominio.com', # Cuando tengas dominio propio
+]
 
 # ====================================================
 # CONFIGURACIÓN DE BASE DE DATOS (SIMPLE Y ROBUSTA)
