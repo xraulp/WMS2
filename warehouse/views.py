@@ -17,6 +17,14 @@ from .utils import generate_pdf_report, generate_label_pdf
 now_local = timezone.localtime(timezone.now())
 generated_at = now_local.strftime('%Y-%m-%d %H:%M')
 
+##### 072526 12:33 Función auxiliar para obtener el tenant
+def get_tenant_or_404(request):
+    """Devuelve el tenant del request o lanza 404."""
+    tenant = getattr(request, 'tenant', None)
+    if not tenant:
+        raise Http404("Tenant no encontrado")
+    return tenant
+##### 072526 12:33
 
 # ── PERMISSION HELPERS ────────────────────────────────────────────────────────
 
@@ -73,9 +81,23 @@ def logout_view(request):
 
 # ── DASHBOARD ─────────────────────────────────────────────────────────────────
 
+#@login_required
+#def dashboard(request):
+    #profile = get_profile(request.user)
+
+#### 072526 12:40 Paso 3: Modificar las vistas de listado (filtro por tenant)
+####3.1. dashboard
 @login_required
 def dashboard(request):
+    tenant = get_tenant_or_404(request) #### 072526 12:40 Paso 3: Modificar las vistas de listado (filtro por tenant)
     profile = get_profile(request.user)
+
+    # Filtrar operaciones por tenant
+    ops = WarehouseOperation.objects.filter(tenant=tenant).select_related( #### 072526 12:40 Paso 3: Modificar las vistas de listado (filtro por tenant)
+        'customer', 'shipper', 'carrier', 'bundle_type', 'created_by'
+    ).order_by('-date')[:200]
+
+###072526 12:40
 
     # Obtener lista de usuarios para el filtro (solo para superadmin/home/manager)
     users = []
@@ -114,13 +136,15 @@ def dashboard(request):
 @login_required
 @require_GET
 def operations_by_user(request, user_id):
+    tenant = get_tenant_or_404(request) ###### 3.1. dashboard 072526 20:43
     """Filtrar operaciones creadas por un usuario específico"""
     profile = get_profile(request.user)
     if not profile.is_superadmin() and not profile.is_home() and not profile.is_manager():
         return HttpResponse('Permission denied.', status=403)
 
     target_user = get_object_or_404(User, pk=user_id)
-    ops = WarehouseOperation.objects.filter(created_by=target_user).select_related(
+    ##ops = WarehouseOperation.objects.filter(created_by=target_user).select_related(
+    ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(  ###### 3.1. dashboard 072526 20:43
         'customer', 'shipper', 'carrier', 'bundle_type', 'created_by')[:200]
 
     return render(request, 'warehouse/partials/operations_table.html', {
@@ -227,6 +251,7 @@ def _send_whatsapp(operation):
 @login_required
 @require_POST
 def operation_create(request):
+    tenant = get_tenant_or_404(request) ############ Usa tenant=tenant al crear la operación 072526 20:49
     profile = get_profile(request.user)
     if not profile.can_create_operations():
         return HttpResponse('<div class="msg-error">✗ Permission denied.</div>', status=422)
@@ -299,6 +324,7 @@ def operation_create(request):
     bundle_type_obj = get_catalog(p.get('bundle_type_id'), 'BUNDLE_TYPE')
 
     op = WarehouseOperation(
+        tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 072526 19:51 4.1. operation_create Al final, al crear la operación, asigna el tenant:
         date=op_date, operation_type=op_type,
         entry_dispatched=p.get('entry_dispatched', '').strip(),
         customer=customer_obj, customer_name_manual=customer_manual,
@@ -371,7 +397,8 @@ def operation_create(request):
 
 @login_required
 def operation_detail(request, pk):
-    op = get_object_or_404(WarehouseOperation, pk=pk)
+    tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 20:57
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### 5.1. operation_detail 072526 20:03
     if is_customer_user(request.user):
         profile = get_profile(request.user)
         if profile.customer and op.customer != profile.customer:
@@ -411,10 +438,11 @@ def operation_detail(request, pk):
 
 @login_required
 def operation_delete(request, pk):
+    tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 20:58
     profile = get_profile(request.user)
     if not profile.can_delete():
         return HttpResponse('Permission denied.', status=403)
-    op = get_object_or_404(WarehouseOperation, pk=pk)
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) #### 5.2. operation_delete 072526 20:05
     if request.method == 'POST':
         _log_deletion(op, request.user)
         op.delete()
@@ -440,6 +468,7 @@ def _log_deletion(op, user):
 
 @login_required
 def operation_delete_confirm(request, pk):
+    tenant = get_tenant_or_404(request) ##### Usa tenant=tenant en get_object_or_404 072526 20:58
     profile = get_profile(request.user)
     if not profile.can_delete():
         return HttpResponse('Permission denied.', status=403)
@@ -447,7 +476,7 @@ def operation_delete_confirm(request, pk):
         return HttpResponse(status=405)
 
     password = request.POST.get('confirm_password','')
-    op = get_object_or_404(WarehouseOperation, pk=pk)
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant )  ######y operation_delete_confirm 072526 20:06
     ops_qs = WarehouseOperation.objects.select_related(
         'customer','shipper','carrier','bundle_type').all()
     ops_qs = customer_ops_filter(request.user, ops_qs)[:200]
@@ -511,7 +540,8 @@ def operation_delete_confirm(request, pk):
 
 @login_required
 def operation_pdf(request, pk):
-    op = get_object_or_404(WarehouseOperation, pk=pk)
+    tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:00
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### 5.3. operation_pd  072526 20:09
     if is_customer_user(request.user):
         profile = get_profile(request.user)
         if profile.customer and op.customer != profile.customer:
@@ -524,7 +554,8 @@ def operation_pdf(request, pk):
 
 @login_required
 def operation_label(request, pk):
-    op = get_object_or_404(WarehouseOperation, pk=pk)
+    tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:00
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ####operation_label 072526 20:10
     pdf = generate_label_pdf(op)
     resp = HttpResponse(pdf, content_type='application/pdf')
     resp['Content-Disposition'] = f'inline; filename="{op.custom_id}_label.pdf"'
@@ -533,7 +564,8 @@ def operation_label(request, pk):
 
 @login_required
 def operation_download_all(request, pk):
-    op = get_object_or_404(WarehouseOperation, pk=pk)
+    tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:00
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### operation_download_all 072526 20:11
     docs = op.documents.all()
 
     if not docs.exists():
@@ -608,7 +640,8 @@ def get_customer_abbreviation(operation):
 @login_required
 @require_POST
 def operation_send_email(request, pk):
-    op        = get_object_or_404(WarehouseOperation, pk=pk)
+    tenant = get_tenant_or_404(request) ######### Usa tenant=tenant en get_object_or_404 0072526 21:03
+    op        = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)##### operation_send_email  072526 20:13
     recipient = request.POST.get('recipient_email','').strip()
     subject   = request.POST.get('subject', _build_subject(op))
     message   = request.POST.get('message','')
@@ -636,8 +669,9 @@ def operation_send_email(request, pk):
 @login_required
 @require_POST
 def operation_send_whatsapp(request, pk):
+    tenant = get_tenant_or_404(request) ######### Usa tenant=tenant en get_object_or_404 0072526 21:03
     """Send WhatsApp message for a specific operation."""
-    op = get_object_or_404(WarehouseOperation, pk=pk)
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### operation_send_whatsapp 072526 20:13
     if is_customer_user(request.user):
         profile = get_profile(request.user)
         if profile.customer and op.customer != profile.customer:
@@ -654,11 +688,16 @@ def operation_send_whatsapp(request, pk):
 @login_required
 @require_GET
 def operations_search(request):
+    tenant = get_tenant_or_404(request) #### 072526 12:51 Modifica la consulta inicial:
     q   = request.GET.get('q','').strip()
     status_filter = request.GET.get('status','').strip()
-    ops = WarehouseOperation.objects.select_related(
-        'customer','shipper','carrier','bundle_type').all()
-    ops = customer_ops_filter(request.user, ops)
+    #####ops = WarehouseOperation.objects.select_related(
+    #####    'customer','shipper','carrier','bundle_type').all()
+    #####ops = customer_ops_filter(request.user, ops)
+    ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
+        'customer', 'shipper', 'carrier', 'bundle_type' #### 072526 12:54 Modifica la consulta inicial:
+    )
+
     if q:
         ops = ops.filter(
             Q(custom_id__icontains=q) | Q(operation_type__icontains=q) |
@@ -682,6 +721,7 @@ def operations_search(request):
 @login_required
 @require_GET
 def free_entries(request):
+    tenant = get_tenant_or_404(request) ##### 072526 13:00 3.3. free_entries
     customer_id = request.GET.get('customer_id','').strip()
     if not customer_id:
         return JsonResponse([], safe=False)
@@ -690,6 +730,7 @@ def free_entries(request):
     except (ValueError, TypeError):
         return JsonResponse([], safe=False)
     ops = WarehouseOperation.objects.filter(
+        tenant=tenant, ##### 072526 13:00 3.3. free_entries
         operation_type='ENTRY', customer_id=cid,
     ).filter(Q(entry_dispatched__isnull=True)|Q(entry_dispatched='')).order_by('-date')
     return JsonResponse(
@@ -701,11 +742,12 @@ def free_entries(request):
 
 @login_required
 def digital_search(request):
+    tenant = get_tenant_or_404(request) ##### 072526 13:07
     q  = request.GET.get('q','').strip()
     op = None
     if q:
         try:
-            op = WarehouseOperation.objects.get(custom_id__iexact=q)
+            op = WarehouseOperation.objects.get(tenant=tenant, custom_id__iexact=q) ##### tenant=tenant 072526 13:07
             if is_customer_user(request.user):
                 profile = get_profile(request.user)
                 if profile.customer and op.customer != profile.customer:
@@ -721,6 +763,7 @@ def digital_search(request):
 @login_required
 @require_POST
 def digital_upload(request, pk):
+    tenant = get_tenant_or_404(request) ######### Usa tenant=tenant al crear el documento 072526 20:51
     op = get_object_or_404(WarehouseOperation, pk=pk)
     if is_customer_user(request.user):
         profile = get_profile(request.user)
@@ -743,6 +786,7 @@ def digital_upload(request, pk):
         else:                                                  ftype = 'OTHER'
 
         doc = OperationDocument.objects.create(
+            tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 4.2. digital_upload Al crear el documento, asignar tenant: 072526 19:55
             operation=op, file_type=ftype, file=f,
             original_name=f.name, digital_name=digital_name,
             uploaded_by=request.user)
@@ -758,6 +802,7 @@ def digital_upload(request, pk):
 
 @login_required
 def digital_delete_file(request, doc_pk):
+    tenant = get_tenant_or_404(request) ######### Usa tenant=tenant al crear el documento 072526 21:05
     # Verificar que el usuario tenga permiso para eliminar
     profile = get_profile(request.user)
     if not profile.can_delete():
@@ -778,7 +823,7 @@ def digital_delete_file(request, doc_pk):
 
     if not password_valid:
         # Contraseña incorrecta
-        doc = get_object_or_404(OperationDocument, pk=doc_pk)
+        doc = get_object_or_404(OperationDocument, pk=doc_pk, tenant=tenant) ######5.6. digital_delete_file, digital_delete_multiple 072526 20:17
         op = doc.operation
         return render(request, 'warehouse/partials/digital_panel.html', {
             'operation': op, 'query': op.custom_id,
@@ -807,6 +852,7 @@ def digital_delete_file(request, doc_pk):
 @login_required
 @require_POST
 def digital_delete_multiple(request):
+    tenant = get_tenant_or_404(request) ######### Usa tenant=tenant al crear el documento 072526 21:05
     """Elimina múltiples archivos de Digital con verificación de contraseña."""
     profile = get_profile(request.user)
     if not profile.can_delete():
@@ -829,7 +875,7 @@ def digital_delete_multiple(request):
         return HttpResponse('<div class="msg-error">❌ Contraseña de eliminación incorrecta.</div>')
 
     # Obtener los documentos
-    docs = OperationDocument.objects.filter(pk__in=doc_ids)
+    docs = OperationDocument.objects.filter(pk__in=doc_ids, tenant=tenant) ##### # y en digital_delete_multiple, filtrar documentos por tenant: 072526 20:19
     if not docs.exists():
         return HttpResponse('<div class="msg-error">✗ Ninguno de los archivos seleccionados existe.</div>')
 
@@ -898,7 +944,8 @@ def report_generator(request):
         if not customer_ids and not all_customers:
             error = 'Please select at least one customer or choose All Customers.'
         else:
-            ops = WarehouseOperation.objects.select_related(
+            ####ops = WarehouseOperation.objects.select_related(
+            ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(   ######072526 13:13  En report_generator, la consulta base debe ser:
                 'customer', 'shipper', 'carrier', 'bundle_type', 'created_by').all()
             ops = customer_ops_filter(request.user, ops)
 
@@ -1051,6 +1098,7 @@ def report_generator_email(request):
 @login_required
 @require_POST
 def catalog_create(request):
+    tenant = get_tenant_or_404(request) ###### Usa tenant=tenant al crear el catálogo 072526 20:52
     profile = get_profile(request.user)
     if profile.is_customer():
         return HttpResponse('Permission denied.', status=403)
@@ -1060,6 +1108,7 @@ def catalog_create(request):
     if not category or not name:
         return HttpResponse('<div class="msg-error">✗ Category and Name are required.</div>')
     entry = Catalog.objects.create(
+        tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 4.3. catalog_create 072526 19:57
         category=category, name=name,
         contact_email=p.get('contact_email','').strip(),
         phone=p.get('phone','').strip(),
@@ -1078,10 +1127,11 @@ def catalog_create(request):
 
 @login_required
 def catalog_edit(request, pk):
+    tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 20:55
     profile = get_profile(request.user)
     if profile.is_customer():
         return HttpResponse('Permission denied.', status=403)
-    entry = get_object_or_404(Catalog, pk=pk)
+    entry = get_object_or_404(Catalog, pk=pk, tenant=tenant) #### 4.4. catalog_edit Verificar que el catálogo pertenece al tenant:
     if request.method == 'POST':
         p = request.POST
         entry.name          = p.get('name', entry.name).strip()
@@ -1100,10 +1150,11 @@ def catalog_edit(request, pk):
 
 @login_required
 def catalog_delete(request, pk):
+    tenant = get_tenant_or_404(request) ###### Usa tenant=tenant en get_object_or_404 072526 20:56
     profile = get_profile(request.user)
     if profile.is_customer():
         return HttpResponse('Permission denied.', status=403)
-    entry = get_object_or_404(Catalog, pk=pk)
+    entry = get_object_or_404(Catalog, pk=pk, tenant=tenant) #####4.5. catalog_delete 072526 20:00
     if request.method == 'POST':
         entry.active = False
         entry.save()
@@ -1115,16 +1166,19 @@ def catalog_delete(request, pk):
 
 @login_required
 def catalog_list(request):
+    tenant = get_tenant_or_404(request) ##### 072526 13:20 3.6. catalog_list, catalog_autocomplete
+    entries = Catalog.objects.filter(tenant=tenant, active=True).order_by('category', 'name') ##### 072526 13:20 3.6. catalog_list, catalog_autocomplete
     return render(request, 'warehouse/partials/catalog_table.html', {
-        'catalog_entries': Catalog.objects.filter(active=True).order_by('category','name')
-    })
+        'catalog_entries': entries}) ###Catalog.objects.filter(active=True).order_by('category','name')
+    ##})
 
 
 @login_required
 def catalog_autocomplete(request):
+    tenant = get_tenant_or_404(request)  ##### 072526 13:17 3.6. catalog_list, catalog_autocomplete
     category = request.GET.get('category','')
     q        = request.GET.get('q','')
-    entries  = Catalog.objects.filter(category=category, active=True)
+    entries  = Catalog.objects.filter(tenant=tenant, category=category, active=True) ##### 072526 tenant=tenant,
     if q: entries = entries.filter(name__icontains=q)
     return JsonResponse([{'id': e.pk, 'name': e.name} for e in entries[:20]], safe=False)
 
@@ -1241,11 +1295,13 @@ def mobile_dashboard(request):
 @login_required
 @require_GET
 def exit_entry_totals(request):
+    tenant = get_tenant_or_404(request) #####072526 13:28 3.7. exit_entry_totals
     ids_str = request.GET.get('ids', '')
     if not ids_str:
         return JsonResponse({})
     custom_ids = [x.strip() for x in ids_str.split(',') if x.strip()]
     entries = WarehouseOperation.objects.filter(
+        tenant=tenant, #####072526 13:28 3.7. exit_entry_totals
         custom_id__in=custom_ids, operation_type='ENTRY'
     ).select_related('shipper', 'bundle_type')
 
@@ -1286,7 +1342,8 @@ def exit_entry_totals(request):
 
 @login_required
 def operation_edit(request, pk):
-    op = get_object_or_404(WarehouseOperation, pk=pk)
+    tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:05
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### 5.5. operation_edit 072526 20:15
     profile = get_profile(request.user)
     if not is_home(request.user) and not profile.is_customer():
         return HttpResponse('Permission denied.', status=403)
