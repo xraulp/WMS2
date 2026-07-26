@@ -9,6 +9,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.db.models import Q
 from io import BytesIO
+from django.http import Http404
 import os, json, zipfile
 
 from .models import WarehouseOperation, Catalog, OperationDocument, UserProfile, DeletionLog

@@ -2,6 +2,14 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 
+# warehouse/models.py (al inicio, después de los imports)
+ROLE_CHOICES = [
+    ('superadmin', 'Super Administrador'),
+    ('admin', 'Administrador'),
+    ('manager', 'Gerente'),
+    ('staff', 'Staff'),
+    ('customer', 'Cliente'),
+]
 
 class Catalog(models.Model):
     CATEGORY_CHOICES = [
@@ -12,9 +20,10 @@ class Catalog(models.Model):
         ('TYPE_OP',     'Type of Operation'),
         ('CC_EMAIL',    'CC Email'),
     ]
+    tenant        = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='catalog_entries')
     category      = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
     name          = models.CharField(max_length=200)
-    abbreviation = models.CharField(max_length=10, blank=True, null=True,
+    abbreviation = models.CharField(max_length=50, blank=True, null=True,
                                      help_text='Abreviatura del cliente (ej: LBO, ACME)')
     contact_email = models.TextField(blank=True, null=True)
     phone         = models.CharField(max_length=50, blank=True, null=True)
@@ -33,45 +42,51 @@ class Catalog(models.Model):
 
 
 class UserProfile(models.Model):
-    ROLE_CHOICES = [
-        ('superadmin', 'Super Administrator'),
-        ('manager',    'Manager'),
-        ('staff',      'Staff'),
-        ('customer',   'Customer'),
+      user = models.OneToOneField(User, on_delete=models.CASCADE)
+      tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='users')
+      #role = models.ForeignKey('Role', on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
+      role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='staff')  # <--- CAMBIA ESTO
+      #created_at = models.DateTimeField(auto_now_add=True)   # <--- AGREGA ESTA LÍNEA
+      created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True) ### 072626 9:47
+
+ROLE_CHOICES = [
+    ('superadmin', 'Super Administrator'),
+    ('manager',    'Manager'),
+    ('staff',      'Staff'),
+    ('customer',   'Customer'),
     ]
-    user            = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    role            = models.CharField(max_length=20, choices=ROLE_CHOICES, default='manager')
-    plain_password  = models.CharField(max_length=128, blank=True, null=True)
-    customer        = models.ForeignKey(Catalog, on_delete=models.SET_NULL, null=True, blank=True,
+user            = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+role            = models.CharField(max_length=20, choices=ROLE_CHOICES, default='manager')
+plain_password  = models.CharField(max_length=128, blank=True, null=True)
+ustomer        = models.ForeignKey(Catalog, on_delete=models.SET_NULL, null=True, blank=True,
                                         limit_choices_to={'category': 'CUSTOMER'})
-    delete_password = models.CharField(max_length=128, blank=True, null=True,
+delete_password = models.CharField(max_length=128, blank=True, null=True,
                        help_text='Custom password required to delete records')
 
-    def is_superadmin(self):
+def is_superadmin(self):
         return self.role == 'superadmin' or self.user.is_superuser
 
-    def is_manager(self):
-        return self.role in ('superadmin', 'manager') or self.user.is_superuser
+def is_manager(self):
 
-    def is_staff_role(self):
+ def is_staff_role(self):
         return self.role == 'staff'
 
-    def is_customer(self):
+def is_customer(self):
         return self.role == 'customer'
 
-    def is_home(self):
+def is_home(self):
         return self.role in ('superadmin', 'manager') or self.user.is_superuser
 
-    def can_delete(self):
+def can_delete(self):
         return self.role in ('superadmin', 'manager') or self.user.is_superuser
 
-    def can_create_operations(self):
+def can_create_operations(self):
         return self.role in ('superadmin', 'manager', 'staff')
 
-    def can_manage_users(self):
+def can_manage_users(self):
         return self.role == 'superadmin' or self.user.is_superuser
 
-    def can_see_tab(self, tab):
+def can_see_tab(self, tab):
         if self.role == 'customer':
             return tab in ('database', 'digital', 'reports')
         if self.role == 'staff':
@@ -80,13 +95,14 @@ class UserProfile(models.Model):
             return tab in ('form', 'database', 'catalog', 'digital', 'reports')
         return True
 
-    def __str__(self):
+def __str__(self):
         return f"{self.user.username} ({self.role})"
 
 
 class WarehouseOperation(models.Model):
     TYPE_CHOICES = [('ENTRY', 'Entry'), ('EXIT', 'Exit')]
-
+    tenant               = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, 
+                                             related_name='operations')
     date                 = models.DateField(default=timezone.now)
     operation_type       = models.CharField(max_length=5, choices=TYPE_CHOICES)
     custom_id            = models.CharField(max_length=20, unique=True, blank=True)
@@ -260,6 +276,7 @@ class WarehouseOperation(models.Model):
 
 class OperationDocument(models.Model):
     FILE_TYPE_CHOICES = [('PHOTO', 'Photo'), ('DOCUMENT', 'Document'), ('VIDEO', 'Video'), ('OTHER', 'Other')]
+    tenant        = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='documents')
     operation     = models.ForeignKey(WarehouseOperation, on_delete=models.CASCADE, related_name='documents')
     file_type     = models.CharField(max_length=10, choices=FILE_TYPE_CHOICES, default='OTHER')
     file          = models.FileField(upload_to='operations/%Y/%m/%d/')
@@ -287,3 +304,209 @@ class DeletionLog(models.Model):
 
     def __str__(self):
         return f"Deleted {self.custom_id} by {self.deleted_by} at {self.deleted_at}"
+
+    # ============================================================
+# MULTI-TENENCIA JERÁRQUICA (NIVEL 1, 2, 3)
+# ============================================================
+
+class Tenant(models.Model):
+    """
+    Nivel 2: Corporativo / Empresa Matriz (type='organization')
+    Nivel 3: Sucursal / Franquicia (type='branch')
+    """
+    TYPES = (
+        ('organization', 'Corporativo / Empresa Matriz'),
+        ('branch', 'Sucursal / Franquicia'),
+    )
+
+    name = models.CharField(max_length=200, verbose_name="Nombre")
+    type = models.CharField(max_length=20, choices=TYPES, verbose_name="Tipo")
+    subdomain = models.CharField(max_length=50, unique=True, verbose_name="Subdominio")
+    parent = models.ForeignKey(
+        'self', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='children',
+        verbose_name="Tenant Padre"
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Creado el")
+    
+    # Configuraciones específicas
+    config = models.JSONField(default=dict, blank=True, verbose_name="Configuración")
+    
+    # Facturación (solo para organizations)
+    billing_email = models.EmailField(blank=True, null=True, verbose_name="Email de Facturación")
+    plan = models.CharField(
+        max_length=50, 
+        default='starter',
+        choices=[('starter', 'Starter'), ('pro', 'Pro'), ('enterprise', 'Enterprise')],
+        verbose_name="Plan"
+    )
+
+    class Meta:
+        verbose_name = "Tenant"
+        verbose_name_plural = "Tenants"
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_type_display()})"
+
+    @property
+    def is_organization(self):
+        return self.type == 'organization'
+
+    @property
+    def is_branch(self):
+        return self.type == 'branch'
+
+    @property
+    def root_tenant(self):
+        """Obtiene el tenant raíz (organización) de esta jerarquía."""
+        if self.is_organization:
+            return self
+        return self.parent
+
+    def get_all_branches(self):
+        """Obtiene todas las sucursales de esta organización (solo si es organización)."""
+        if self.is_organization:
+            return self.children.filter(type='branch', is_active=True)
+        return Tenant.objects.none()
+
+    def get_all_children(self):
+        """Obtiene todos los tenants hijos (directos e indirectos)."""
+        children = list(self.children.all())
+        for child in children:
+            children.extend(child.get_all_children())
+        return children
+
+
+class Role(models.Model):
+    """
+    Roles jerárquicos con herencia de permisos.
+    """
+    name = models.CharField(max_length=50, verbose_name="Nombre del Rol")
+    tenant = models.ForeignKey(
+        Tenant, 
+        on_delete=models.CASCADE, 
+        related_name='roles',
+        verbose_name="Tenant"
+    )
+    permissions = models.ManyToManyField(
+        'auth.Permission', 
+        blank=True,
+        verbose_name="Permisos"
+    )
+    parent = models.ForeignKey(
+        'self', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='children_roles',
+        verbose_name="Rol Padre"
+    )
+    description = models.TextField(blank=True, null=True, verbose_name="Descripción")
+
+    class Meta:
+        verbose_name = "Rol"
+        verbose_name_plural = "Roles"
+        unique_together = [['name', 'tenant']]
+
+    def __str__(self):
+        return f"{self.name} ({self.tenant.name})"
+
+    def get_all_permissions(self):
+        """Obtiene todos los permisos heredados (incluyendo los del padre)."""
+        perms = set(self.permissions.all())
+        if self.parent:
+            perms.update(self.parent.get_all_permissions())
+        return perms
+
+    def has_permission(self, perm_codename):
+        """Verifica si el rol tiene un permiso específico (incluyendo herencia)."""
+        return perm_codename in [p.codename for p in self.get_all_permissions()]
+
+
+class Subscription(models.Model):
+    """
+    Suscripción por tenant principal (Nivel 2).
+    """
+    tenant = models.OneToOneField(
+        Tenant, 
+        on_delete=models.CASCADE, 
+        related_name='subscription',
+        verbose_name="Tenant"
+    )
+    plan = models.CharField(
+        max_length=50, 
+        default='starter',
+        choices=[('starter', 'Starter'), ('pro', 'Pro'), ('enterprise', 'Enterprise')],
+        verbose_name="Plan"
+    )
+    start_date = models.DateField(auto_now_add=True, verbose_name="Fecha de Inicio")
+    end_date = models.DateField(null=True, blank=True, verbose_name="Fecha de Fin")
+    is_active = models.BooleanField(default=True, verbose_name="Activa")
+    
+    # Métricas de uso
+    storage_used_gb = models.FloatField(default=0, verbose_name="Almacenamiento usado (GB)")
+    operations_count = models.IntegerField(default=0, verbose_name="Número de Operaciones")
+    
+    # Facturación
+    invoice_number = models.CharField(max_length=50, blank=True, null=True, verbose_name="Número de Factura")
+    invoice_date = models.DateField(null=True, blank=True, verbose_name="Fecha de Factura")
+    amount_usd = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Monto (USD)")
+
+    class Meta:
+        verbose_name = "Suscripción"
+        verbose_name_plural = "Suscripciones"
+
+    def __str__(self):
+        return f"{self.tenant.name} - {self.plan}"
+
+# Métodos de utilidad
+    def can_access_tenant(self, tenant):
+        """Verifica si el usuario puede acceder a los datos de un tenant."""
+        if not self.tenant:
+            return False
+        if self.tenant == tenant:
+            return True
+        # Un usuario de organización puede acceder a sus branches
+        if self.tenant.is_organization and tenant.parent == self.tenant:
+            return True
+        return False
+    
+    def has_tenant_permission(self, perm_codename):
+        """Verifica si el usuario tiene un permiso específico (con herencia)."""
+        if self.role:
+            return self.role.has_permission(perm_codename)
+        return False
+
+    
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Creado el")
+    
+    config = models.JSONField(default=dict, blank=True, verbose_name="Configuración")
+    billing_email = models.EmailField(blank=True, null=True, verbose_name="Email de Facturación")
+    plan = models.CharField(
+        max_length=50, 
+        default='starter',
+        choices=[('starter', 'Starter'), ('pro', 'Pro'), ('enterprise', 'Enterprise')],
+        verbose_name="Plan"
+    )
+
+    class Meta:
+        verbose_name = "Tenant"
+        verbose_name_plural = "Tenants"
+        ordering = ['tenant__name']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_type_display()})"
+
+    @property
+    def is_organization(self):
+        return self.type == 'organization'
+
+    @property
+    def is_branch(self):
+        return self.type == 'branch'
