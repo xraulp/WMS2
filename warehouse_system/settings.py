@@ -49,8 +49,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'warehouse.middleware.TenantPermissionsMiddleware', # <--- ¡NUEVO!
-    'warehouse.middleware.TenantContextMiddleware',    # <--- ¡NUEVO!
+    #'warehouse.middleware.TenantPermissionsMiddleware', # <--- ¡NUEVO!
+    #'warehouse.middleware.TenantContextMiddleware',    # <--- ¡NUEVO!
     'warehouse.middleware.TenantMiddleware',          # <--- ¡NUEVO!
 ]
 
