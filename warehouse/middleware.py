@@ -12,17 +12,26 @@ class TenantMiddleware:
     def __call__(self, request):
         host = request.get_host()
         subdomain = host.split('.')[0] if '.' in host else None
-        
+
         if subdomain:
             try:
                 request.tenant = Tenant.objects.get(subdomain=subdomain, is_active=True)
             except Tenant.DoesNotExist:
                 raise Http404("Tenant no encontrado")
         else:
-            # Sin subdominio -> panel de superadmin
-            #####request.tenant = None
-            #####072526 12:23 ds En desarrollo local, usar tenant por defecto (subdomain='default')
+            # Sin subdominio: usar tenant por defecto o crearlo
             request.tenant = Tenant.objects.filter(subdomain='default', is_active=True).first()
+            if not request.tenant:
+                # Crear tenant por defecto automáticamente
+                request.tenant = Tenant.objects.create(
+                    name='Default Organization',
+                    type='organization',
+                    subdomain='default',
+                    is_active=True,
+                    billing_email='admin@example.com',
+                    plan='pro'
+                )
+                print("✅ Tenant 'default' creado automáticamente")
 
         # Configurar RLS si hay tenant
         if request.tenant and request.user.is_authenticated:
