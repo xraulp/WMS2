@@ -51,7 +51,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     #'warehouse.middleware.TenantPermissionsMiddleware', # <--- ¡NUEVO!
     #'warehouse.middleware.TenantContextMiddleware',    # <--- ¡NUEVO!
-    'warehouse.middleware.TenantMiddleware',          # <--- ¡NUEVO!
+    #'warehouse.middleware.TenantMiddleware',          # <--- ¡NUEVO!
 ]
 
 ROOT_URLCONF = 'warehouse_system.urls'
