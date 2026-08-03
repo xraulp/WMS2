@@ -49,9 +49,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    #'warehouse.middleware.TenantPermissionsMiddleware', # <--- ¡NUEVO!
-    #'warehouse.middleware.TenantContextMiddleware',    # <--- ¡NUEVO!
-    #'warehouse.middleware.TenantMiddleware',          # <--- ¡NUEVO!
+    #'warehouse.middleware.TenantPermissionsMiddleware', # pendiente: 'role' es CharField, no FK a Role todavia
+    #'warehouse.middleware.TenantContextMiddleware',      # pendiente: revisar si aplica con TemplateResponse
+    'warehouse.middleware.TenantMiddleware',
 ]
 
 ROOT_URLCONF = 'warehouse_system.urls'

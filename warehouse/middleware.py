@@ -4,34 +4,30 @@ from .models import Tenant
 
 class TenantMiddleware:
     """
-    Middleware para detectar el tenant por subdominio y configurar RLS.
+    Middleware para detectar el tenant: primero por subdominio (para cuando
+    haya subdominios reales por tenant), y si no aplica, usando el tenant
+    asignado al perfil del usuario autenticado. Ya no lanza 404 si no
+    encuentra nada; simplemente deja request.tenant en None y cada vista
+    decide si el tenant es obligatorio (via get_tenant_or_404).
     """
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        host = request.get_host()
-        subdomain = host.split('.')[0] if '.' in host else None
+        host = request.get_host().split(':')[0]
+        parts = host.split('.')
+        subdomain = parts[0] if len(parts) >= 3 else None
 
-        if subdomain:
-            try:
-                request.tenant = Tenant.objects.get(subdomain=subdomain, is_active=True)
-            except Tenant.DoesNotExist:
-                raise Http404("Tenant no encontrado")
-        else:
-            # Sin subdominio: usar tenant por defecto o crearlo
-            request.tenant = Tenant.objects.filter(subdomain='default', is_active=True).first()
-            if not request.tenant:
-                # Crear tenant por defecto automáticamente
-                request.tenant = Tenant.objects.create(
-                    name='Default Organization',
-                    type='organization',
-                    subdomain='default',
-                    is_active=True,
-                    billing_email='admin@example.com',
-                    plan='pro'
-                )
-                print("✅ Tenant 'default' creado automáticamente")
+        tenant = None
+        if subdomain and subdomain not in ('www',):
+            tenant = Tenant.objects.filter(subdomain=subdomain, is_active=True).first()
+
+        if not tenant and request.user.is_authenticated:
+            profile = getattr(request.user, 'profile', None)
+            if profile and profile.tenant_id:
+                tenant = profile.tenant
+
+        request.tenant = tenant
 
         # Configurar RLS si hay tenant
         if request.tenant and request.user.is_authenticated:
