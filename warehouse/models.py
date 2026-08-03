@@ -42,60 +42,53 @@ class Catalog(models.Model):
 
 
 class UserProfile(models.Model):
-      user = models.OneToOneField(User, on_delete=models.CASCADE)
-      tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='users')
-      #role = models.ForeignKey('Role', on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
-      role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='staff')  # <--- CAMBIA ESTO
-      #created_at = models.DateTimeField(auto_now_add=True)   # <--- AGREGA ESTA LÍNEA
-      created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True) ### 072626 9:47
-
-ROLE_CHOICES = [
-    ('superadmin', 'Super Administrator'),
-    ('manager',    'Manager'),
-    ('staff',      'Staff'),
-    ('customer',   'Customer'),
-    ]
-user            = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-role            = models.CharField(max_length=20, choices=ROLE_CHOICES, default='manager')
-plain_password  = models.CharField(max_length=128, blank=True, null=True)
-ustomer        = models.ForeignKey(Catalog, on_delete=models.SET_NULL, null=True, blank=True,
-                                        limit_choices_to={'category': 'CUSTOMER'})
-delete_password = models.CharField(max_length=128, blank=True, null=True,
+    user            = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    tenant          = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='users')
+    role            = models.CharField(max_length=20, choices=ROLE_CHOICES, default='staff')
+    plain_password  = models.CharField(max_length=128, blank=True, null=True)
+    customer        = models.ForeignKey(Catalog, on_delete=models.SET_NULL, null=True, blank=True,
+                                         limit_choices_to={'category': 'CUSTOMER'})
+    delete_password = models.CharField(max_length=128, blank=True, null=True,
                        help_text='Custom password required to delete records')
+    created_at      = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
-def is_superadmin(self):
+    def is_superadmin(self):
         return self.role == 'superadmin' or self.user.is_superuser
 
-def is_manager(self):
+    def is_admin(self):
+        return self.role == 'admin'
 
- def is_staff_role(self):
+    def is_manager(self):
+        return self.role == 'manager'
+
+    def is_staff_role(self):
         return self.role == 'staff'
 
-def is_customer(self):
+    def is_customer(self):
         return self.role == 'customer'
 
-def is_home(self):
-        return self.role in ('superadmin', 'manager') or self.user.is_superuser
+    def is_home(self):
+        return self.role in ('superadmin', 'admin', 'manager') or self.user.is_superuser
 
-def can_delete(self):
-        return self.role in ('superadmin', 'manager') or self.user.is_superuser
+    def can_delete(self):
+        return self.role in ('superadmin', 'admin', 'manager') or self.user.is_superuser
 
-def can_create_operations(self):
-        return self.role in ('superadmin', 'manager', 'staff')
+    def can_create_operations(self):
+        return self.role in ('superadmin', 'admin', 'manager', 'staff')
 
-def can_manage_users(self):
-        return self.role == 'superadmin' or self.user.is_superuser
+    def can_manage_users(self):
+        return self.role in ('superadmin', 'admin') or self.user.is_superuser
 
-def can_see_tab(self, tab):
+    def can_see_tab(self, tab):
         if self.role == 'customer':
             return tab in ('database', 'digital', 'reports')
         if self.role == 'staff':
             return tab in ('form', 'database', 'catalog', 'digital', 'reports')
-        if self.role == 'manager':
+        if self.role in ('manager', 'admin'):
             return tab in ('form', 'database', 'catalog', 'digital', 'reports')
         return True
 
-def __str__(self):
+    def __str__(self):
         return f"{self.user.username} ({self.role})"
 
 
