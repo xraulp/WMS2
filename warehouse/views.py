@@ -464,6 +464,7 @@ def _log_deletion(op, user):
         operation_date=op.date,
         customer_name=op.get_customer_display(),
         description=op.description or '',
+        tenant=op.tenant,
     )
 
 
@@ -1247,7 +1248,7 @@ def user_management(request):
 
     users    = User.objects.filter(profile__tenant=tenant).order_by('username')
     profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
-    deletion_log = DeletionLog.objects.select_related('deleted_by').all()[:50]
+    deletion_log = DeletionLog.objects.select_related('deleted_by').filter(tenant=tenant)[:50]
     return render(request, 'warehouse/partials/user_management.html', {
         'users': users, 'profiles': profiles,
         'customers': customers, 'msg': msg,
