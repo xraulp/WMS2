@@ -919,6 +919,7 @@ def digital_delete_multiple(request):
 
 @login_required
 def report_generator(request):
+    tenant    = get_tenant_or_404(request)
     customers = Catalog.objects.filter(category='CUSTOMER', active=True).order_by('name')
     profile   = get_profile(request.user)
 
