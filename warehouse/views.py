@@ -765,7 +765,7 @@ def digital_search(request):
 @require_POST
 def digital_upload(request, pk):
     tenant = get_tenant_or_404(request) ######### Usa tenant=tenant al crear el documento 072526 20:51
-    op = get_object_or_404(WarehouseOperation, pk=pk)
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
     if is_customer_user(request.user):
         profile = get_profile(request.user)
         if profile.customer and op.customer != profile.customer:
@@ -1189,12 +1189,13 @@ def catalog_autocomplete(request):
 
 @login_required
 def user_management(request):
+    tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_manage_users():
         return HttpResponse('Permission denied.', status=403)
-    users    = User.objects.all().order_by('username')
-    profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').all()}
-    customers = Catalog.objects.filter(category='CUSTOMER', active=True).order_by('name')
+    users    = User.objects.filter(profile__tenant=tenant).order_by('username')
+    profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
+    customers = Catalog.objects.filter(category='CUSTOMER', active=True, tenant=tenant).order_by('name')
     msg = ''
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -1206,14 +1207,14 @@ def user_management(request):
             if uname and pwd:
                 if not User.objects.filter(username=uname).exists():
                     u = User.objects.create_user(username=uname, password=pwd)
-                    cat = Catalog.objects.get(pk=int(cid)) if cid else None
-                    UserProfile.objects.create(user=u, role=role, customer=cat, plain_password=pwd)
+                    cat = Catalog.objects.filter(pk=int(cid), tenant=tenant).first() if cid else None
+                    UserProfile.objects.create(user=u, role=role, customer=cat, plain_password=pwd, tenant=tenant)
                     msg = f'User "{uname}" created with role "{role}".'
                 else:
                     msg = f'Username "{uname}" already exists.'
         elif action == 'delete':
             uid = request.POST.get('user_id')
-            u   = get_object_or_404(User, pk=uid)
+            u   = get_object_or_404(User, pk=uid, profile__tenant=tenant)
             if u != request.user:
                 u.delete()
                 msg = 'User deleted.'
@@ -1221,10 +1222,10 @@ def user_management(request):
             uid = request.POST.get('user_id')
             new_pwd = request.POST.get('new_password','').strip()
             if uid and new_pwd:
-                u = get_object_or_404(User, pk=uid)
+                u = get_object_or_404(User, pk=uid, profile__tenant=tenant)
                 u.set_password(new_pwd)
                 u.save()
-                p, _ = UserProfile.objects.get_or_create(user=u)
+                p, _ = UserProfile.objects.get_or_create(user=u, defaults={'tenant': tenant})
                 p.plain_password = new_pwd
                 p.save()
                 msg = f'Password updated for "{u.username}".'
@@ -1233,19 +1234,19 @@ def user_management(request):
             role = request.POST.get('role','staff')
             cid  = request.POST.get('customer_id','').strip()
             del_pwd = request.POST.get('delete_password','').strip()
-            u    = get_object_or_404(User, pk=uid)
-            p, _ = UserProfile.objects.get_or_create(user=u)
+            u    = get_object_or_404(User, pk=uid, profile__tenant=tenant)
+            p, _ = UserProfile.objects.get_or_create(user=u, defaults={'tenant': tenant})
             p.role     = role
-            p.customer = Catalog.objects.get(pk=int(cid)) if cid else None
+            p.customer = Catalog.objects.filter(pk=int(cid), tenant=tenant).first() if cid else None
             if del_pwd:
                 p.delete_password = del_pwd
             p.save()
             msg = f'User "{u.username}" updated.'
-        users    = User.objects.all().order_by('username')
-        profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').all()}
+        users    = User.objects.filter(profile__tenant=tenant).order_by('username')
+        profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
 
-    users    = User.objects.all().order_by('username')
-    profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').all()}
+    users    = User.objects.filter(profile__tenant=tenant).order_by('username')
+    profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
     deletion_log = DeletionLog.objects.select_related('deleted_by').all()[:50]
     return render(request, 'warehouse/partials/user_management.html', {
         'users': users, 'profiles': profiles,
