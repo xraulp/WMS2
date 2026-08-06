@@ -106,7 +106,8 @@ def generate_pdf_report(operation):
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
     else:
-        logo_cell = Paragraph('<b>DYSER GROUP</b>', style('lg', fontName='Helvetica-Bold',
+        tenant_name = operation.tenant.name if operation.tenant else 'WMS'
+        logo_cell = Paragraph(f'<b>{tenant_name.upper()}</b>', style('lg', fontName='Helvetica-Bold',
                               fontSize=11, textColor=WHITE))
 
     # ── Columna central (WAREHOUSE MANAGEMENT SYSTEM + subtítulo) ──
@@ -355,6 +356,7 @@ def generate_label_pdf(operation):
     value_style = style('value', fontName='Helvetica', fontSize=11, textColor=colors.HexColor('#0f172a'))
 
     qty = operation.bundle_qty or 1
+    tenant_name = (operation.tenant.name if operation.tenant else 'WMS').upper()
     type_color = ENTRY_COL if operation.operation_type == 'ENTRY' else EXIT_COL
     type_label = operation.get_operation_type_display().upper()
 
@@ -368,7 +370,7 @@ def generate_label_pdf(operation):
         # Primera fila del header
         header_row1 = Table([
             [
-                Paragraph('<b>DYSER GROUP LLC</b>', header_company_style),
+                Paragraph(f'<b>{tenant_name.upper()}</b>', header_company_style),
                 Paragraph(f'<b>{type_label}</b>', header_type_style),
             ]
         ], colWidths=[label_width * 0.80, label_width * 0.20],
@@ -519,7 +521,7 @@ def generate_label_pdf(operation):
 
         footer_qr_row = Table([
             [
-                Paragraph(f'DYSER GROUP LLC · {operation.custom_id} · Bundle {bundle_num}/{qty}',
+                Paragraph(f'{tenant_name} · {operation.custom_id} · Bundle {bundle_num}/{qty}',
                           style('footer', fontSize=6, alignment=TA_LEFT, textColor=colors.HexColor('#94a3b8'))),
                 qr_image,
             ]
@@ -537,7 +539,7 @@ def generate_label_pdf(operation):
         # Fila con footer + QR (reemplaza el footer simple)
         footer_qr_row = Table([
             [
-                Paragraph(f'DYSER GROUP LLC · {operation.custom_id} · Bundle {bundle_num}/{qty}',
+                Paragraph(f'{tenant_name} · {operation.custom_id} · Bundle {bundle_num}/{qty}',
                           style('footer', fontSize=6, alignment=TA_LEFT, textColor=colors.HexColor('#94a3b8'))),
                 qr_image,
             ]

@@ -165,16 +165,16 @@ def _build_subject(operation):
         parts.append(customer)
     if operation.po_order:
         parts.append(f"PO: {operation.po_order}")
-    parts.append('DYSER Group LLC')
+    parts.append(operation.tenant.name if operation.tenant else 'WMS')
     op_type = 'Recepcion de Mercancias' if operation.operation_type == 'ENTRY' else 'Salida de Mercancias'
     parts.append(op_type)
     if operation.custom_id:
         parts.append(str(operation.custom_id))
     return ' | '.join(parts)
 
-def _get_cc_emails():
+def _get_cc_emails(tenant):
     cc = []
-    for e in Catalog.objects.filter(category='CC_EMAIL', active=True).exclude(
+    for e in Catalog.objects.filter(category='CC_EMAIL', active=True, tenant=tenant).exclude(
             contact_email__isnull=True).exclude(contact_email=''):
         for addr in e.contact_email.split(','):
             addr = addr.strip()
@@ -201,7 +201,7 @@ def _send_operation_email(operation, message_body=''):
             subject=_build_subject(operation),
             body=html_body,
             to=emails,
-            cc=_get_cc_emails(),
+            cc=_get_cc_emails(operation.tenant),
         )
         email.content_subtype = 'html'
         email.attach(f'{operation.custom_id}.pdf', pdf_buffer, 'application/pdf')
@@ -229,7 +229,8 @@ def _send_whatsapp(operation):
     try:
         from twilio.rest import Client
         op_type = 'Recep de Mercancias' if operation.operation_type == 'ENTRY' else 'Salida de Mercancias'
-        msg = (f"*DYSER GROUP — {op_type}*\n"
+        tenant_name = operation.tenant.name if operation.tenant else 'WMS'
+        msg = (f"*{tenant_name.upper()} — {op_type}*\n"
                f"ID: {operation.custom_id}\n"
                f"Date: {operation.date}\n"
                f"Customer: {operation.get_customer_display()}\n"
@@ -654,7 +655,7 @@ def operation_send_email(request, pk):
         html_body = render_to_string('warehouse/email/report_email.html',
                                      {'operation': op, 'message_body': message})
         email = EmailMessage(subject=subject, body=html_body,
-                             to=[recipient], cc=_get_cc_emails())
+                             to=[recipient], cc=_get_cc_emails(tenant))
         email.content_subtype = 'html'
         email.attach(f'{op.custom_id}.pdf', pdf, 'application/pdf')
         for doc in op.documents.all():
@@ -1027,6 +1028,7 @@ def report_generator_pdf(request):
 @require_POST
 def report_generator_email(request):
     from .utils import generate_operations_report_pdf
+    tenant           = get_tenant_or_404(request)
     ids_raw          = request.POST.get('ids', '').strip().rstrip(',')
     title            = request.POST.get('title', 'Operations Report')
     extra_emails_str = request.POST.get('extra_emails', '').strip()
@@ -1042,7 +1044,7 @@ def report_generator_email(request):
     if not pk_list:
         return HttpResponse('<div class="msg-error">✗ No records selected.</div>')
 
-    ops = WarehouseOperation.objects.filter(pk__in=pk_list).select_related(
+    ops = WarehouseOperation.objects.filter(pk__in=pk_list, tenant=tenant).select_related(
         'customer', 'shipper', 'carrier', 'bundle_type', 'created_by').order_by('-date')
     ops = customer_ops_filter(request.user, ops)
     ops_list = list(ops)
@@ -1054,7 +1056,7 @@ def report_generator_email(request):
 
     if not all_customers and customer_id and customer_id.isdigit():
         try:
-            cat = Catalog.objects.get(pk=int(customer_id))
+            cat = Catalog.objects.get(pk=int(customer_id), tenant=tenant)
             if cat.contact_email:
                 for addr in cat.contact_email.split(','):
                     addr = addr.strip()
@@ -1083,9 +1085,9 @@ def report_generator_email(request):
                  f'Registros incluidos: {len(ops_list)}\n'
                  f'Fecha y hora de generación: {generated_at} (Hora Central)\n\n'
                  f'Saludos cordiales,\n'
-                 f'DYSER Group LLC',
+                 f'{tenant.name}',
             to=recipients,
-            cc=_get_cc_emails(),
+            cc=_get_cc_emails(tenant),
         )
         email.attach('report.pdf', pdf, 'application/pdf')
         email.send()
