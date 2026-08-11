@@ -96,7 +96,7 @@ def dashboard(request):
     # Filtrar operaciones por tenant
     ops = WarehouseOperation.objects.filter(tenant=tenant).select_related( #### 072526 12:40 Paso 3: Modificar las vistas de listado (filtro por tenant)
         'customer', 'shipper', 'carrier', 'bundle_type', 'created_by'
-    ).order_by('-date')[:200]
+    ).order_by('-date')
 
 ###072526 12:40
 
@@ -110,16 +110,14 @@ def dashboard(request):
     def cat_json(category):
         return json.dumps([
             {'id': e.pk, 'name': e.name}
-            for e in Catalog.objects.filter(category=category, active=True).order_by('name')
+            for e in Catalog.objects.filter(category=category, active=True, tenant=tenant).order_by('name')
         ])
 
-    ops = WarehouseOperation.objects.select_related(
-        'customer', 'shipper', 'carrier', 'bundle_type', 'created_by').all()
     ops = customer_ops_filter(request.user, ops)[:200]
 
     context = {
         'operations': ops,
-        'catalog_entries': Catalog.objects.filter(active=True).order_by('category', 'name'),
+        'catalog_entries': Catalog.objects.filter(active=True, tenant=tenant).order_by('category', 'name'),
         'customers_json':    cat_json('CUSTOMER'),
         'shippers_json':     cat_json('SHIPPER'),
         'carriers_json':     cat_json('CARRIER'),
@@ -369,7 +367,7 @@ def operation_create(request):
     if op.operation_type == 'EXIT' and op.entry_dispatched:
         for eid in [x.strip() for x in op.entry_dispatched.split(',') if x.strip()]:
             try:
-                entry_op = WarehouseOperation.objects.get(custom_id=eid)
+                entry_op = WarehouseOperation.objects.get(tenant=tenant, custom_id=eid)
                 entry_op.entry_dispatched = op.custom_id
                 entry_op.save(update_fields=['entry_dispatched'])
             except WarehouseOperation.DoesNotExist:
@@ -385,8 +383,8 @@ def operation_create(request):
     if smtp_not_configured:
         email_sent, email_error = False, 'smtp_not_configured'
 
-    ops = WarehouseOperation.objects.select_related(
-        'customer','shipper','carrier','bundle_type').all()
+    ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
+        'customer','shipper','carrier','bundle_type')
     ops = customer_ops_filter(request.user, ops)[:200]
     return render(request, 'warehouse/partials/operation_success.html', {
         'operation': op, 'operations': ops,
@@ -449,7 +447,7 @@ def operation_delete(request, pk):
         _log_deletion(op, request.user)
         op.delete()
         ops = WarehouseOperation.objects.select_related(
-            'customer','shipper','carrier','bundle_type').all()
+            'customer','shipper','carrier','bundle_type').filter(tenant=tenant)
         ops = customer_ops_filter(request.user, ops)[:200]
         return render(request, 'warehouse/partials/operations_table.html',
                       {'operations': ops, 'is_home': is_home(request.user),
@@ -480,8 +478,8 @@ def operation_delete_confirm(request, pk):
 
     password = request.POST.get('confirm_password','')
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant )  ######y operation_delete_confirm 072526 20:06
-    ops_qs = WarehouseOperation.objects.select_related(
-        'customer','shipper','carrier','bundle_type').all()
+    ops_qs = WarehouseOperation.objects.filter(tenant=tenant).select_related(
+        'customer','shipper','carrier','bundle_type')
     ops_qs = customer_ops_filter(request.user, ops_qs)[:200]
 
     # Superadmin/manager can delete any record
@@ -507,7 +505,7 @@ def operation_delete_confirm(request, pk):
             if profile.is_superadmin():
                 # Check if password matches any user's delete_password or any manager
                 found = False
-                for up in UserProfile.objects.filter(role__in=['superadmin','manager']):
+                for up in UserProfile.objects.filter(role__in=['superadmin','manager'], tenant=tenant):
                     if up.delete_password and password == up.delete_password:
                         found = True
                         break
@@ -700,6 +698,7 @@ def operations_search(request):
     ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
         'customer', 'shipper', 'carrier', 'bundle_type' #### 072526 12:54 Modifica la consulta inicial:
     )
+    ops = customer_ops_filter(request.user, ops)
 
     if q:
         ops = ops.filter(
@@ -922,12 +921,12 @@ def digital_delete_multiple(request):
 @login_required
 def report_generator(request):
     tenant    = get_tenant_or_404(request)
-    customers = Catalog.objects.filter(category='CUSTOMER', active=True).order_by('name')
+    customers = Catalog.objects.filter(category='CUSTOMER', active=True, tenant=tenant).order_by('name')
     profile   = get_profile(request.user)
 
     users = []
     if profile.is_superadmin() or profile.is_home():
-        users = User.objects.filter(is_active=True).order_by('username')
+        users = User.objects.filter(is_active=True, profile__tenant=tenant).order_by('username')
     elif profile.is_manager() or profile.is_staff_role():
         users = User.objects.filter(pk=request.user.pk)
     else:
@@ -963,7 +962,7 @@ def report_generator(request):
                 ops = ops.filter(created_by_id=int(created_by_id))
                 filters['created_by_id'] = created_by_id
                 try:
-                    creator = User.objects.get(pk=int(created_by_id))
+                    creator = User.objects.get(pk=int(created_by_id), profile__tenant=tenant)
                     filters['created_by_name'] = creator.username
                 except User.DoesNotExist:
                     pass
@@ -976,7 +975,7 @@ def report_generator(request):
                 cid_ints = [int(x) for x in customer_ids if x.isdigit()]
                 ops = ops.filter(customer_id__in=cid_ints)
                 filters['customer_ids_list'] = customer_ids
-                names = list(Catalog.objects.filter(pk__in=cid_ints).values_list('name', flat=True))
+                names = list(Catalog.objects.filter(pk__in=cid_ints, tenant=tenant).values_list('name', flat=True))
                 filters['customer_label'] = ', '.join(names)
                 if cid_ints:
                     filters['customer_id'] = str(cid_ints[0])
@@ -1013,8 +1012,9 @@ def report_generator(request):
 @login_required
 def report_generator_pdf(request):
     from .utils import generate_operations_report_pdf
+    tenant = get_tenant_or_404(request)
     ops_ids = request.GET.get('ids','').split(',')
-    ops = WarehouseOperation.objects.filter(pk__in=[i for i in ops_ids if i]).select_related(
+    ops = WarehouseOperation.objects.filter(pk__in=[i for i in ops_ids if i], tenant=tenant).select_related(
         'customer','shipper','carrier','bundle_type', 'created_by')
     ops = customer_ops_filter(request.user, ops)
     title   = request.GET.get('title', 'Operations Report')
@@ -1121,7 +1121,7 @@ def catalog_create(request):
         notes=p.get('notes','').strip(),
         whatsapp=p.get('whatsapp','').strip(),
     )
-    catalog_entries = Catalog.objects.filter(active=True).order_by('category','name')
+    catalog_entries = Catalog.objects.filter(active=True, tenant=tenant).order_by('category','name')
     table_html = render_to_string('warehouse/partials/catalog_table.html',
                                   {'catalog_entries': catalog_entries}, request=request)
     return HttpResponse(
@@ -1147,7 +1147,7 @@ def catalog_edit(request, pk):
         entry.whatsapp      = p.get('whatsapp', '').strip()
         entry.abbreviation  = p.get('abbreviation', '').strip().upper()   # ← AGREGAR ESTA LÍNEA
         entry.save()
-        catalog_entries = Catalog.objects.filter(active=True).order_by('category','name')
+        catalog_entries = Catalog.objects.filter(active=True, tenant=tenant).order_by('category','name')
         return render(request, 'warehouse/partials/catalog_table.html',
                       {'catalog_entries': catalog_entries, 'edit_success': f'{entry.name} updated.'})
     return render(request, 'warehouse/partials/catalog_edit_form.html', {'entry': entry})
@@ -1164,7 +1164,7 @@ def catalog_delete(request, pk):
         entry.active = False
         entry.save()
         return render(request, 'warehouse/partials/catalog_table.html', {
-            'catalog_entries': Catalog.objects.filter(active=True).order_by('category','name')
+            'catalog_entries': Catalog.objects.filter(active=True, tenant=tenant).order_by('category','name')
         })
     return HttpResponse(status=405)
 
@@ -1263,13 +1263,14 @@ def user_management(request):
 
 @login_required
 def debug_catalog(request):
+    tenant = get_tenant_or_404(request)
     def to_list(qs):
         return [{'id': e.pk, 'name': e.name} for e in qs]
     return JsonResponse({
-        'customers':    to_list(Catalog.objects.filter(category='CUSTOMER',    active=True).order_by('name')),
-        'shippers':     to_list(Catalog.objects.filter(category='SHIPPER',     active=True).order_by('name')),
-        'carriers':     to_list(Catalog.objects.filter(category='CARRIER',     active=True).order_by('name')),
-        'bundle_types': to_list(Catalog.objects.filter(category='BUNDLE_TYPE', active=True).order_by('name')),
+        'customers':    to_list(Catalog.objects.filter(category='CUSTOMER',    active=True, tenant=tenant).order_by('name')),
+        'shippers':     to_list(Catalog.objects.filter(category='SHIPPER',     active=True, tenant=tenant).order_by('name')),
+        'carriers':     to_list(Catalog.objects.filter(category='CARRIER',     active=True, tenant=tenant).order_by('name')),
+        'bundle_types': to_list(Catalog.objects.filter(category='BUNDLE_TYPE', active=True, tenant=tenant).order_by('name')),
     })
 
 
@@ -1277,14 +1278,15 @@ def debug_catalog(request):
 
 @login_required
 def mobile_dashboard(request):
+    tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
-    ops = WarehouseOperation.objects.select_related(
-        'customer','shipper','carrier','bundle_type').all()
+    ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
+        'customer','shipper','carrier','bundle_type')
     ops = customer_ops_filter(request.user, ops)[:200]
     def cat_json(category):
         return json.dumps([
             {'id': e.pk, 'name': e.name}
-            for e in Catalog.objects.filter(category=category, active=True).order_by('name')
+            for e in Catalog.objects.filter(category=category, active=True, tenant=tenant).order_by('name')
         ])
     context = {
         'profile': profile,
@@ -1454,8 +1456,9 @@ def report_generator_excel(request):
     except ImportError:
         return HttpResponse('openpyxl not installed. Run: pip install openpyxl', status=500)
 
+    tenant = get_tenant_or_404(request)
     ops_ids = request.GET.get('ids','').split(',')
-    ops = WarehouseOperation.objects.filter(pk__in=[i for i in ops_ids if i]).select_related(
+    ops = WarehouseOperation.objects.filter(pk__in=[i for i in ops_ids if i], tenant=tenant).select_related(
         'customer','shipper','carrier','bundle_type').order_by('-date')
     ops = customer_ops_filter(request.user, ops)
 
@@ -1555,6 +1558,7 @@ def operations_layout(request):
 @login_required
 @require_POST
 def operations_import(request):
+    tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_create_operations():
         return HttpResponse('Permission denied.', status=403)
@@ -1603,7 +1607,7 @@ def operations_import(request):
                 def find_cat(name, category):
                     if not name: return None, ''
                     name = str(name).strip()
-                    obj = Catalog.objects.filter(category=category, name__iexact=name, active=True).first()
+                    obj = Catalog.objects.filter(category=category, name__iexact=name, active=True, tenant=tenant).first()
                     return (obj, '') if obj else (None, name)
 
                 cust_obj, cust_manual       = find_cat(cust_name, 'CUSTOMER')
@@ -1620,6 +1624,7 @@ def operations_import(request):
                     except: return None
 
                 op = WarehouseOperation(
+                    tenant=tenant,
                     date=op_date, operation_type=op_type,
                     customer=cust_obj, customer_name_manual=cust_manual,
                     shipper=ship_obj, shipper_name_manual=ship_manual,
@@ -1648,8 +1653,8 @@ def operations_import(request):
             except Exception as e:
                 errors.append(f'Row {row_idx}: {e}')
 
-        ops = WarehouseOperation.objects.select_related(
-            'customer', 'shipper', 'carrier', 'bundle_type').all()
+        ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
+            'customer', 'shipper', 'carrier', 'bundle_type')
         ops = customer_ops_filter(request.user, ops)[:200]
         profile = get_profile(request.user)
         msg = f'{created} operation(s) imported successfully.'
@@ -1709,6 +1714,7 @@ def catalog_layout(request):
 @login_required
 @require_POST
 def catalog_import(request):
+    tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if profile.is_customer():
         return HttpResponse('Permission denied.', status=403)
@@ -1737,8 +1743,9 @@ def catalog_import(request):
                 if not category or not name or category not in valid_cats:
                     errors.append(f'Row {row_idx}: invalid category or missing name')
                     continue
-                if not Catalog.objects.filter(category=category, name__iexact=name).exists():
+                if not Catalog.objects.filter(category=category, name__iexact=name, tenant=tenant).exists():
                     Catalog.objects.create(
+                        tenant=tenant,
                         category=category, name=name,
                         contact_email=str(email or '').strip(),
                         phone=str(phone or '').strip(),
@@ -1750,7 +1757,7 @@ def catalog_import(request):
             except Exception as e:
                 errors.append(f'Row {row_idx}: {e}')
 
-        catalog_entries = Catalog.objects.filter(active=True).order_by('category','name')
+        catalog_entries = Catalog.objects.filter(active=True, tenant=tenant).order_by('category','name')
         msg = f'{created} catalog entries imported.'
         if errors: msg += f' Errors: {"; ".join(errors[:3])}'
         key = 'import_success' if not errors else 'import_error'
