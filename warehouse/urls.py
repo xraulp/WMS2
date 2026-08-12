@@ -43,6 +43,7 @@ urlpatterns = [
     path('catalog/autocomplete/', views.catalog_autocomplete, name='catalog_autocomplete'),
     # Users
     path('users/', views.user_management, name='user_management'),
+    path('platform/tenants/', views.platform_tenant_list, name='platform_tenant_list'),
     # Debug
     path('debug/catalog/', views.debug_catalog, name='debug_catalog'),
     path('mobile/', views.mobile_dashboard, name='mobile_dashboard'),

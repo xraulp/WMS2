@@ -173,6 +173,9 @@ tbody td:has(.btn-action) {
   {% if profile.can_manage_users %}
   <button class="tab" id="tab-users" onclick="showTab('users')">Users</button>
   {% endif %}
+  {% if request.user.is_superuser %}
+  <button class="tab" id="tab-platform" onclick="showTab('platform')">🛠 Platform</button>
+  {% endif %}
 </div>
 
 <div class="pg">
@@ -510,6 +513,20 @@ tbody td:has(.btn-action) {
 </div>
 {% endif %}
 
+{% if request.user.is_superuser %}
+<div class="panel" id="panel-platform">
+  <div class="card">
+    <div class="ct">SaaS Platform Admin — All Tenants</div>
+    <div id="platform-content"
+         hx-get="{% url 'platform_tenant_list' %}"
+         hx-trigger="intersect once"
+         hx-swap="innerHTML">
+      <div style="color:var(--faint);font-size:13px;padding:20px">Loading…</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 </div>
 
 <div class="mo" id="modal" onclick="if(event.target===this)closeModal()">
@@ -578,7 +595,7 @@ function loadCatalog() {
 loadCatalog();
 
 function showTab(t) {
-  const tabs = ['form','database','catalog','digital','reports','users'];
+  const tabs = ['form','database','catalog','digital','reports','users','platform'];
   tabs.forEach(n=>{
     const p = document.getElementById('panel-'+n);
     const b = document.getElementById('tab-'+n);
@@ -588,6 +605,7 @@ function showTab(t) {
   const pb = document.getElementById('print-bar');
   if (pb) pb.style.display = 'none';
   if (t === 'users') htmx.ajax('GET','{% url "user_management" %}',{target:'#users-content',swap:'innerHTML'});
+  if (t === 'platform') htmx.ajax('GET','{% url "platform_tenant_list" %}',{target:'#platform-content',swap:'innerHTML'});
   if (t === 'reports') htmx.ajax('GET','{% url "report_generator" %}',{target:'#report-content',swap:'innerHTML'});
   if (t !== 'digital') {
     const dc = document.getElementById('digital-content');

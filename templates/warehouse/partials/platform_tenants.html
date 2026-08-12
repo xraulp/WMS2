@@ -1,0 +1,96 @@
+{% if msg %}<div class="msg-success" style="margin-bottom:12px">✓ {{ msg }}</div>{% endif %}
+
+<!-- Create tenant form -->
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:10px">Create New Tenant</div>
+  <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML"
+        style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+    {% csrf_token %}<input type="hidden" name="action" value="create">
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Company Name</label>
+      <input type="text" name="name" required placeholder="Warehouse 123 Llc"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:200px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Subdomain</label>
+      <input type="text" name="subdomain" placeholder="auto from name"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:150px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Plan</label>
+      <select name="plan" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+        <option value="starter">Starter</option>
+        <option value="pro">Pro</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Billing Email</label>
+      <input type="email" name="billing_email" placeholder="billing@cliente.com"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:180px">
+    </div>
+    <div style="width:100%;height:1px;background:#e2e8f0;margin:4px 0"></div>
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:#94a3b8;width:100%">First Admin User (optional — leave blank to add later from the tenant's own Users tab)</div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Admin Username</label>
+      <input type="text" name="admin_username" placeholder="admin_w123"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:150px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Admin Password</label>
+      <input type="text" name="admin_password" placeholder="Visible for reference"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:150px">
+    </div>
+    <button type="submit" class="btn btn-p" style="height:28px">+ Create Tenant</button>
+  </form>
+</div>
+
+<!-- Tenants table -->
+<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px">
+<table style="min-width:800px">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Subdomain</th>
+      <th>Plan</th>
+      <th>Billing Email</th>
+      <th>Users</th>
+      <th>Operations</th>
+      <th>Status</th>
+      <th>Created</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in tenants %}
+    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+      <td><strong>{{ t.name }}</strong></td>
+      <td class="mono" style="font-size:11px;color:#64748b">{{ t.subdomain }}</td>
+      <td><span class="badge b-sent">{{ t.plan }}</span></td>
+      <td style="font-size:12px">{{ t.billing_email|default:"—" }}</td>
+      <td style="text-align:center">{{ t.user_count }}</td>
+      <td style="text-align:center">{{ t.op_count }}</td>
+      <td>
+        <span class="badge {% if t.is_active %}b-entry{% else %}b-exit{% endif %}">
+          {% if t.is_active %}Active{% else %}Inactive{% endif %}
+        </span>
+      </td>
+      <td style="color:#94a3b8;font-size:11px">{{ t.created_at|date:"Y-m-d" }}</td>
+      <td>
+        <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML" style="display:inline">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="toggle_active">
+          <input type="hidden" name="tenant_id" value="{{ t.pk }}">
+          <button type="submit" class="btn {% if t.is_active %}btn-d{% else %}btn-g{% endif %} btn-sm"
+                  onclick="return confirm('{% if t.is_active %}Deactivate{% else %}Activate{% endif %} {{ t.name }}?')">
+            {% if t.is_active %}Deactivate{% else %}Activate{% endif %}
+          </button>
+        </form>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:20px">No tenants yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>

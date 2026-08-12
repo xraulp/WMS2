@@ -7,12 +7,13 @@ from django.views.decorators.http import require_POST, require_GET
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Count
 from io import BytesIO
 from django.http import Http404
-import os, json, zipfile
+from django.utils.text import slugify
+import os, json, zipfile, re
 
-from .models import WarehouseOperation, Catalog, OperationDocument, UserProfile, DeletionLog
+from .models import WarehouseOperation, Catalog, OperationDocument, UserProfile, DeletionLog, Tenant, Subscription
 from .utils import generate_pdf_report, generate_label_pdf
 
 now_local = timezone.localtime(timezone.now())
@@ -1765,3 +1766,62 @@ def catalog_import(request):
                       {'catalog_entries': catalog_entries, key: msg})
     except Exception as e:
         return HttpResponse(f'Import failed: {e}', status=500)
+
+# ── SAAS PLATFORM ADMIN (fuera del scoping de tenant, solo is_superuser) ──────
+
+@login_required
+def platform_tenant_list(request):
+    if not request.user.is_superuser:
+        return HttpResponse('Permission denied.', status=403)
+
+    msg = ''
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'create':
+            name          = request.POST.get('name', '').strip()
+            subdomain_in  = request.POST.get('subdomain', '').strip()
+            plan          = request.POST.get('plan', 'starter')
+            billing_email = request.POST.get('billing_email', '').strip()
+            admin_username = request.POST.get('admin_username', '').strip()
+            admin_password = request.POST.get('admin_password', '').strip()
+
+            subdomain = re.sub(r'[^a-z0-9-]', '', slugify(subdomain_in or name))
+            if not name:
+                msg = 'Tenant name is required.'
+            elif not subdomain:
+                msg = 'Could not derive a valid subdomain from the name provided.'
+            elif Tenant.objects.filter(subdomain=subdomain).exists():
+                msg = f'Subdomain "{subdomain}" is already in use.'
+            elif admin_username and User.objects.filter(username=admin_username).exists():
+                msg = f'Username "{admin_username}" is already taken. Tenant was NOT created — pick a different admin username.'
+            else:
+                tenant = Tenant.objects.create(
+                    name=name, type='organization', subdomain=subdomain,
+                    is_active=True, plan=plan, billing_email=billing_email or None,
+                )
+                Subscription.objects.create(tenant=tenant, plan=plan, billing_email=billing_email or None)
+                msg = f'Tenant "{name}" created (subdomain: {subdomain}).'
+
+                if admin_username and admin_password:
+                    admin_user = User.objects.create_user(username=admin_username, password=admin_password)
+                    UserProfile.objects.create(
+                        user=admin_user, tenant=tenant, role='admin', plain_password=admin_password,
+                    )
+                    msg += f' Admin user "{admin_username}" created for this tenant.'
+
+        elif action == 'toggle_active':
+            tid = request.POST.get('tenant_id')
+            t = get_object_or_404(Tenant, pk=tid)
+            t.is_active = not t.is_active
+            t.save(update_fields=['is_active'])
+            msg = f'Tenant "{t.name}" is now {"active" if t.is_active else "inactive"}.'
+
+    tenants = Tenant.objects.filter(type='organization').annotate(
+        user_count=Count('users', distinct=True),
+        op_count=Count('operations', distinct=True),
+    ).order_by('name')
+
+    return render(request, 'warehouse/partials/platform_tenants.html', {
+        'tenants': tenants, 'msg': msg,
+    })
