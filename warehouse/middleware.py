@@ -29,8 +29,11 @@ class TenantMiddleware:
 
         request.tenant = tenant
 
-        # Configurar RLS si hay tenant
-        if request.tenant and request.user.is_authenticated:
+        # Configurar RLS si hay tenant. SET es sintaxis exclusiva de PostgreSQL:
+        # sin este guard, cualquier request truena con OperationalError al correr
+        # sobre SQLite (el fallback local de settings.py y la base de los tests).
+        if (request.tenant and request.user.is_authenticated
+                and connection.vendor == 'postgresql'):
             with connection.cursor() as cursor:
                 cursor.execute("SET app.current_tenant_id = %s", [str(request.tenant.id)])
                 cursor.execute("SET app.current_user_id = %s", [str(request.user.id)])

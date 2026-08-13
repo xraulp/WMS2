@@ -56,6 +56,31 @@ def customer_ops_filter(user, qs):
     return qs.none()
 
 
+def customer_can_access_op(user, op):
+    """
+    Version por-objeto de customer_ops_filter, para las vistas que reciben un pk.
+    El scoping por tenant ya lo hizo get_object_or_404; esto restringe ademas al
+    cliente (Tenant nivel 2) dentro del tenant.
+
+    Los usuarios internos del tenant pasan siempre. Un usuario 'customer' solo
+    accede a las operaciones de su propio cliente y, si no tiene cliente asignado,
+    no accede a ninguna: mismo criterio fail-closed que customer_ops_filter, para
+    que lo que se puede abrir coincida exactamente con lo que se puede listar.
+    """
+    profile = get_profile(user)
+    if not profile.is_customer():
+        return True
+    if not profile.customer_id:
+        return False
+    if op.customer_id == profile.customer_id:
+        return True
+    # customer_ops_filter tambien acepta el nombre capturado a mano; si no lo
+    # replicamos aqui, el customer veria la operacion en la lista pero recibiria
+    # 403 al abrirla.
+    manual = (op.customer_name_manual or '').strip().lower()
+    return bool(manual) and manual == profile.customer.name.strip().lower()
+
+
 # ── AUTH ──────────────────────────────────────────────────────────────────────
 
 def login_view(request):
@@ -400,10 +425,8 @@ def operation_create(request):
 def operation_detail(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 20:57
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### 5.1. operation_detail 072526 20:03
-    if is_customer_user(request.user):
-        profile = get_profile(request.user)
-        if profile.customer and op.customer != profile.customer:
-            return HttpResponse('Permission denied.', status=403)
+    if not customer_can_access_op(request.user, op):
+        return HttpResponse('Permission denied.', status=403)
 
     fields = [
         ('Date',             op.date.strftime('%Y-%m-%d')),
@@ -544,10 +567,8 @@ def operation_delete_confirm(request, pk):
 def operation_pdf(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:00
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### 5.3. operation_pd  072526 20:09
-    if is_customer_user(request.user):
-        profile = get_profile(request.user)
-        if profile.customer and op.customer != profile.customer:
-            return HttpResponse('Permission denied.', status=403)
+    if not customer_can_access_op(request.user, op):
+        return HttpResponse('Permission denied.', status=403)
     pdf = generate_pdf_report(op)
     resp = HttpResponse(pdf, content_type='application/pdf')
     resp['Content-Disposition'] = f'inline; filename="{op.custom_id}.pdf"'
@@ -558,6 +579,8 @@ def operation_pdf(request, pk):
 def operation_label(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:00
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ####operation_label 072526 20:10
+    if not customer_can_access_op(request.user, op):
+        return HttpResponse('Permission denied.', status=403)
     pdf = generate_label_pdf(op)
     resp = HttpResponse(pdf, content_type='application/pdf')
     resp['Content-Disposition'] = f'inline; filename="{op.custom_id}_label.pdf"'
@@ -568,6 +591,8 @@ def operation_label(request, pk):
 def operation_download_all(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:00
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### operation_download_all 072526 20:11
+    if not customer_can_access_op(request.user, op):
+        return HttpResponse('Permission denied.', status=403)
     docs = op.documents.all()
 
     if not docs.exists():
@@ -644,6 +669,8 @@ def get_customer_abbreviation(operation):
 def operation_send_email(request, pk):
     tenant = get_tenant_or_404(request) ######### Usa tenant=tenant en get_object_or_404 0072526 21:03
     op        = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)##### operation_send_email  072526 20:13
+    if not customer_can_access_op(request.user, op):
+        return HttpResponse('<div class="msg-error">✗ Permission denied.</div>', status=403)
     recipient = request.POST.get('recipient_email','').strip()
     subject   = request.POST.get('subject', _build_subject(op))
     message   = request.POST.get('message','')
@@ -674,10 +701,8 @@ def operation_send_whatsapp(request, pk):
     tenant = get_tenant_or_404(request) ######### Usa tenant=tenant en get_object_or_404 0072526 21:03
     """Send WhatsApp message for a specific operation."""
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### operation_send_whatsapp 072526 20:13
-    if is_customer_user(request.user):
-        profile = get_profile(request.user)
-        if profile.customer and op.customer != profile.customer:
-            return HttpResponse('Permission denied.', status=403)
+    if not customer_can_access_op(request.user, op):
+        return HttpResponse('Permission denied.', status=403)
     _send_whatsapp(op)
     wa = op.get_customer_whatsapp()
     if wa:
@@ -751,10 +776,8 @@ def digital_search(request):
     if q:
         try:
             op = WarehouseOperation.objects.get(tenant=tenant, custom_id__iexact=q) ##### tenant=tenant 072526 13:07
-            if is_customer_user(request.user):
-                profile = get_profile(request.user)
-                if profile.customer and op.customer != profile.customer:
-                    op = None
+            if not customer_can_access_op(request.user, op):
+                op = None
         except WarehouseOperation.DoesNotExist:
             op = None
     profile = get_profile(request.user)
@@ -768,15 +791,13 @@ def digital_search(request):
 def digital_upload(request, pk):
     tenant = get_tenant_or_404(request) ######### Usa tenant=tenant al crear el documento 072526 20:51
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
-    if is_customer_user(request.user):
-        profile = get_profile(request.user)
-        if profile.customer and op.customer != profile.customer:
-            return HttpResponse('Permission denied.', status=403)
+    if not customer_can_access_op(request.user, op):
+        return HttpResponse('Permission denied.', status=403)
 
     from datetime import date as date_cls
     today_str = date_cls.today().strftime('%d%m%y')
     existing_today = OperationDocument.objects.filter(
-        digital_name__startswith=today_str).count()
+        tenant=tenant, digital_name__startswith=today_str).count()
 
     uploaded = []
     for f in request.FILES.getlist('files'):
@@ -1355,6 +1376,8 @@ def operation_edit(request, pk):
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### 5.5. operation_edit 072526 20:15
     profile = get_profile(request.user)
     if not is_home(request.user) and not profile.is_customer():
+        return HttpResponse('Permission denied.', status=403)
+    if not customer_can_access_op(request.user, op):
         return HttpResponse('Permission denied.', status=403)
 
     if request.method == 'POST':
