@@ -79,6 +79,17 @@ class UserProfile(models.Model):
     def can_manage_users(self):
         return self.role in ('superadmin', 'admin') or self.user.is_superuser
 
+    def can_access_tenant(self, tenant):
+        """Verifica si el usuario puede acceder a los datos de un tenant."""
+        if not self.tenant_id:
+            return False
+        if self.tenant == tenant:
+            return True
+        # Un usuario de organización puede acceder a sus branches
+        if self.tenant.is_organization and tenant.parent_id == self.tenant_id:
+            return True
+        return False
+
     def can_see_tab(self, tab):
         if self.role == 'customer':
             return tab in ('database', 'digital', 'reports')
@@ -454,53 +465,7 @@ class Subscription(models.Model):
     class Meta:
         verbose_name = "Suscripción"
         verbose_name_plural = "Suscripciones"
-
-    def __str__(self):
-        return f"{self.tenant.name} - {self.plan}"
-
-# Métodos de utilidad
-    def can_access_tenant(self, tenant):
-        """Verifica si el usuario puede acceder a los datos de un tenant."""
-        if not self.tenant:
-            return False
-        if self.tenant == tenant:
-            return True
-        # Un usuario de organización puede acceder a sus branches
-        if self.tenant.is_organization and tenant.parent == self.tenant:
-            return True
-        return False
-    
-    def has_tenant_permission(self, perm_codename):
-        """Verifica si el usuario tiene un permiso específico (con herencia)."""
-        if self.role:
-            return self.role.has_permission(perm_codename)
-        return False
-
-    
-    is_active = models.BooleanField(default=True, verbose_name="Activo")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Creado el")
-    
-    config = models.JSONField(default=dict, blank=True, verbose_name="Configuración")
-    billing_email = models.EmailField(blank=True, null=True, verbose_name="Email de Facturación")
-    plan = models.CharField(
-        max_length=50, 
-        default='starter',
-        choices=[('starter', 'Starter'), ('pro', 'Pro'), ('enterprise', 'Enterprise')],
-        verbose_name="Plan"
-    )
-
-    class Meta:
-        verbose_name = "Tenant"
-        verbose_name_plural = "Tenants"
         ordering = ['tenant__name']
 
     def __str__(self):
-        return f"{self.name} ({self.get_type_display()})"
-
-    @property
-    def is_organization(self):
-        return self.type == 'organization'
-
-    @property
-    def is_branch(self):
-        return self.type == 'branch'
+        return f"{self.tenant.name} - {self.plan}"

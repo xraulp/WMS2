@@ -1800,7 +1800,7 @@ def platform_tenant_list(request):
                     name=name, type='organization', subdomain=subdomain,
                     is_active=True, plan=plan, billing_email=billing_email or None,
                 )
-                Subscription.objects.create(tenant=tenant, plan=plan, billing_email=billing_email or None)
+                Subscription.objects.create(tenant=tenant, plan=plan)
                 msg = f'Tenant "{name}" created (subdomain: {subdomain}).'
 
                 if admin_username and admin_password:
