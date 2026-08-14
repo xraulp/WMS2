@@ -10,6 +10,40 @@ from reportlab.platypus import (
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from io import BytesIO
 import os
+
+from django.conf import settings
+
+
+def tenant_public_url(tenant=None):
+    """
+    URL pública base del tenant, para los enlaces y QR que salen impresos.
+
+    Si hay un dominio raíz configurado (TENANT_BASE_DOMAIN) y el tenant tiene
+    subdominio propio, cada tenant apunta al suyo. Si no, todos comparten
+    SITE_BASE_URL, que es como opera hoy: un solo host en Render.
+
+    El subdominio 'default' se ignora a propósito: es el que reciben los tenants
+    creados por el backfill, no un subdominio real que alguien haya registrado.
+    """
+    base_domain = getattr(settings, 'TENANT_BASE_DOMAIN', '')
+    subdomain = getattr(tenant, 'subdomain', None)
+
+    if base_domain and subdomain and subdomain != 'default':
+        return f"https://{subdomain}.{base_domain}"
+
+    return settings.SITE_BASE_URL
+
+
+def operation_digital_url(operation, path='/'):
+    """
+    Enlace al expediente digital de una operación, ya resuelto contra el tenant
+    dueño de la operación. `path` elige la vista destino: '/dashboard/' para
+    escritorio, '/mobile/' para el QR que se escanea con el teléfono.
+    """
+    base = tenant_public_url(getattr(operation, 'tenant', None))
+    return f"{base}{path}?tab=digital&q={operation.custom_id}"
+
+
 ###agregado 0610262
 def generate_qr_code(data, size=50):
     """Genera un código QR y lo devuelve como objeto Image de ReportLab"""
@@ -261,7 +295,7 @@ def generate_pdf_report(operation):
 
 ### agregado 0610262
     # ── CÓDIGO QR ──────────────────────────────────────────────────────────────
-    qr_url = f"https://rdeluna.pythonanywhere.com/mobile/?tab=digital&q={operation.custom_id}"
+    qr_url = operation_digital_url(operation, '/mobile/')
     qr_image = generate_qr_code(qr_url, size=50)
 
     qr_text = Paragraph(
@@ -282,11 +316,11 @@ def generate_pdf_report(operation):
 ### agregado 0610262
 
     # ── ENLACE CLICKEABLE + QR (solo para Full Report) ────────────────────────
-    qr_url_pc = f"https://rdeluna.pythonanywhere.com/dashboard/?tab=digital&q={operation.custom_id}"
+    qr_url_pc = operation_digital_url(operation, '/dashboard/')
 
     # Solo enlace clickeable (sin QR)
     link_text = Paragraph(
-        f'🔗 <link href="{qr_url_pc }">Haga clic aquí para acceder al expediente digital de esta operación</link>',
+        f'🔗 <link href="{qr_url_pc}">Haga clic aquí para acceder al expediente digital de esta operación</link>',
         style('link', fontName='Helvetica', fontSize=9, textColor=colors.HexColor('#0ea5e9'))
     )
 
@@ -513,27 +547,9 @@ def generate_label_pdf(operation):
         # ============================================
         # CONFIGURACIÓN DE ESPACIOS ALREDEDOR DE LA LÍNEA DE CORTE
         # ============================================
-        ### agregado 0610262
-                # ── CÓDIGO QR EN ETIQUETA ─────────────────────────────────────────────
-        ### qr_url = f"https://rdeluna.pythonanywhere.com/dashboard/?tab=digital&q={operation.custom_id}" ### ELIMINADA 061026
-        qr_url = f"https://rdeluna.pythonanywhere.com/?tab=digital&q={operation.custom_id}"  ### NUEVA 061026
-        qr_image = generate_qr_code(qr_url, size=35)
-
-        footer_qr_row = Table([
-            [
-                Paragraph(f'{tenant_name} · {operation.custom_id} · Bundle {bundle_num}/{qty}',
-                          style('footer', fontSize=6, alignment=TA_LEFT, textColor=colors.HexColor('#94a3b8'))),
-                qr_image,
-            ]
-        ], colWidths=[label_width - 0.6*inch, 0.5*inch])
-        footer_qr_row.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ]))
-
-                # ── CÓDIGO QR EN ETIQUETA ─────────────────────────────────────────────
-        qr_url = f"https://rdeluna.pythonanywhere.com/mobile/?tab=digital&q={operation.custom_id}"
+        # ── CÓDIGO QR EN ETIQUETA ─────────────────────────────────────────────
+        # La etiqueta se escanea con el teléfono, así que apunta a /mobile/.
+        qr_url = operation_digital_url(operation, '/mobile/')
         qr_image = generate_qr_code(qr_url, size=30)
 
         # Fila con footer + QR (reemplaza el footer simple)

@@ -27,7 +27,36 @@ if 'BASE_DIR' not in locals():
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,.onrender.com').split(',')
+# Los hosts del entorno se SUMAN a los base, no los reemplazan: antes había un
+# segundo ALLOWED_HOSTS más abajo que pisaba a este, así que la variable de
+# entorno nunca se usó. Al empezar a respetarla, sustituir habría podido dejar
+# fuera '.onrender.com' y tumbar producción.
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.onrender.com']
+ALLOWED_HOSTS += [
+    h.strip() for h in os.getenv('ALLOWED_HOSTS', '').split(',')
+    if h.strip() and h.strip() not in ALLOWED_HOSTS
+]
+
+# ====================================================
+# URL PÚBLICA DE LA APLICACIÓN
+# ====================================================
+# Se usa para armar los enlaces y códigos QR que salen impresos en los PDF.
+# No puede deducirse del request porque los PDF también se generan fuera de uno
+# (tareas, envíos por correo), así que vive en configuración.
+#
+# RENDER_EXTERNAL_URL la inyecta Render sola, así que en producción esto queda
+# resuelto sin configurar nada. SITE_BASE_URL la pisa cuando haya dominio propio.
+SITE_BASE_URL = (
+    os.environ.get('SITE_BASE_URL')
+    or os.environ.get('RENDER_EXTERNAL_URL')
+    or 'http://localhost:8000'
+).rstrip('/')
+
+# Dominio raíz bajo el cual cada tenant tiene su propio subdominio
+# (ej. 'wms.com' → los enlaces de DYSER salen como https://dyser.wms.com).
+# Vacío = todos los tenants comparten SITE_BASE_URL, que es la situación de hoy:
+# Render en plan free no permite subdominios propios.
+TENANT_BASE_DOMAIN = os.environ.get('TENANT_BASE_DOMAIN', '').strip().lstrip('.')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -74,12 +103,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'warehouse_system.wsgi.application'
 
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    '.onrender.com',  # Permite cualquier subdominio de Render
-    '.tudominio.com', # Cuando tengas dominio propio
-]
+# NOTA: aquí había un segundo ALLOWED_HOSTS que pisaba al de arriba y dejaba
+# la variable de entorno ALLOWED_HOSTS sin efecto. Sus valores se fusionaron
+# en el default de la línea 30.
 
 # ====================================================
 # CONFIGURACIÓN DE BASE DE DATOS (SIMPLE Y ROBUSTA)
