@@ -8,6 +8,7 @@ from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.db.models import Q, Count
+from django.db import transaction
 from io import BytesIO
 from django.http import Http404
 from django.utils.text import slugify
@@ -1222,6 +1223,9 @@ def user_management(request):
     profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
     customers = Catalog.objects.filter(category='CUSTOMER', active=True, tenant=tenant).order_by('name')
     msg = ''
+    # El template pintaba cualquier msg como exito, con su palomita, incluso los
+    # rechazos. Con esto los errores se ven como errores.
+    msg_is_error = False
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'create':
@@ -1237,6 +1241,48 @@ def user_management(request):
                     msg = f'User "{uname}" created with role "{role}".'
                 else:
                     msg = f'Username "{uname}" already exists.'
+                    msg_is_error = True
+        elif action == 'create_customer':
+            # Alta del cliente nivel 2 en un solo paso: el Catalog CUSTOMER y el
+            # usuario que lo va a usar se crean juntos. Antes eran dos pantallas
+            # y era facil terminar con un usuario 'customer' sin cliente asignado,
+            # que es justo el caso que customer_ops_filter bloquea por completo.
+            cname  = request.POST.get('customer_name', '').strip()
+            uname  = request.POST.get('username', '').strip()
+            pwd    = request.POST.get('password', '').strip()
+
+            existing = Catalog.objects.filter(
+                tenant=tenant, category='CUSTOMER', active=True, name__iexact=cname).first()
+
+            if not (cname and uname and pwd):
+                msg = 'Customer name, username and password are all required.'
+                msg_is_error = True
+            elif existing:
+                msg = (f'Customer "{existing.name}" already exists. Use "Create New User" '
+                       f'above and link the new user to it. Nothing was created.')
+                msg_is_error = True
+            elif User.objects.filter(username=uname).exists():
+                msg = (f'Username "{uname}" is already taken. Nothing was created — '
+                       f'pick a different username.')
+                msg_is_error = True
+            else:
+                # Atomico a proposito: si algo falla a mitad, no queremos dejar el
+                # cliente sin usuario ni el usuario sin cliente.
+                with transaction.atomic():
+                    cat = Catalog.objects.create(
+                        tenant=tenant, category='CUSTOMER', name=cname,
+                        abbreviation=request.POST.get('abbreviation', '').strip().upper() or None,
+                        contact_email=request.POST.get('contact_email', '').strip() or None,
+                        phone=request.POST.get('phone', '').strip() or None,
+                        whatsapp=request.POST.get('whatsapp', '').strip() or None,
+                    )
+                    u = User.objects.create_user(username=uname, password=pwd)
+                    UserProfile.objects.create(
+                        user=u, tenant=tenant, role='customer',
+                        customer=cat, plain_password=pwd,
+                    )
+                msg = (f'Customer "{cat.name}" created, with login "{uname}" '
+                       f'already linked to it.')
         elif action == 'delete':
             uid = request.POST.get('user_id')
             u   = get_object_or_404(User, pk=uid, profile__tenant=tenant)
@@ -1272,10 +1318,12 @@ def user_management(request):
 
     users    = User.objects.filter(profile__tenant=tenant).order_by('username')
     profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
+    # Se recalcula despues del POST para que incluya un cliente recien creado.
+    customers = Catalog.objects.filter(category='CUSTOMER', active=True, tenant=tenant).order_by('name')
     deletion_log = DeletionLog.objects.select_related('deleted_by').filter(tenant=tenant)[:50]
     return render(request, 'warehouse/partials/user_management.html', {
         'users': users, 'profiles': profiles,
-        'customers': customers, 'msg': msg,
+        'customers': customers, 'msg': msg, 'msg_is_error': msg_is_error,
         'request': request,
         'deletion_log': deletion_log,
     })
