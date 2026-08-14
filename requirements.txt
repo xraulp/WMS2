@@ -1,50 +1,66 @@
-anyio==4.12.0
-asgiref==3.11.1
+# Dependencias del WMS. Se instalan en Render en cada deploy, asi que todo lo
+# que sobra aqui es tiempo de build.
+#
+# Estan pineadas las transitivas tambien, para que un deploy futuro instale
+# exactamente lo mismo que el ultimo que se sabe que funciona.
+#
+# Antes de agregar algo, verificar que se importe de verdad en el proyecto:
+#   grep -rE "^\s*(import|from)\s+" --include="*.py" warehouse/ warehouse_system/
+
+# ── Django y servidor ─────────────────────────────────────────────────────────
+Django==6.0.7
+gunicorn==26.0.0
+whitenoise==6.12.0            # sirve los estaticos en produccion
+
+# ── Base de datos ─────────────────────────────────────────────────────────────
+dj-database-url==3.1.2        # parsea DATABASE_URL en settings.py
+psycopg2-binary==2.9.12       # Supabase/Postgres
+
+# ── Almacenamiento de archivos en Cloudflare R2 ───────────────────────────────
+django-storages==1.14.6
 boto3==1.43.51
+
+# ── Generacion de documentos ──────────────────────────────────────────────────
+reportlab==4.2.0              # PDF de reportes y etiquetas
+qrcode==8.2                   # QR embebido en esos PDF
+pillow==12.3.0                # requerido por reportlab y por qrcode
+openpyxl==3.1.5               # exportacion a Excel
+
+# ── Integraciones ─────────────────────────────────────────────────────────────
+twilio==9.11.0                # WhatsApp (warehouse/views.py, _send_whatsapp)
+python-dotenv==1.2.2          # carga el .env en local (warehouse_system/settings.py)
+
+# ── Transitivas ───────────────────────────────────────────────────────────────
+# No se importan directamente; las arrastran los paquetes de arriba.
+#
+# requests/urllib3/charset-normalizer van en versiones mas altas que las que
+# tenia este archivo: requests 2.32.3 avisaba en cada arranque que chardet 7.x
+# no le servia. chardet lo arrastra reportlab y antes no estaba pineado, asi que
+# el conflicto ya se daba en produccion, solo que en silencio.
+aiohappyeyeballs==2.7.1
+aiohttp-retry==2.9.1
+aiohttp==3.14.3
+aiosignal==1.4.0
+asgiref==3.11.1
+attrs==26.1.0
 botocore==1.43.51
 certifi==2025.1.31
-charset-normalizer==3.4.1
-click==8.3.1
+chardet==7.5.1
+charset-normalizer==3.5.0
 colorama==0.4.6
-distlib==0.4.0
-dj-database-url==3.1.2
-django-storages==1.14.6
-Django==6.0.7
 et_xmlfile==2.0.0
-filelock==3.18.0
-flet-desktop==0.80.0
-flet==0.80.0
-gunicorn==26.0.0
-h11==0.16.0
-httpcore==1.0.9
-httpx==0.28.1
+frozenlist==1.8.0
 idna==3.10
 jmespath==1.1.0
-msgpack==1.1.2
-numpy==2.2.3
-oauthlib==3.3.1
-openpyxl==3.1.5
+multidict==6.7.1
 packaging==26.2
-pandas==2.2.3
-pillow==12.3.0
-platformdirs==4.3.8
-psycopg2-binary==2.9.12
-pycairo==1.26.0
-PySocks==1.7.1
+propcache==0.5.2
+PyJWT==2.13.0
 python-dateutil==2.9.0.post0
-pytz==2025.1
-qrcode==8.2
-repath==0.9.0
-reportlab==4.2.0
-requests-futures==1.0.2
-requests==2.32.3
+requests==2.34.2
 s3transfer==0.19.1
-sherlock-project==0.15.0
 six==1.17.0
 sqlparse==0.5.5
-stem==1.8.2
 tzdata==2025.1
-urllib3==2.3.0
-uvicorn==0.40.0
-virtualenv==20.32.0
-whitenoise==6.12.0
+urllib3==2.7.0
+yarl==1.24.5
