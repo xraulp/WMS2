@@ -361,6 +361,162 @@ class DocumentosNuevosTests(NotificationTestBase):
         self.assertEqual(self._logs(event='DOCUMENTS_ADDED').count(), 0)
 
 
+class ArchivoRemoto:
+    """
+    Se comporta como un archivo guardado en R2: se abre y se lee, pero **no
+    tiene ruta local**.
+
+    Es la pieza que faltaba reproducir. El codigo viejo hacia
+    `attach_file(doc.file.path)`, y con R2 eso lanza NotImplementedError, que un
+    `except: pass` se tragaba: los correos salieron sin documentos desde la
+    mudanza y nadie se entero.
+    """
+
+    def __init__(self, nombre, contenido):
+        self.name = f'operations/2026/08/16/{nombre}'
+        self._contenido = contenido
+        self.size = len(contenido)
+
+    @property
+    def path(self):
+        raise NotImplementedError("Este backend no tiene rutas locales.")
+
+    def open(self, mode='rb'):
+        return self
+
+    def read(self):
+        return self._contenido
+
+    def close(self):
+        pass
+
+
+class DocumentoRemoto:
+    def __init__(self, pk, nombre, contenido):
+        self.pk = pk
+        self.original_name = nombre
+        self.file = ArchivoRemoto(nombre, contenido)
+
+
+class OperacionConDocumentos:
+    """Lo minimo que `_attach_documents` le pide a una operacion."""
+
+    def __init__(self, documentos):
+        self.documents = type('_Rel', (), {'all': lambda _self: documentos})()
+
+
+class AdjuntosTests(NotificationTestBase):
+    """Los documentos del expediente cuando el almacenamiento es remoto."""
+
+    def _correo(self):
+        from django.core.mail import EmailMessage
+        return EmailMessage(subject='x', body='y', to=['a@b.com'])
+
+    def test_el_documento_viaja_aunque_no_haya_ruta_local(self):
+        email = self._correo()
+        op = OperacionConDocumentos([
+            DocumentoRemoto(1, 'factura.pdf', b'%PDF-1.4 contenido')])
+
+        notifications._attach_documents(email, op)
+
+        self.assertEqual([n for n, _, _ in email.attachments], ['factura.pdf'])
+        self.assertEqual(email.attachments[0][1], b'%PDF-1.4 contenido')
+
+    def test_un_archivo_demasiado_grande_se_omite_sin_romper_el_resto(self):
+        email = self._correo()
+        op = OperacionConDocumentos([
+            DocumentoRemoto(1, 'chico.pdf', b'x' * 10),
+            DocumentoRemoto(2, 'enorme.mp4', b'x' * (2 * 1024 * 1024)),
+        ])
+
+        with self.settings(EMAIL_MAX_ATTACHMENT_MB=1):
+            notifications._attach_documents(email, op)
+
+        adjuntos = [n for n, _, _ in email.attachments]
+        self.assertIn('chico.pdf', adjuntos)
+        self.assertNotIn('enorme.mp4', adjuntos)
+
+    def test_un_archivo_ilegible_no_impide_los_demas(self):
+        email = self._correo()
+        roto = DocumentoRemoto(1, 'roto.pdf', b'x')
+        roto.file.read = lambda: (_ for _ in ()).throw(OSError('no se pudo leer'))
+        op = OperacionConDocumentos([
+            roto, DocumentoRemoto(2, 'bueno.pdf', b'contenido')])
+
+        notifications._attach_documents(email, op)
+
+        self.assertEqual([n for n, _, _ in email.attachments], ['bueno.pdf'])
+
+    def test_el_alta_adjunta_los_documentos_del_expediente(self):
+        """El camino completo, con el almacenamiento real de las pruebas."""
+        op = self._operacion(customer=self.cliente)
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(STORAGES={
+                'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage',
+                            'OPTIONS': {'location': tmp}},
+                'staticfiles': {'BACKEND':
+                                'django.contrib.staticfiles.storage.StaticFilesStorage'},
+            }):
+                OperationDocument.objects.create(
+                    tenant=self.tenant, operation=op, file_type='DOCUMENT',
+                    file=SimpleUploadedFile('bl.pdf', b'%PDF-1.4 bl'),
+                    original_name='bl.pdf')
+
+                notifications.notify_operation_created(op, triggered_by=self.staff)
+
+                self.assertIn('bl.pdf',
+                              [n for n, _, _ in mail.outbox[0].attachments])
+
+
+class BlindajeTests(NotificationTestBase):
+    """
+    Registrar la operacion es lo importante; avisar es secundario.
+
+    En el refactor `render_to_string` quedo fuera del try, asi que un fallo
+    notificando podia devolver un 500 y hacerle perder el alta al operador.
+    """
+
+    def test_un_fallo_notificando_no_tumba_el_alta_de_la_operacion(self):
+        self.client.force_login(self.staff)
+
+        with patch('warehouse.notifications.render_to_string',
+                   side_effect=Exception('template roto')):
+            resp = self.client.post('/operations/create/', {
+                'operation_type': 'ENTRY',
+                'date': '2026-08-16',
+                'customer_id': str(self.cliente.pk),
+                'shipper_text': 'Shipper X',
+                'carrier_text': 'Carrier X',
+                'bundle_type_text': 'Pallet',
+                'bundle_qty': '2',
+                'weight_lbs': '50',
+                'description': 'Entrada de prueba',
+            })
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(
+            WarehouseOperation.objects.filter(description='Entrada de prueba').exists())
+
+    def test_el_error_se_devuelve_en_vez_de_propagarse(self):
+        op = self._operacion(customer=self.cliente)
+
+        with patch('warehouse.notifications.render_to_string',
+                   side_effect=Exception('template roto')):
+            enviado, error = notifications.notify_operation_created(
+                op, triggered_by=self.staff)
+
+        self.assertFalse(enviado)
+        self.assertIn('template roto', error)
+
+    def test_un_fallo_notificando_no_tumba_la_subida_de_documentos(self):
+        op = self._operacion(customer=self.cliente)
+
+        with patch('warehouse.notifications.resolve_customer',
+                   side_effect=Exception('reventado')):
+            self.assertFalse(
+                notifications.notify_documents_added(op, ['x'], triggered_by=self.staff))
+
+
 class EnvioManualTests(NotificationTestBase):
     """Los botones del detalle: se mandan siempre, pero ahora dejan rastro."""
 

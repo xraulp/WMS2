@@ -192,6 +192,13 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 
+# Segundos de espera para conectar con el servidor de correo. Sin esto, un
+# servidor que no contesta deja la petición colgada hasta que gunicorn mata al
+# worker por timeout, y el operador ve un "Internal Server Error" en vez del
+# aviso de que el correo no salió. Pasó en producción: la salida al puerto 465
+# desde Render se queda esperando sin respuesta.
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', 10))
+
 # ====================================================
 # CONFIGURACIÓN DE TWILIO (WHATSAPP)
 # ====================================================

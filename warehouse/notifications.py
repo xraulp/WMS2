@@ -8,6 +8,7 @@ fallido era indistinguible de uno exitoso. Aquí todo pasa por el mismo camino:
 se resuelve el cliente, se consultan sus preferencias, se envía, y salga bien o
 mal queda un renglón en `NotificationLog`.
 """
+import functools
 import logging
 
 from django.conf import settings
@@ -119,6 +120,31 @@ def build_subject(operation):
     return ' | '.join(parts)
 
 
+# ── BLINDAJE ──────────────────────────────────────────────────────────────────
+
+def _never_breaks(default):
+    """
+    Un fallo avisando no puede tumbar lo que se estaba registrando.
+
+    Guardar la operación es lo importante; el aviso es secundario. El error se
+    loguea entero (con traza) y se devuelve como resultado para que la vista lo
+    pinte, pero nunca sube hasta convertirse en un 500 que le borre el trabajo
+    al operador.
+
+    `default` puede ser un valor o una función que recibe la excepción.
+    """
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                logger.exception('Fallo inesperado notificando en %s', fn.__name__)
+                return default(e) if callable(default) else default
+        return wrapper
+    return decorator
+
+
 # ── BITÁCORA ──────────────────────────────────────────────────────────────────
 
 def log_notification(operation, customer, channel, event, status,
@@ -148,6 +174,40 @@ def log_notification(operation, customer, channel, event, status,
 
 # ── ENVÍO ─────────────────────────────────────────────────────────────────────
 
+# Tope por archivo adjunto. Los expedientes traen fotos y hasta video, y un
+# correo de 40 MB lo rechaza cualquier servidor; además leerlo entero en memoria
+# en un plan chico es la forma rápida de quedarse sin RAM.
+MAX_ATTACHMENT_MB = 5
+
+
+def _attach_documents(email, operation):
+    """
+    Adjunta los archivos del expediente leyéndolos del storage.
+
+    La versión anterior usaba `attach_file(doc.file.path)`, y `path` **no existe
+    cuando los archivos viven en R2**: lanzaba NotImplementedError que un
+    `except: pass` se tragaba. Resultado: desde la mudanza a R2 los correos
+    salían sin los documentos y nadie se enteró. Hay que leer el contenido, que
+    es lo que funciona con cualquier backend de almacenamiento.
+    """
+    limite = getattr(settings, 'EMAIL_MAX_ATTACHMENT_MB', MAX_ATTACHMENT_MB) * 1024 * 1024
+
+    for doc in operation.documents.all():
+        nombre = doc.original_name or (doc.file.name or '').rsplit('/', 1)[-1]
+        try:
+            if doc.file.size > limite:
+                logger.info('Documento %s omitido del correo por tamaño (%s bytes)',
+                            doc.pk, doc.file.size)
+                continue
+            doc.file.open('rb')
+            try:
+                contenido = doc.file.read()
+            finally:
+                doc.file.close()
+            email.attach(nombre, contenido)
+        except Exception:
+            logger.warning('No se pudo adjuntar el documento %s (%s)', doc.pk, nombre)
+
 def _deliver_email(operation, customer, event, recipients, subject, html_body,
                    pdf=None, attach_documents=False, triggered_by=None):
     """Manda el correo y registra el resultado. Devuelve (enviado, error)."""
@@ -168,11 +228,7 @@ def _deliver_email(operation, customer, event, recipients, subject, html_body,
         if pdf is not None:
             email.attach(f'{operation.custom_id}.pdf', pdf, 'application/pdf')
         if attach_documents and operation:
-            for doc in operation.documents.all():
-                try:
-                    email.attach_file(doc.file.path)
-                except Exception:
-                    logger.warning('No se pudo adjuntar el documento %s', doc.pk)
+            _attach_documents(email, operation)
         email.send()
     except Exception as e:
         log_notification(operation, customer, EMAIL, event, FAILED,
@@ -258,6 +314,7 @@ def _event_email_body(operation, event, extra=None):
 
 # ── EVENTOS ───────────────────────────────────────────────────────────────────
 
+@_never_breaks(lambda e: (False, str(e)))
 def notify_operation_created(operation, triggered_by=None, message_body='',
                              force_whatsapp=False):
     """
@@ -309,6 +366,7 @@ def notify_operation_created(operation, triggered_by=None, message_body='',
     return email_sent, email_error
 
 
+@_never_breaks(False)
 def notify_goods_released(entry_op, exit_op=None, triggered_by=None,
                           already_notified=None):
     """
@@ -351,6 +409,7 @@ def notify_goods_released(entry_op, exit_op=None, triggered_by=None,
     return sent
 
 
+@_never_breaks(False)
 def notify_documents_added(operation, documents, triggered_by=None):
     """
     Aviso de que se subieron documentos nuevos al expediente de una operación.
@@ -387,6 +446,7 @@ def notify_documents_added(operation, documents, triggered_by=None):
 
 # ── ENVÍOS MANUALES (botones del detalle de la operación) ─────────────────────
 
+@_never_breaks(lambda e: (False, str(e)))
 def send_manual_email(operation, recipient, subject, message_body='', triggered_by=None):
     """
     Reenvío a mano desde el detalle. Es una orden explícita del operador, así que
@@ -409,6 +469,7 @@ def send_manual_email(operation, recipient, subject, message_body='', triggered_
     return sent, error
 
 
+@_never_breaks(lambda e: (False, str(e)))
 def send_manual_whatsapp(operation, triggered_by=None):
     customer = resolve_customer(operation)
     return _deliver_whatsapp(operation, customer, EVENT_MANUAL,
