@@ -45,6 +45,36 @@
       <label>Abreviatura</label>
       <input type="text" name="abbreviation" value="{{ entry.abbreviation|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px" placeholder="Ej: LBO, ACME">
     </div>
+
+    {% if entry.category == 'CUSTOMER' %}
+    <div style="grid-column:span 2;margin-top:6px;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;background:#f8fafc">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b;margin-bottom:8px">
+        Notificaciones al cliente
+      </div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" name="notify_email" {% if entry.notify_email %}checked{% endif %}> Email
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" name="notify_whatsapp" {% if entry.notify_whatsapp %}checked{% endif %}> WhatsApp
+        </label>
+      </div>
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b;margin-bottom:6px">
+        ¿Cuándo avisarle?
+      </div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" name="notify_on_create" {% if entry.notify_on_create %}checked{% endif %}> Al registrar la operación
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" name="notify_on_release" {% if entry.notify_on_release %}checked{% endif %}> Al liberar la mercancía
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" name="notify_on_documents" {% if entry.notify_on_documents %}checked{% endif %}> Al agregar documentos
+        </label>
+      </div>
+    </div>
+    {% endif %}
   </div>
   <div style="display:flex;gap:8px;margin-top:12px">
     <button type="submit" style="flex:1;padding:8px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;cursor:pointer">Save Changes</button>

@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import WarehouseOperation, Catalog, OperationDocument, UserProfile, DeletionLog
+from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
+                     DeletionLog, NotificationLog)
 
 
 @admin.register(UserProfile)
@@ -34,3 +35,22 @@ class DeletionLogAdmin(admin.ModelAdmin):
     list_display  = ['custom_id', 'operation_type', 'customer_name', 'deleted_by', 'deleted_at']#####En warehouse/admin.py, agrega list_filter = ['tenant'] 072526 20:25 , 'tenant'
     list_filter   = ['operation_type', 'deleted_at']
     readonly_fields = ['deleted_at']
+
+
+@admin.register(NotificationLog)
+class NotificationLogAdmin(admin.ModelAdmin):
+    """
+    Es una bitácora: se consulta, no se edita. Por eso todo va en readonly y no
+    se permite agregar renglones a mano.
+    """
+    list_display  = ['created_at', 'operation_custom_id', 'customer', 'channel',
+                     'event', 'status', 'recipient']
+    list_filter   = ['channel', 'event', 'status', 'created_at', 'tenant']
+    search_fields = ['operation_custom_id', 'recipient', 'subject', 'detail']
+    readonly_fields = [f.name for f in NotificationLog._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

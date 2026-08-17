@@ -34,8 +34,42 @@ class Catalog(models.Model):
     active        = models.BooleanField(default=True)
     created_at    = models.DateTimeField(auto_now_add=True)
 
+    # ── Preferencias de notificacion (solo aplican a category='CUSTOMER') ──────
+    # Los defaults reproducen el comportamiento que ya existia: el correo de alta
+    # salia siempre y el de WhatsApp solo si el operador marcaba el checkbox. Por
+    # eso los eventos nuevos nacen apagados: se activan cliente por cliente.
+    notify_email        = models.BooleanField(default=True,
+                            verbose_name='Notificar por email')
+    notify_whatsapp     = models.BooleanField(default=False,
+                            verbose_name='Notificar por WhatsApp')
+    notify_on_create    = models.BooleanField(default=True,
+                            verbose_name='Avisar al registrar la operacion')
+    notify_on_release   = models.BooleanField(default=False,
+                            verbose_name='Avisar al liberar la mercancia')
+    notify_on_documents = models.BooleanField(default=False,
+                            verbose_name='Avisar al agregar documentos')
+
     class Meta:
         ordering = ['category', 'name']
+
+    def wants_notification(self, channel, event):
+        """
+        True si este cliente quiere recibir `event` por `channel`.
+
+        Se cruzan dos ejes independientes: el canal (email / WhatsApp) y el
+        evento. Apagar el canal silencia todos los eventos de ese canal; apagar
+        el evento lo silencia en los dos canales.
+        """
+        channel_ok = {
+            'EMAIL':    self.notify_email,
+            'WHATSAPP': self.notify_whatsapp,
+        }.get(channel, False)
+        event_ok = {
+            'OPERATION_CREATED': self.notify_on_create,
+            'GOODS_RELEASED':    self.notify_on_release,
+            'DOCUMENTS_ADDED':   self.notify_on_documents,
+        }.get(event, False)
+        return bool(channel_ok and event_ok)
 
     def __str__(self):
         return f"{self.get_category_display()} - {self.name}"
@@ -469,3 +503,63 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.tenant.name} - {self.plan}"
+
+
+class NotificationLog(models.Model):
+    """
+    Bitacora de cada aviso enviado al cliente (Tenant nivel 2).
+
+    Antes solo quedaba el flag `email_sent` en la operacion y de WhatsApp no
+    quedaba ningun rastro, asi que un envio fallido era invisible. Aqui se
+    registra un renglon por destinatario y canal, incluidos los fallos y los
+    que se omitieron por preferencia del cliente.
+    """
+    CHANNEL_CHOICES = [
+        ('EMAIL',    'Email'),
+        ('WHATSAPP', 'WhatsApp'),
+    ]
+    EVENT_CHOICES = [
+        ('OPERATION_CREATED', 'Operación registrada'),
+        ('GOODS_RELEASED',    'Mercancía liberada'),
+        ('DOCUMENTS_ADDED',   'Documentos agregados'),
+        ('MANUAL',            'Envío manual'),
+    ]
+    STATUS_CHOICES = [
+        ('SENT',    'Enviada'),
+        ('FAILED',  'Fallida'),
+        ('SKIPPED', 'Omitida'),
+    ]
+
+    tenant     = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True,
+                                   related_name='notification_logs')
+    operation  = models.ForeignKey(WarehouseOperation, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='notifications')
+    # Se copia el custom_id porque la operacion se puede borrar y la bitacora
+    # tiene que seguir diciendo de que envio se trataba, igual que DeletionLog.
+    operation_custom_id = models.CharField(max_length=30, blank=True)
+    customer   = models.ForeignKey(Catalog, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='notifications',
+                                   limit_choices_to={'category': 'CUSTOMER'})
+    channel    = models.CharField(max_length=10, choices=CHANNEL_CHOICES)
+    event      = models.CharField(max_length=20, choices=EVENT_CHOICES)
+    status     = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    recipient  = models.CharField(max_length=500, blank=True)
+    subject    = models.CharField(max_length=300, blank=True)
+    # Para SKIPPED guarda el motivo ('no_recipient', 'preference_off', ...) y
+    # para FAILED el texto de la excepcion.
+    detail     = models.TextField(blank=True)
+    triggered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='triggered_notifications')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Notificación"
+        verbose_name_plural = "Notificaciones"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['tenant', '-created_at']),
+            models.Index(fields=['operation']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_channel_display()} {self.status} → {self.recipient or '—'}"

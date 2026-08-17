@@ -14,8 +14,10 @@ from django.http import Http404
 from django.utils.text import slugify
 import os, json, zipfile, re
 
-from .models import WarehouseOperation, Catalog, OperationDocument, UserProfile, DeletionLog, Tenant, Subscription
+from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
+                     DeletionLog, Tenant, Subscription)
 from .utils import generate_pdf_report, generate_label_pdf
+from . import notifications
 
 now_local = timezone.localtime(timezone.now())
 generated_at = now_local.strftime('%Y-%m-%d %H:%M')
@@ -182,95 +184,12 @@ def operations_by_user(request, user_id):
 
 
 # ── EMAIL HELPERS ─────────────────────────────────────────────────────────────
+# El envío vive ahora en warehouse/notifications.py, que además deja constancia
+# de cada aviso en NotificationLog. Aquí solo quedan los alias que usan las
+# plantillas y las vistas.
 
-def _build_subject(operation):
-    parts = []
-    customer = operation.get_customer_display()
-    if customer and customer != '—':
-        parts.append(customer)
-    if operation.po_order:
-        parts.append(f"PO: {operation.po_order}")
-    parts.append(operation.tenant.name if operation.tenant else 'WMS')
-    op_type = 'Recepcion de Mercancias' if operation.operation_type == 'ENTRY' else 'Salida de Mercancias'
-    parts.append(op_type)
-    if operation.custom_id:
-        parts.append(str(operation.custom_id))
-    return ' | '.join(parts)
-
-def _get_cc_emails(tenant):
-    cc = []
-    for e in Catalog.objects.filter(category='CC_EMAIL', active=True, tenant=tenant).exclude(
-            contact_email__isnull=True).exclude(contact_email=''):
-        for addr in e.contact_email.split(','):
-            addr = addr.strip()
-            if addr: cc.append(addr)
-    return cc
-
-def _send_operation_email(operation, message_body=''):
-    # Obtener el string completo de emails (puede ser "a@mail.com, b@mail.com")
-    email_raw = operation.get_customer_email_raw()
-    if not email_raw:
-        return False, 'no_email'
-
-    # Dividir por comas y limpiar espacios
-    emails = [email.strip() for email in email_raw.split(',') if email.strip()]
-
-    if not emails:
-        return False, 'no_email'
-
-    try:
-        pdf_buffer = generate_pdf_report(operation)
-        html_body = render_to_string('warehouse/email/report_email.html',
-                                      {'operation': operation, 'message_body': message_body})
-        email = EmailMessage(
-            subject=_build_subject(operation),
-            body=html_body,
-            to=emails,
-            cc=_get_cc_emails(operation.tenant),
-        )
-        email.content_subtype = 'html'
-        email.attach(f'{operation.custom_id}.pdf', pdf_buffer, 'application/pdf')
-        for doc in operation.documents.all():
-            try: email.attach_file(doc.file.path)
-            except: pass
-        email.send()
-        operation.email_sent = True
-        operation.email_sent_at = timezone.now()
-        operation.save(update_fields=['email_sent', 'email_sent_at'])
-        return True, None
-    except Exception as e:
-        return False, str(e)
-
-def _send_whatsapp(operation):
-    from django.conf import settings
-    wa_number = operation.get_customer_whatsapp()
-    if not wa_number:
-        return
-    sid   = getattr(settings, 'TWILIO_ACCOUNT_SID', '')
-    token = getattr(settings, 'TWILIO_AUTH_TOKEN', '')
-    from_  = getattr(settings, 'TWILIO_WHATSAPP_FROM', '')
-    if not (sid and token and from_):
-        return
-    try:
-        from twilio.rest import Client
-        op_type = 'Recep de Mercancias' if operation.operation_type == 'ENTRY' else 'Salida de Mercancias'
-        tenant_name = operation.tenant.name if operation.tenant else 'WMS'
-        msg = (f"*{tenant_name.upper()} — {op_type}*\n"
-               f"ID: {operation.custom_id}\n"
-               f"Date: {operation.date}\n"
-               f"Customer: {operation.get_customer_display()}\n"
-               f"Shipper: {operation.get_shipper_display()}\n"
-               f"Po/Order: {operation.po_order or '—'}\n"
-               f"Description: {operation.description or '—'}\n"
-               f"Bundles: {operation.bundle_qty or '—'}\n"
-               f"Weight: {operation.weight_lbs or '—'} LBS")
-        Client(sid, token).messages.create(
-            body=msg,
-            from_=from_,
-            to=f'whatsapp:{wa_number}'
-        )
-    except Exception:
-        pass
+_build_subject  = notifications.build_subject
+_get_cc_emails  = notifications.get_cc_emails
 
 
 # ── OPERATION CREATE ──────────────────────────────────────────────────────────
@@ -391,19 +310,30 @@ def operation_create(request):
             operation=op, file_type=guess_type(f.name),
             file=f, original_name=f.name, uploaded_by=request.user)
 
+    released_entries = []
     if op.operation_type == 'EXIT' and op.entry_dispatched:
         for eid in [x.strip() for x in op.entry_dispatched.split(',') if x.strip()]:
             try:
                 entry_op = WarehouseOperation.objects.get(tenant=tenant, custom_id=eid)
                 entry_op.entry_dispatched = op.custom_id
                 entry_op.save(update_fields=['entry_dispatched'])
+                released_entries.append(entry_op)
             except WarehouseOperation.DoesNotExist:
                 pass
 
     send_wa = p.get('send_whatsapp') == '1'
-    email_sent, email_error = _send_operation_email(op)
-    if send_wa:
-        _send_whatsapp(op)
+    email_sent, email_error = notifications.notify_operation_created(
+        op, triggered_by=request.user, force_whatsapp=send_wa)
+
+    # Aviso de mercancía liberada, a los clientes de las entradas que esta salida
+    # despacha. Se pasa lo que ya se envió arriba para no escribirle dos veces a
+    # quien es cliente de la salida y de la entrada a la vez.
+    if released_entries:
+        already = notifications.email_recipients(notifications.resolve_customer(op)) if email_sent else []
+        for entry_op in released_entries:
+            notifications.notify_goods_released(
+                entry_op, exit_op=op, triggered_by=request.user,
+                already_notified=already)
 
     smtp_not_configured = email_error and any(
         x in str(email_error) for x in ['getaddrinfo','Connection refused','tuservidor'])
@@ -416,7 +346,7 @@ def operation_create(request):
     return render(request, 'warehouse/partials/operation_success.html', {
         'operation': op, 'operations': ops,
         'email_sent': email_sent, 'email_error': email_error,
-        'has_whatsapp': bool(op.get_customer_whatsapp()),
+        'has_whatsapp': bool(notifications.whatsapp_number(notifications.resolve_customer(op))),
     })
 
 
@@ -677,23 +607,11 @@ def operation_send_email(request, pk):
     message   = request.POST.get('message','')
     if not recipient:
         return HttpResponse('<div class="msg-error">✗ Recipient email required.</div>')
-    try:
-        pdf = generate_pdf_report(op)
-        html_body = render_to_string('warehouse/email/report_email.html',
-                                     {'operation': op, 'message_body': message})
-        email = EmailMessage(subject=subject, body=html_body,
-                             to=[recipient], cc=_get_cc_emails(tenant))
-        email.content_subtype = 'html'
-        email.attach(f'{op.custom_id}.pdf', pdf, 'application/pdf')
-        for doc in op.documents.all():
-            try: email.attach_file(doc.file.path)
-            except: pass
-        email.send()
-        op.email_sent = True; op.email_sent_at = timezone.now()
-        op.save(update_fields=['email_sent','email_sent_at'])
+    sent, error = notifications.send_manual_email(
+        op, recipient, subject, message_body=message, triggered_by=request.user)
+    if sent:
         return HttpResponse(f'<div class="msg-success">✓ Report sent to {recipient}.</div>')
-    except Exception as e:
-        return HttpResponse(f'<div class="msg-error">✗ Email failed: {e}</div>')
+    return HttpResponse(f'<div class="msg-error">✗ Email failed: {error}</div>')
 
 
 @login_required
@@ -704,11 +622,17 @@ def operation_send_whatsapp(request, pk):
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### operation_send_whatsapp 072526 20:13
     if not customer_can_access_op(request.user, op):
         return HttpResponse('Permission denied.', status=403)
-    _send_whatsapp(op)
-    wa = op.get_customer_whatsapp()
-    if wa:
+    sent, error = notifications.send_manual_whatsapp(op, triggered_by=request.user)
+    wa = notifications.whatsapp_number(notifications.resolve_customer(op))
+    if sent:
         return HttpResponse(f'<div class="msg-success">✓ WhatsApp sent to {wa}.</div>')
-    return HttpResponse('<div class="msg-error">✗ No WhatsApp number for this customer.</div>')
+    # Antes esta vista decía "sent" siempre que el cliente tuviera número, aunque
+    # el envío hubiera reventado: el error se perdía dentro de _send_whatsapp.
+    if error == 'no_number':
+        return HttpResponse('<div class="msg-error">✗ No WhatsApp number for this customer.</div>')
+    if error == 'twilio_not_configured':
+        return HttpResponse('<div class="msg-error">✗ WhatsApp no está configurado en el servidor.</div>')
+    return HttpResponse(f'<div class="msg-error">✗ WhatsApp failed: {error}</div>')
 
 
 # ── SEARCH ────────────────────────────────────────────────────────────────────
@@ -818,6 +742,9 @@ def digital_upload(request, pk):
         uploaded.append(doc)
 
     profile = get_profile(request.user)
+    # No se le avisa al cliente de los archivos que él mismo acaba de subir.
+    if uploaded and not profile.is_customer():
+        notifications.notify_documents_added(op, uploaded, triggered_by=request.user)
     return render(request, 'warehouse/partials/digital_panel.html', {
         'operation': op, 'query': op.custom_id,
         'is_home': is_home(request.user),
@@ -1169,6 +1096,15 @@ def catalog_edit(request, pk):
         entry.notes         = p.get('notes', '').strip()
         entry.whatsapp      = p.get('whatsapp', '').strip()
         entry.abbreviation  = p.get('abbreviation', '').strip().upper()   # ← AGREGAR ESTA LÍNEA
+        # Las preferencias de aviso solo existen para los clientes; para el resto
+        # de categorías el formulario ni siquiera pinta los checkboxes, así que
+        # leerlos ahí apagaría valores que nadie quiso cambiar.
+        if entry.category == 'CUSTOMER':
+            entry.notify_email        = p.get('notify_email') == 'on'
+            entry.notify_whatsapp     = p.get('notify_whatsapp') == 'on'
+            entry.notify_on_create    = p.get('notify_on_create') == 'on'
+            entry.notify_on_release   = p.get('notify_on_release') == 'on'
+            entry.notify_on_documents = p.get('notify_on_documents') == 'on'
         entry.save()
         catalog_entries = Catalog.objects.filter(active=True, tenant=tenant).order_by('category','name')
         return render(request, 'warehouse/partials/catalog_table.html',
