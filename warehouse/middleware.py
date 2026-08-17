@@ -1,6 +1,10 @@
+import logging
+
 from django.http import Http404
 from django.db import connection
 from .models import Tenant
+
+logger = logging.getLogger(__name__)
 
 class TenantMiddleware:
     """
@@ -32,14 +36,44 @@ class TenantMiddleware:
         # Configurar RLS si hay tenant. SET es sintaxis exclusiva de PostgreSQL:
         # sin este guard, cualquier request truena con OperationalError al correr
         # sobre SQLite (el fallback local de settings.py y la base de los tests).
-        if (request.tenant and request.user.is_authenticated
-                and connection.vendor == 'postgresql'):
+        rls = (request.tenant and request.user.is_authenticated
+               and connection.vendor == 'postgresql')
+        if rls:
             with connection.cursor() as cursor:
                 cursor.execute("SET app.current_tenant_id = %s", [str(request.tenant.id)])
                 cursor.execute("SET app.current_user_id = %s", [str(request.user.id)])
 
-        response = self.get_response(request)
+        try:
+            response = self.get_response(request)
+        finally:
+            # Las variables de sesion viven en la **conexion**, no en el
+            # request, y las conexiones son persistentes (conn_max_age=600 en
+            # settings.py). Sin limpiar al terminar, la siguiente peticion que
+            # reutilice esta conexion arranca con el tenant y el usuario de la
+            # anterior; si esa peticion no entra por este if — un usuario sin
+            # tenant, o una peticion anonima — hereda el contexto ajeno y RLS lo
+            # deja leer datos de otra empresa.
+            #
+            # `SET LOCAL` no sirve aqui: se limita a la transaccion en curso y
+            # con autocommit no habria ninguna, asi que RLS se quedaria sin
+            # contexto. Limpiar al final del request si.
+            if rls:
+                self._reset_rls()
+
         return response
+
+    @staticmethod
+    def _reset_rls():
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("RESET app.current_tenant_id")
+                cursor.execute("RESET app.current_user_id")
+        except Exception:
+            # La conexion puede estar ya cerrada o en estado de error si la
+            # vista revento; no vale la pena tapar esa excepcion con esta. La
+            # conexion en error se descarta y no se reutiliza, asi que el
+            # contexto no se filtra.
+            logger.debug('No se pudo limpiar el contexto de RLS', exc_info=True)
 
 
 class TenantPermissionsMiddleware:

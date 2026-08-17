@@ -12,12 +12,14 @@ from django.db import transaction
 from io import BytesIO
 from django.http import Http404
 from django.utils.text import slugify
-import os, json, zipfile, re
+import os, json, zipfile, re, logging
 
 from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
                      DeletionLog, Tenant, Subscription)
 from .utils import generate_pdf_report, generate_label_pdf
 from . import notifications
+
+logger = logging.getLogger(__name__)
 
 now_local = timezone.localtime(timezone.now())
 generated_at = now_local.strftime('%Y-%m-%d %H:%M')
@@ -170,9 +172,13 @@ def operations_by_user(request, user_id):
     if not profile.is_superadmin() and not profile.is_home() and not profile.is_manager():
         return HttpResponse('Permission denied.', status=403)
 
-    target_user = get_object_or_404(User, pk=user_id)
-    ##ops = WarehouseOperation.objects.filter(created_by=target_user).select_related(
-    ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(  ###### 3.1. dashboard 072526 20:43
+    # `profile__tenant=tenant` para no confirmar la existencia de usuarios de
+    # otras empresas: el pk venia sin acotar y la vista devolvia su username.
+    target_user = get_object_or_404(User, pk=user_id, profile__tenant=tenant)
+    # El filtro por usuario estaba comentado, asi que la vista devolvia todas
+    # las operaciones del tenant sin importar a quien se le pedia filtrar.
+    ops = WarehouseOperation.objects.filter(
+        tenant=tenant, created_by=target_user).select_related(
         'customer', 'shipper', 'carrier', 'bundle_type', 'created_by')[:200]
 
     return render(request, 'warehouse/partials/operations_table.html', {
@@ -218,8 +224,12 @@ def operation_create(request):
         return HttpResponse('<div class="msg-error">✗ Invalid date format.</div>', status=422)
 
     def get_catalog(pk_str, category):
+        # Filtra por tenant: sin eso, un pk de otra empresa se aceptaba y la
+        # operacion quedaba apuntando al catalogo de un tercero — con lo que el
+        # aviso de alta se le habria ido a su correo.
         try:
-            return Catalog.objects.get(pk=int(pk_str), category=category, active=True)
+            return Catalog.objects.get(pk=int(pk_str), tenant=tenant,
+                                       category=category, active=True)
         except (ValueError, TypeError, Catalog.DoesNotExist):
             return None
 
@@ -565,9 +575,18 @@ def operation_download_all(request, pk):
             for idx, doc in enumerate(file_list, 1):
                 new_filename = f"{base_name} {idx}{ext}"
                 try:
-                    zf.write(doc.file.path, new_filename)
+                    # Se lee del storage en vez de usar `doc.file.path`: `path`
+                    # no existe con R2, asi que el ZIP salia vacio en produccion
+                    # y el error solo aparecia en la consola. Es el mismo fallo
+                    # que dejo los correos sin adjuntos.
+                    doc.file.open('rb')
+                    try:
+                        zf.writestr(new_filename, doc.file.read())
+                    finally:
+                        doc.file.close()
                 except Exception as e:
-                    print(f"Error adding {doc.file.path}: {e}")
+                    logger.warning('No se pudo agregar al ZIP el documento %s: %s',
+                                   doc.pk, e)
 
     buf.seek(0)
     resp = HttpResponse(buf.read(), content_type='application/zip')
@@ -752,6 +771,30 @@ def digital_upload(request, pk):
         'upload_success': f'{len(uploaded)} file(s) uploaded.',
     })
 
+def _delete_stored_file(doc):
+    """
+    Borra el archivo del storage, sea local o R2.
+
+    La version anterior hacia `os.path.exists(doc.file.path)`, y `path` **no
+    existe cuando los archivos viven en R2**: lanza NotImplementedError. En
+    `digital_delete_file` un `except: pass` se lo tragaba y el objeto quedaba
+    huerfano en el bucket — accesible todavia por su URL publica, porque el
+    dominio de R2 sirve los archivos sin pedir credenciales. En
+    `digital_delete_multiple` era peor: la excepcion saltaba antes del
+    `doc.delete()`, asi que el borrado multiple no borraba nada y reportaba
+    error. `FieldFile.delete()` habla con el storage que este configurado.
+    """
+    if not doc.file:
+        return True, None
+    try:
+        doc.file.delete(save=False)
+        return True, None
+    except Exception as e:
+        logger.warning('No se pudo borrar del storage el archivo del documento %s: %s',
+                       doc.pk, e)
+        return False, str(e)
+
+
 @login_required
 def digital_delete_file(request, doc_pk):
     tenant = get_tenant_or_404(request) ######### Usa tenant=tenant al crear el documento 072526 21:05
@@ -785,13 +828,12 @@ def digital_delete_file(request, doc_pk):
         })
 
     # ✅ Contraseña correcta - proceder a eliminar
-    doc = get_object_or_404(OperationDocument, pk=doc_pk)
+    # El filtro por tenant tiene que estar aqui tambien: la rama de contraseña
+    # incorrecta ya lo tenia, pero esta no, asi que un usuario con permiso de
+    # borrado podia eliminar el documento de otra empresa pasando su pk.
+    doc = get_object_or_404(OperationDocument, pk=doc_pk, tenant=tenant)
     op = doc.operation
-    try:
-        if os.path.exists(doc.file.path):
-            os.remove(doc.file.path)
-    except:
-        pass
+    _delete_stored_file(doc)
     doc.delete()
 
     return render(request, 'warehouse/partials/digital_panel.html', {
@@ -843,9 +885,11 @@ def digital_delete_multiple(request):
                 errors.append(f'No tienes permiso para eliminar {doc.original_name}')
                 continue
         try:
-            # Eliminar archivo físico
-            if doc.file and os.path.exists(doc.file.path):
-                os.remove(doc.file.path)
+            # El archivo del storage se borra aparte a proposito: si eso falla
+            # (R2 caido, objeto ya inexistente) el registro se borra igual, que
+            # es lo que el operador pidio. Antes la excepcion de `file.path`
+            # saltaba antes del delete() y no se borraba ni una cosa ni la otra.
+            _delete_stored_file(doc)
             doc.delete()
             deleted_count += 1
         except Exception as e:
