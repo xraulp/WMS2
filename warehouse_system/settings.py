@@ -183,7 +183,29 @@ DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 # ====================================================
 # CONFIGURACIÓN DE EMAIL
 # ====================================================
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# Render bloquea la salida SMTP (puertos 25, 465 y 587) en los servicios web del
+# plan gratuito desde septiembre de 2025, así que en producción el correo sale
+# por la API HTTPS de Resend. El SMTP se conserva porque sigue funcionando desde
+# la red local, que es donde se prueba.
+#
+#   EMAIL_PROVIDER=resend  -> API de Resend (necesita RESEND_API_KEY)
+#   EMAIL_PROVIDER=smtp    -> servidor SMTP propio (variables EMAIL_HOST y demás)
+#   sin definir             -> Resend si hay RESEND_API_KEY, SMTP si no
+#
+# `EMAIL_BACKEND` explícito en el entorno gana sobre todo lo anterior, para poder
+# forzar el backend de consola al depurar.
+RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
+EMAIL_PROVIDER = os.getenv('EMAIL_PROVIDER', '').strip().lower()
+
+if not EMAIL_PROVIDER:
+    EMAIL_PROVIDER = 'resend' if RESEND_API_KEY else 'smtp'
+
+if EMAIL_PROVIDER == 'resend':
+    _EMAIL_BACKEND_DEFAULT = 'warehouse.email_backends.ResendBackend'
+else:
+    _EMAIL_BACKEND_DEFAULT = 'django.core.mail.backends.smtp.EmailBackend'
+
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND') or _EMAIL_BACKEND_DEFAULT
 EMAIL_HOST = os.getenv('EMAIL_HOST')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS') == 'True'
@@ -198,6 +220,14 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 # aviso de que el correo no salió. Pasó en producción: la salida al puerto 465
 # desde Render se queda esperando sin respuesta.
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', 10))
+
+# Tope por archivo adjunto. Los expedientes traen fotos y hasta video; además de
+# que ningún servidor acepta un correo de 40 MB, leerlo entero en memoria en un
+# plan chico es la forma rápida de quedarse sin RAM. Resend rechaza los envíos
+# que pasan de 40 MB en total, y el base64 infla el tamaño un 33%.
+EMAIL_MAX_ATTACHMENT_MB = int(os.getenv('EMAIL_MAX_ATTACHMENT_MB', 5))
+
+print(f"[INFO] Correo: proveedor={EMAIL_PROVIDER} backend={EMAIL_BACKEND}")
 
 # ====================================================
 # CONFIGURACIÓN DE TWILIO (WHATSAPP)
