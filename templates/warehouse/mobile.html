@@ -373,7 +373,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
           <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Category</label>
           <select name="category" class="form-input" style="height:44px;">
             <option value="">— Select —</option>
-            <option value="CUSTOMER">Customer</option>
+            {% if profile|can_edit_catalog:'CUSTOMER' %}<option value="CUSTOMER">Customer</option>{% endif %}
             <option value="SHIPPER">Shipper</option>
             <option value="CARRIER">Carrier</option>
             <option value="BUNDLE_TYPE">Type of Bundle</option>

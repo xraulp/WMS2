@@ -24,7 +24,8 @@
     <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Role</label>
       <select name="role" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
-        <option value="superadmin">Super Admin</option>
+        {% if profile|can_assign_role:'superadmin' %}<option value="superadmin">Super Admin</option>{% endif %}
+        {% if profile|can_assign_role:'admin' %}<option value="admin">Admin</option>{% endif %}
         <option value="manager">Manager</option>
         <option value="staff" selected>Staff</option>
         <option value="customer">Customer</option>
@@ -171,7 +172,8 @@
           <div style="display:flex;flex-direction:column;gap:2px">
             <label style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Role</label>
             <select name="role" style="height:24px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px">
-              <option value="superadmin" {% if p and p.role == 'superadmin' %}selected{% endif %}>SuperAdmin</option>
+              {% if profile|can_assign_role:'superadmin' or p.role == 'superadmin' %}<option value="superadmin" {% if p and p.role == 'superadmin' %}selected{% endif %}>SuperAdmin</option>{% endif %}
+              {% if profile|can_assign_role:'admin' or p.role == 'admin' %}<option value="admin" {% if p and p.role == 'admin' %}selected{% endif %}>Admin</option>{% endif %}
               <option value="manager"    {% if not p or p.role == 'manager' %}selected{% endif %}>Manager</option>
               <option value="staff"      {% if p and p.role == 'staff' %}selected{% endif %}>Staff</option>
               <option value="customer"   {% if p and p.role == 'customer' %}selected{% endif %}>Customer</option>

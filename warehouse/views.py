@@ -1171,6 +1171,13 @@ def catalog_create(request):
     name     = p.get('name','').strip()
     if not category or not name:
         return HttpResponse('<div class="msg-error">✗ Category and Name are required.</div>')
+    # La categoría llega de un desplegable del formulario, así que quitarle la
+    # opción a quien no debe verla no basta: el POST se manda igual. Dar de alta
+    # un cliente queda reservado al administrador de la empresa.
+    if not profile.can_edit_catalog(category):
+        return HttpResponse(
+            '<div class="msg-error">✗ Only an administrator can create customers.</div>',
+            status=403)
     entry = Catalog.objects.create(
         tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 4.3. catalog_create 072526 19:57
         category=category, name=name,
@@ -1202,6 +1209,10 @@ def catalog_edit(request, pk):
     if profile.is_customer():
         return HttpResponse('Permission denied.', status=403)
     entry = get_object_or_404(Catalog, pk=pk, tenant=tenant) #### 4.4. catalog_edit Verificar que el catálogo pertenece al tenant:
+    # La categoría no se puede cambiar desde aquí, así que la que manda es la
+    # que ya tiene la entrada.
+    if not profile.can_edit_catalog(entry.category):
+        return HttpResponse('Permission denied.', status=403)
     if request.method == 'POST':
         p = request.POST
         entry.name          = p.get('name', entry.name).strip()
@@ -1234,6 +1245,8 @@ def catalog_delete(request, pk):
     if profile.is_customer():
         return HttpResponse('Permission denied.', status=403)
     entry = get_object_or_404(Catalog, pk=pk, tenant=tenant) #####4.5. catalog_delete 072526 20:00
+    if not profile.can_edit_catalog(entry.category):
+        return HttpResponse('Permission denied.', status=403)
     if request.method == 'POST':
         entry.active = False
         entry.save()
@@ -1264,6 +1277,17 @@ def catalog_autocomplete(request):
 
 # ── USER MANAGEMENT ───────────────────────────────────────────────────────────
 
+def _perfil_de(user):
+    """
+    El perfil de otro usuario, sin inventarlo si no lo tiene.
+
+    `get_profile` crea uno sobre la marcha, que es lo que hace falta para quien
+    esta navegando pero no para el usuario sobre el que se actua: fabricarle un
+    perfil solo para poder compararlo seria darle un rol que nadie le dio.
+    """
+    return UserProfile.objects.filter(user=user).first()
+
+
 @login_required
 def user_management(request):
     tenant  = get_tenant_or_404(request)
@@ -1284,7 +1308,13 @@ def user_management(request):
             pwd   = request.POST.get('password','').strip()
             role  = request.POST.get('role','staff')
             cid   = request.POST.get('customer_id','').strip()
-            if uname and pwd:
+            if uname and pwd and not profile.can_assign_role(role):
+                # El rol llegaba del formulario y se guardaba tal cual, asi que
+                # un administrador podia nombrar un 'superadmin' y quedar por
+                # debajo de alguien a quien acababa de crear.
+                msg = f'You cannot create a user with the role "{role}".'
+                msg_is_error = True
+            elif uname and pwd:
                 if not User.objects.filter(username=uname).exists():
                     u = User.objects.create_user(username=uname, password=pwd)
                     cat = Catalog.objects.filter(pk=int(cid), tenant=tenant).first() if cid else None
@@ -1337,7 +1367,10 @@ def user_management(request):
         elif action == 'delete':
             uid = request.POST.get('user_id')
             u   = get_object_or_404(User, pk=uid, profile__tenant=tenant)
-            if u != request.user:
+            if not profile.can_manage_user(_perfil_de(u)):
+                msg = f'You cannot manage the account of "{u.username}".'
+                msg_is_error = True
+            elif u != request.user:
                 u.delete()
                 msg = 'User deleted.'
         elif action == 'change_password':
@@ -1345,25 +1378,36 @@ def user_management(request):
             new_pwd = request.POST.get('new_password','').strip()
             if uid and new_pwd:
                 u = get_object_or_404(User, pk=uid, profile__tenant=tenant)
-                u.set_password(new_pwd)
-                u.save()
-                p, _ = UserProfile.objects.get_or_create(user=u, defaults={'tenant': tenant})
-                p.plain_password = new_pwd
-                p.save()
-                msg = f'Password updated for "{u.username}".'
+                # Validar solo el rol dejaba la puerta entornada: sin esto un
+                # administrador no podia nombrar un superadmin, pero si cambiarle
+                # la contrasena al que ya hubiera y entrar como el.
+                if not profile.can_manage_user(_perfil_de(u)):
+                    msg = f'You cannot change the password of "{u.username}".'
+                    msg_is_error = True
+                else:
+                    u.set_password(new_pwd)
+                    u.save()
+                    p, _ = UserProfile.objects.get_or_create(user=u, defaults={'tenant': tenant})
+                    p.plain_password = new_pwd
+                    p.save()
+                    msg = f'Password updated for "{u.username}".'
         elif action == 'update_role':
             uid  = request.POST.get('user_id')
             role = request.POST.get('role','staff')
             cid  = request.POST.get('customer_id','').strip()
             del_pwd = request.POST.get('delete_password','').strip()
             u    = get_object_or_404(User, pk=uid, profile__tenant=tenant)
-            p, _ = UserProfile.objects.get_or_create(user=u, defaults={'tenant': tenant})
-            p.role     = role
-            p.customer = Catalog.objects.filter(pk=int(cid), tenant=tenant).first() if cid else None
-            if del_pwd:
-                p.delete_password = del_pwd
-            p.save()
-            msg = f'User "{u.username}" updated.'
+            if not profile.can_manage_user(_perfil_de(u)) or not profile.can_assign_role(role):
+                msg = f'You cannot assign the role "{role}" to "{u.username}".'
+                msg_is_error = True
+            else:
+                p, _ = UserProfile.objects.get_or_create(user=u, defaults={'tenant': tenant})
+                p.role     = role
+                p.customer = Catalog.objects.filter(pk=int(cid), tenant=tenant).first() if cid else None
+                if del_pwd:
+                    p.delete_password = del_pwd
+                p.save()
+                msg = f'User "{u.username}" updated.'
         users    = User.objects.filter(profile__tenant=tenant).order_by('username')
         profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
 
@@ -1377,6 +1421,8 @@ def user_management(request):
         'customers': customers, 'msg': msg, 'msg_is_error': msg_is_error,
         'request': request,
         'deletion_log': deletion_log,
+        # Para no ofrecer en el desplegable un rol que la vista va a rechazar.
+        'profile': profile,
     })
 
 
@@ -1866,6 +1912,13 @@ def catalog_import(request):
                 name     = str(name or '').strip()
                 if not category or not name or category not in valid_cats:
                     errors.append(f'Row {row_idx}: invalid category or missing name')
+                    continue
+                # El Excel es la puerta de atrás del catálogo: sin esto, quien no
+                # puede dar de alta un cliente desde el formulario lo da de alta
+                # subiendo un archivo con la categoría escrita dentro.
+                if not profile.can_edit_catalog(category):
+                    errors.append(
+                        f'Row {row_idx}: only an administrator can import {category} entries')
                     continue
                 if not Catalog.objects.filter(category=category, name__iexact=name, tenant=tenant).exists():
                     Catalog.objects.create(

@@ -31,6 +31,11 @@ class BaseTenant(TestCase):
         cls.manager = User.objects.create_user('manager', password='x')
         UserProfile.objects.create(user=cls.manager, tenant=cls.tenant,
                                    role='manager', delete_password='borrar123')
+        # El catalogo de clientes es cosa del administrador de la empresa, asi
+        # que las pruebas que dan de alta clientes entran con este.
+        cls.admin = User.objects.create_user('admin_tenant', password='x')
+        UserProfile.objects.create(user=cls.admin, tenant=cls.tenant,
+                                   role='admin', delete_password='borrar123')
 
     def setUp(self):
         self.client.force_login(self.manager)
@@ -48,6 +53,10 @@ class AbreviaturaDelCatalogoTests(BaseTenant):
     Importa porque la abreviatura del cliente es lo que
     `get_customer_abbreviation` usa para nombrar lo que sale impreso.
     """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.admin)
 
     def _alta(self, **extra):
         datos = {'category': 'CUSTOMER', 'name': 'Ferretera del Bajio',

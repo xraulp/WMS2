@@ -11,6 +11,26 @@ ROLE_CHOICES = [
     ('customer', 'Cliente'),
 ]
 
+# Los mismos roles, ordenados. Hace falta un orden porque la gestion de usuarios
+# recibia el rol desde el formulario y lo guardaba tal cual: un administrador de
+# una empresa podia crear -o ascender a alguien a- 'superadmin', que es el nivel
+# mas alto que existe dentro del tenant. Con el orden se puede exigir la regla
+# que faltaba: nadie reparte un nivel por encima del suyo.
+ROLE_RANK = {
+    'customer': 0,
+    'staff': 1,
+    'manager': 2,
+    'admin': 3,
+    'superadmin': 4,
+}
+
+# Categorias del catalogo reservadas al administrador de la empresa. Dar de alta
+# un cliente y dar de alta un carrier son hoy la misma operacion con un valor
+# distinto en el desplegable, y no deberian serlo: los operativos son trabajo
+# diario de cualquiera que capture, mientras que un cliente decide a quien se le
+# mandan los avisos y quien puede tener acceso al sistema.
+CATALOG_ADMIN_CATEGORIES = {'CUSTOMER'}
+
 class Catalog(models.Model):
     CATEGORY_CHOICES = [
         ('CUSTOMER',    'Customer'),
@@ -123,6 +143,60 @@ class UserProfile(models.Model):
         if self.tenant.is_organization and tenant.parent_id == self.tenant_id:
             return True
         return False
+
+    def role_rank(self):
+        """
+        Nivel del usuario en la jerarquia de roles.
+
+        El superusuario de Django cuenta como el maximo, igual que en
+        `is_superadmin()`, porque hoy los dos niveles comparten llave.
+        """
+        if self.user.is_superuser:
+            return ROLE_RANK['superadmin']
+        return ROLE_RANK.get(self.role, 0)
+
+    def can_assign_role(self, role):
+        """
+        Si puede repartir ese rol al crear o modificar a otro usuario.
+
+        Se permite el propio nivel para que una empresa pueda tener dos
+        administradores; lo que no se permite es subir por encima.
+        """
+        if not self.can_manage_users():
+            return False
+        if role not in ROLE_RANK:
+            return False
+        return ROLE_RANK[role] <= self.role_rank()
+
+    def can_manage_user(self, otro):
+        """
+        Si puede tocar la cuenta de ese otro usuario: cambiarle el rol, la
+        contrasena o borrarla.
+
+        Validar solo el rol que se reparte dejaba la puerta entornada: un
+        administrador no podia nombrar un superadmin, pero si cambiarle la
+        contrasena al que ya hubiera y entrar como el. Un usuario sin perfil
+        cuenta como el nivel mas bajo.
+        """
+        if not self.can_manage_users():
+            return False
+        rango_otro = otro.role_rank() if otro is not None else 0
+        return rango_otro <= self.role_rank()
+
+    def can_edit_catalog(self, category):
+        """
+        Si puede dar de alta, editar o dar de baja esa parte del catalogo.
+
+        Los clientes son cosa del administrador de la empresa; el resto del
+        catalogo -carriers, shippers, tipos de bulto- lo mantiene quien captura.
+        La comprobacion vive aqui y se hace en el servidor a proposito: esconder
+        la opcion del desplegable no impide mandar el POST a mano.
+        """
+        if self.is_customer():
+            return False
+        if category in CATALOG_ADMIN_CATEGORIES:
+            return self.is_superadmin() or self.is_admin()
+        return True
 
     def can_see_tab(self, tab):
         if self.role == 'customer':

@@ -29,7 +29,10 @@ class NotificationTestBase(TestCase):
             contact_email='compras@cliente-a.com', whatsapp='+521999')
 
         cls.staff = User.objects.create_user('operador', password='x')
-        UserProfile.objects.create(user=cls.staff, tenant=cls.tenant, role='manager')
+        # 'admin' y no 'manager': mantener las preferencias de aviso de un cliente
+        # es editar el catalogo de clientes, y eso quedo reservado al
+        # administrador de la empresa.
+        UserProfile.objects.create(user=cls.staff, tenant=cls.tenant, role='admin')
 
     def _operacion(self, customer=None, custom_id='ED260816-0001',
                    op_type='ENTRY', manual=''):
