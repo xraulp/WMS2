@@ -168,6 +168,9 @@ tbody td:has(.btn-action) {
   {% if profile|can_see_tab:'catalog' %}
   <button class="tab" id="tab-catalog" onclick="showTab('catalog')">Catalog</button>
   {% endif %}
+  {% if profile|can_see_tab:'customers' %}
+  <button class="tab" id="tab-customers" onclick="showTab('customers')">Customers</button>
+  {% endif %}
   <button class="tab" id="tab-digital" onclick="showTab('digital')">Digital</button>
   <button class="tab" id="tab-reports" onclick="showTab('reports')">Report Generator</button>
   {% if profile.can_manage_users %}
@@ -410,7 +413,12 @@ tbody td:has(.btn-action) {
 {% if profile|can_see_tab:'catalog' %}
 <div class="panel" id="panel-catalog">
   <div class="card">
-    <div class="ct">Catalog</div>
+    <div class="ct">Operational Catalog</div>
+    <p style="font-size:11px;color:#94a3b8;margin:-6px 0 10px">
+      Shippers, carriers, bundle types and the rest of what you pick while
+      capturing an operation. Customers live in their own tab.
+    </p>
+    {% if can_edit_operational %}
     <div id="cat-msg"></div>
     <form id="cat-form"
           hx-post="{% url 'catalog_create' %}"
@@ -418,12 +426,12 @@ tbody td:has(.btn-action) {
           hx-swap="innerHTML"
           hx-on::after-request="onAfterCatSave(event)">
       {% csrf_token %}
+      <input type="hidden" name="scope" value="operational">
       <div class="cf">
         <div class="cf-g">
           <label>Category</label>
           <select name="category" class="cf-i" style="min-width:150px">
             <option value="">— Select —</option>
-            {% if profile|can_edit_catalog:'CUSTOMER' %}<option value="CUSTOMER">Customer</option>{% endif %}
             <option value="SHIPPER">Shipper</option>
             <option value="CARRIER">Carrier</option>
             <option value="BUNDLE_TYPE">Type of Bundle</option>
@@ -441,9 +449,8 @@ tbody td:has(.btn-action) {
         </div>
         <div class="cf-g" style="min-width:100px">
           <label>Abreviatura</label>
-        <input type="text" name="abbreviation" class="cf-i" placeholder="Ej: LBO, ACME">
+          <input type="text" name="abbreviation" class="cf-i" placeholder="Ej: LBO, ACME">
         </div>
-
         <div class="cf-g" style="min-width:110px">
           <label>Phone</label>
           <input type="text" name="phone" class="cf-i" placeholder="+52 xxx...">
@@ -466,12 +473,102 @@ tbody td:has(.btn-action) {
         </div>
       </div>
     </form>
+    {% endif %}
     <div class="tw" id="catalog-table">
-      {% include 'warehouse/partials/catalog_table.html' %}
+      {% include 'warehouse/partials/catalog_table.html' with catalog_entries=operational_entries scope='operational' table_id='catalog-table' can_edit=can_edit_operational %}
     </div>
   </div>
 </div>
 {% endif %}
+
+{% if profile|can_see_tab:'customers' %}
+<div class="panel" id="panel-customers">
+  <div class="card">
+    <div class="ct">Customers</div>
+    <p style="font-size:11px;color:#94a3b8;margin:-6px 0 10px">
+      {% if can_edit_customers %}
+      A customer decides who gets notified and who can be given access, so only
+      an administrator maintains this list. To give a customer a login, use the
+      Users tab.
+      {% else %}
+      Read only: only an administrator of this company can add or edit customers.
+      {% endif %}
+    </p>
+    {% if can_edit_customers %}
+    <div id="cust-msg"></div>
+    <form id="cust-form"
+          hx-post="{% url 'catalog_create' %}"
+          hx-target="#cust-msg"
+          hx-swap="innerHTML"
+          hx-on::after-request="onAfterCustSave(event)">
+      {% csrf_token %}
+      <input type="hidden" name="category" value="CUSTOMER">
+      <input type="hidden" name="scope" value="customers">
+      <div class="cf">
+        <div class="cf-g" style="flex:1;min-width:150px">
+          <label>Customer name</label>
+          <input type="text" name="name" class="cf-i" placeholder="Company name...">
+        </div>
+        <div class="cf-g" style="min-width:100px">
+          <label>Abreviatura</label>
+          <input type="text" name="abbreviation" class="cf-i" placeholder="Ej: LBO, ACME">
+        </div>
+        <div class="cf-g" style="flex:1;min-width:170px">
+          <label>Email(s) — comma separated</label>
+          <input type="text" name="contact_email" class="cf-i" placeholder="a@x.com, b@x.com">
+        </div>
+        <div class="cf-g" style="min-width:110px">
+          <label>Phone</label>
+          <input type="text" name="phone" class="cf-i" placeholder="+52 xxx...">
+        </div>
+        <div class="cf-g" style="min-width:140px">
+          <label>WhatsApp (+521XXXXXXXXXX)</label>
+          <input type="text" name="whatsapp" class="cf-i" placeholder="+521XXXXXXXXXX">
+        </div>
+        <div class="cf-g" style="min-width:130px">
+          <label>Address</label>
+          <input type="text" name="address" class="cf-i" placeholder="Address...">
+        </div>
+        <div class="cf-g" style="min-width:110px">
+          <label>Notes</label>
+          <input type="text" name="notes" class="cf-i" placeholder="Notes...">
+        </div>
+        <div class="cf-g">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn btn-p" style="height:28px">Save Customer</button>
+        </div>
+      </div>
+    </form>
+    {% endif %}
+    <div class="tw" id="customer-table">
+      {% include 'warehouse/partials/catalog_table.html' with catalog_entries=customer_entries scope='customers' table_id='customer-table' can_edit=can_edit_customers %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal de edicion del catalogo. Vive aqui, una sola vez, y no dentro del
+     partial de la tabla: al haber dos tablas en la pagina, un modal por partial
+     duplicaria los mismos id y el segundo no responderia. -->
+<div id="cat-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:10px;padding:20px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">Edit Catalog Entry</span>
+      <button onclick="closeCatalogEdit()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b">✕</button>
+    </div>
+    <div id="cat-edit-body"></div>
+  </div>
+</div>
+<script>
+function openCatalogEdit(pk) {
+  htmx.ajax('GET', '/catalog/'+pk+'/edit/', {target:'#cat-edit-body', swap:'innerHTML'});
+  document.getElementById('cat-edit-modal').style.display = 'flex';
+}
+function closeCatalogEdit() {
+  document.getElementById('cat-edit-modal').style.display = 'none';
+}
+</script>
+
 
 <div class="panel" id="panel-digital">
   <div class="card">
@@ -595,7 +692,7 @@ function loadCatalog() {
 loadCatalog();
 
 function showTab(t) {
-  const tabs = ['form','database','catalog','digital','reports','users','platform'];
+  const tabs = ['form','database','catalog','customers','digital','reports','users','platform'];
   tabs.forEach(n=>{
     const p = document.getElementById('panel-'+n);
     const b = document.getElementById('tab-'+n);
@@ -861,7 +958,17 @@ function dismissFormError(){document.getElementById('form-msg').innerHTML='';}
 function onAfterCatSave(e){
   if(e.detail.successful){
     document.getElementById('cat-form').reset();
-    htmx.ajax('GET','{% url "catalog_list" %}',{target:'#catalog-table',swap:'innerHTML'});
+    htmx.ajax('GET','{% url "catalog_list" %}?scope=operational',{target:'#catalog-table',swap:'innerHTML'});
+    loadCatalog();
+  }
+}
+
+// El mismo gesto para la tabla de clientes. Son dos tablas distintas en la
+// misma pagina, asi que cada formulario refresca la suya.
+function onAfterCustSave(e){
+  if(e.detail.successful){
+    document.getElementById('cust-form').reset();
+    htmx.ajax('GET','{% url "catalog_list" %}?scope=customers',{target:'#customer-table',swap:'innerHTML'});
     loadCatalog();
   }
 }

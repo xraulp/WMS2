@@ -357,7 +357,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
 <!-- ══════ CATALOG ══════ -->
 <div class="panel" id="panel-catalog">
   <div class="card">
-    <div class="card-title">Catalog</div>
+    <div class="card-title">Operational Catalog</div>
     <div id="mob-cat-msg"></div>
 
     <!-- Formulario para agregar nuevo registro -->
@@ -368,12 +368,12 @@ tbody td:has(button), tbody td:has(.btn-action) {
           hx-on::after-request="onMobAfterCatSave(event)"
           style="margin-bottom:16px">
       {% csrf_token %}
+      <input type="hidden" name="scope" value="operational">
       <div style="display:grid; gap:8px; margin-bottom:12px;">
         <div>
           <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Category</label>
           <select name="category" class="form-input" style="height:44px;">
             <option value="">— Select —</option>
-            {% if profile|can_edit_catalog:'CUSTOMER' %}<option value="CUSTOMER">Customer</option>{% endif %}
             <option value="SHIPPER">Shipper</option>
             <option value="CARRIER">Carrier</option>
             <option value="BUNDLE_TYPE">Type of Bundle</option>
@@ -415,10 +415,45 @@ tbody td:has(button), tbody td:has(.btn-action) {
 
     <!-- Tabla de catálogos -->
     <div class="tw" id="catalog-table">
-      {% include 'warehouse/partials/catalog_table.html' %}
+      {% include 'warehouse/partials/catalog_table.html' with catalog_entries=operational_entries scope='operational' table_id='catalog-table' can_edit=can_edit_operational %}
     </div>
   </div>
+
+  {% if profile|can_see_tab:'customers' %}
+  <!-- Los clientes van en su propia tarjeta, debajo y en solo lectura: la barra
+       de abajo no tiene sitio para otra pestaña, y dar de alta un cliente es
+       trabajo de escritorio. Aquí se consultan, que es lo que hace falta en el
+       patio. -->
+  <div class="card" style="margin-top:12px">
+    <div class="card-title">Customers</div>
+    <div class="tw" id="customer-table">
+      {% include 'warehouse/partials/catalog_table.html' with catalog_entries=customer_entries scope='customers' table_id='customer-table' can_edit=False %}
+    </div>
+  </div>
+  {% endif %}
 </div>
+
+<!-- Modal de edicion del catalogo. Antes venia dentro del partial de la tabla;
+     al haber ahora dos tablas en la pagina se saco fuera, y esta pantalla lo
+     necesita igual porque pinta el boton Edit. -->
+<div id="cat-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:10px;padding:18px;max-width:500px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <span style="font-size:13px;font-weight:600">Edit Catalog Entry</span>
+      <button onclick="closeCatalogEdit()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#64748b">✕</button>
+    </div>
+    <div id="cat-edit-body"></div>
+  </div>
+</div>
+<script>
+function openCatalogEdit(pk) {
+  htmx.ajax('GET', '/catalog/'+pk+'/edit/', {target:'#cat-edit-body', swap:'innerHTML'});
+  document.getElementById('cat-edit-modal').style.display = 'flex';
+}
+function closeCatalogEdit() {
+  document.getElementById('cat-edit-modal').style.display = 'none';
+}
+</script>
 
 <!-- ══════ DIGITAL ══════ -->
 <div class="panel" id="panel-digital">
@@ -521,7 +556,7 @@ function mobShowTab(t) {
     htmx.ajax('GET', '{% url "report_generator" %}', {target:'#report-content', swap:'innerHTML'});
   }
   if (t === 'catalog') {
-    htmx.ajax('GET', '{% url "catalog_list" %}', {target:'#catalog-table', swap:'innerHTML'});
+    htmx.ajax('GET', '{% url "catalog_list" %}?scope=operational', {target:'#catalog-table', swap:'innerHTML'});
   }
 }
 
@@ -849,7 +884,7 @@ function confirmDelete(pk, customId) {
 function onMobAfterCatSave(e) {
   if (e.detail.successful) {
     document.getElementById('mob-cat-form').reset();
-    htmx.ajax('GET', '{% url "catalog_list" %}', {target:'#catalog-table', swap:'innerHTML'});
+    htmx.ajax('GET', '{% url "catalog_list" %}?scope=operational', {target:'#catalog-table', swap:'innerHTML'});
     fetch('/debug/catalog/').then(r=>r.json()).then(d=>{
       MOB_CAT.customer    = d.customers    || [];
       MOB_CAT.shipper     = d.shippers     || [];

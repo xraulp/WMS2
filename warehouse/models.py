@@ -31,6 +31,20 @@ ROLE_RANK = {
 # mandan los avisos y quien puede tener acceso al sistema.
 CATALOG_ADMIN_CATEGORIES = {'CUSTOMER'}
 
+# El catalogo esta partido en dos pantallas porque son dos trabajos distintos
+# con dos publicos distintos: los clientes los mantiene el administrador de la
+# empresa, y el resto -carriers, shippers, tipos de bulto- lo mantiene a diario
+# quien captura las operaciones. Tenerlos juntos en una sola tabla obligaba a
+# elegir la categoria en un desplegable y hacia imposible separar los permisos.
+CATALOG_SCOPES = {
+    'customers':   ['CUSTOMER'],
+    'operational': ['SHIPPER', 'CARRIER', 'BUNDLE_TYPE', 'TYPE_OP', 'CC_EMAIL'],
+}
+
+def catalog_scope_of(category):
+    """A que pantalla pertenece una categoria."""
+    return 'customers' if category in CATALOG_ADMIN_CATEGORIES else 'operational'
+
 class Catalog(models.Model):
     CATEGORY_CHOICES = [
         ('CUSTOMER',    'Customer'),
@@ -199,12 +213,14 @@ class UserProfile(models.Model):
         return True
 
     def can_see_tab(self, tab):
+        # 'customers' es la pestana de clientes, separada del catalogo
+        # operativo. Manager y staff la ven, pero en solo lectura: necesitan
+        # consultar el contacto de un cliente aunque no puedan darlo de alta.
         if self.role == 'customer':
             return tab in ('database', 'digital', 'reports')
-        if self.role == 'staff':
-            return tab in ('form', 'database', 'catalog', 'digital', 'reports')
-        if self.role in ('manager', 'admin'):
-            return tab in ('form', 'database', 'catalog', 'digital', 'reports')
+        if self.role in ('staff', 'manager', 'admin'):
+            return tab in ('form', 'database', 'catalog', 'customers',
+                           'digital', 'reports')
         return True
 
     def __str__(self):

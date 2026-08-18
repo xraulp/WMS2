@@ -1,12 +1,27 @@
+{% comment %}
+Tabla del catálogo, compartida por las dos pantallas en que quedó partido:
+la operativa (carriers, shippers, tipos de bulto) y la de clientes.
+
+Espera en el contexto:
+  scope      'operational' | 'customers'
+  table_id   el id del contenedor que HTMX reemplaza, uno por pantalla porque
+             las dos tablas conviven en la misma página
+  can_edit   si quien mira puede dar de alta, editar y archivar aquí
+
+El modal de edición vive en la plantilla que incluye esta, no aquí: al haber
+dos tablas, un modal dentro del partial se duplicaría con los mismos id.
+{% endcomment %}
 {% if edit_success %}<div class="msg-success" style="margin-bottom:8px">✓ {{ edit_success }}</div>{% endif %}
 {% if import_success %}<div class="msg-success" style="margin-bottom:8px">✓ {{ import_success }}</div>{% endif %}
 {% if import_error %}<div class="msg-error" style="margin-bottom:8px">⚠ {{ import_error }}</div>{% endif %}
 
+{% if can_edit %}
 <!-- Import / Layout bar -->
 <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-  <form hx-post="{% url 'catalog_import' %}" hx-target="#catalog-table" hx-swap="innerHTML"
+  <form hx-post="{% url 'catalog_import' %}" hx-target="#{{ table_id }}" hx-swap="innerHTML"
         hx-encoding="multipart/form-data" style="display:flex;gap:6px;align-items:center">
     {% csrf_token %}
+    <input type="hidden" name="scope" value="{{ scope }}">
     <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Import Excel:</label>
     <input type="file" name="import_file" accept=".xlsx,.xls" required
            style="font-size:11px;height:26px;border:1px solid #e2e8f0;border-radius:6px;padding:2px 6px;background:#fff">
@@ -14,6 +29,7 @@
   </form>
   <a href="{% url 'catalog_layout' %}" class="btn btn-g btn-sm" style="color:#0ea5e9;border-color:#0ea5e9">⬇ Download Layout</a>
 </div>
+{% endif %}
 
 {% if catalog_entries %}
 <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px">
@@ -25,7 +41,8 @@
       <th>Abreviatura</th>
       <th>Email</th><th>Phone</th>
       <th style="color:#7dd3fc">WhatsApp</th>
-      <th>Notes</th><th>Actions</th>
+      <th>Notes</th>
+      {% if can_edit %}<th>Actions</th>{% endif %}
     </tr>
   </thead>
   <tbody>
@@ -38,15 +55,17 @@
       <td>{{ entry.phone|default:"—" }}</td>
       <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#0ea5e9">{{ entry.whatsapp|default:"—" }}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ entry.notes }}">{{ entry.notes|default:"—" }}</td>
+      {% if can_edit %}
       <td style="white-space:nowrap">
         <button class="btn btn-g btn-sm" onclick="openCatalogEdit({{ entry.pk }})">Edit</button>
         <button class="btn btn-d btn-sm"
                 hx-post="{% url 'catalog_delete' entry.pk %}"
-                hx-target="#catalog-table"
+                hx-target="#{{ table_id }}"
                 hx-swap="innerHTML"
                 hx-confirm="Archive '{{ entry.name }}'? Historical records will NOT be affected."
                 hx-include="[name=csrfmiddlewaretoken]">Archive</button>
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>
@@ -54,27 +73,12 @@
 </div>
 {% else %}
 <div class="empty-state" style="text-align:center;padding:30px;color:#94a3b8">
+  {% if scope == 'customers' %}
+  <h3 style="margin-bottom:4px;font-size:14px;color:#64748b">No customers yet</h3>
+  <p style="font-size:12px">{% if can_edit %}Add your customers using the form above.{% else %}Only an administrator can add customers.{% endif %}</p>
+  {% else %}
   <h3 style="margin-bottom:4px;font-size:14px;color:#64748b">Catalog is empty</h3>
-  <p style="font-size:12px">Add customers, shippers, carriers and bundle types using the form above.</p>
+  <p style="font-size:12px">{% if can_edit %}Add shippers, carriers and bundle types using the form above.{% else %}Nothing to show yet.{% endif %}</p>
+  {% endif %}
 </div>
 {% endif %}
-
-<!-- Edit modal -->
-<div id="cat-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:10px;padding:20px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">Edit Catalog Entry</span>
-      <button onclick="closeCatalogEdit()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b">✕</button>
-    </div>
-    <div id="cat-edit-body"></div>
-  </div>
-</div>
-<script>
-function openCatalogEdit(pk) {
-  htmx.ajax('GET', '/catalog/'+pk+'/edit/', {target:'#cat-edit-body', swap:'innerHTML'});
-  document.getElementById('cat-edit-modal').style.display = 'flex';
-}
-function closeCatalogEdit() {
-  document.getElementById('cat-edit-modal').style.display = 'none';
-}
-</script>

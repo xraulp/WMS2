@@ -15,7 +15,8 @@ from django.utils.text import slugify
 import os, json, zipfile, re, logging
 
 from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
-                     DeletionLog, DocumentSequence, Tenant, Subscription)
+                     DeletionLog, DocumentSequence, Tenant, Subscription,
+                     CATALOG_SCOPES, catalog_scope_of)
 from .utils import generate_pdf_report, generate_label_pdf
 from . import notifications
 
@@ -152,7 +153,12 @@ def dashboard(request):
 
     context = {
         'operations': ops,
-        'catalog_entries': Catalog.objects.filter(active=True, tenant=tenant).order_by('category', 'name'),
+        # El catalogo va en dos pantallas: la operativa, que mantiene quien
+        # captura, y la de clientes, que es del administrador de la empresa.
+        'operational_entries': _catalog_entries(tenant, 'operational'),
+        'customer_entries':    _catalog_entries(tenant, 'customers'),
+        'can_edit_operational': profile.can_edit_catalog('SHIPPER'),
+        'can_edit_customers':   profile.can_edit_catalog('CUSTOMER'),
         'customers_json':    cat_json('CUSTOMER'),
         'shippers_json':     cat_json('SHIPPER'),
         'carriers_json':     cat_json('CARRIER'),
@@ -1159,6 +1165,45 @@ def report_generator_email(request):
 
 # ── CATALOG ───────────────────────────────────────────────────────────────────
 
+def _catalog_scope(request, default='operational'):
+    """
+    Cual de las dos pantallas del catalogo pidio esto.
+
+    Va en el formulario porque no siempre se puede deducir: la importacion por
+    Excel trae categorias mezcladas y la vista tiene que saber que tabla
+    refrescar. Un valor desconocido cae en la operativa, que es la de menos
+    permiso.
+    """
+    scope = (request.POST.get('scope') or request.GET.get('scope') or '').strip()
+    return scope if scope in CATALOG_SCOPES else default
+
+
+def _catalog_entries(tenant, scope):
+    return Catalog.objects.filter(
+        active=True, tenant=tenant, category__in=CATALOG_SCOPES[scope]
+    ).order_by('category', 'name')
+
+
+def _catalog_table_id(scope):
+    """El id del contenedor que HTMX reemplaza. Uno por pantalla, porque las
+    dos tablas conviven en la misma pagina."""
+    return 'customer-table' if scope == 'customers' else 'catalog-table'
+
+
+def _catalog_table_context(request, tenant, scope, **extra):
+    profile = get_profile(request.user)
+    contexto = {
+        'catalog_entries': _catalog_entries(tenant, scope),
+        'scope': scope,
+        'table_id': _catalog_table_id(scope),
+        # Manager y staff ven la pantalla de clientes para consultarla; los
+        # botones de alta, edicion y baja solo se pintan a quien puede usarlos.
+        'can_edit': profile.can_edit_catalog(CATALOG_SCOPES[scope][0]),
+    }
+    contexto.update(extra)
+    return contexto
+
+
 @login_required
 @require_POST
 def catalog_create(request):
@@ -1193,12 +1238,15 @@ def catalog_create(request):
         notes=p.get('notes','').strip(),
         whatsapp=p.get('whatsapp','').strip(),
     )
-    catalog_entries = Catalog.objects.filter(active=True, tenant=tenant).order_by('category','name')
-    table_html = render_to_string('warehouse/partials/catalog_table.html',
-                                  {'catalog_entries': catalog_entries}, request=request)
+    # La tabla que se refresca es la de la pantalla a la que pertenece lo que
+    # se acaba de crear, no siempre la misma.
+    scope = catalog_scope_of(category)
+    table_html = render_to_string(
+        'warehouse/partials/catalog_table.html',
+        _catalog_table_context(request, tenant, scope), request=request)
     return HttpResponse(
         f'<div class="msg-success">✓ {entry.name} ({entry.get_category_display()}) saved.</div>'
-        f'<div id="catalog-table" hx-swap-oob="innerHTML">{table_html}</div>'
+        f'<div id="{_catalog_table_id(scope)}" hx-swap-oob="innerHTML">{table_html}</div>'
     )
 
 
@@ -1232,9 +1280,10 @@ def catalog_edit(request, pk):
             entry.notify_on_release   = p.get('notify_on_release') == 'on'
             entry.notify_on_documents = p.get('notify_on_documents') == 'on'
         entry.save()
-        catalog_entries = Catalog.objects.filter(active=True, tenant=tenant).order_by('category','name')
         return render(request, 'warehouse/partials/catalog_table.html',
-                      {'catalog_entries': catalog_entries, 'edit_success': f'{entry.name} updated.'})
+                      _catalog_table_context(request, tenant,
+                                             catalog_scope_of(entry.category),
+                                             edit_success=f'{entry.name} updated.'))
     return render(request, 'warehouse/partials/catalog_edit_form.html', {'entry': entry})
 
 
@@ -1250,18 +1299,18 @@ def catalog_delete(request, pk):
     if request.method == 'POST':
         entry.active = False
         entry.save()
-        return render(request, 'warehouse/partials/catalog_table.html', {
-            'catalog_entries': Catalog.objects.filter(active=True, tenant=tenant).order_by('category','name')
-        })
+        return render(request, 'warehouse/partials/catalog_table.html',
+                      _catalog_table_context(request, tenant,
+                                             catalog_scope_of(entry.category)))
     return HttpResponse(status=405)
 
 
 @login_required
 def catalog_list(request):
     tenant = get_tenant_or_404(request) ##### 072526 13:20 3.6. catalog_list, catalog_autocomplete
-    entries = Catalog.objects.filter(tenant=tenant, active=True).order_by('category', 'name') ##### 072526 13:20 3.6. catalog_list, catalog_autocomplete
-    return render(request, 'warehouse/partials/catalog_table.html', {
-        'catalog_entries': entries}) ###Catalog.objects.filter(active=True).order_by('category','name')
+    scope = _catalog_scope(request)
+    return render(request, 'warehouse/partials/catalog_table.html',
+                  _catalog_table_context(request, tenant, scope))
     ##})
 
 
@@ -1460,6 +1509,10 @@ def mobile_dashboard(request):
         'is_home': profile.is_home(),
         'tenant': tenant,
         'operations': ops,
+        'operational_entries': _catalog_entries(tenant, 'operational'),
+        'customer_entries':    _catalog_entries(tenant, 'customers'),
+        'can_edit_operational': profile.can_edit_catalog('SHIPPER'),
+        'can_edit_customers':   profile.can_edit_catalog('CUSTOMER'),
         'customers_json':    cat_json('CUSTOMER'),
         'shippers_json':     cat_json('SHIPPER'),
         'carriers_json':     cat_json('CARRIER'),
@@ -1893,6 +1946,7 @@ def catalog_import(request):
     except ImportError:
         return HttpResponse('openpyxl not installed.', status=500)
 
+    scope = _catalog_scope(request)
     f = request.FILES.get('import_file')
     if not f:
         return HttpResponse('No file.', status=400)
@@ -1934,12 +1988,11 @@ def catalog_import(request):
             except Exception as e:
                 errors.append(f'Row {row_idx}: {e}')
 
-        catalog_entries = Catalog.objects.filter(active=True, tenant=tenant).order_by('category','name')
         msg = f'{created} catalog entries imported.'
         if errors: msg += f' Errors: {"; ".join(errors[:3])}'
         key = 'import_success' if not errors else 'import_error'
         return render(request, 'warehouse/partials/catalog_table.html',
-                      {'catalog_entries': catalog_entries, key: msg})
+                      _catalog_table_context(request, tenant, scope, **{key: msg}))
     except Exception as e:
         return HttpResponse(f'Import failed: {e}', status=500)
 
