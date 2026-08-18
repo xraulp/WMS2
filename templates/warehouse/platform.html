@@ -1,0 +1,71 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Platform — WMS</title>
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#0f172a}
+    .tb{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#0f172a;color:#fff}
+    .tb-brand{display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600}
+    .tb-dot{width:9px;height:9px;border-radius:50%;background:#38bdf8}
+    .tb-right{display:flex;align-items:center;gap:10px;font-size:12px;color:#cbd5e1}
+    .btn{border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;color:#0f172a}
+    .btn-sm{padding:3px 9px;font-size:11px}
+    .btn-p{background:#0ea5e9;border-color:#0ea5e9;color:#fff}
+    .btn-g{background:#fff}
+    .btn-d{background:#fff;border-color:#ef4444;color:#ef4444}
+    .btn-lo{background:transparent;border-color:#475569;color:#e2e8f0;text-decoration:none;padding:5px 12px;border-radius:6px;border-width:1px;border-style:solid;font-size:12px}
+    .wrap{max-width:1200px;margin:20px auto;padding:0 16px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px}
+    .ct{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin-bottom:12px}
+    table{width:100%;border-collapse:collapse}
+    th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;padding:8px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;white-space:nowrap}
+    td{padding:8px 10px;font-size:13px;border-bottom:1px solid #f1f5f9}
+    .mono{font-family:'IBM Plex Mono',monospace}
+    .badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600}
+    .b-entry{background:#dcfce7;color:#166534}
+    .b-exit{background:#fee2e2;color:#991b1b}
+    .b-sent{background:#e0f2fe;color:#075985}
+    .msg-success{background:#dcfce7;color:#166534;padding:8px 12px;border-radius:8px;font-size:13px}
+    .msg-error{background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:8px;font-size:13px}
+  </style>
+</head>
+<body>
+
+<div class="tb">
+  <div class="tb-brand">
+    <span class="tb-dot"></span>
+    <span>WMS — PLATFORM</span>
+  </div>
+  <div class="tb-right">
+    <strong style="color:#fff">{{ request.user.username }}</strong>
+    <span style="font-size:11px;color:#94a3b8">[PLATFORM {{ platform_role|upper }}]</span>
+    {% if tiene_empresa %}
+    <a href="{% url 'dashboard' %}" class="btn-lo">← My company</a>
+    {% endif %}
+    <a href="{% url 'logout' %}" class="btn-lo">Sign out</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <div class="ct">SaaS administration</div>
+    <p style="font-size:12px;color:#64748b;margin:-4px 0 14px">
+      This level administers the product itself. It is not tied to any company:
+      from here you cannot open a company's operations, documents or catalog.
+    </p>
+    <div id="platform-content"
+         hx-get="{% url 'platform_tenant_list' %}"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      <p style="color:#94a3b8;font-size:12px">Loading…</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

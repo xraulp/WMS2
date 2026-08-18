@@ -1,0 +1,29 @@
+{% comment %}
+Navegación entre las pantallas del nivel de plataforma.
+
+Las tres cargan sobre el mismo contenedor (#platform-content), así que la
+pestaña activa se pasa por parámetro: {% include ... with activa='tenants' %}
+
+"Platform Users" solo se ofrece al administrador: repartir este acceso es lo
+más crítico que hay aquí, porque quien lo tiene puede dar de alta empresas y
+nombrar a sus administradores.
+{% endcomment %}
+<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e2e8f0">
+  <button class="btn btn-sm {% if activa == 'tenants' %}btn-p{% else %}btn-g{% endif %}"
+          hx-get="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML">
+    Companies
+  </button>
+  <button class="btn btn-sm {% if activa == 'notifications' %}btn-p{% else %}btn-g{% endif %}"
+          hx-get="{% url 'platform_notifications' %}" hx-target="#platform-content" hx-swap="innerHTML">
+    Delivery Log
+  </button>
+  {% if platform_role == 'admin' %}
+  <button class="btn btn-sm {% if activa == 'users' %}btn-p{% else %}btn-g{% endif %}"
+          hx-get="{% url 'platform_users' %}" hx-target="#platform-content" hx-swap="innerHTML">
+    Platform Users
+  </button>
+  {% endif %}
+  <span style="margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">
+    Platform {{ platform_role|default:"—" }}
+  </span>
+</div>

@@ -16,6 +16,7 @@ import os, json, zipfile, re, logging
 
 from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
                      DeletionLog, DocumentSequence, Tenant, Subscription,
+                     NotificationLog, PlatformUser, PLATFORM_ROLE_CHOICES,
                      CATALOG_SCOPES, catalog_scope_of)
 from .utils import generate_pdf_report, generate_label_pdf
 from . import notifications
@@ -89,18 +90,35 @@ def customer_can_access_op(user, op):
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
 
+def _destino_tras_entrar(user):
+    """
+    A donde va cada quien al entrar.
+
+    Un usuario de plataforma no pertenece a ninguna empresa, asi que el tablero
+    del tenant le daria 404: su sitio es la pantalla de plataforma. Quien tenga
+    las dos cosas -hoy, el superusuario, que ademas es admin de su empresa- sigue
+    entrando al tablero de siempre y llega a la plataforma por su pestana.
+    """
+    tiene_empresa = UserProfile.objects.filter(user=user, tenant__isnull=False).exists()
+    if not tiene_empresa and platform_role(user):
+        return 'platform_dashboard'
+    return 'dashboard'
+
+
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        return redirect(_destino_tras_entrar(request.user))
     if request.method == 'POST':
         user = authenticate(request,
                             username=request.POST.get('username'),
                             password=request.POST.get('password'))
         if user:
             login(request, user)
+            destino = _destino_tras_entrar(user)
             if request.headers.get('HX-Request'):
-                return HttpResponse(headers={'HX-Redirect': '/dashboard/'})
-            return redirect('dashboard')
+                url = '/platform/' if destino == 'platform_dashboard' else '/dashboard/'
+                return HttpResponse(headers={'HX-Redirect': url})
+            return redirect(destino)
         if request.headers.get('HX-Request'):
             return render(request, 'warehouse/partials/login_error.html')
         return render(request, 'warehouse/login.html', {'error': 'Invalid credentials.'})
@@ -169,6 +187,10 @@ def dashboard(request):
         'users': users,
         # La barra superior llevaba el nombre de una empresa escrito a mano.
         'tenant': tenant,
+        # Quien ademas administra la plataforma llega a ella por esta pestana;
+        # los usuarios de plataforma que no pertenecen a ninguna empresa ni
+        # siquiera pasan por aqui, tienen su propia pantalla.
+        'platform_role': platform_role(request.user),
     }
     return render(request, 'warehouse/dashboard.html', context)
 
@@ -1996,15 +2018,64 @@ def catalog_import(request):
     except Exception as e:
         return HttpResponse(f'Import failed: {e}', status=500)
 
-# ── SAAS PLATFORM ADMIN (fuera del scoping de tenant, solo is_superuser) ──────
+# ── SAAS PLATFORM (nivel 1: fuera del scoping de tenant) ─────────────────────
+#
+# Este nivel no pasa por `get_tenant_or_404`: sus usuarios no pertenecen a
+# ninguna empresa. El acceso se resuelve con `platform_role`, que devuelve
+# 'admin', 'staff' o None.
+
+def platform_role(user):
+    """
+    Nivel de plataforma de este usuario, o None si no tiene ninguno.
+
+    `is_superuser` sigue contando como administrador de plataforma. Es la llave
+    maestra y se conserva a proposito: quitarsela al unico superusuario que hay
+    hoy, en el mismo cambio que introduce el nivel nuevo, dejaria el sistema sin
+    nadie dentro si algo saliera mal. El camino seguro es crear el usuario de
+    plataforma, comprobar que entra, y solo despues retirar el flag.
+    """
+    if not user.is_authenticated:
+        return None
+    if user.is_superuser:
+        return 'admin'
+    acceso = PlatformUser.objects.filter(user=user).first()
+    return acceso.role if acceso else None
+
+
+def _es_admin_de_plataforma(user):
+    return platform_role(user) == 'admin'
+
+
+def _sin_permiso_de_plataforma(user, solo_admin=False):
+    """
+    Devuelve la respuesta de rechazo, o None si puede pasar.
+
+    Se comprueban las dos cosas por separado porque casi todas las pantallas de
+    plataforma las ve el soporte y solo algunas acciones son del administrador.
+    """
+    nivel = platform_role(user)
+    if nivel is None:
+        return HttpResponse('Permission denied.', status=403)
+    if solo_admin and nivel != 'admin':
+        return HttpResponse('Only a platform administrator can do this.', status=403)
+    return None
+
+
 
 @login_required
 def platform_tenant_list(request):
-    if not request.user.is_superuser:
-        return HttpResponse('Permission denied.', status=403)
+    negado = _sin_permiso_de_plataforma(request.user)
+    if negado:
+        return negado
+    es_admin = _es_admin_de_plataforma(request.user)
 
     msg = ''
     if request.method == 'POST':
+        # Dar de alta una empresa es fabricar la llave de su administrador, y
+        # desactivarla es cortarle el servicio: las dos son del administrador de
+        # plataforma, no del soporte.
+        if not es_admin:
+            return HttpResponse('Only a platform administrator can do this.', status=403)
         action = request.POST.get('action')
 
         if action == 'create':
@@ -2053,4 +2124,147 @@ def platform_tenant_list(request):
 
     return render(request, 'warehouse/partials/platform_tenants.html', {
         'tenants': tenants, 'msg': msg,
+        'platform_role': platform_role(request.user),
+        'is_platform_admin': es_admin,
+    })
+
+
+@login_required
+def platform_notifications(request):
+    """
+    La bitácora de envíos, para soporte.
+
+    Es el trabajo diario del staff de plataforma y la razón principal por la que
+    ese nivel existe: el caso real es «a este cliente no le llegan los correos»,
+    y `NotificationLog` ya guarda el estado, el motivo y el destinatario de cada
+    intento. Hasta ahora solo se veía desde el admin de Django, que exige
+    `is_superuser`; o sea que para leer una bitácora había que entregar las
+    llaves del sistema entero.
+
+    Es de solo lectura para los dos niveles. No hay acciones: reenviar un aviso
+    es cosa del operador de la empresa, desde el detalle de su operación.
+    """
+    negado = _sin_permiso_de_plataforma(request.user)
+    if negado:
+        return negado
+
+    registros = (NotificationLog.objects
+                 .select_related('tenant', 'customer', 'triggered_by')
+                 .order_by('-created_at'))
+
+    tenant_id = (request.GET.get('tenant') or '').strip()
+    estado    = (request.GET.get('status') or '').strip()
+    if tenant_id.isdigit():
+        registros = registros.filter(tenant_id=int(tenant_id))
+    if estado:
+        registros = registros.filter(status=estado)
+
+    return render(request, 'warehouse/partials/platform_notifications.html', {
+        'registros': registros[:200],
+        'tenants': Tenant.objects.order_by('name'),
+        'tenant_id': tenant_id,
+        'estado': estado,
+        'estados': NotificationLog.STATUS_CHOICES,
+        'platform_role': platform_role(request.user),
+    })
+
+
+@login_required
+def platform_users(request):
+    """
+    Quién administra el SaaS. Solo el administrador de plataforma.
+
+    Repartir este acceso es lo más crítico que hay en el panel: quien lo tiene
+    puede dar de alta empresas y nombrar a sus administradores. Por eso no se
+    delega en el soporte.
+    """
+    negado = _sin_permiso_de_plataforma(request.user, solo_admin=True)
+    if negado:
+        return negado
+
+    msg, msg_is_error = '', False
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'create':
+            uname = request.POST.get('username', '').strip()
+            pwd   = request.POST.get('password', '').strip()
+            rol   = request.POST.get('role', 'staff')
+            roles_validos = [r for r, _ in PLATFORM_ROLE_CHOICES]
+            if not uname or not pwd:
+                msg, msg_is_error = 'Username and password are required.', True
+            elif rol not in roles_validos:
+                msg, msg_is_error = f'Unknown platform role "{rol}".', True
+            elif User.objects.filter(username=uname).exists():
+                msg, msg_is_error = f'Username "{uname}" is already taken.', True
+            else:
+                # Sin tenant y sin UserProfile a propósito: un usuario de
+                # plataforma no pertenece a ninguna empresa, y es esa ausencia la
+                # que hace que get_tenant_or_404 lo deje fuera de las pantallas
+                # del tenant. Tampoco es superusuario: el admin de Django y los
+                # datos de las empresas siguen siendo otra cosa.
+                with transaction.atomic():
+                    u = User.objects.create_user(username=uname, password=pwd)
+                    PlatformUser.objects.create(user=u, role=rol)
+                msg = f'Platform user "{uname}" created as {rol}.'
+
+        elif action == 'update_role':
+            pk  = request.POST.get('platform_user_id')
+            rol = request.POST.get('role', 'staff')
+            acceso = get_object_or_404(PlatformUser, pk=pk)
+            roles_validos = [r for r, _ in PLATFORM_ROLE_CHOICES]
+            if rol not in roles_validos:
+                msg, msg_is_error = f'Unknown platform role "{rol}".', True
+            elif acceso.user == request.user:
+                # Quitarse a uno mismo el nivel de administrador deja el panel
+                # sin quien lo administre si es el único que queda.
+                msg, msg_is_error = 'You cannot change your own platform role.', True
+            else:
+                acceso.role = rol
+                acceso.save(update_fields=['role'])
+                msg = f'"{acceso.user.username}" is now {rol}.'
+
+        elif action == 'revoke':
+            pk = request.POST.get('platform_user_id')
+            acceso = get_object_or_404(PlatformUser, pk=pk)
+            if acceso.user == request.user:
+                msg, msg_is_error = 'You cannot revoke your own platform access.', True
+            else:
+                nombre = acceso.user.username
+                # Se retira el acceso, no se borra la persona: el usuario sigue
+                # existiendo y puede tener historial asociado.
+                acceso.delete()
+                msg = f'Platform access revoked for "{nombre}".'
+
+    return render(request, 'warehouse/partials/platform_users.html', {
+        'accesos': PlatformUser.objects.select_related('user').all(),
+        'roles': PLATFORM_ROLE_CHOICES,
+        'msg': msg, 'msg_is_error': msg_is_error,
+        # Los superusuarios de Django entran al panel sin figurar en esta lista.
+        # Mostrarlos evita la lectura equivocada de que no hay nadie más.
+        'superusuarios': User.objects.filter(is_superuser=True).order_by('username'),
+    })
+
+
+@login_required
+def platform_dashboard(request):
+    """
+    La pantalla del nivel de plataforma, aparte del tablero de las empresas.
+
+    Tiene que ser una pagina propia y no una pestana mas: sus usuarios no
+    pertenecen a ninguna empresa, asi que `dashboard` les responderia 404 al
+    no encontrarles tenant. Que ese 404 exista es justo la garantia de que un
+    usuario de plataforma no alcanza los datos de nadie.
+    """
+    negado = _sin_permiso_de_plataforma(request.user)
+    if negado:
+        return negado
+
+    return render(request, 'warehouse/platform.html', {
+        'platform_role': platform_role(request.user),
+        'is_platform_admin': _es_admin_de_plataforma(request.user),
+        # Quien ademas pertenece a una empresa puede volver a su tablero.
+        'tiene_empresa': UserProfile.objects.filter(
+            user=request.user, tenant__isnull=False).exists(),
     })

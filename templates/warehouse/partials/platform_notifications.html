@@ -1,0 +1,67 @@
+{% include 'warehouse/partials/platform_nav.html' with activa='notifications' %}
+
+<p style="font-size:11px;color:#94a3b8;margin:-4px 0 12px">
+  Every email and WhatsApp the system tried to send, across all companies. Read
+  only — resending an alert is done by the company's own operator, from the
+  operation. Showing the latest 200.
+</p>
+
+<form hx-get="{% url 'platform_notifications' %}" hx-target="#platform-content" hx-swap="innerHTML"
+      style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Company</label>
+    <select name="tenant" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;min-width:180px">
+      <option value="">All companies</option>
+      {% for t in tenants %}
+      <option value="{{ t.pk }}" {% if tenant_id == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Status</label>
+    <select name="status" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+      <option value="">Any status</option>
+      {% for valor, etiqueta in estados %}
+      <option value="{{ valor }}" {% if estado == valor %}selected{% endif %}>{{ etiqueta }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-g btn-sm" style="height:28px">Filter</button>
+</form>
+
+<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px">
+<table style="min-width:900px">
+  <thead>
+    <tr>
+      <th>When</th>
+      <th>Company</th>
+      <th>Operation</th>
+      <th>Channel</th>
+      <th>Event</th>
+      <th>Status</th>
+      <th>Recipient</th>
+      <th>Detail</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in registros %}
+    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+      <td style="white-space:nowrap;font-size:11px;color:#64748b">{{ r.created_at|date:"Y-m-d H:i" }}</td>
+      <td style="font-size:12px">{{ r.tenant.name|default:"—" }}</td>
+      <td class="mono" style="font-size:11px">{{ r.operation_custom_id|default:"—" }}</td>
+      <td style="font-size:11px">{{ r.get_channel_display }}</td>
+      <td style="font-size:11px">{{ r.get_event_display }}</td>
+      <td>
+        <span class="badge {% if r.status == 'SENT' %}b-entry{% elif r.status == 'FAILED' %}b-exit{% else %}b-sent{% endif %}">
+          {{ r.get_status_display }}
+        </span>
+      </td>
+      <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="{{ r.recipient }}">{{ r.recipient|default:"—" }}</td>
+      <td style="font-size:11px;max-width:260px;overflow:hidden;text-overflow:ellipsis" title="{{ r.detail }}">{{ r.detail|default:"—" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px">Nothing sent yet with these filters.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>

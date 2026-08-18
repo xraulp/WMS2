@@ -1,0 +1,96 @@
+{% include 'warehouse/partials/platform_nav.html' with activa='users' platform_role='admin' %}
+
+{% if msg %}
+  {% if msg_is_error %}
+  <div class="msg-error" style="margin-bottom:12px">⚠ {{ msg }}</div>
+  {% else %}
+  <div class="msg-success" style="margin-bottom:12px">✓ {{ msg }}</div>
+  {% endif %}
+{% endif %}
+
+<p style="font-size:11px;color:#94a3b8;margin:-4px 0 12px">
+  Who administers the SaaS itself. These accounts belong to no company: they
+  cannot open any company's operations, documents or catalog. An
+  <strong>admin</strong> creates companies and names their administrators; a
+  <strong>staff</strong> reviews companies and the delivery log to answer support.
+</p>
+
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:10px">Add Platform User</div>
+  <form hx-post="{% url 'platform_users' %}" hx-target="#platform-content" hx-swap="innerHTML"
+        style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+    {% csrf_token %}<input type="hidden" name="action" value="create">
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Username</label>
+      <input type="text" name="username" required placeholder="soporte_ana"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:170px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Password</label>
+      <input type="text" name="password" required placeholder="Visible for reference"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:170px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Level</label>
+      <select name="role" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+        {% for valor, etiqueta in roles %}
+        <option value="{{ valor }}" {% if valor == 'staff' %}selected{% endif %}>{{ etiqueta }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-p" style="height:28px">+ Add</button>
+  </form>
+</div>
+
+<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px">
+<table style="min-width:700px">
+  <thead>
+    <tr><th>Username</th><th>Level</th><th>Since</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for a in accesos %}
+    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+      <td><strong>{{ a.user.username }}</strong></td>
+      <td>
+        <span class="badge {% if a.role == 'admin' %}b-exit{% else %}b-sent{% endif %}">{{ a.get_role_display }}</span>
+      </td>
+      <td style="color:#94a3b8;font-size:11px">{{ a.created_at|date:"Y-m-d" }}</td>
+      <td style="white-space:nowrap">
+        <form hx-post="{% url 'platform_users' %}" hx-target="#platform-content" hx-swap="innerHTML" style="display:inline-flex;gap:4px;align-items:center">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update_role">
+          <input type="hidden" name="platform_user_id" value="{{ a.pk }}">
+          <select name="role" style="height:24px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px">
+            {% for valor, etiqueta in roles %}
+            <option value="{{ valor }}" {% if a.role == valor %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-g btn-sm">Save</button>
+        </form>
+        <form hx-post="{% url 'platform_users' %}" hx-target="#platform-content" hx-swap="innerHTML" style="display:inline">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="revoke">
+          <input type="hidden" name="platform_user_id" value="{{ a.pk }}">
+          <button type="submit" class="btn btn-d btn-sm"
+                  onclick="return confirm('Revoke platform access for {{ a.user.username }}? The user account itself is kept.')">
+            Revoke
+          </button>
+        </form>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px">No platform users yet — access comes only from Django superusers.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if superusuarios %}
+<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-top:14px;font-size:12px;color:#92400e">
+  <strong>Django superusers</strong> reach this panel as platform administrators
+  without appearing in the list above, and they also hold the Django admin and
+  every company's data:
+  {% for u in superusuarios %}<span class="mono">{{ u.username }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}.
+  Once a platform administrator here has been tested, that flag can be dropped.
+</div>
+{% endif %}

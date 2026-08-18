@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
-                     DeletionLog, DocumentSequence, NotificationLog, Tenant)
+                     DeletionLog, DocumentSequence, NotificationLog,
+                     PlatformUser, Tenant)
 
 
 @admin.register(UserProfile)
@@ -85,3 +86,15 @@ class DocumentSequenceAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(PlatformUser)
+class PlatformUserAdmin(admin.ModelAdmin):
+    """
+    Quien administra el SaaS. Es un nivel distinto del rol que un usuario tenga
+    dentro de una empresa, y por eso vive en su propio modelo.
+    """
+    list_display  = ['user', 'role', 'created_at']
+    list_filter   = ['role']
+    search_fields = ['user__username']
+    readonly_fields = ['created_at']

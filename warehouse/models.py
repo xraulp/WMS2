@@ -710,3 +710,55 @@ class DocumentSequence(models.Model):
 
     def __str__(self):
         return f"{self.tenant_id}/{self.day} → {self.last_value}"
+
+
+PLATFORM_ROLE_CHOICES = [
+    ('admin', 'Administrador de plataforma'),
+    ('staff', 'Soporte de plataforma'),
+]
+
+
+class PlatformUser(models.Model):
+    """
+    Quien administra el SaaS, que no es lo mismo que quien administra una
+    empresa.
+
+    Hasta ahora el nivel de plataforma no existia como tal: tenia una sola
+    llave, el `is_superuser` de Django. Eso obligaba a elegir entre dar acceso
+    total -el admin de Django y los datos de todas las empresas- o no dar
+    ninguno, asi que un equipo de soporte era imposible. Y en el otro sentido,
+    `UserProfile.is_superadmin()` cuenta a cualquier superusuario como el rol
+    mas alto dentro de su empresa, con lo que los dos niveles acababan siendo la
+    misma persona por construccion.
+
+    Este modelo vive aparte de `UserProfile` a proposito. Meter el nivel de
+    plataforma como un rol mas del perfil habria reproducido justamente la
+    mezcla que se quiere deshacer: un usuario de plataforma no pertenece a
+    ninguna empresa, y no tener tenant es lo que hace que `get_tenant_or_404` lo
+    deje fuera de todas las pantallas del tenant.
+
+    Los dos niveles:
+
+    - `admin`: lo critico. Dar de alta una empresa y nombrar a su
+      administrador, activarla o desactivarla, cambiarle el plan, y repartir
+      este mismo acceso.
+    - `staff`: el dia a dia. Consultar el estado de las empresas y la bitacora
+      de envios para atender un "a este cliente no le llegan los correos". Mira,
+      no toca.
+    """
+    user       = models.OneToOneField(User, on_delete=models.CASCADE,
+                                      related_name='platform_access')
+    role       = models.CharField(max_length=20, choices=PLATFORM_ROLE_CHOICES,
+                                  default='staff')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Usuario de plataforma"
+        verbose_name_plural = "Usuarios de plataforma"
+        ordering = ['user__username']
+
+    def __str__(self):
+        return f"{self.user.username} ({self.get_role_display()})"
+
+    def is_platform_admin(self):
+        return self.role == 'admin'

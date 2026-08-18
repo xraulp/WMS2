@@ -176,7 +176,7 @@ tbody td:has(.btn-action) {
   {% if profile.can_manage_users %}
   <button class="tab" id="tab-users" onclick="showTab('users')">Users</button>
   {% endif %}
-  {% if request.user.is_superuser %}
+  {% if platform_role %}
   <button class="tab" id="tab-platform" onclick="showTab('platform')">🛠 Platform</button>
   {% endif %}
 </div>

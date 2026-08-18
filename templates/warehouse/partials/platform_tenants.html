@@ -1,5 +1,15 @@
+{% include 'warehouse/partials/platform_nav.html' with activa='tenants' %}
+
 {% if msg %}<div class="msg-success" style="margin-bottom:12px">✓ {{ msg }}</div>{% endif %}
 
+{% if not is_platform_admin %}
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#1e40af">
+  Support access: you can review the companies on the platform, but creating one
+  or changing its status is reserved to a platform administrator.
+</div>
+{% endif %}
+
+{% if is_platform_admin %}
 <!-- Create tenant form -->
 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
   <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:10px">Create New Tenant</div>
@@ -44,6 +54,7 @@
     <button type="submit" class="btn btn-p" style="height:28px">+ Create Tenant</button>
   </form>
 </div>
+{% endif %}
 
 <!-- Tenants table -->
 <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px">
@@ -58,7 +69,7 @@
       <th>Operations</th>
       <th>Status</th>
       <th>Created</th>
-      <th></th>
+      {% if is_platform_admin %}<th></th>{% endif %}
     </tr>
   </thead>
   <tbody>
@@ -76,6 +87,7 @@
         </span>
       </td>
       <td style="color:#94a3b8;font-size:11px">{{ t.created_at|date:"Y-m-d" }}</td>
+      {% if is_platform_admin %}
       <td>
         <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML" style="display:inline">
           {% csrf_token %}
@@ -87,9 +99,10 @@
           </button>
         </form>
       </td>
+      {% endif %}
     </tr>
     {% empty %}
-    <tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:20px">No tenants yet.</td></tr>
+    <tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:20px">No companies yet.</td></tr>
     {% endfor %}
   </tbody>
 </table>
