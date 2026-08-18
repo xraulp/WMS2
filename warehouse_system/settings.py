@@ -157,28 +157,65 @@ USE_TZ = True
 # ARCHIVOS ESTÁTICOS
 # ====================================================
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# El proyecto sirve sus estáticos desde las carpetas `static/` de cada app, no
+# desde una raíz común: el directorio `static/` del proyecto no existe ni está
+# en el repositorio. Declararlo a secas hacía que Django avisara con
+# staticfiles.W004 en cada `check` y en cada `collectstatic` del deploy. Se
+# respeta si alguien lo crea.
+STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').is_dir() else []
+
 # ====================================================
-# ARCHIVOS MEDIA - R2
+# ARCHIVOS MEDIA - CLOUDFLARE R2
 # ====================================================
-# Configuración de Cloudflare R2
+# R2 habla el protocolo de S3, así que se usa django-storages con el backend
+# s3boto3 apuntado al endpoint de Cloudflare. Las credenciales llegan en
+# variables R2_* y se exponen con los nombres AWS_* porque son esos los que
+# django-storages busca.
+#
+# Este bloque estaba escrito dos veces en el archivo, y el segundo pisaba al
+# primero renglón por renglón. Quedaba uno solo vigente, pero cualquier cambio
+# hecho en el de arriba no tenía ningún efecto.
 AWS_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME')
 AWS_S3_ENDPOINT_URL = os.environ.get('R2_ENDPOINT_URL')
 AWS_S3_REGION_NAME = 'auto'
 AWS_S3_SIGNATURE_VERSION = 's3v4'
-AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
 AWS_S3_USE_SSL = True
+AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
 
-# URL pública de desarrollo de R2 (con barra final)
-AWS_S3_CUSTOM_DOMAIN = 'pub-7aa64bbc50bd414e93e88ea59d6561a7.r2.dev'
-MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+# Dominio público desde el que se sirven los archivos. Es lo que decide la URL
+# que devuelve FieldFile.url; sin él django-storages firma URLs contra el
+# endpoint de R2, que caducan. Vive en el entorno porque el dominio de
+# desarrollo del bucket y el definitivo son distintos.
+AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN')
 
-# Backend de almacenamiento
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# MEDIA_URL no interviene en cómo se sirven los archivos de R2 - de eso se
+# encarga AWS_S3_CUSTOM_DOMAIN -, pero Django la exige y urls.py la usa. Antes
+# se armaba siempre con el dominio, así que sin la variable definida quedaba en
+# la cadena literal 'https://None/'.
+MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/' if AWS_S3_CUSTOM_DOMAIN else '/media/'
+
+# Django >= 5.1 ya no lee DEFAULT_FILE_STORAGE: el backend se declara aquí. El
+# archivo definía aquella variable en dos sitios y hasta la imprimía al
+# arrancar, pero no tenía efecto alguno sobre este proyecto (Django 6.0).
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
+
+# La política CORS del bucket se configura en el panel de Cloudflare, no aquí.
+# Estaba pegada en este archivo como un literal JSON suelto que Python evaluaba
+# y tiraba en cada arranque. Quedó documentada en docs/configurar-r2.md.
+#
+# Para comprobar que las credenciales y el bucket responden:
+#     python manage.py check_r2
 
 # ====================================================
 # CONFIGURACIÓN DE EMAIL
@@ -242,78 +279,3 @@ TWILIO_WHATSAPP_FROM = os.environ.get('TWILIO_WHATSAPP_FROM')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/'
 LOGIN_REDIRECT_URL = '/'
-
-# ====================================================
-# CONFIGURACIÓN FORZADA DE R2 (NO MODIFICAR)
-# ====================================================
-import os
-AWS_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME')
-AWS_S3_ENDPOINT_URL = os.environ.get('R2_ENDPOINT_URL')
-AWS_S3_REGION_NAME = 'auto'
-AWS_S3_SIGNATURE_VERSION = 's3v4'
-AWS_S3_USE_SSL = True
-AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-
-AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN')
-MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
-
-#DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-
-# ====================================================
-# CONFIGURACIÓN DE ALMACENAMIENTO (DJANGO >= 5.1)
-# ====================================================
-STORAGES = {
-    "default": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-    },
-    "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-    },
-}
-
-
-
-# Verificar que la configuración se aplicó (mensajes en logs)
-print(f"[DEBUG] R2_BUCKET_NAME: {AWS_STORAGE_BUCKET_NAME}")
-print(f"[DEBUG] MEDIA_URL: {MEDIA_URL}")
-print(f"[DEBUG] DEFAULT_FILE_STORAGE: {DEFAULT_FILE_STORAGE}")
-
-
-[
-  {
-    "AllowedOrigins": ["*"],
-    "AllowedMethods": ["GET", "HEAD"],
-    "AllowedHeaders": ["*"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]
-
-# ====================================================
-# DIAGNÓSTICO DE CONEXIÓN A R2 (TEMPORAL)
-# ====================================================
-try:
-    import boto3
-    from botocore.exceptions import NoCredentialsError, ClientError
-
-    print("[DEBUG] Intentando conectar a R2...")
-    s3 = boto3.client(
-        's3',
-        endpoint_url=AWS_S3_ENDPOINT_URL,
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-        region_name=AWS_S3_REGION_NAME
-    )
-    # Intentar listar objetos (solo 1) para verificar credenciales
-    response = s3.list_objects_v2(Bucket=AWS_STORAGE_BUCKET_NAME, MaxKeys=1)
-    print(f"[DEBUG] ✅ Conexión a R2 exitosa. Bucket: {AWS_STORAGE_BUCKET_NAME}")
-    print(f"[DEBUG]   - Contiene {response.get('KeyCount', 0)} objetos.")
-except NoCredentialsError:
-    print("[DEBUG] ❌ No se encontraron credenciales de AWS.")
-except ClientError as e:
-    error_code = e.response['Error']['Code']
-    print(f"[DEBUG] ❌ Error de conexión a R2: {error_code} - {e}")
-except Exception as e:
-    print(f"[DEBUG] ❌ Error inesperado: {e}")

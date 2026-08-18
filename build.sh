@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
 # build.sh - Script de construcción para Render
 
-#!/usr/bin/env bash
-
-#!/usr/bin/env bash
-
-#!/usr/bin/env bash
-
-#!/usr/bin/env bash
-
-#!/usr/bin/env bash
-
 echo "-----> Installing Python dependencies..."
 pip install -r requirements.txt
 
