@@ -133,7 +133,7 @@
               </div>
 
               <div class="footer" style="padding:16px 28px; background:#f8fafc; border-top:1px solid #e2e8f0; font-size:11px; color:#94a3b8; text-align:center;">
-                Mensaje automático del Sistema de Gestión de Almacenes de DYSER Group LLC.   · {{ operation.custom_id }} · Provider for RDL Systems LLC.
+                Mensaje automático del Sistema de Gestión de Almacenes{% if operation.tenant %} de {{ operation.tenant.name }}{% endif %} · {{ operation.custom_id }}{% if operation.tenant.email_footer_note %} · {{ operation.tenant.email_footer_note }}{% endif %}
               </div>
               <!-- ========== FIN CONTENIDO ========== -->
             </td>

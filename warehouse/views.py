@@ -8,14 +8,14 @@ from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.db.models import Q, Count
-from django.db import transaction
+from django.db import connection, transaction
 from io import BytesIO
 from django.http import Http404
 from django.utils.text import slugify
 import os, json, zipfile, re, logging
 
 from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
-                     DeletionLog, Tenant, Subscription)
+                     DeletionLog, DocumentSequence, Tenant, Subscription)
 from .utils import generate_pdf_report, generate_label_pdf
 from . import notifications
 
@@ -730,6 +730,66 @@ def digital_search(request):
                    'profile': profile})
 
 
+def _reservar_consecutivos(tenant, day, cantidad):
+    """
+    Aparta `cantidad` números para los documentos de hoy y devuelve cuáles son.
+
+    El contador vive en `DocumentSequence` y solo sube. La versión anterior lo
+    deducía de los documentos que había en ese momento -primero contándolos,
+    luego mirando el mayor-, y las dos formas devuelven números ya usados en
+    cuanto alguien borra algo: contar los reparte repetidos entre documentos
+    vivos, y mirar el mayor libera el último en cuanto se borra, aunque su
+    nombre ya haya salido impreso y adjunto en un correo.
+
+    Se reserva de una sola vez para toda la subida y dentro de una transacción,
+    con la fila bloqueada donde el motor lo permite. Sin eso, dos operadores
+    subiendo a la vez el mismo día leen el mismo valor y se llevan los mismos
+    números.
+    """
+    if cantidad <= 0:
+        return []
+
+    with transaction.atomic():
+        fila, recien_creada = DocumentSequence.objects.get_or_create(
+            tenant=tenant, day=day)
+
+        if recien_creada:
+            # Puente con los expedientes anteriores a este contador: se arranca
+            # donde se hubieran quedado, para no repetir sus nombres.
+            fila.last_value = _mayor_consecutivo_ya_usado(tenant, day)
+
+        # SQLite no sabe bloquear filas y Django protesta si se le pide; en
+        # local da igual, porque serializa las escrituras de todas formas.
+        if connection.features.has_select_for_update:
+            fila = (DocumentSequence.objects.select_for_update()
+                    .get(pk=fila.pk))
+
+        primero = fila.last_value + 1
+        fila.last_value += cantidad
+        fila.save(update_fields=['last_value'])
+
+    return list(range(primero, primero + cantidad))
+
+
+def _mayor_consecutivo_ya_usado(tenant, day):
+    """
+    El número más alto que aparece en los `DDMMAA-N` que ya existen ese día.
+
+    Solo se usa para sembrar el contador la primera vez. Los nombres con otra
+    forma se ignoran: en su día se pudieron cargar a mano.
+    """
+    nombres = OperationDocument.objects.filter(
+        tenant=tenant, digital_name__startswith=f'{day}-'
+    ).values_list('digital_name', flat=True)
+
+    mayor = 0
+    for nombre in nombres:
+        sufijo = (nombre or '').split('-', 1)[-1]
+        if sufijo.isdigit():
+            mayor = max(mayor, int(sufijo))
+    return mayor
+
+
 @login_required
 @require_POST
 def digital_upload(request, pk):
@@ -740,12 +800,11 @@ def digital_upload(request, pk):
 
     from datetime import date as date_cls
     today_str = date_cls.today().strftime('%d%m%y')
-    existing_today = OperationDocument.objects.filter(
-        tenant=tenant, digital_name__startswith=today_str).count()
+    archivos = request.FILES.getlist('files')
+    consecutivos = _reservar_consecutivos(tenant, today_str, len(archivos))
 
     uploaded = []
-    for f in request.FILES.getlist('files'):
-        consecutive = existing_today + len(uploaded) + 1
+    for f, consecutive in zip(archivos, consecutivos):
         digital_name = f'{today_str}-{consecutive}'
         ext = f.name.rsplit('.',1)[-1].lower() if '.' in f.name else ''
         if ext in ('jpg','jpeg','png','gif','webp','heic'):  ftype = 'PHOTO'
@@ -1109,6 +1168,12 @@ def catalog_create(request):
     entry = Catalog.objects.create(
         tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 4.3. catalog_create 072526 19:57
         category=category, name=name,
+        # Los dos formularios que llegan aquí -el del escritorio y el del móvil-
+        # pintan la abreviatura y el operador la escribe, pero el alta no la
+        # guardaba: se perdía sin avisar y solo se podía poner volviendo a
+        # editar el registro. Se guarda None en vez de cadena vacía para que
+        # coincida con lo que hace el alta de cliente con usuario.
+        abbreviation=p.get('abbreviation','').strip().upper() or None,
         contact_email=p.get('contact_email','').strip(),
         phone=p.get('phone','').strip(),
         address=p.get('address','').strip(),
@@ -1139,7 +1204,7 @@ def catalog_edit(request, pk):
         entry.address       = p.get('address', '').strip()
         entry.notes         = p.get('notes', '').strip()
         entry.whatsapp      = p.get('whatsapp', '').strip()
-        entry.abbreviation  = p.get('abbreviation', '').strip().upper()   # ← AGREGAR ESTA LÍNEA
+        entry.abbreviation  = p.get('abbreviation', '').strip().upper() or None
         # Las preferencias de aviso solo existen para los clientes; para el resto
         # de categorías el formulario ni siquiera pinta los checkboxes, así que
         # leerlos ahí apagaría valores que nadie quiso cambiar.

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
-                     DeletionLog, NotificationLog)
+                     DeletionLog, DocumentSequence, NotificationLog, Tenant)
 
 
 @admin.register(UserProfile)
@@ -53,4 +53,35 @@ class NotificationLogAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Tenant)
+class TenantAdmin(admin.ModelAdmin):
+    """
+    Las empresas no estaban en el admin, asi que lo que vive en `config` -las
+    preferencias de marca que no merecen una columna propia- no habia forma de
+    tocarlo sin abrir una shell. La primera que lo necesita es
+    `email_footer_note`, la leyenda al pie de los correos:
+
+        {"email_footer_note": "Provider for RDL Systems LLC."}
+    """
+    list_display  = ['name', 'type', 'subdomain', 'plan', 'is_active', 'created_at']
+    list_filter   = ['type', 'plan', 'is_active']
+    search_fields = ['name', 'subdomain', 'billing_email']
+    readonly_fields = ['created_at']
+
+
+@admin.register(DocumentSequence)
+class DocumentSequenceAdmin(admin.ModelAdmin):
+    """
+    El contador de nombres del expediente. Se mira para entender de donde sale
+    un numero; cambiarlo a mano es como cambiar un consecutivo fiscal, asi que
+    no se ofrece el alta y el valor va en solo lectura.
+    """
+    list_display = ['tenant', 'day', 'last_value']
+    list_filter  = ['tenant']
+    readonly_fields = ['tenant', 'day', 'last_value']
+
+    def has_add_permission(self, request):
         return False

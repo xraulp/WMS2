@@ -407,6 +407,25 @@ class Tenant(models.Model):
             return self
         return self.parent
 
+    @property
+    def email_footer_note(self):
+        """
+        Leyenda extra al pie de los correos, si la empresa quiere una.
+
+        El pie de `report_email.html` traía escrito "DYSER Group LLC" y
+        "Provider for RDL Systems LLC", así que el correo de cualquier otra
+        empresa iba firmado con el nombre de una ajena. El nombre sale ahora de
+        `Tenant.name`; esta leyenda, que es propia de cada quien, se guarda en
+        `config` para no pedir una migración por cada dato de marca.
+
+        Se pone desde el admin, en el JSON de Configuración:
+
+            {"email_footer_note": "Provider for RDL Systems LLC."}
+
+        Sin ella el pie simplemente no la pinta.
+        """
+        return (self.config or {}).get('email_footer_note', '').strip()
+
     def get_all_branches(self):
         """Obtiene todas las sucursales de esta organización (solo si es organización)."""
         if self.is_organization:
@@ -563,3 +582,41 @@ class NotificationLog(models.Model):
 
     def __str__(self):
         return f"{self.get_channel_display()} {self.status} → {self.recipient or '—'}"
+
+class DocumentSequence(models.Model):
+    """
+    Contador de documentos del expediente, por empresa y por día.
+
+    El nombre digital de un documento es `DDMMAA-N`, y ese N salía de contar los
+    documentos que la empresa tenía subidos ese día. Contar no es lo mismo que
+    continuar: al borrar uno el contador retrocedía y la siguiente subida
+    repetía un nombre ya entregado. En el peor caso -borrar el primero de dos-
+    los dos documentos vivos acababan llamándose igual, y el operador que busca
+    `170826-2` en el expediente no sabe cuál de los dos le están dando.
+
+    Deducirlo del máximo que sigue existiendo tampoco basta: al borrar el
+    último, su número vuelve a quedar libre, y el nombre ya salió impreso y
+    adjunto en un correo. Por eso el contador se guarda, y solo sube.
+
+    La fila se siembra la primera vez con el número más alto que ya hubiera en
+    la base para ese día, así que los expedientes que existen desde antes de
+    este cambio siguen numerándose donde se quedaron, sin migración de datos.
+    """
+    tenant     = models.ForeignKey('Tenant', on_delete=models.CASCADE,
+                                   related_name='document_sequences')
+    # La fecha en el mismo formato en que va dentro del nombre (DDMMAA), para
+    # que la correspondencia con `digital_name` sea directa y no haya que
+    # convertirla en cada consulta.
+    day        = models.CharField(max_length=6)
+    last_value = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Consecutivo de documentos"
+        verbose_name_plural = "Consecutivos de documentos"
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'day'],
+                                    name='unique_document_sequence_per_day'),
+        ]
+
+    def __str__(self):
+        return f"{self.tenant_id}/{self.day} → {self.last_value}"
