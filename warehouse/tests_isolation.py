@@ -359,3 +359,59 @@ class ContextoRLSTests(TestCase):
             middleware(self._request(sin_tenant))
 
         conexion.cursor.assert_not_called()
+
+
+class FiltroDeUsuariosDelDashboardTests(DosTenantsTestBase):
+    """
+    El desplegable con el que se filtran las operaciones por usuario.
+
+    Se llenaba con `User.objects.filter(is_active=True)`, sin acotar la empresa,
+    asi que los nombres de usuario de una aparecian en la pantalla de otra. Es
+    el mismo hueco que tenia `operations_by_user`, que se cerro antes; este
+    quedaba abierto porque la lista se arma en el propio dashboard.
+    """
+
+    def test_no_lista_usuarios_de_otra_empresa(self):
+        self.client.force_login(self.manager_uno)
+
+        respuesta = self.client.get('/dashboard/')
+
+        usuarios = respuesta.context['users']
+        self.assertIn(self.manager_uno, usuarios)
+        self.assertNotIn(self.manager_dos, usuarios)
+
+    def test_un_usuario_sin_perfil_no_se_cuela(self):
+        """
+        `profile__tenant` es un JOIN: un usuario sin perfil no tiene tenant que
+        comparar y no debe aparecer en la lista de nadie.
+        """
+        User.objects.create_user('suelto', password='x')
+        self.client.force_login(self.manager_uno)
+
+        respuesta = self.client.get('/dashboard/')
+
+        nombres = [u.username for u in respuesta.context['users']]
+        self.assertNotIn('suelto', nombres)
+
+
+class MarcaDeLaBarraSuperiorTests(DosTenantsTestBase):
+    """
+    La barra superior del dashboard llevaba 'WMS - DYSER GROUP LLC' escrito a
+    mano, asi que cualquier otra empresa trabajaba todo el dia bajo el nombre de
+    una ajena. La version movil no lo tenia, pero por poner solo 'WMS'.
+    """
+
+    def test_el_dashboard_lleva_el_nombre_de_la_empresa_de_quien_entra(self):
+        self.client.force_login(self.manager_dos)
+
+        html = self.client.get('/dashboard/').content.decode()
+
+        self.assertIn('WAREHOUSE DOS', html)
+        self.assertNotIn('DYSER', html)
+
+    def test_la_version_movil_tambien(self):
+        self.client.force_login(self.manager_dos)
+
+        html = self.client.get('/mobile/').content.decode()
+
+        self.assertIn('WAREHOUSE DOS', html)

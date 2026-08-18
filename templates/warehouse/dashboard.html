@@ -151,7 +151,7 @@ tbody td:has(.btn-action) {
 <div class="tb">
   <div class="tb-brand">
     <span class="tb-dot"></span>
-    <span style="font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600;">WMS - DYSER GROUP LLC</span>
+    <span style="font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600;">WMS{% if tenant %} - {{ tenant.name|upper }}{% endif %}</span>
   </div>
   <div class="tb-right">
     Welcome, <strong>{{ request.user.username }}</strong>

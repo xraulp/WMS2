@@ -132,9 +132,13 @@ def dashboard(request):
 ###072526 12:40
 
     # Obtener lista de usuarios para el filtro (solo para superadmin/home/manager)
+    # Acotada a la empresa: el desplegable listaba a todos los usuarios activos
+    # del sistema, asi que el nombre de usuario de una empresa aparecia en la
+    # pantalla de otra. Es el mismo hueco que tenia `operations_by_user`.
     users = []
     if profile.is_superadmin() or profile.is_home() or profile.is_manager():
-        users = User.objects.filter(is_active=True).order_by('username')
+        users = User.objects.filter(
+            is_active=True, profile__tenant=tenant).order_by('username')
     else:
         users = User.objects.filter(pk=request.user.pk)
 
@@ -157,6 +161,8 @@ def dashboard(request):
         'profile': profile,
         'is_home': profile.is_home(),
         'users': users,
+        # La barra superior llevaba el nombre de una empresa escrito a mano.
+        'tenant': tenant,
     }
     return render(request, 'warehouse/dashboard.html', context)
 
@@ -1406,6 +1412,7 @@ def mobile_dashboard(request):
     context = {
         'profile': profile,
         'is_home': profile.is_home(),
+        'tenant': tenant,
         'operations': ops,
         'customers_json':    cat_json('CUSTOMER'),
         'shippers_json':     cat_json('SHIPPER'),
