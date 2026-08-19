@@ -435,102 +435,87 @@ def operation_detail(request, pk):
     })
 
 
-@login_required
-def operation_delete(request, pk):
-    tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 20:58
-    profile = get_profile(request.user)
-    if not profile.can_delete():
-        return HttpResponse('Permission denied.', status=403)
-    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) #### 5.2. operation_delete 072526 20:05
-    if request.method == 'POST':
-        _log_deletion(op, request.user)
-        op.delete()
-        ops = WarehouseOperation.objects.select_related(
-            'customer','shipper','carrier','bundle_type').filter(tenant=tenant)
-        ops = customer_ops_filter(request.user, ops)[:200]
-        return render(request, 'warehouse/partials/operations_table.html',
-                      {'operations': ops, 'is_home': is_home(request.user),
-                       'profile': profile})
-    return HttpResponse(status=405)
-
-
-def _log_deletion(op, user):
+def _log_deletion(op, user, motivo=''):
     DeletionLog.objects.create(
         deleted_by=user,
+        kind='OPERATION',
         custom_id=op.custom_id,
         operation_type=op.operation_type,
         operation_date=op.date,
         customer_name=op.get_customer_display(),
         description=op.description or '',
+        reason=motivo,
         tenant=op.tenant,
     )
 
 
+def _log_document_deletion(doc, user, motivo=''):
+    """
+    Deja constancia de un archivo que se saca del expediente.
+
+    Se escribe al archivar, no al purgar: lo que le importa al administrador es
+    que el archivo dejo de estar, y la purga posterior solo destruye lo que ya
+    estaba fuera.
+    """
+    op = doc.operation
+    DeletionLog.objects.create(
+        deleted_by=user,
+        kind='DOCUMENT',
+        custom_id=op.custom_id if op else '',
+        operation_date=op.date if op else None,
+        customer_name=op.get_customer_display() if op else '',
+        document_name=doc.digital_name or doc.original_name or '',
+        description=doc.original_name or '',
+        reason=motivo,
+        tenant=doc.tenant,
+    )
+
+
+def _motivo_de(request):
+    """
+    El motivo del borrado, obligatorio y de una linea.
+
+    Sin motivo la bitacora dice quien borro pero no por que, que es justo lo
+    que se pregunta cuando falta un expediente.
+    """
+    return request.POST.get('delete_reason', '').strip()
+
+
 @login_required
 def operation_delete_confirm(request, pk):
-    tenant = get_tenant_or_404(request) ##### Usa tenant=tenant en get_object_or_404 072526 20:58
+    tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
-    if not profile.can_delete():
+    if not profile.can_delete_operations():
         return HttpResponse('Permission denied.', status=403)
     if request.method != 'POST':
         return HttpResponse(status=405)
 
-    password = request.POST.get('confirm_password','')
-    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant )  ######y operation_delete_confirm 072526 20:06
+    password = request.POST.get('confirm_password', '')
+    motivo   = _motivo_de(request)
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
     ops_qs = WarehouseOperation.objects.filter(tenant=tenant).select_related(
-        'customer','shipper','carrier','bundle_type')
+        'customer', 'shipper', 'carrier', 'bundle_type')
     ops_qs = customer_ops_filter(request.user, ops_qs)[:200]
 
-    # Superadmin/manager can delete any record
-    # Staff: no delete (already blocked above)
-    # Check: if user has a custom delete_password set, use it; else fall back to login password
-    if profile.delete_password:
-        # Custom delete password set — use it
-        if password != profile.delete_password:
-            # Also allow login password as fallback for managers/superadmins
-            user_auth = authenticate(request, username=request.user.username, password=password)
-            if not (user_auth and profile.is_manager()):
-                return render(request, 'warehouse/partials/operations_table.html', {
-                    'operations': ops_qs,
-                    'delete_error': f'Incorrect password. Record #{pk} was NOT deleted.',
-                    'is_home': is_home(request.user), 'profile': profile,
-                })
-    else:
-        # No custom delete password — authenticate via login password
-        user_auth = authenticate(request, username=request.user.username, password=password)
-        if not user_auth:
-            # For superadmin, also try comparing against all users' passwords
-            # If the user is superadmin, check if password matches any manager
-            if profile.is_superadmin():
-                # Check if password matches any user's delete_password or any manager
-                found = False
-                for up in UserProfile.objects.filter(role__in=['superadmin','manager'], tenant=tenant):
-                    if up.delete_password and password == up.delete_password:
-                        found = True
-                        break
-                if not found:
-                    return render(request, 'warehouse/partials/operations_table.html', {
-                        'operations': ops_qs,
-                        'delete_error': f'Incorrect password. Record #{pk} was NOT deleted.',
-                        'is_home': is_home(request.user), 'profile': profile,
-                    })
-            else:
-                return render(request, 'warehouse/partials/operations_table.html', {
-                    'operations': ops_qs,
-                    'delete_error': f'Incorrect password. Record #{pk} was NOT deleted.',
-                    'is_home': is_home(request.user), 'profile': profile,
-                })
+    def negar(mensaje):
+        return render(request, 'warehouse/partials/operations_table.html', {
+            'operations': ops_qs, 'delete_error': mensaje,
+            'is_home': is_home(request.user), 'profile': profile,
+        })
 
-    # Check ownership restriction: non-superadmin managers can only delete own records
-    if not profile.is_superadmin() and op.created_by and op.created_by != request.user:
-        if not profile.is_superadmin():
-            return render(request, 'warehouse/partials/operations_table.html', {
-                'operations': ops_qs,
-                'delete_error': f'You can only delete records you created. Record #{pk} was NOT deleted.',
-                'is_home': is_home(request.user), 'profile': profile,
-            })
+    # La contrasena de borrado es ahora el control que autoriza a borrar, asi
+    # que se exige siempre y sin salidas laterales. Antes, quien no la tuviera
+    # configurada pasaba con su contrasena de sesion -la que ya esta escrita en
+    # el navegador- y un superadmin podia usar la de cualquier manager.
+    if not profile.delete_password:
+        return negar('No tienes contrasena de borrado configurada. '
+                     'Pidesela al administrador de la empresa.')
+    if not profile.check_delete_password(password):
+        return negar(f'Incorrect password. Record #{pk} was NOT deleted.')
+    if not motivo:
+        return negar('Escribe el motivo del borrado.')
 
-    _log_deletion(op, request.user)
+    _log_deletion(op, request.user, motivo)
     op.delete()
     return render(request, 'warehouse/partials/operations_table.html', {
         'operations': ops_qs, 'delete_success': 'Record deleted successfully.',
@@ -811,8 +796,13 @@ def _mayor_consecutivo_ya_usado(tenant, day):
 
     Solo se usa para sembrar el contador la primera vez. Los nombres con otra
     forma se ignoran: en su día se pudieron cargar a mano.
+
+    Cuenta tambien los documentos que estan en la papelera -de ahi `todos`-:
+    un nombre que ya salio impreso o adjunto en un correo no puede volver a
+    asignarse porque el archivo se haya archivado, y menos aun cuando ese
+    archivo puede restaurarse.
     """
-    nombres = OperationDocument.objects.filter(
+    nombres = OperationDocument.todos.filter(
         tenant=tenant, digital_name__startswith=f'{day}-'
     ).values_list('digital_name', flat=True)
 
@@ -888,61 +878,65 @@ def _delete_stored_file(doc):
         return False, str(e)
 
 
-@login_required
-def digital_delete_file(request, doc_pk):
-    tenant = get_tenant_or_404(request) ######### Usa tenant=tenant al crear el documento 072526 21:05
-    # Verificar que el usuario tenga permiso para eliminar
-    profile = get_profile(request.user)
-    if not profile.can_delete():
-        return HttpResponse('Permission denied.', status=403)
-
-    # Obtener la contraseña del request
-    if request.method == 'POST':
-        password = request.POST.get('confirm_password', '')
-    else:
-        password = request.GET.get('password', '')
-
-    # 🔐 SOLO VERIFICAR delete_password (NO la contraseña de login)
-    password_valid = False
-
-    # Solo verificar si tiene delete_password personalizado
-    if profile.delete_password and password == profile.delete_password:
-        password_valid = True
-
-    if not password_valid:
-        # Contraseña incorrecta
-        doc = get_object_or_404(OperationDocument, pk=doc_pk, tenant=tenant) ######5.6. digital_delete_file, digital_delete_multiple 072526 20:17
-        op = doc.operation
-        return render(request, 'warehouse/partials/digital_panel.html', {
-            'operation': op, 'query': op.custom_id,
-            'is_home': profile.is_home(),
-            'profile': profile,
-            'upload_error': '❌ Contraseña de eliminación incorrecta. No se pudo eliminar el archivo.',
-        })
-
-    # ✅ Contraseña correcta - proceder a eliminar
-    # El filtro por tenant tiene que estar aqui tambien: la rama de contraseña
-    # incorrecta ya lo tenia, pero esta no, asi que un usuario con permiso de
-    # borrado podia eliminar el documento de otra empresa pasando su pk.
-    doc = get_object_or_404(OperationDocument, pk=doc_pk, tenant=tenant)
-    op = doc.operation
-    _delete_stored_file(doc)
-    doc.delete()
-
-    return render(request, 'warehouse/partials/digital_panel.html', {
-        'operation': op, 'query': op.custom_id,
+def _panel_digital(request, op, profile, **extra):
+    contexto = {
+        'operation': op,
+        'query': op.custom_id if op else '',
         'is_home': profile.is_home(),
         'profile': profile,
-        'upload_success': '✓ Archivo eliminado correctamente.',
-    })
+    }
+    contexto.update(extra)
+    return render(request, 'warehouse/partials/digital_panel.html', contexto)
+
+
+@login_required
+@require_POST
+def digital_delete_file(request, doc_pk):
+    """
+    Saca un archivo del expediente y lo manda a la papelera.
+
+    No destruye nada: el objeto sigue en R2 y el registro sigue en la base con
+    la marca de quien lo quito y por que. Un archivo del expediente ya salio
+    impreso y adjunto en un correo, de modo que quitarlo de la vista y
+    destruirlo son dos decisiones distintas y de dos personas distintas.
+    """
+    tenant = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if not profile.can_delete_documents():
+        return HttpResponse('Permission denied.', status=403)
+
+    doc = get_object_or_404(OperationDocument.todos, pk=doc_pk, tenant=tenant)
+    op = doc.operation
+    password = request.POST.get('confirm_password', '')
+    motivo   = _motivo_de(request)
+
+    if not profile.delete_password:
+        return _panel_digital(request, op, profile,
+                              upload_error='❌ No tienes contrasena de borrado configurada.')
+    if not profile.check_delete_password(password):
+        return _panel_digital(request, op, profile,
+                              upload_error='❌ Contrasena de eliminacion incorrecta. No se pudo eliminar el archivo.')
+    if not motivo:
+        return _panel_digital(request, op, profile,
+                              upload_error='❌ Escribe el motivo del borrado.')
+
+    if not doc.en_papelera:
+        doc.archivar(request.user, motivo)
+        _log_document_deletion(doc, request.user, motivo)
+
+    return _panel_digital(request, op, profile,
+                          upload_success='✓ Archivo enviado a la papelera.')
+
 
 @login_required
 @require_POST
 def digital_delete_multiple(request):
-    tenant = get_tenant_or_404(request) ######### Usa tenant=tenant al crear el documento 072526 21:05
-    """Elimina múltiples archivos de Digital con verificación de contraseña."""
+    """
+    Lo mismo para varios archivos de una vez.
+    """
+    tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
-    if not profile.can_delete():
+    if not profile.can_delete_documents():
         return HttpResponse('Permission denied.', status=403)
 
     ids_str = request.POST.get('ids', '').strip()
@@ -953,55 +947,124 @@ def digital_delete_multiple(request):
     if not doc_ids:
         return HttpResponse('<div class="msg-error">✗ IDs inválidos.</div>')
 
-    password = request.POST.get('confirm_password', '')
-    password_valid = False
-    if profile.delete_password and password == profile.delete_password:
-        password_valid = True
-
-    if not password_valid:
-        return HttpResponse('<div class="msg-error">❌ Contraseña de eliminación incorrecta.</div>')
-
-    # Obtener los documentos
-    docs = OperationDocument.objects.filter(pk__in=doc_ids, tenant=tenant) ##### # y en digital_delete_multiple, filtrar documentos por tenant: 072526 20:19
-    if not docs.exists():
+    docs = list(OperationDocument.todos.filter(pk__in=doc_ids, tenant=tenant))
+    if not docs:
         return HttpResponse('<div class="msg-error">✗ Ninguno de los archivos seleccionados existe.</div>')
 
-    # Obtener la operación del primer documento (asumimos que todos son de la misma operación)
-    op = docs.first().operation
-    deleted_count = 0
-    errors = []
+    op = docs[0].operation
+    password = request.POST.get('confirm_password', '')
+    motivo   = _motivo_de(request)
 
+    if not profile.delete_password:
+        return _panel_digital(request, op, profile,
+                              upload_error='❌ No tienes contrasena de borrado configurada.')
+    if not profile.check_delete_password(password):
+        return _panel_digital(request, op, profile,
+                              upload_error='❌ Contrasena de eliminacion incorrecta.')
+    if not motivo:
+        return _panel_digital(request, op, profile,
+                              upload_error='❌ Escribe el motivo del borrado.')
+
+    archivados = 0
     for doc in docs:
-        # Verificar permisos
-        if not (profile.is_superadmin() or profile.is_home() or profile.is_manager()):
-            if doc.operation.created_by != request.user:
-                errors.append(f'No tienes permiso para eliminar {doc.original_name}')
-                continue
-        try:
-            # El archivo del storage se borra aparte a proposito: si eso falla
-            # (R2 caido, objeto ya inexistente) el registro se borra igual, que
-            # es lo que el operador pidio. Antes la excepcion de `file.path`
-            # saltaba antes del delete() y no se borraba ni una cosa ni la otra.
-            _delete_stored_file(doc)
-            doc.delete()
-            deleted_count += 1
-        except Exception as e:
-            errors.append(f'{doc.original_name}: {str(e)}')
+        if doc.en_papelera:
+            continue
+        doc.archivar(request.user, motivo)
+        _log_document_deletion(doc, request.user, motivo)
+        archivados += 1
 
-    # Construir contexto
-    context = {
-        'operation': op,
-        'query': op.custom_id if op else '',
-        'is_home': profile.is_home(),
+    return _panel_digital(
+        request, op, profile,
+        upload_success='✓ %d archivo(s) enviado(s) a la papelera.' % archivados)
+
+
+# ── PAPELERA Y BITACORA DE BORRADOS ───────────────────────────────────────────
+# Lo que sustituye al permiso denegado es el rastro: quien borra deja constancia
+# de que se llevo y por que, y lo que se lleva de un expediente se puede
+# devolver. Las dos pantallas viven en la misma pestana.
+
+def _contexto_papelera(request, tenant, profile, **extra):
+    archivados = (OperationDocument.todos
+                  .filter(tenant=tenant, deleted_at__isnull=False)
+                  .select_related('operation', 'deleted_by')
+                  .order_by('-deleted_at')[:200])
+    registros = (DeletionLog.objects
+                 .filter(tenant=tenant)
+                 .select_related('deleted_by')[:200])
+    contexto = {
+        'archivados': archivados,
+        'deletion_logs': registros,
         'profile': profile,
+        'tenant': tenant,
     }
+    contexto.update(extra)
+    return contexto
 
-    if deleted_count > 0:
-        context['upload_success'] = f'✓ {deleted_count} archivo(s) eliminado(s) correctamente.'
-    if errors:
-        context['upload_error'] = '⚠️ Algunos archivos no se pudieron eliminar: ' + '; '.join(errors[:3])
 
-    return render(request, 'warehouse/partials/digital_panel.html', context)
+@login_required
+def deletion_log(request):
+    """
+    La bitacora de borrados y la papelera, juntas.
+
+    Hasta ahora `DeletionLog` solo se leia desde el admin de Django siendo
+    superusuario, que es justo el acceso que el proyecto esta retirando.
+    """
+    tenant = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if not profile.can_see_deletion_log():
+        return HttpResponse('Permission denied.', status=403)
+    return render(request, 'warehouse/partials/deletion_log.html',
+                  _contexto_papelera(request, tenant, profile))
+
+
+@login_required
+@require_POST
+def document_restore(request, doc_pk):
+    tenant = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if not profile.can_see_deletion_log():
+        return HttpResponse('Permission denied.', status=403)
+
+    doc = get_object_or_404(OperationDocument.todos, pk=doc_pk, tenant=tenant)
+    doc.restaurar()
+    return render(request, 'warehouse/partials/deletion_log.html',
+                  _contexto_papelera(request, tenant, profile,
+                                     aviso='✓ %s volvio al expediente.'
+                                           % (doc.digital_name or doc.original_name)))
+
+
+@login_required
+@require_POST
+def document_purge(request, doc_pk):
+    """
+    Destruye de verdad un archivo que ya estaba en la papelera.
+
+    Es lo unico irreversible de esta pantalla, asi que se queda en el
+    administrador de la empresa y exige su contrasena de borrado.
+    """
+    tenant = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if not profile.can_purge_documents():
+        return HttpResponse('Permission denied.', status=403)
+
+    doc = get_object_or_404(OperationDocument.todos, pk=doc_pk, tenant=tenant)
+    if not doc.en_papelera:
+        return render(request, 'warehouse/partials/deletion_log.html',
+                      _contexto_papelera(request, tenant, profile,
+                                         aviso='⚠ Ese archivo sigue en el expediente.'))
+
+    if not profile.check_delete_password(request.POST.get('confirm_password', '')):
+        return render(request, 'warehouse/partials/deletion_log.html',
+                      _contexto_papelera(request, tenant, profile,
+                                         aviso='❌ Contrasena de eliminacion incorrecta.'))
+
+    nombre = doc.digital_name or doc.original_name
+    _delete_stored_file(doc)
+    doc.delete()
+    return render(request, 'warehouse/partials/deletion_log.html',
+                  _contexto_papelera(request, tenant, profile,
+                                     aviso='✓ %s se destruyo definitivamente.' % nombre))
+
 
 # ── REPORT GENERATOR ──────────────────────────────────────────────────────────
 
@@ -1379,6 +1442,10 @@ def user_management(request):
             pwd   = request.POST.get('password','').strip()
             role  = request.POST.get('role','staff')
             cid   = request.POST.get('customer_id','').strip()
+            # El formulario pinta el campo desde siempre y el alta lo tiraba.
+            # Ahora importa de verdad: sin contrasena de borrado configurada,
+            # el usuario no puede borrar nada.
+            del_pwd = request.POST.get('delete_password','').strip()
             if uname and pwd and not profile.can_assign_role(role):
                 # El rol llegaba del formulario y se guardaba tal cual, asi que
                 # un administrador podia nombrar un 'superadmin' y quedar por
@@ -1389,7 +1456,11 @@ def user_management(request):
                 if not User.objects.filter(username=uname).exists():
                     u = User.objects.create_user(username=uname, password=pwd)
                     cat = Catalog.objects.filter(pk=int(cid), tenant=tenant).first() if cid else None
-                    UserProfile.objects.create(user=u, role=role, customer=cat, plain_password=pwd, tenant=tenant)
+                    nuevo_perfil = UserProfile.objects.create(
+                        user=u, role=role, customer=cat, plain_password=pwd, tenant=tenant)
+                    if del_pwd:
+                        nuevo_perfil.set_delete_password(del_pwd)
+                        nuevo_perfil.save(update_fields=['delete_password'])
                     msg = f'User "{uname}" created with role "{role}".'
                 else:
                     msg = f'Username "{uname}" already exists.'
@@ -1476,7 +1547,9 @@ def user_management(request):
                 p.role     = role
                 p.customer = Catalog.objects.filter(pk=int(cid), tenant=tenant).first() if cid else None
                 if del_pwd:
-                    p.delete_password = del_pwd
+                    # Cifrada: es el control que autoriza a borrar, y estuvo
+                    # guardada en claro y a la vista en esta misma pantalla.
+                    p.set_delete_password(del_pwd)
                 p.save()
                 msg = f'User "{u.username}" updated.'
         users    = User.objects.filter(profile__tenant=tenant).order_by('username')
@@ -1486,12 +1559,10 @@ def user_management(request):
     profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
     # Se recalcula despues del POST para que incluya un cliente recien creado.
     customers = Catalog.objects.filter(category='CUSTOMER', active=True, tenant=tenant).order_by('name')
-    deletion_log = DeletionLog.objects.select_related('deleted_by').filter(tenant=tenant)[:50]
     return render(request, 'warehouse/partials/user_management.html', {
         'users': users, 'profiles': profiles,
         'customers': customers, 'msg': msg, 'msg_is_error': msg_is_error,
         'request': request,
-        'deletion_log': deletion_log,
         # Para no ofrecer en el desplegable un rol que la vista va a rechazar.
         'profile': profile,
     })
@@ -1596,7 +1667,10 @@ def operation_edit(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:05
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### 5.5. operation_edit 072526 20:15
     profile = get_profile(request.user)
-    if not is_home(request.user) and not profile.is_customer():
+    # El staff tambien corrige: exigir `is_home()` dejaba al operador que
+    # captura sin forma de arreglar un peso mal tecleado, y ademas el boton
+    # Edit le aparecia en la tabla y respondia 403.
+    if not profile.can_edit_operations() and not profile.is_customer():
         return HttpResponse('Permission denied.', status=403)
     if not customer_can_access_op(request.user, op):
         return HttpResponse('Permission denied.', status=403)

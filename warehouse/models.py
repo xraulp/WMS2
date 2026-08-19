@@ -139,10 +139,100 @@ class UserProfile(models.Model):
         return self.role in ('superadmin', 'admin', 'manager') or self.user.is_superuser
 
     def can_delete(self):
-        return self.role in ('superadmin', 'admin', 'manager') or self.user.is_superuser
+        """
+        Si puede borrar algo, sea una operacion o un archivo del expediente.
+
+        Incluye al staff desde que el borrado dejo de ser una frontera de rol:
+        buscar al administrador para quitar un archivo mal subido paraba el
+        trabajo del dia. Lo que sustituye al permiso denegado es el rastro
+        -contrasena de borrado, motivo escrito y renglon en la bitacora-, no
+        la confianza.
+        """
+        return self.is_operator()
+
+    def can_delete_operations(self):
+        return self.is_operator()
+
+    def can_delete_documents(self):
+        return self.is_operator()
+
+    def can_see_deletion_log(self):
+        """
+        Quien lee la bitacora de borrados y la papelera.
+
+        Es vigilancia sobre el trabajo ajeno, asi que se queda en los roles de
+        casa; el staff deja rastro, no lo audita.
+        """
+        return self.is_home()
+
+    def can_purge_documents(self):
+        """
+        Quien destruye de verdad un archivo ya archivado.
+
+        Solo el administrador de la empresa: la papelera no sirve de nada si
+        cualquiera puede vaciarla.
+        """
+        return self.is_superadmin() or self.is_admin()
+
+    def set_delete_password(self, raw):
+        """
+        Guarda la contrasena de borrado cifrada. Una cadena vacia la quita.
+        """
+        from django.contrib.auth.hashers import make_password
+        raw = (raw or '').strip()
+        self.delete_password = make_password(raw) if raw else None
+
+    def check_delete_password(self, raw):
+        """
+        Comprueba la contrasena de borrado.
+
+        El campo estuvo guardado en claro y visible en la pantalla de usuarios,
+        de modo que aqui se acepta tambien un valor sin cifrar y se aprovecha
+        para cifrarlo en el acto: asi una base que no haya pasado por la
+        migracion se arregla sola en el primer borrado.
+        """
+        from django.contrib.auth.hashers import check_password, identify_hasher
+
+        guardada = self.delete_password
+        if not guardada or not raw:
+            return False
+        try:
+            identify_hasher(guardada)
+        except ValueError:
+            if raw != guardada:
+                return False
+            self.set_delete_password(raw)
+            self.save(update_fields=['delete_password'])
+            return True
+        return check_password(raw, guardada)
+
+    def is_operator(self):
+        """
+        Si es personal de la empresa que opera el almacen todos los dias.
+
+        Incluye al `staff`: es un operador completo, no un usuario de solo
+        lectura. Captura operaciones, las corrige, reenvia avisos y saca
+        reportes. Lo que no hace es dar de alta clientes ni borrar; para eso
+        estan `can_edit_catalog()` y `can_delete()`.
+
+        No confundirlo con `is_home()`, que deja fuera al staff y solo debe
+        usarse donde la diferencia sea el borrado o la administracion.
+        """
+        return (self.role in ('superadmin', 'admin', 'manager', 'staff')
+                or self.user.is_superuser)
 
     def can_create_operations(self):
-        return self.role in ('superadmin', 'admin', 'manager', 'staff')
+        return self.is_operator()
+
+    def can_edit_operations(self):
+        """
+        Si puede corregir una operacion ya capturada.
+
+        Va con `can_create_operations()` a proposito: quien captura se
+        equivoca al capturar, y negarle la correccion obligaba a pedirsela a
+        un manager por un peso mal tecleado.
+        """
+        return self.is_operator()
 
     def can_manage_users(self):
         return self.role in ('superadmin', 'admin') or self.user.is_superuser
@@ -402,6 +492,20 @@ class WarehouseOperation(models.Model):
 ###Agrega esta función en models.py dentro de la clase WarehouseOperation
 ###Busca la sección donde están los métodos (después de get_customer_email) y agrega esto:052826
 
+class DocumentosVivosManager(models.Manager):
+    """
+    Los documentos que siguen en el expediente.
+
+    Es el manager por defecto a proposito: `operation.documents.all()` se
+    recorre en las plantillas, en el ZIP y en los adjuntos del correo, y en
+    ninguno de esos sitios debe aparecer lo que esta en la papelera. Lo que
+    necesite ver tambien lo archivado usa `OperationDocument.todos`.
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
 class OperationDocument(models.Model):
     FILE_TYPE_CHOICES = [('PHOTO', 'Photo'), ('DOCUMENT', 'Document'), ('VIDEO', 'Video'), ('OTHER', 'Other')]
     tenant        = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='documents')
@@ -413,18 +517,70 @@ class OperationDocument(models.Model):
     uploaded_at   = models.DateTimeField(auto_now_add=True)
     digital_name  = models.CharField(max_length=100, blank=True, null=True)
 
+    # Papelera. Un archivo del expediente ya salio impreso y adjunto en un
+    # correo, asi que quitarlo de la vista y destruirlo no son la misma
+    # decision: lo primero lo hace quien opera, lo segundo el administrador.
+    deleted_at     = models.DateTimeField(null=True, blank=True)
+    deleted_by     = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                       blank=True, related_name='documentos_borrados')
+    delete_reason  = models.TextField(blank=True)
+
+    objects = DocumentosVivosManager()
+    # El manager sin filtrar. Va segundo para que el filtrado sea el que usan
+    # las relaciones inversas, y se llama distinto para que su uso se vea.
+    todos   = models.Manager()
+
+    class Meta:
+        # `base_manager_name` decide el manager que Django usa por dentro para
+        # seguir claves foraneas. Sin esto, `doc.operation` de un documento ya
+        # archivado podria dejar de resolverse.
+        base_manager_name = 'todos'
+
+    @property
+    def en_papelera(self):
+        return self.deleted_at is not None
+
+    def archivar(self, usuario, motivo):
+        """
+        Lo saca del expediente sin destruir el archivo.
+        """
+        self.deleted_at    = timezone.now()
+        self.deleted_by    = usuario
+        self.delete_reason = motivo or ''
+        self.save(update_fields=['deleted_at', 'deleted_by', 'delete_reason'])
+
+    def restaurar(self):
+        self.deleted_at    = None
+        self.deleted_by    = None
+        self.delete_reason = ''
+        self.save(update_fields=['deleted_at', 'deleted_by', 'delete_reason'])
+
     def __str__(self):
         return f"{self.get_file_type_display()} - {self.operation.custom_id}"
 
 
 class DeletionLog(models.Model):
+    """
+    Que se borro, quien lo borro y por que.
+
+    Registra las dos cosas que se pueden destruir: la operacion entera y el
+    archivo del expediente. El `kind` distingue una de otra porque la pantalla
+    de bitacora las muestra juntas -para el administrador lo que importa es la
+    linea de tiempo, no el tipo de objeto-.
+    """
+    KIND_CHOICES = [('OPERATION', 'Operacion'), ('DOCUMENT', 'Documento')]
+
     deleted_by     = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     deleted_at     = models.DateTimeField(auto_now_add=True)
+    kind           = models.CharField(max_length=10, choices=KIND_CHOICES, default='OPERATION')
     custom_id      = models.CharField(max_length=20)
-    operation_type = models.CharField(max_length=5)
+    operation_type = models.CharField(max_length=5, blank=True)
     operation_date = models.DateField(null=True, blank=True)
     customer_name  = models.CharField(max_length=200, blank=True)
     description    = models.TextField(blank=True)
+    # El nombre del archivo cuando `kind` es DOCUMENT: el registro tiene que
+    # decir cual de los archivos del expediente se fue.
+    document_name  = models.CharField(max_length=255, blank=True)
     reason         = models.TextField(blank=True, null=True)
     tenant         = models.ForeignKey('Tenant', on_delete=models.SET_NULL, null=True, blank=True, related_name='deletion_logs')
 

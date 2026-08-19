@@ -44,7 +44,8 @@
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Delete Password</label>
-      <input type="text" name="delete_password" placeholder="Optional"
+      <input type="password" name="delete_password" placeholder="Para poder borrar"
+             autocomplete="new-password"
              style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:130px">
     </div>
     <button type="submit" class="btn btn-p" style="height:28px">+ Create User</button>
@@ -153,9 +154,14 @@
       <!-- Customer link -->
       <td style="font-size:12px">{{ p.customer.name|default:"—" }}</td>
 
-      <!-- Delete password -->
-      <td style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#94a3b8">
-        {{ p.delete_password|default:"—" }}
+      <!-- Delete password: se dice si la tiene, nunca cual es. Estuvo a la
+           vista en esta columna, y es la contrasena que autoriza a borrar. -->
+      <td style="font-size:11px">
+        {% if p.delete_password %}
+        <span style="color:#059669">✓ configurada</span>
+        {% else %}
+        <span style="color:#ef4444">sin configurar</span>
+        {% endif %}
       </td>
 
       <!-- Last login -->
@@ -193,8 +199,9 @@
 
           <div style="display:flex;flex-direction:column;gap:2px">
             <label style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Del. Pwd</label>
-            <input type="text" name="delete_password" value="{{ p.delete_password|default:'' }}"
-                   placeholder="Del.Pwd"
+            <input type="password" name="delete_password" value=""
+                   placeholder="{% if p.delete_password %}cambiar{% else %}asignar{% endif %}"
+                   autocomplete="new-password"
                    style="height:24px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;width:80px">
           </div>
 
@@ -226,34 +233,11 @@
 </table>
 </div>
 
-<!-- Deletion Log -->
-<div style="margin-top:20px">
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:8px;padding-left:8px;border-left:3px solid #ef4444">
-    Deletion Log (last 50)
-  </div>
-  {% if deletion_log %}
-  <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px">
-  <table>
-    <thead>
-      <tr><th>Deleted At</th><th>Custom ID</th><th>Type</th><th>Op. Date</th><th>Customer</th><th>Deleted By</th></tr>
-    </thead>
-    <tbody>
-      {% for log in deletion_log %}
-      <tr style="background:{% cycle '#fff5f5' '#fff' %}">
-        <td style="font-size:11px;color:#94a3b8">{{ log.deleted_at|date:"Y-m-d H:i" }}</td>
-        <td class="mono" style="color:#ef4444">{{ log.custom_id }}</td>
-        <td>{{ log.operation_type }}</td>
-        <td>{{ log.operation_date|date:"Y-m-d"|default:"—" }}</td>
-        <td>{{ log.customer_name|default:"—" }}</td>
-        <td><strong>{{ log.deleted_by.username|default:"—" }}</strong></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% else %}
-  <p style="color:#94a3b8;font-size:12px;padding:8px">No deletions recorded yet.</p>
-  {% endif %}
+<!-- La bitacora de borrados vive en su propia pestana, Deletions, junto a la
+     papelera del expediente: alli se ve tambien que archivos se quitaron, con
+     su motivo, y se pueden devolver. -->
+<div style="margin-top:20px;font-size:11px;color:#94a3b8;padding-left:8px;border-left:3px solid #ef4444">
+  El registro de lo que se ha borrado está en la pestaña <strong>Deletions</strong>.
 </div>
 
 <script>

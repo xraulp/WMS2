@@ -176,6 +176,9 @@ tbody td:has(.btn-action) {
   {% if profile.can_manage_users %}
   <button class="tab" id="tab-users" onclick="showTab('users')">Users</button>
   {% endif %}
+  {% if profile.can_see_deletion_log %}
+  <button class="tab" id="tab-deletions" onclick="showTab('deletions')">Deletions</button>
+  {% endif %}
   {% if platform_role %}
   <button class="tab" id="tab-platform" onclick="showTab('platform')">🛠 Platform</button>
   {% endif %}
@@ -602,6 +605,20 @@ function closeCatalogEdit() {
     <div class="ct">User Management</div>
     <div id="users-content"
          hx-get="{% url 'user_management' %}"
+         hx-trigger="intersect once"
+         hx-swap="innerHTML">
+      <div style="color:var(--faint);font-size:13px;padding:20px">Loading…</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if profile.can_see_deletion_log %}
+<div class="panel" id="panel-deletions">
+  <div class="card">
+    <div class="ct">Papelera y bitácora de borrados</div>
+    <div id="deletions-content"
+         hx-get="{% url 'deletion_log' %}"
          hx-trigger="intersect once"
          hx-swap="innerHTML">
       <div style="color:var(--faint);font-size:13px;padding:20px">Loading…</div>

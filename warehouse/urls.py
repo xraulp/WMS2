@@ -14,7 +14,9 @@ urlpatterns = [
     path('operations/layout/', views.operations_layout, name='operations_layout'),
     path('operations/<int:pk>/', views.operation_detail, name='operation_detail'),
     path('operations/<int:pk>/edit/', views.operation_edit, name='operation_edit'),
-    path('operations/<int:pk>/delete/', views.operation_delete, name='operation_delete'),
+    # `operations/<pk>/delete/` se retiro: borraba con un POST pelado, sin
+    # contrasena ni motivo, mientras la pantalla usaba delete-confirm. Con el
+    # staff pudiendo borrar, esa puerta volvia decorativo el control.
     path('operations/<int:pk>/delete-confirm/', views.operation_delete_confirm, name='operation_delete_confirm'),
     path('operations/<int:pk>/pdf/', views.operation_pdf, name='operation_pdf'),
     path('operations/<int:pk>/label/', views.operation_label, name='operation_label'),
@@ -28,6 +30,10 @@ urlpatterns = [
     path('digital/<int:pk>/upload/', views.digital_upload, name='digital_upload'),
     path('digital/file/<int:doc_pk>/delete/', views.digital_delete_file, name='digital_delete_file'),
     path('digital/delete-multiple/', views.digital_delete_multiple, name='digital_delete_multiple'),
+    # Papelera y bitacora de borrados
+    path('deletions/', views.deletion_log, name='deletion_log'),
+    path('deletions/<int:doc_pk>/restore/', views.document_restore, name='document_restore'),
+    path('deletions/<int:doc_pk>/purge/', views.document_purge, name='document_purge'),
     # Report generator
     path('reports/', views.report_generator, name='report_generator'),
     path('reports/pdf/', views.report_generator_pdf, name='report_generator_pdf'),

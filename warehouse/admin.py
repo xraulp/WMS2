@@ -28,13 +28,20 @@ class CatalogAdmin(admin.ModelAdmin):
 
 @admin.register(OperationDocument)
 class OperationDocumentAdmin(admin.ModelAdmin):
-    list_display = ['operation', 'file_type', 'original_name', 'uploaded_by', 'uploaded_at'] #####En warehouse/admin.py, agrega list_filter = ['tenant'] 072526 20:25  , 'tenant'
+    list_display = ['operation', 'file_type', 'original_name', 'uploaded_by', 'uploaded_at', 'deleted_at']
+    list_filter  = ['file_type', 'deleted_at']
+
+    def get_queryset(self, request):
+        # El manager por defecto esconde lo que esta en la papelera, y aqui hay
+        # que poder verlo: este admin es la ultima ventana cuando algo se busca
+        # y no aparece.
+        return OperationDocument.todos.all()
 
 
 @admin.register(DeletionLog)
 class DeletionLogAdmin(admin.ModelAdmin):
-    list_display  = ['custom_id', 'operation_type', 'customer_name', 'deleted_by', 'deleted_at']#####En warehouse/admin.py, agrega list_filter = ['tenant'] 072526 20:25 , 'tenant'
-    list_filter   = ['operation_type', 'deleted_at']
+    list_display  = ['custom_id', 'kind', 'document_name', 'customer_name', 'deleted_by', 'deleted_at']
+    list_filter   = ['kind', 'operation_type', 'deleted_at']
     readonly_fields = ['deleted_at']
 
 

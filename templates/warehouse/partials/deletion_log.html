@@ -1,0 +1,129 @@
+{% comment %}
+El token va en la partial: restaurar y destruir son POST, y el panel se carga
+por htmx sin ningun formulario propio del que tomarlo prestado.
+{% endcomment %}
+{% csrf_token %}
+
+{% if aviso %}
+<div class="msg-success" style="margin-bottom:12px">{{ aviso }}</div>
+{% endif %}
+
+<p style="font-size:11px;color:#94a3b8;margin:-4px 0 14px">
+  Todo el mundo que opera puede borrar; nadie borra sin dejar constancia. Los
+  archivos del expediente van a la papelera y se pueden devolver. Las
+  operaciones no: de ellas queda el renglón de la bitácora. Se muestran los
+  últimos 200 de cada lista.
+</p>
+
+<!-- ── PAPELERA ─────────────────────────────────────────────────────────── -->
+<h3 style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 8px">
+  🗑 Papelera del expediente
+</h3>
+
+<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:22px">
+<table style="min-width:820px">
+  <thead>
+    <tr>
+      <th>Cuándo</th>
+      <th>Archivo</th>
+      <th>Operación</th>
+      <th>Quién</th>
+      <th>Motivo</th>
+      <th style="text-align:right">Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for doc in archivados %}
+    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+      <td style="white-space:nowrap;font-size:11px;color:#64748b">{{ doc.deleted_at|date:"Y-m-d H:i" }}</td>
+      <td class="mono" style="font-size:11px">
+        {{ doc.digital_name|default:doc.original_name }}
+        <div style="font-size:10px;color:#94a3b8">{{ doc.original_name }}</div>
+      </td>
+      <td class="mono" style="font-size:11px">{{ doc.operation.custom_id }}</td>
+      <td style="font-size:11px">{{ doc.deleted_by.username|default:"—" }}</td>
+      <td style="font-size:11px;max-width:260px">{{ doc.delete_reason|default:"—" }}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-g btn-sm"
+                hx-post="{% url 'document_restore' doc.pk %}"
+                hx-target="#deletions-content" hx-swap="innerHTML"
+                hx-include="[name=csrfmiddlewaretoken]"
+                hx-confirm="¿Devolver {{ doc.digital_name|default:doc.original_name }} al expediente?">
+          ↩ Restaurar
+        </button>
+        {% if profile.can_purge_documents %}
+        <button class="btn btn-d btn-sm"
+                onclick="purgarArchivo({{ doc.pk }}, '{{ doc.digital_name|default:doc.original_name|escapejs }}')">
+          ✕ Destruir
+        </button>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">La papelera está vacía.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<!-- ── BITÁCORA ─────────────────────────────────────────────────────────── -->
+<h3 style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 8px">
+  📋 Bitácora de borrados
+</h3>
+
+<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px">
+<table style="min-width:820px">
+  <thead>
+    <tr>
+      <th>Cuándo</th>
+      <th>Qué</th>
+      <th>Operación</th>
+      <th>Cliente</th>
+      <th>Quién</th>
+      <th>Motivo</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in deletion_logs %}
+    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+      <td style="white-space:nowrap;font-size:11px;color:#64748b">{{ r.deleted_at|date:"Y-m-d H:i" }}</td>
+      <td style="font-size:11px">
+        <span class="badge {% if r.kind == 'OPERATION' %}b-exit{% else %}b-sent{% endif %}">
+          {{ r.get_kind_display }}
+        </span>
+        {% if r.document_name %}<span class="mono" style="font-size:10px;color:#64748b">{{ r.document_name }}</span>{% endif %}
+      </td>
+      <td class="mono" style="font-size:11px">{{ r.custom_id|default:"—" }}</td>
+      <td style="font-size:11px">{{ r.customer_name|default:"—" }}</td>
+      <td style="font-size:11px">{{ r.deleted_by.username|default:"—" }}</td>
+      <td style="font-size:11px;max-width:280px">{{ r.reason|default:"—" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">Todavía no se ha borrado nada.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<script>
+// Destruir un archivo de la papelera es lo unico que no tiene vuelta en esta
+// pantalla, asi que pide la contrasena de borrado del administrador.
+function purgarArchivo(docId, nombre) {
+  if (!confirm('Destruir "' + nombre + '" definitivamente.\nEl archivo se borra de R2 y no se puede recuperar. ¿Continuar?')) return;
+  const password = prompt('Contraseña de eliminación:');
+  if (!password) return;
+
+  const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+  const fd = new FormData();
+  fd.append('confirm_password', password);
+  fd.append('csrfmiddlewaretoken', csrf);
+
+  fetch('/deletions/' + docId + '/purge/', { method: 'POST', body: fd })
+    .then(r => r.text())
+    .then(html => {
+      const target = document.getElementById('deletions-content');
+      if (target) { target.innerHTML = html; if (typeof htmx !== 'undefined') htmx.process(target); }
+    })
+    .catch(err => alert('Error al destruir el archivo: ' + err.message));
+}
+</script>

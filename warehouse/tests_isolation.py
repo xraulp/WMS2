@@ -171,39 +171,56 @@ class BorradoDeDocumentosTests(DosTenantsTestBase):
             file=SimpleUploadedFile('propio.pdf', b'%PDF-1.4 propio'),
             original_name='propio.pdf', digital_name='170826-2')
 
-    def _borrar(self, doc, password='borrar123'):
+    def _borrar(self, doc, password='borrar123', motivo='Subido por error'):
         self.client.force_login(self.manager_uno)
         return self.client.post(f'/digital/file/{doc.pk}/delete/',
-                                {'confirm_password': password})
+                                {'confirm_password': password,
+                                 'delete_reason': motivo})
 
     def test_no_borra_el_documento_de_otra_empresa(self):
         respuesta = self._borrar(self.doc_dos)
 
         self.assertEqual(respuesta.status_code, 404)
-        self.assertTrue(
-            OperationDocument.objects.filter(pk=self.doc_dos.pk).exists())
+        self.doc_dos.refresh_from_db()
+        self.assertIsNone(self.doc_dos.deleted_at)
 
-    def test_borra_el_documento_propio(self):
+    def test_saca_del_expediente_el_documento_propio(self):
+        """
+        `OperationDocument.objects` esconde lo que esta en la papelera, que es
+        justo lo que se quiere comprobar: el archivo deja de existir para el
+        expediente aunque el registro siga en la base.
+        """
         respuesta = self._borrar(self.doc_uno)
 
         self.assertEqual(respuesta.status_code, 200)
         self.assertFalse(
             OperationDocument.objects.filter(pk=self.doc_uno.pk).exists())
+        self.doc_uno.refresh_from_db()
+        self.assertEqual(self.doc_uno.deleted_by, self.manager_uno)
+        self.assertEqual(self.doc_uno.delete_reason, 'Subido por error')
 
-    def test_borra_tambien_el_archivo_del_storage(self):
+    def test_el_archivo_sobrevive_en_la_papelera(self):
         """
-        El registro y el archivo se borran por separado. Si el archivo se queda,
-        sigue descargable: el dominio publico de R2 sirve los objetos sin pedir
-        credenciales, asi que un documento 'eliminado' seguiria a la vista de
-        quien tenga la URL.
+        Lo contrario de lo que se probaba antes, y a proposito: el archivo se
+        queda para poder devolverlo. Quien lo destruye es la purga, y esa es
+        del administrador.
+
+        La contrapartida hay que tenerla presente: mientras este en la
+        papelera, quien ya tuviera la URL publica de R2 puede seguir abriendola.
         """
         ruta = self.doc_uno.file.name
         storage = self.doc_uno.file.storage
-        self.assertTrue(storage.exists(ruta))
 
         self._borrar(self.doc_uno)
 
-        self.assertFalse(storage.exists(ruta))
+        self.assertTrue(storage.exists(ruta))
+
+    def test_sin_motivo_no_se_borra(self):
+        respuesta = self._borrar(self.doc_uno, motivo='')
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(
+            OperationDocument.objects.filter(pk=self.doc_uno.pk).exists())
 
     def test_con_la_contraseña_equivocada_no_borra_nada(self):
         respuesta = self._borrar(self.doc_uno, password='incorrecta')
@@ -217,19 +234,24 @@ class BorradoDeDocumentosTests(DosTenantsTestBase):
 
         self.client.post('/digital/delete-multiple/', {
             'ids': f'{self.doc_uno.pk},{self.doc_dos.pk}',
-            'confirm_password': 'borrar123'})
+            'confirm_password': 'borrar123',
+            'delete_reason': 'Duplicados'})
 
         self.assertFalse(
             OperationDocument.objects.filter(pk=self.doc_uno.pk).exists())
-        self.assertTrue(
-            OperationDocument.objects.filter(pk=self.doc_dos.pk).exists())
+        self.doc_dos.refresh_from_db()
+        self.assertIsNone(self.doc_dos.deleted_at)
 
-    def test_el_borrado_multiple_funciona_cuando_el_archivo_no_tiene_ruta_local(self):
+    def test_el_borrado_multiple_no_depende_del_storage(self):
         """
         Con R2 el `os.path.exists(doc.file.path)` de antes lanzaba
         NotImplementedError **antes** del `doc.delete()`, dentro de un try que
         solo apuntaba el error: el borrado multiple no borraba nada en
         produccion y reportaba que algunos archivos habian fallado.
+
+        Mandar a la papelera ya ni siquiera toca el storage, asi que el
+        escenario se comprueba ahora sobre la purga, que es la que borra el
+        archivo de verdad.
         """
         self.client.force_login(self.manager_uno)
 
@@ -238,11 +260,12 @@ class BorradoDeDocumentosTests(DosTenantsTestBase):
 
         with patch('warehouse.views.os.path.exists', side_effect=sin_ruta):
             respuesta = self.client.post('/digital/delete-multiple/', {
-                'ids': str(self.doc_uno.pk), 'confirm_password': 'borrar123'})
+                'ids': str(self.doc_uno.pk), 'confirm_password': 'borrar123',
+                'delete_reason': 'Duplicado'})
 
         self.assertFalse(
             OperationDocument.objects.filter(pk=self.doc_uno.pk).exists())
-        self.assertIn('eliminado', respuesta.content.decode())
+        self.assertIn('papelera', respuesta.content.decode())
 
 
 class OperacionesPorUsuarioTests(DosTenantsTestBase):

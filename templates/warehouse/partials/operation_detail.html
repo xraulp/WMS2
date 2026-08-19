@@ -67,7 +67,11 @@
 </div>
 
 <!-- Send WhatsApp -->
-{% if is_home %}
+{% comment %}
+El reenvio de avisos es trabajo del operador, staff incluido; lo que no puede
+hacer el staff es borrar. Por eso aqui va is_operator y no is_home.
+{% endcomment %}
+{% if profile.is_operator %}
 <div style="border-top:1px solid #e2e8f0;padding-top:12px;margin-bottom:14px">
   <div id="wa-status"></div>
   <form hx-post="{% url 'operation_send_whatsapp' operation.pk %}" hx-target="#wa-status" hx-swap="innerHTML">
