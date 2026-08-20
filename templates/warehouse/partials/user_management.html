@@ -111,10 +111,10 @@
   <thead>
     <tr>
       <th>Username</th>
-      <th>Set Password</th>
+      <th>Login Password</th>
       <th>Role</th>
       <th>Customer Link</th>
-      <th>Delete Pwd</th>
+      <th>Delete Password</th>
       <th>Last Login</th>
       <th style="min-width:320px">Edit</th>
       <th>Remove</th>
@@ -156,20 +156,39 @@
       <!-- Customer link -->
       <td style="font-size:12px">{{ p.customer.name|default:"—" }}</td>
 
-      <!-- Delete password: se dice si la tiene, nunca cual es. Estuvo a la
-           vista en esta columna, y es la contrasena que autoriza a borrar. -->
+      {% comment %}
+      Delete password: se dice si la tiene, nunca cual es -estuvo a la vista en
+      esta columna, y es la contrasena que autoriza a borrar-, y se asigna aqui
+      mismo. Antes solo informaba y el campo para ponerla vivia dentro del
+      bloque Edit, a cuatro campos de distancia y estrecho, mientras la columna
+      de al lado -la contrasena de acceso- se ofrecia ancha y con su boton. Era
+      facil poner una donde iba la otra, y el precio de equivocarse es cambiarle
+      a alguien la contrasena con la que entra.
+      {% endcomment %}
       <td style="font-size:11px">
-        {% if p.delete_password %}
-        <span style="color:#059669">✓ configurada</span>
-        {% else %}
-        <span style="color:#ef4444">sin configurar</span>
-        {% endif %}
+        <form hx-post="{% url 'user_management' %}" hx-target="#users-content" hx-swap="innerHTML"
+              style="display:flex;gap:4px;align-items:center">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="set_delete_password">
+          <input type="hidden" name="user_id" value="{{ u.pk }}">
+          <input type="password" name="delete_password" value="" autocomplete="new-password"
+                 placeholder="{% if p.delete_password %}cambiar{% else %}asignar{% endif %}"
+                 style="height:22px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;width:80px">
+          <button type="submit" class="btn btn-g btn-sm">Set</button>
+        </form>
+        <div style="margin-top:3px">
+          {% if p.delete_password %}
+          <span style="color:#059669">✓ configurada</span>
+          {% else %}
+          <span style="color:#ef4444">sin configurar — no puede borrar</span>
+          {% endif %}
+        </div>
       </td>
 
       <!-- Last login -->
       <td style="color:#94a3b8;font-size:11px">{{ u.last_login|date:"Y-m-d"|default:"Never" }}</td>
 
-      <!-- Edit: role + customer + delete_password (username excluded) -->
+      <!-- Edit: role + customer (username y contrasenas van aparte) -->
       <td style="min-width:320px">
         <form hx-post="{% url 'user_management' %}" hx-target="#users-content" hx-swap="innerHTML"
               style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
@@ -197,14 +216,6 @@
                    onblur="setTimeout(()=>{const d=document.getElementById('edit-cust-drop-{{ u.pk }}');if(d)d.style.display='none'},200)">
             <input type="hidden" name="customer_id" id="edit-cust-id-{{ u.pk }}" value="{{ p.customer_id|default:'' }}">
             <div id="edit-cust-drop-{{ u.pk }}" style="display:none;position:absolute;top:100%;left:0;width:200px;background:#fff;border:1px solid #0ea5e9;border-top:none;border-radius:0 0 6px 6px;z-index:999;max-height:130px;overflow-y:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)"></div>
-          </div>
-
-          <div style="display:flex;flex-direction:column;gap:2px">
-            <label style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Del. Pwd</label>
-            <input type="password" name="delete_password" value=""
-                   placeholder="{% if p.delete_password %}cambiar{% else %}asignar{% endif %}"
-                   autocomplete="new-password"
-                   style="height:24px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;width:80px">
           </div>
 
           <div style="display:flex;flex-direction:column;gap:2px">

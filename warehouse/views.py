@@ -1610,6 +1610,29 @@ def user_management(request):
                     u.save()
                     msg = (f'Password updated for "{u.username}". It is not stored '
                            f'anywhere — hand it over now.')
+        elif action == 'set_delete_password':
+            # Tiene accion propia, y no el formulario de edicion, porque la fila
+            # ofrecia dos campos de contrasena muy distintos: el ancho de la
+            # izquierda cambia la contrasena de acceso y el estrecho del final
+            # la de borrado. Quien queria lo segundo tenia buenas razones para
+            # escribir en lo primero, y el efecto era cambiarle a alguien la
+            # contrasena con la que entra.
+            uid = request.POST.get('user_id')
+            nueva = request.POST.get('delete_password', '').strip()
+            u = get_object_or_404(User, pk=uid, profile__tenant=tenant)
+            objetivo = _perfil_de(u)
+            if not profile.can_manage_user(objetivo):
+                msg = f'You cannot change the delete password of "{u.username}".'
+                msg_is_error = True
+            elif objetivo is None:
+                msg = f'"{u.username}" has no profile in this company.'
+                msg_is_error = True
+            else:
+                objetivo.set_delete_password(nueva)
+                objetivo.save(update_fields=['delete_password'])
+                msg = (f'Delete password set for "{u.username}".' if nueva
+                       else f'Delete password removed for "{u.username}" — '
+                            f'they can no longer delete anything.')
         elif action == 'update_role':
             uid  = request.POST.get('user_id')
             role = request.POST.get('role','staff')

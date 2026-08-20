@@ -572,7 +572,7 @@ function mobShowTab(t) {
   }
 
   if (t === 'digital') {
-    htmx.ajax('GET', '/digital/search/', {target:'#mob-digital-content', swap:'innerHTML'});
+    cargarPanelDigital();
   }
 
   if (t === 'reports') {
@@ -605,6 +605,10 @@ function initMobileTab() {
     {% endif %}
 
     mobShowTab(savedTab);
+    // El panel digital queda cargado aunque no sea la pestana activa: no puede
+    // quedarse en "Loading..." esperando a que alguien lo abra por el camino
+    // correcto.
+    cargarPanelDigital();
 }
 
 
@@ -809,10 +813,20 @@ function resetMobForm(){
   const uni=document.getElementById('mob-all-files');if(uni){const dt=new DataTransfer();uni.files=dt.files;}
 }
 
+// Misma via unica que en el tablero: abrir la pestana, pulsar Search y la carga
+// inicial llaman todas aqui, para que el panel no dependa de un solo disparador
+// ni compitan dos peticiones por el mismo hueco.
+function cargarPanelDigital(){
+  const destino=document.getElementById('mob-digital-content');
+  if(!destino || typeof htmx==='undefined')return;
+  const dq=document.getElementById('mob-digi-q');
+  const q=dq?dq.value.trim():'';
+  htmx.ajax('GET','/digital/search/?q='+encodeURIComponent(q),
+            {target:'#mob-digital-content',swap:'innerHTML'});
+}
+
 function mobDigiSearch(){
-  // Sin texto carga el indice de expedientes con archivos, igual que el tablero.
-  const q=document.getElementById('mob-digi-q').value.trim();
-  htmx.ajax('GET','/digital/search/?q='+encodeURIComponent(q),{target:'#mob-digital-content',swap:'innerHTML'});
+  cargarPanelDigital();
 }
 
 window.addEventListener('load',()=>{

@@ -220,3 +220,37 @@ class LaPestanaDeletionsSeAbreTests(TestCase):
 
         self.assertNotIn('{#', cuerpo)
         self.assertNotIn('#}', cuerpo)
+
+
+class ElPanelDigitalNoDependeDeUnSoloDisparadorTests(TestCase):
+    """
+    El panel se carga por htmx y su contenido inicial es un "Loading...". Si la
+    unica llamada que lo llena depende de pulsar la pestana, cualquier camino
+    que no pase por ahi deja el panel colgado para siempre — y antes ese mismo
+    caso mostraba un texto estatico, asi que no se notaba.
+
+    Aqui se comprueba en el HTML servido que hay mas de una entrada a la misma
+    funcion de carga: la pestana y la inicializacion de la pagina.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        cls.manager = User.objects.create_user('manager_norte', password='x')
+        UserProfile.objects.create(user=cls.manager, tenant=cls.tenant, role='manager')
+
+    def _cuerpo(self, url):
+        self.client.force_login(self.manager)
+        return self.client.get(url).content.decode()
+
+    def test_el_tablero_carga_el_panel_al_arrancar_y_al_abrir_la_pestana(self):
+        cuerpo = self._cuerpo('/dashboard/')
+
+        # Al menos: la definicion, la llamada de showTab y la de arranque.
+        self.assertGreaterEqual(cuerpo.count('cargarPanelDigital()'), 3)
+
+    def test_el_movil_tambien(self):
+        cuerpo = self._cuerpo('/mobile/')
+
+        self.assertGreaterEqual(cuerpo.count('cargarPanelDigital()'), 3)

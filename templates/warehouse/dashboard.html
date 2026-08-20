@@ -735,7 +735,7 @@ function showTab(t) {
     const dq = document.getElementById('digital-q');
     if (dq) dq.value = '';
   }
-  if (t === 'digital') htmx.ajax('GET','{% url "digital_search" %}',{target:'#digital-content',swap:'innerHTML'});
+  if (t === 'digital') cargarPanelDigital();
   localStorage.setItem('activeTab', t);
 }
 
@@ -752,11 +752,23 @@ function filterByUser(userId) {
   }
 }
 
+// Todas las entradas al panel digital pasan por aqui: abrir la pestana, pulsar
+// Search, y la carga inicial. Antes cada una hacia su propia peticion, con dos
+// consecuencias: si la unica que correspondia no llegaba a ejecutarse el panel
+// se quedaba en "Loading..." para siempre -antes ese caso mostraba un texto
+// estatico y no se notaba-, y al entrar desde un QR competian dos, la del
+// expediente y la del indice, ganando la que llegara ultima.
+function cargarPanelDigital() {
+  const destino = document.getElementById('digital-content');
+  if (!destino || typeof htmx === 'undefined') return;
+  const dq = document.getElementById('digital-q');
+  const q = dq ? dq.value.trim() : '';
+  htmx.ajax('GET','{% url "digital_search" %}?q='+encodeURIComponent(q),
+            {target:'#digital-content', swap:'innerHTML'});
+}
+
 function digitalSearch() {
-  const q = document.getElementById('digital-q').value.trim();
-  // Sin texto ya no se queda quieto: recarga el indice de expedientes con
-  // archivos, que es a donde uno quiere volver despues de mirar uno.
-  htmx.ajax('GET','{% url "digital_search" %}?q='+encodeURIComponent(q),{target:'#digital-content',swap:'innerHTML'});
+  cargarPanelDigital();
 }
 
 const CB = {};
@@ -1178,19 +1190,22 @@ document.addEventListener('DOMContentLoaded', function() {
     const q = urlParams.get('q');
 
     if (tab === 'digital' && q) {
-        // Si viene del enlace del PDF, vamos directamente a Digital
+        // Si viene del enlace del PDF, vamos directamente a Digital. El valor
+        // se pone antes de abrir la pestana porque la carga lo lee de ahi: asi
+        // hay una sola peticion, la del expediente, y no dos compitiendo.
         console.log("🎯 Inicialización: detectado 'tab=digital', mostrando Digital");
         const searchInput = document.getElementById('digital-q');
-        if (searchInput) {
-            searchInput.value = q;
-            showTab('digital');
-            digitalSearch();
-        }
+        if (searchInput) searchInput.value = q;
+        showTab('digital');
     } else {
         // Si no hay parámetros, comportamiento normal (pestaña por defecto)
         console.log("🏠 Inicialización: sin parámetros, usando pestaña por defecto");
         // Llamamos a la función initActiveTab que respeta el rol
         initActiveTab();
+        // Y se deja el panel digital cargado aunque no sea la pestana activa:
+        // no puede quedarse en "Loading..." esperando a que alguien lo abra por
+        // el camino correcto.
+        cargarPanelDigital();
     }
 });
 </script>

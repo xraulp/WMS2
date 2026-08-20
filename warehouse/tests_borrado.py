@@ -368,3 +368,120 @@ class ContrasenaDeBorradoTests(TestCase):
 
         self.assertNotContains(respuesta, self.perfil_admin.delete_password)
         self.assertContains(respuesta, 'configurada')
+
+
+class AsignarLaContrasenaDeBorradoTests(TestCase):
+    """
+    El camino por el que la contrasena de borrado llega al perfil.
+
+    No estaba cubierto por ninguna prueba, y es el que decide si alguien puede
+    borrar: sin contrasena configurada, la pantalla rechaza el borrado. Se
+    comprueba el caso que se dio en produccion -un superadmin asignandosela a si
+    mismo desde su propia fila- y que el campo vacio no la borra.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        cls.jefe = User.objects.create_user('jefe', password='x')
+        cls.perfil_jefe = UserProfile.objects.create(
+            user=cls.jefe, tenant=cls.tenant, role='superadmin')
+        cls.operador = User.objects.create_user('operador', password='x')
+        cls.perfil_operador = UserProfile.objects.create(
+            user=cls.operador, tenant=cls.tenant, role='staff')
+
+    def setUp(self):
+        self.client.force_login(self.jefe)
+
+    def _editar(self, usuario, perfil, **extra):
+        datos = {'action': 'update_role', 'user_id': usuario.pk,
+                 'role': perfil.role, 'customer_id': ''}
+        datos.update(extra)
+        return self.client.post('/users/', datos)
+
+    def test_se_la_puede_asignar_a_otro(self):
+        self._editar(self.operador, self.perfil_operador,
+                     delete_password='borrar123')
+
+        self.perfil_operador.refresh_from_db()
+        self.assertTrue(self.perfil_operador.check_delete_password('borrar123'))
+
+    def test_se_la_puede_asignar_a_si_mismo(self):
+        """
+        Es lo primero que hay que hacer en una instalacion nueva: el
+        administrador no puede borrar nada mientras no tenga la suya.
+        """
+        self._editar(self.jefe, self.perfil_jefe, delete_password='borrar123')
+
+        self.perfil_jefe.refresh_from_db()
+        self.assertTrue(self.perfil_jefe.check_delete_password('borrar123'))
+
+    def test_queda_cifrada_y_no_en_claro(self):
+        self._editar(self.operador, self.perfil_operador,
+                     delete_password='borrar123')
+
+        self.perfil_operador.refresh_from_db()
+        self.assertNotEqual(self.perfil_operador.delete_password, 'borrar123')
+
+    def test_el_campo_vacio_no_borra_la_que_ya_tenia(self):
+        self.perfil_operador.set_delete_password('borrar123')
+        self.perfil_operador.save(update_fields=['delete_password'])
+
+        self._editar(self.operador, self.perfil_operador, delete_password='')
+
+        self.perfil_operador.refresh_from_db()
+        self.assertTrue(self.perfil_operador.check_delete_password('borrar123'))
+
+    def _asignar(self, usuario, clave):
+        return self.client.post('/users/', {
+            'action': 'set_delete_password', 'user_id': usuario.pk,
+            'delete_password': clave})
+
+    def test_la_columna_propia_la_asigna_sin_tocar_nada_mas(self):
+        """
+        Tiene accion propia para que asignarla no arrastre el rol ni el cliente,
+        y sobre todo para que no se confunda con la contrasena de acceso, que se
+        pone en la columna de al lado.
+        """
+        self._asignar(self.operador, 'borrar123')
+
+        self.perfil_operador.refresh_from_db()
+        self.assertTrue(self.perfil_operador.check_delete_password('borrar123'))
+        self.assertEqual(self.perfil_operador.role, 'staff')
+
+    def test_asignarla_no_cambia_la_contrasena_de_acceso(self):
+        self._asignar(self.operador, 'borrar123')
+
+        self.assertTrue(self.client.login(username='operador', password='x'))
+
+    def test_vaciarla_se_la_quita_y_lo_dice(self):
+        self.perfil_operador.set_delete_password('borrar123')
+        self.perfil_operador.save(update_fields=['delete_password'])
+
+        respuesta = self._asignar(self.operador, '')
+
+        self.perfil_operador.refresh_from_db()
+        self.assertFalse(self.perfil_operador.delete_password)
+        self.assertIn('no longer delete', respuesta.content.decode())
+
+    def test_nadie_se_la_pone_a_quien_esta_por_encima(self):
+        otro_jefe = User.objects.create_user('otro_jefe', password='x')
+        perfil = UserProfile.objects.create(
+            user=otro_jefe, tenant=self.tenant, role='superadmin')
+        admin = User.objects.create_user('un_admin', password='x')
+        UserProfile.objects.create(user=admin, tenant=self.tenant, role='admin')
+        self.client.force_login(admin)
+
+        self._asignar(otro_jefe, 'borrar123')
+
+        perfil.refresh_from_db()
+        self.assertFalse(perfil.delete_password)
+
+    def test_el_alta_de_usuario_tambien_la_guarda(self):
+        self.client.post('/users/', {
+            'action': 'create', 'username': 'nuevo', 'password': 'acceso123',
+            'role': 'staff', 'delete_password': 'borrar123'})
+
+        perfil = UserProfile.objects.get(user__username='nuevo')
+        self.assertTrue(perfil.check_delete_password('borrar123'))
