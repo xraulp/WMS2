@@ -82,6 +82,9 @@ La migración `0014_cifrar_delete_password` convierte las que ya estaban
 guardadas; el código acepta además un valor sin cifrar y lo cifra en el acto, por
 si alguna base se queda sin migrar.
 
+La contraseña de acceso siguió el mismo camino poco después: ver
+[`contrasenas.md`](contrasenas.md).
+
 > **Al desplegar:** revisa que los usuarios que van a borrar tengan contraseña de
 > borrado configurada. Quien no la tenga verá «No tienes contraseña de borrado
 > configurada» y no podrá borrar nada. El alta de usuario ya la guarda —antes

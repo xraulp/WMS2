@@ -113,7 +113,9 @@ class UserProfile(models.Model):
     user            = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     tenant          = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='users')
     role            = models.CharField(max_length=20, choices=ROLE_CHOICES, default='staff')
-    plain_password  = models.CharField(max_length=128, blank=True, null=True)
+    # Aqui vivio `plain_password`, la contrasena de acceso guardada en claro para
+    # que la pantalla de usuarios pudiera volver a mostrarla. Se retiro: una
+    # contrasena se asigna, no se consulta, y quien la olvida recibe una nueva.
     customer        = models.ForeignKey(Catalog, on_delete=models.SET_NULL, null=True, blank=True,
                                          limit_choices_to={'category': 'CUSTOMER'})
     delete_password = models.CharField(max_length=128, blank=True, null=True,

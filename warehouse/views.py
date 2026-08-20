@@ -1457,11 +1457,15 @@ def user_management(request):
                     u = User.objects.create_user(username=uname, password=pwd)
                     cat = Catalog.objects.filter(pk=int(cid), tenant=tenant).first() if cid else None
                     nuevo_perfil = UserProfile.objects.create(
-                        user=u, role=role, customer=cat, plain_password=pwd, tenant=tenant)
+                        user=u, role=role, customer=cat, tenant=tenant)
                     if del_pwd:
                         nuevo_perfil.set_delete_password(del_pwd)
                         nuevo_perfil.save(update_fields=['delete_password'])
-                    msg = f'User "{uname}" created with role "{role}".'
+                    # La contrasena ya no queda guardada en claro, asi que esta
+                    # pantalla no va a poder recordarla: se dice aqui, una vez.
+                    msg = (f'User "{uname}" created with role "{role}". '
+                           f'The password is not stored anywhere — write it down '
+                           f'or set a new one later.')
                 else:
                     msg = f'Username "{uname}" already exists.'
                     msg_is_error = True
@@ -1502,10 +1506,11 @@ def user_management(request):
                     u = User.objects.create_user(username=uname, password=pwd)
                     UserProfile.objects.create(
                         user=u, tenant=tenant, role='customer',
-                        customer=cat, plain_password=pwd,
+                        customer=cat,
                     )
                 msg = (f'Customer "{cat.name}" created, with login "{uname}" '
-                       f'already linked to it.')
+                       f'already linked to it. The password is not stored '
+                       f'anywhere — write it down or set a new one later.')
         elif action == 'delete':
             uid = request.POST.get('user_id')
             u   = get_object_or_404(User, pk=uid, profile__tenant=tenant)
@@ -1527,12 +1532,14 @@ def user_management(request):
                     msg = f'You cannot change the password of "{u.username}".'
                     msg_is_error = True
                 else:
+                    # Solo la de Django, cifrada. Antes se guardaba ademas una
+                    # copia en claro en el perfil para poder repintarla en la
+                    # tabla; el precio era tener todas las contrasenas de la
+                    # empresa legibles en la base.
                     u.set_password(new_pwd)
                     u.save()
-                    p, _ = UserProfile.objects.get_or_create(user=u, defaults={'tenant': tenant})
-                    p.plain_password = new_pwd
-                    p.save()
-                    msg = f'Password updated for "{u.username}".'
+                    msg = (f'Password updated for "{u.username}". It is not stored '
+                           f'anywhere — hand it over now.')
         elif action == 'update_role':
             uid  = request.POST.get('user_id')
             role = request.POST.get('role','staff')
@@ -2180,9 +2187,10 @@ def platform_tenant_list(request):
                 if admin_username and admin_password:
                     admin_user = User.objects.create_user(username=admin_username, password=admin_password)
                     UserProfile.objects.create(
-                        user=admin_user, tenant=tenant, role='admin', plain_password=admin_password,
+                        user=admin_user, tenant=tenant, role='admin',
                     )
-                    msg += f' Admin user "{admin_username}" created for this tenant.'
+                    msg += (f' Admin user "{admin_username}" created for this tenant. '
+                            f'Its password is not stored anywhere — hand it over now.')
 
         elif action == 'toggle_active':
             tid = request.POST.get('tenant_id')

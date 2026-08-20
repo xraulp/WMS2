@@ -19,7 +19,7 @@
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Password</label>
-      <input type="text" name="password" required style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:130px" placeholder="Visible for reference">
+      <input type="text" name="password" required style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:130px" placeholder="Write it down">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Role</label>
@@ -98,7 +98,7 @@
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Password *</label>
-      <input type="text" name="password" required placeholder="Visible for reference"
+      <input type="text" name="password" required placeholder="Write it down"
              style="height:28px;padding:4px 8px;border:1px solid #bae6fd;border-radius:6px;font-size:12px;width:150px">
     </div>
     <button type="submit" class="btn btn-p" style="height:28px">+ Create Customer &amp; Login</button>
@@ -111,7 +111,7 @@
   <thead>
     <tr>
       <th>Username</th>
-      <th>Password</th>
+      <th>Set Password</th>
       <th>Role</th>
       <th>Customer Link</th>
       <th>Delete Pwd</th>
@@ -130,15 +130,17 @@
         {% if u.is_superuser %}<span class="badge" style="background:#fef3c7;color:#92400e;margin-left:4px">Super</span>{% endif %}
       </td>
 
-      <!-- Password -->
+      <!-- Password: se asigna una nueva, nunca se muestra la que hay. Esta
+           columna repintaba la contrasena de acceso, que el perfil guardaba en
+           claro para eso; quien la olvida recibe otra. -->
       <td>
         <form hx-post="{% url 'user_management' %}" hx-target="#users-content" hx-swap="innerHTML"
               style="display:flex;gap:4px;align-items:center">
           {% csrf_token %}
           <input type="hidden" name="action" value="change_password">
           <input type="hidden" name="user_id" value="{{ u.pk }}">
-          <input type="text" name="new_password" value="{{ p.plain_password|default:'' }}"
-                 placeholder="New pwd"
+          <input type="text" name="new_password" value=""
+                 placeholder="New pwd" autocomplete="off"
                  style="height:22px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;width:90px">
           <button type="submit" class="btn btn-g btn-sm">Set</button>
         </form>
