@@ -627,7 +627,9 @@ function closeCatalogEdit() {
 </div>
 {% endif %}
 
-{% if request.user.is_superuser %}
+{# La pestana de arriba cuelga de platform_role y este panel colgaba del
+   is_superuser, asi que se veian por separado. Es el mismo permiso. #}
+{% if platform_role %}
 <div class="panel" id="panel-platform">
   <div class="card">
     <div class="ct">SaaS Platform Admin — All Tenants</div>

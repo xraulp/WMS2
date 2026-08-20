@@ -110,6 +110,22 @@ class Catalog(models.Model):
 
 
 class UserProfile(models.Model):
+    """
+    Quien es cada persona dentro de una empresa: su rol y, si es cliente, a que
+    cliente pertenece.
+
+    Los permisos salen del rol y de nada mas. Durante mucho tiempo cada
+    predicado de aqui llevaba pegado un `or self.user.is_superuser`, de modo
+    que el superusuario de Django mandaba dentro de cualquier empresa a la que
+    perteneciera sin que nadie se lo hubiera dado, y los niveles 1 y 2 acababan
+    siendo la misma persona por construccion. Ese atajo se retiro: quien tenga
+    que mandar en una empresa lo hace con el rol escrito en su perfil, y para
+    administrar el producto esta `PlatformUser`.
+
+    El `is_superuser` sigue existiendo como llave de emergencia -abre el admin
+    de Django- y sigue valiendo para el panel de plataforma mientras no haya un
+    administrador de plataforma de verdad; `platform_role()` lo explica.
+    """
     user            = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     tenant          = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='users')
     role            = models.CharField(max_length=20, choices=ROLE_CHOICES, default='staff')
@@ -123,7 +139,7 @@ class UserProfile(models.Model):
     created_at      = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     def is_superadmin(self):
-        return self.role == 'superadmin' or self.user.is_superuser
+        return self.role == 'superadmin'
 
     def is_admin(self):
         return self.role == 'admin'
@@ -138,7 +154,7 @@ class UserProfile(models.Model):
         return self.role == 'customer'
 
     def is_home(self):
-        return self.role in ('superadmin', 'admin', 'manager') or self.user.is_superuser
+        return self.role in ('superadmin', 'admin', 'manager')
 
     def can_delete(self):
         """
@@ -220,8 +236,7 @@ class UserProfile(models.Model):
         No confundirlo con `is_home()`, que deja fuera al staff y solo debe
         usarse donde la diferencia sea el borrado o la administracion.
         """
-        return (self.role in ('superadmin', 'admin', 'manager', 'staff')
-                or self.user.is_superuser)
+        return self.role in ('superadmin', 'admin', 'manager', 'staff')
 
     def can_create_operations(self):
         return self.is_operator()
@@ -237,7 +252,7 @@ class UserProfile(models.Model):
         return self.is_operator()
 
     def can_manage_users(self):
-        return self.role in ('superadmin', 'admin') or self.user.is_superuser
+        return self.role in ('superadmin', 'admin')
 
     def can_access_tenant(self, tenant):
         """Verifica si el usuario puede acceder a los datos de un tenant."""
@@ -254,11 +269,10 @@ class UserProfile(models.Model):
         """
         Nivel del usuario en la jerarquia de roles.
 
-        El superusuario de Django cuenta como el maximo, igual que en
-        `is_superadmin()`, porque hoy los dos niveles comparten llave.
+        Sale del rol y de nada mas. El `is_superuser` de Django contaba aqui
+        como el maximo, con lo que un superusuario mandaba dentro de una
+        empresa sin que nadie se lo hubiera dado: ver la nota de clase.
         """
-        if self.user.is_superuser:
-            return ROLE_RANK['superadmin']
         return ROLE_RANK.get(self.role, 0)
 
     def can_assign_role(self, role):

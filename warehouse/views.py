@@ -38,12 +38,24 @@ def get_tenant_or_404(request):
 # ── PERMISSION HELPERS ────────────────────────────────────────────────────────
 
 def get_profile(user):
+    """
+    El perfil de quien esta navegando, sin regalarle un rol si no lo tiene.
+
+    Antes fabricaba el perfil que faltaba y le ponia 'superadmin' al
+    superusuario de Django y 'manager' a cualquier otro. Lo segundo era lo
+    grave: bastaba con existir en `auth_user` y abrir el subdominio de una
+    empresa para quedar de manager en ella, con un perfil que ademas quedaba
+    escrito en la base como si alguien lo hubiera decidido.
+
+    Ahora quien no tiene perfil recibe uno vacio y sin guardar: todos los
+    predicados dan False y las pantallas lo rechazan una por una. Fail-closed,
+    y sin filas nuevas. Dar de alta a alguien es un acto explicito de la
+    pestana Users.
+    """
     try:
         return user.profile
     except UserProfile.DoesNotExist:
-        role = 'superadmin' if user.is_superuser else 'manager'
-        profile = UserProfile.objects.create(user=user, role=role)
-        return profile
+        return UserProfile(user=user, role='')
 
 def is_home(user):
     return get_profile(user).is_home()
@@ -2109,18 +2121,25 @@ def platform_role(user):
     """
     Nivel de plataforma de este usuario, o None si no tiene ninguno.
 
-    `is_superuser` sigue contando como administrador de plataforma. Es la llave
-    maestra y se conserva a proposito: quitarsela al unico superusuario que hay
-    hoy, en el mismo cambio que introduce el nivel nuevo, dejaria el sistema sin
-    nadie dentro si algo saliera mal. El camino seguro es crear el usuario de
-    plataforma, comprobar que entra, y solo despues retirar el flag.
+    El `is_superuser` de Django todavia abre esta puerta, pero solo mientras no
+    haya un administrador de plataforma de verdad. En cuanto existe el primer
+    `PlatformUser` con rol 'admin', la llave maestra deja de valer aqui y el
+    acceso pasa a ser el que este modelo dice.
+
+    La condicion es la que resuelve el huevo y la gallina sin poder dejar a
+    nadie fuera: la pantalla que reparte este acceso solo la ve quien ya lo
+    tiene, asi que hace falta una llave para crear al primero; y esa llave se
+    retira sola en cuanto hay sucesor, en vez de quedarse ahi para siempre
+    esperando a que alguien se acuerde. Si el sucesor se revoca, vuelve.
     """
     if not user.is_authenticated:
         return None
-    if user.is_superuser:
-        return 'admin'
     acceso = PlatformUser.objects.filter(user=user).first()
-    return acceso.role if acceso else None
+    if acceso:
+        return acceso.role
+    if user.is_superuser and not PlatformUser.objects.filter(role='admin').exists():
+        return 'admin'
+    return None
 
 
 def _es_admin_de_plataforma(user):
@@ -2323,9 +2342,12 @@ def platform_users(request):
         'accesos': PlatformUser.objects.select_related('user').all(),
         'roles': PLATFORM_ROLE_CHOICES,
         'msg': msg, 'msg_is_error': msg_is_error,
-        # Los superusuarios de Django entran al panel sin figurar en esta lista.
-        # Mostrarlos evita la lectura equivocada de que no hay nadie más.
+        # Los superusuarios de Django no figuran en esta lista y conviene que se
+        # vean: mientras no haya ningun administrador aqui, entran al panel; y
+        # tengan o no acceso, siguen abriendo el admin de Django con los datos
+        # de todas las empresas.
         'superusuarios': User.objects.filter(is_superuser=True).order_by('username'),
+        'llave_maestra_activa': not PlatformUser.objects.filter(role='admin').exists(),
     })
 
 

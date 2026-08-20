@@ -42,31 +42,75 @@ contraseña.
 
 ## El `is_superuser` de Django, y cómo retirarlo
 
-**Hoy `is_superuser` sigue contando como administrador de plataforma.** Se
-conserva a propósito: quitárselo al único superusuario que hay, en el mismo
-cambio que introduce el nivel nuevo, dejaría el sistema sin nadie dentro si algo
-saliera mal.
+Ese flag daba tres cosas a la vez, que no tienen por qué ir juntas:
 
-Ese flag es más de lo que parece. Da a la vez:
+1. El admin de Django, con **todos los datos de todas las empresas**.
+2. El panel de plataforma.
+3. **El rol más alto dentro de su propia empresa**, porque cada predicado de
+   `UserProfile` llevaba pegado un `or self.user.is_superuser`.
 
-1. El panel de plataforma.
-2. El admin de Django, con **todos los datos de todas las empresas**.
-3. El rol más alto dentro de su propia empresa — porque
-   `UserProfile.is_superadmin()` devuelve `True` para cualquier superusuario.
+**La tercera ya no existe.** Los permisos de empresa salen del rol escrito en el
+perfil y de nada más: un superusuario cuyo perfil diga `staff` es staff, y punto.
+La migración `0016` escribió `superadmin` en el perfil de los superusuarios que
+lo tuvieran menor, para que nadie se degradara de golpe con el deploy — era lo
+que ya ejercían.
 
-El objetivo es que ese flag deje de ser necesario. **El orden importa**, y hay
-que hacerlo en este y no en otro:
+**La segunda se retira sola.** `platform_role()` sigue aceptando el flag, pero
+solo **mientras no exista ningún `PlatformUser` con rol `admin`**. En cuanto se
+crea el primer administrador de plataforma, la llave maestra deja de abrir esa
+puerta. Esa condición es la que resuelve el huevo y la gallina —hace falta una
+llave para crear al primero— sin que la llave se quede puesta para siempre
+esperando a que alguien se acuerde de quitarla. Si el sucesor se revoca, vuelve.
 
-1. Crear el administrador de plataforma con el comando de arriba.
-2. **Entrar con él** y comprobar que ve `/platform/`, que puede crear una empresa
-   de prueba y que la bitácora carga. Hasta aquí no se ha perdido nada: si algo
-   falla, el superusuario sigue estando.
-3. Crear, si hace falta, un usuario `admin` de la empresa para el trabajo diario
-   —el que da de alta operaciones y clientes— y probarlo también.
-4. Solo entonces, retirar `is_superuser` al usuario original, desde el admin de
-   Django o por shell.
+**La primera se retira a mano**, y es el último paso.
+
+### El orden
+
+Sigue importando, y hay un comando que acompaña cada paso:
+
+```
+python manage.py retirar_superusuario
+```
+
+Sin argumentos hace un informe y no toca nada: quién es superusuario, a qué
+empresa pertenece, con qué rol se quedaría y si hay administradores de
+plataforma. Conviene correrlo antes de empezar.
+
+1. **Crear el administrador de plataforma:**
+   ```
+   python manage.py create_platform_user ana --role admin --password ...
+   ```
+2. **Entrar con él** y comprobar que ve `/platform/`, que crea una empresa de
+   prueba y que la bitácora carga. Desde este momento el superusuario **ya no
+   entra al panel de plataforma** —la llave cedió ante el sucesor—, pero sigue
+   teniendo el admin de Django, así que si algo falla se revoca el acceso nuevo
+   desde ahí y la llave vuelve.
+3. **Crear, si hace falta, un usuario `admin` de la empresa** para el trabajo
+   diario, y probarlo también.
+4. **Retirar el flag:**
+   ```
+   python manage.py retirar_superusuario admin
+   ```
+   Se niega si no quedara ningún administrador de plataforma. Retira también el
+   `is_staff`, porque sin superusuario el admin de Django no muestra nada útil y
+   sí sigue siendo una puerta; para conservarlo, `--conservar-admin-django`.
 
 Saltarse el paso 2 es la forma de quedarse fuera.
+
+### Quien no tiene perfil, no tiene rol
+
+`get_profile()` fabricaba el perfil que faltara: `superadmin` para el
+superusuario y `manager` para cualquier otro. Lo segundo era lo grave — bastaba
+existir en `auth_user` y abrir el subdominio de una empresa para quedar de
+manager en ella, con una fila escrita en la base como si alguien lo hubiera
+decidido. Ahora devuelve un perfil vacío y sin guardar: todos los predicados dan
+`False` y cada pantalla lo rechaza por su cuenta. Dar de alta a alguien es un
+acto explícito de la pestaña Users.
+
+Consecuencia práctica: **un superusuario sin perfil de empresa no entra a ningún
+tablero.** No es una pérdida —no tenía ningún rol que nadie le hubiera dado—,
+pero conviene saberlo antes de retirar el flag. El informe del comando lo avisa
+usuario por usuario.
 
 ## Lo que el nivel de plataforma **no** puede hacer
 
@@ -81,8 +125,13 @@ conviene saber que está ahí.
 
 ## Pendiente
 
-`UserProfile.is_superadmin()` sigue devolviendo `True` para cualquier
-superusuario de Django. Mientras exista un superusuario que además pertenezca a
-una empresa, los niveles 1 y 2 se tocan en esa persona. Se arregla solo cuando se
-complete la retirada descrita arriba; el código no puede forzarlo sin arriesgarse
-a dejar a alguien fuera.
+Lo que queda es operativo, no de código: **retirar el flag al superusuario
+original**, siguiendo el orden de arriba. Mientras exista un superusuario, sigue
+abierto el admin de Django con los datos de todas las empresas — que es lo único
+que ese flag conserva ya.
+
+Del lado del código queda un detalle menor: la pestaña **Platform** del tablero
+de una empresa muestra la lista de todas las empresas dentro de esa pantalla,
+duplicando lo que ya vive en `/platform/`. Hoy cuelga del mismo permiso que el
+panel, así que no es un hueco; es una mezcla de niveles que valdría la pena
+deshacer.

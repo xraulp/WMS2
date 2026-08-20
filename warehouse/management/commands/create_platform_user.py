@@ -2,9 +2,10 @@
 
 Hace falta un camino que no pase por la interfaz, porque hay un problema del
 huevo y la gallina: la pantalla que reparte este acceso solo la ve quien ya lo
-tiene. Hoy eso se resuelve porque `is_superuser` sigue contando como
-administrador de plataforma, pero el objetivo es poder retirar ese flag, y
-entonces este comando es la única forma de volver a entrar.
+tiene. Para el primero, el `is_superuser` de Django sirve de llave — pero solo
+mientras no exista ningún administrador de plataforma: en cuanto este comando
+crea al primero, esa llave deja de abrir el panel. De ahí en adelante este
+comando es la única forma de volver a entrar si nadie conserva el acceso.
 
     python manage.py create_platform_user ana --role admin
     python manage.py create_platform_user soporte --role staff --password xxx

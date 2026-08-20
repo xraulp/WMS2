@@ -96,9 +96,9 @@ class DondeAterrizaCadaUnoTests(BasePlataforma):
 
     def test_quien_tiene_los_dos_niveles_va_al_tablero(self):
         """
-        Es la situacion de hoy con el superusuario: administra su empresa y
-        ademas la plataforma. Se le manda a su tablero, y la plataforma le queda
-        en la pestana.
+        Quien administra una empresa y ademas el producto entra por su tablero,
+        no por la pantalla de plataforma: el trabajo diario esta en la empresa.
+        La plataforma le queda en la pestana, si conserva ese acceso.
         """
         UserProfile.objects.create(user=self.superusuario, tenant=self.tenant,
                                    role='admin')
