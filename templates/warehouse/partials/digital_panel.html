@@ -2,6 +2,16 @@
 <div class="msg-success" style="margin-bottom:10px">✓ {{ upload_success }}</div>
 {% endif %}
 
+{% comment %}
+El panel pintaba upload_success y no upload_error, asi que el motivo de un
+borrado rechazado -contrasena equivocada, o sin configurar- no aparecia en
+ninguna parte: se recargaba el panel sin decir nada y el aviso del navegador
+anunciaba que el archivo se habia enviado a la papelera.
+{% endcomment %}
+{% if upload_error %}
+<div class="msg-error" style="margin-bottom:10px">{{ upload_error }}</div>
+{% endif %}
+
 {% if operation %}
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
   <div>
@@ -220,6 +230,14 @@ function clearDigital() {
   htmx.ajax('GET','/digital/search/',{target:'#'+destino.id, swap:'innerHTML'});
 }
 
+// El panel devuelto trae el motivo del rechazo pintado; se saca de ahi para
+// decirlo tambien en el aviso, que es lo unico que el usuario mira.
+function mensajeDeError(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const caja = doc.querySelector('.msg-error');
+  return caja ? caja.textContent.trim() : '';
+}
+
 // Eliminar archivo en Digital con confirmación de contraseña
 function confirmDeleteFile(docId, fileName) {
     if (confirm('¿Enviar "' + fileName + '" a la papelera?\nDeja de aparecer en el expediente; el administrador puede devolverlo.')) {
@@ -233,24 +251,30 @@ function confirmDeleteFile(docId, fileName) {
             formData.append('delete_reason', motivo.trim());
             formData.append('csrfmiddlewaretoken', csrf);
 
+            let acepto = false;
             fetch('/digital/file/' + docId + '/delete/', {
                 method: 'POST',
                 body: formData,
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             })
-            .then(response => response.text())
+            .then(response => { acepto = response.ok; return response.text(); })
             .then(html => {
-                // Recargar el contenido digital
-                const digitalContent = document.getElementById('digital-content');
-                if (digitalContent) {
-                    digitalContent.innerHTML = html;
-                    if (typeof htmx !== 'undefined') htmx.process(digitalContent);
+                const destino = document.getElementById('digital-content')
+                             || document.getElementById('mob-digital-content');
+                if (destino) {
+                    destino.innerHTML = html;
+                    if (typeof htmx !== 'undefined') htmx.process(destino);
                 }
-                alert('Archivo enviado a la papelera.');
+                // El aviso decia "enviado a la papelera" pasara lo que pasara:
+                // un rechazo llegaba con el mismo 200 que un exito, y quien no
+                // tenia contrasena de borrado configurada se quedaba con la
+                // buena noticia y el archivo intacto.
+                alert(acepto ? 'Archivo enviado a la papelera.'
+                             : (mensajeDeError(html) || 'No se pudo enviar el archivo a la papelera.'));
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('No se pudo enviar el archivo a la papelera. Revisa la contraseña y el motivo.');
+                alert('No se pudo enviar el archivo a la papelera: ' + error.message);
             });
         }
     }
@@ -305,20 +329,16 @@ function deleteSelectedFiles() {
     btn.textContent = '⏳ Eliminando...';
   }
 
+  // Un rechazo -contrasena mala, o sin configurar- llega con 400 y con el panel
+  // pintado, que trae el motivo escrito: se muestra igual. Lanzar aqui dejaba la
+  // pantalla sin actualizar y el aviso decia "Error 400" con HTML dentro.
+  let acepto = false;
   fetch('/digital/delete-multiple/', {
     method: 'POST',
     body: formData,
     headers: { 'X-Requested-With': 'XMLHttpRequest' }
   })
-  .then(response => {
-    // Verificar si la respuesta es exitosa
-    if (!response.ok) {
-      return response.text().then(text => {
-        throw new Error('Error ' + response.status + ': ' + text.substring(0, 100));
-      });
-    }
-    return response.text();
-  })
+  .then(response => { acepto = response.ok; return response.text(); })
   .then(html => {
     // Restaurar botón
     if (btn) {
@@ -326,22 +346,19 @@ function deleteSelectedFiles() {
       btn.textContent = '🗑 Eliminar seleccionados';
     }
 
-    const content = document.getElementById('digital-content');
+    const content = document.getElementById('digital-content')
+                 || document.getElementById('mob-digital-content');
     if (content) {
       content.innerHTML = html;
       if (typeof htmx !== 'undefined') htmx.process(content);
     }
 
-    // Extraer mensaje de éxito o error del HTML
-    const successMatch = html.match(/msg-success[^>]*>([^<]*)</);
-    const errorMatch = html.match(/msg-error[^>]*>([^<]*)</);
-    if (successMatch) {
-      alert('✅ ' + successMatch[1].trim());
-    } else if (errorMatch) {
-      alert('❌ ' + errorMatch[1].trim());
+    const exito = html.match(/msg-success[^>]*>([^<]*)</);
+    if (acepto) {
+      alert('✅ ' + (exito ? exito[1].trim()
+                           : ids.length + ' archivo(s) enviado(s) a la papelera.'));
     } else {
-      // Si no hay mensaje específico, asumimos éxito si no hubo error
-      alert('✓ ' + ids.length + ' archivo(s) enviado(s) a la papelera.');
+      alert('❌ ' + (mensajeDeError(html) || 'No se pudieron eliminar los archivos.'));
     }
   })
   .catch(error => {

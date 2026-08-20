@@ -223,16 +223,22 @@ class BorradoDeDocumentosTests(DosTenantsTestBase):
     def test_sin_motivo_no_se_borra(self):
         respuesta = self._borrar(self.doc_uno, motivo='')
 
-        self.assertEqual(respuesta.status_code, 200)
+        # 400 y no 200: la pantalla anunciaba "archivo enviado a la papelera"
+        # pasara lo que pasara, porque un rechazo era indistinguible de un
+        # exito para quien recibia la respuesta.
+        self.assertEqual(respuesta.status_code, 400)
         self.assertTrue(
             OperationDocument.objects.filter(pk=self.doc_uno.pk).exists())
 
     def test_con_la_contraseña_equivocada_no_borra_nada(self):
         respuesta = self._borrar(self.doc_uno, password='incorrecta')
 
-        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.status_code, 400)
         self.assertTrue(
             OperationDocument.objects.filter(pk=self.doc_uno.pk).exists())
+        # Y lo dice: el motivo del rechazo no se pintaba en ninguna parte, asi
+        # que el panel volvia mudo y el aviso daba el borrado por hecho.
+        self.assertIn('incorrecta', respuesta.content.decode())
 
     def test_el_borrado_multiple_no_alcanza_documentos_de_otra_empresa(self):
         self.client.force_login(self.manager_uno)

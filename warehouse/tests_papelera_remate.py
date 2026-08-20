@@ -298,3 +298,88 @@ class LaPapeleraEnElMovilTests(BasePapelera):
 
         self.assertNotIn('{#', cuerpo)
         self.assertNotIn('#}', cuerpo)
+
+
+@STORAGE_LOCAL
+class ElBorradoRechazadoLoDiceTests(BasePapelera):
+    """
+    El caso que se vio en produccion: el archivo no se borraba y la pantalla
+    anunciaba que se habia enviado a la papelera.
+
+    Eran tres fallos encadenados. La vista devolvia el rechazo con un 200, asi
+    que para quien recibia la respuesta era indistinguible de un exito; el panel
+    pintaba `upload_success` pero no `upload_error`, de modo que el motivo no
+    aparecia en ninguna parte; y el JavaScript avisaba "archivo enviado a la
+    papelera" sin mirar nada. El detonante era el mas comun de todos: ningun
+    usuario tenia contrasena de borrado configurada.
+    """
+
+    def _operador_sin_contrasena(self):
+        u = User.objects.create_user('sin_clave', password='x')
+        UserProfile.objects.create(user=u, tenant=self.tenant, role='manager')
+        return u
+
+    def _borrar(self, doc, password='borrar123', motivo='Subida equivocada'):
+        return self.client.post(f'/digital/file/{doc.pk}/delete/',
+                                {'confirm_password': password,
+                                 'delete_reason': motivo})
+
+    def test_sin_contrasena_configurada_lo_dice_y_no_borra(self):
+        doc = self._documento()
+        self.client.force_login(self._operador_sin_contrasena())
+
+        respuesta = self._borrar(doc)
+
+        self.assertEqual(respuesta.status_code, 400)
+        cuerpo = respuesta.content.decode()
+        self.assertIn('No tienes contrasena de borrado configurada', cuerpo)
+        # Y dice donde se arregla, que es lo que costo averiguar.
+        self.assertIn('Users', cuerpo)
+        doc.refresh_from_db()
+        self.assertFalse(doc.en_papelera)
+
+    def test_con_la_contrasena_equivocada_lo_dice_y_no_borra(self):
+        doc = self._documento()
+        self.client.force_login(self.admin)
+
+        respuesta = self._borrar(doc, password='la-que-no-es')
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('incorrecta', respuesta.content.decode())
+        doc.refresh_from_db()
+        self.assertFalse(doc.en_papelera)
+
+    def test_sin_motivo_lo_dice_y_no_borra(self):
+        doc = self._documento()
+        self.client.force_login(self.admin)
+
+        respuesta = self._borrar(doc, motivo='')
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('motivo', respuesta.content.decode())
+        doc.refresh_from_db()
+        self.assertFalse(doc.en_papelera)
+
+    def test_el_borrado_bueno_sigue_respondiendo_que_si(self):
+        doc = self._documento()
+        self.client.force_login(self.admin)
+
+        respuesta = self._borrar(doc)
+
+        self.assertEqual(respuesta.status_code, 200)
+        doc.refresh_from_db()
+        self.assertTrue(doc.en_papelera)
+
+    def test_el_borrado_multiple_tambien_distingue_el_rechazo(self):
+        doc = self._documento()
+        self.client.force_login(self.admin)
+
+        respuesta = self.client.post('/digital/delete-multiple/',
+                                     {'ids': str(doc.pk),
+                                      'confirm_password': 'la-que-no-es',
+                                      'delete_reason': 'Subida equivocada'})
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('incorrecta', respuesta.content.decode())
+        doc.refresh_from_db()
+        self.assertFalse(doc.en_papelera)

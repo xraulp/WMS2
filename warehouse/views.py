@@ -927,7 +927,7 @@ def _delete_stored_file(doc):
         return False, str(e)
 
 
-def _panel_digital(request, op, profile, **extra):
+def _panel_digital(request, op, profile, status=200, **extra):
     contexto = {
         'operation': op,
         'query': op.custom_id if op else '',
@@ -935,7 +935,22 @@ def _panel_digital(request, op, profile, **extra):
         'profile': profile,
     }
     contexto.update(extra)
-    return render(request, 'warehouse/partials/digital_panel.html', contexto)
+    return render(request, 'warehouse/partials/digital_panel.html', contexto,
+                  status=status)
+
+
+def _rechazo_de_borrado(request, op, profile, motivo_del_rechazo):
+    """
+    Un borrado que no se hizo, con su porque y con un 400.
+
+    El estado importa: la pantalla pintaba el panel devuelto y avisaba "archivo
+    enviado a la papelera" pasara lo que pasara, porque un rechazo llegaba con
+    el mismo 200 que un exito. Quien tecleaba mal la contrasena -o no la tenia
+    configurada, que era el caso mas frecuente- se quedaba con el aviso de que
+    todo habia ido bien y el archivo intacto en el expediente.
+    """
+    return _panel_digital(request, op, profile, status=400,
+                          upload_error=motivo_del_rechazo)
 
 
 @login_required
@@ -960,14 +975,17 @@ def digital_delete_file(request, doc_pk):
     motivo   = _motivo_de(request)
 
     if not profile.delete_password:
-        return _panel_digital(request, op, profile,
-                              upload_error='❌ No tienes contrasena de borrado configurada.')
+        return _rechazo_de_borrado(
+            request, op, profile,
+            '❌ No tienes contrasena de borrado configurada. Pidesela a un '
+            'administrador: se asigna en la pestana Users.')
     if not profile.check_delete_password(password):
-        return _panel_digital(request, op, profile,
-                              upload_error='❌ Contrasena de eliminacion incorrecta. No se pudo eliminar el archivo.')
+        return _rechazo_de_borrado(
+            request, op, profile,
+            '❌ Contrasena de eliminacion incorrecta. No se pudo eliminar el archivo.')
     if not motivo:
-        return _panel_digital(request, op, profile,
-                              upload_error='❌ Escribe el motivo del borrado.')
+        return _rechazo_de_borrado(
+            request, op, profile, '❌ Escribe el motivo del borrado.')
 
     if not doc.en_papelera:
         doc.archivar(request.user, motivo)
@@ -1005,14 +1023,17 @@ def digital_delete_multiple(request):
     motivo   = _motivo_de(request)
 
     if not profile.delete_password:
-        return _panel_digital(request, op, profile,
-                              upload_error='❌ No tienes contrasena de borrado configurada.')
+        return _rechazo_de_borrado(
+            request, op, profile,
+            '❌ No tienes contrasena de borrado configurada. Pidesela a un '
+            'administrador: se asigna en la pestana Users.')
     if not profile.check_delete_password(password):
-        return _panel_digital(request, op, profile,
-                              upload_error='❌ Contrasena de eliminacion incorrecta.')
+        return _rechazo_de_borrado(
+            request, op, profile,
+            '❌ Contrasena de eliminacion incorrecta.')
     if not motivo:
-        return _panel_digital(request, op, profile,
-                              upload_error='❌ Escribe el motivo del borrado.')
+        return _rechazo_de_borrado(
+            request, op, profile, '❌ Escribe el motivo del borrado.')
 
     archivados = 0
     for doc in docs:
