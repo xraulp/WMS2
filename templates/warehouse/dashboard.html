@@ -581,8 +581,13 @@ function closeCatalogEdit() {
              style="max-width:320px" onkeydown="if(event.key==='Enter')digitalSearch()">
       <button onclick="digitalSearch()" class="btn btn-p">Search</button>
     </div>
+    {% comment %}
+    El contenido lo carga showTab al abrir la pestana, como en Users, Reports y
+    Platform. No cuelga de hx-trigger="load" para no pedir el indice en cada
+    carga del tablero, que casi siempre arranca en otra pestana.
+    {% endcomment %}
     <div id="digital-content">
-      <div style="text-align:center;padding:40px;color:#94a3b8;font-size:13px">Enter a Custom ID above to load files.</div>
+      <div style="text-align:center;padding:40px;color:#94a3b8;font-size:13px">Loading…</div>
     </div>
   </div>
 </div>
@@ -627,8 +632,10 @@ function closeCatalogEdit() {
 </div>
 {% endif %}
 
-{# La pestana de arriba cuelga de platform_role y este panel colgaba del
-   is_superuser, asi que se veian por separado. Es el mismo permiso. #}
+{% comment %}
+La pestana de arriba cuelga de platform_role y este panel colgaba del
+is_superuser, asi que se veian por separado. Es el mismo permiso.
+{% endcomment %}
 {% if platform_role %}
 <div class="panel" id="panel-platform">
   <div class="card">
@@ -711,7 +718,7 @@ function loadCatalog() {
 loadCatalog();
 
 function showTab(t) {
-  const tabs = ['form','database','catalog','customers','digital','reports','users','platform'];
+  const tabs = ['form','database','catalog','customers','digital','reports','users','deletions','platform'];
   tabs.forEach(n=>{
     const p = document.getElementById('panel-'+n);
     const b = document.getElementById('tab-'+n);
@@ -723,12 +730,12 @@ function showTab(t) {
   if (t === 'users') htmx.ajax('GET','{% url "user_management" %}',{target:'#users-content',swap:'innerHTML'});
   if (t === 'platform') htmx.ajax('GET','{% url "platform_tenant_list" %}',{target:'#platform-content',swap:'innerHTML'});
   if (t === 'reports') htmx.ajax('GET','{% url "report_generator" %}',{target:'#report-content',swap:'innerHTML'});
+  if (t === 'deletions') htmx.ajax('GET','{% url "deletion_log" %}',{target:'#deletions-content',swap:'innerHTML'});
   if (t !== 'digital') {
-    const dc = document.getElementById('digital-content');
-    if (dc) dc.innerHTML = '<div style="text-align:center;padding:40px;color:var(--faint);font-size:13px">Enter a Custom ID above to load files.</div>';
     const dq = document.getElementById('digital-q');
     if (dq) dq.value = '';
   }
+  if (t === 'digital') htmx.ajax('GET','{% url "digital_search" %}',{target:'#digital-content',swap:'innerHTML'});
   localStorage.setItem('activeTab', t);
 }
 
@@ -747,7 +754,8 @@ function filterByUser(userId) {
 
 function digitalSearch() {
   const q = document.getElementById('digital-q').value.trim();
-  if (!q) return;
+  // Sin texto ya no se queda quieto: recarga el indice de expedientes con
+  // archivos, que es a donde uno quiere volver despues de mirar uno.
   htmx.ajax('GET','{% url "digital_search" %}?q='+encodeURIComponent(q),{target:'#digital-content',swap:'innerHTML'});
 }
 

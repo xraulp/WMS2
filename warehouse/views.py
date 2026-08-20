@@ -744,10 +744,31 @@ def free_entries(request):
 # ── DIGITAL TAB ───────────────────────────────────────────────────────────────
 
 @login_required
+def _expedientes_con_archivos(request, tenant, limite=30):
+    """
+    Los expedientes que tienen algo guardado, del mas reciente al mas viejo.
+
+    La pantalla solo sabia abrir un expediente si le tecleaban el Custom ID
+    completo y exacto, de modo que no habia manera de saber cuales tienen
+    archivos: quien no se supiera el numero de memoria se quedaba mirando un
+    recuadro vacio. Esto es el indice que faltaba.
+
+    Cuenta solo los documentos vivos; los de la papelera no engordan el numero
+    ni asoman un expediente que se quedo sin nada.
+    """
+    qs = customer_ops_filter(request.user, WarehouseOperation.objects.filter(tenant=tenant))
+    return (qs.annotate(
+                num_docs=Count('documents',
+                               filter=Q(documents__deleted_at__isnull=True)))
+              .filter(num_docs__gt=0)
+              .order_by('-date', '-id')[:limite])
+
+
 def digital_search(request):
     tenant = get_tenant_or_404(request) ##### 072526 13:07
     q  = request.GET.get('q','').strip()
     op = None
+    candidatos = []
     if q:
         try:
             op = WarehouseOperation.objects.get(tenant=tenant, custom_id__iexact=q) ##### tenant=tenant 072526 13:07
@@ -755,10 +776,26 @@ def digital_search(request):
                 op = None
         except WarehouseOperation.DoesNotExist:
             op = None
+
+        if op is None:
+            # Exacto o nada era demasiado estricto para un identificador que
+            # nadie se aprende: se busca por partes y, si solo hay uno, se abre.
+            parciales = customer_ops_filter(
+                request.user,
+                WarehouseOperation.objects.filter(tenant=tenant, custom_id__icontains=q))
+            parciales = (parciales.annotate(
+                            num_docs=Count('documents',
+                                           filter=Q(documents__deleted_at__isnull=True)))
+                         .order_by('-date', '-id')[:30])
+            candidatos = list(parciales)
+            if len(candidatos) == 1:
+                op, candidatos = candidatos[0], []
+
     profile = get_profile(request.user)
     return render(request, 'warehouse/partials/digital_panel.html',
                   {'operation': op, 'query': q, 'is_home': is_home(request.user),
-                   'profile': profile})
+                   'profile': profile, 'candidatos': candidatos,
+                   'con_archivos': [] if (op or q) else _expedientes_con_archivos(request, tenant)})
 
 
 def _reservar_consecutivos(tenant, day, cantidad):

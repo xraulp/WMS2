@@ -465,7 +465,7 @@ function closeCatalogEdit() {
       <button onclick="mobDigiSearch()" class="btn btn-p" style="width:auto;padding:11px 18px;margin:0">Search</button>
     </div>
     <div id="mob-digital-content">
-      <div style="text-align:center;padding:32px;color:var(--faint);font-size:14px">Enter a Custom ID to load files.</div>
+      <div style="text-align:center;padding:32px;color:var(--faint);font-size:14px">Loading…</div>
     </div>
   </div>
 </div>
@@ -546,10 +546,12 @@ function mobShowTab(t) {
   });
 
   if (t !== 'digital') {
-    const dc = document.getElementById('mob-digital-content');
-    if (dc) dc.innerHTML = '<div style="text-align:center;padding:32px;color:var(--faint);font-size:14px">Enter a Custom ID to load files.</div>';
     const dq = document.getElementById('mob-digi-q');
     if (dq) dq.value = '';
+  }
+
+  if (t === 'digital') {
+    htmx.ajax('GET', '/digital/search/', {target:'#mob-digital-content', swap:'innerHTML'});
   }
 
   if (t === 'reports') {
@@ -784,8 +786,8 @@ function resetMobForm(){
 }
 
 function mobDigiSearch(){
+  // Sin texto carga el indice de expedientes con archivos, igual que el tablero.
   const q=document.getElementById('mob-digi-q').value.trim();
-  if(!q)return;
   htmx.ajax('GET','/digital/search/?q='+encodeURIComponent(q),{target:'#mob-digital-content',swap:'innerHTML'});
 }
 

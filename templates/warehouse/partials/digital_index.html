@@ -1,0 +1,39 @@
+{% comment %}
+Una fila por expediente, con lo justo para reconocerlo y saber si vale la pena
+abrirlo: el numero, la fecha, el cliente y cuantos archivos tiene. Se usa tanto
+para el indice de entrada como para las coincidencias de una busqueda parcial.
+{% endcomment %}
+<div style="display:flex;flex-direction:column;gap:6px">
+  {% for op in expedientes %}
+  <button onclick="digitalOpen('{{ op.custom_id|escapejs }}')"
+          style="display:flex;align-items:center;justify-content:space-between;gap:10px;
+                 width:100%;text-align:left;padding:9px 12px;background:#fff;cursor:pointer;
+                 border:1px solid #e2e8f0;border-radius:8px;font-family:inherit">
+    <span style="display:flex;flex-direction:column;gap:2px;min-width:0">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:#0f172a">
+        {{ op.custom_id }}
+      </span>
+      <span style="font-size:11px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        {{ op.date|date:"Y-m-d" }} · {{ op.get_customer_display }}
+      </span>
+    </span>
+    <span style="flex-shrink:0;font-size:11px;color:#475569;background:#f1f5f9;
+                 border-radius:999px;padding:3px 10px">
+      {% if op.num_docs %}📎 {{ op.num_docs }}{% else %}sin archivos{% endif %}
+    </span>
+  </button>
+  {% endfor %}
+</div>
+
+<script>
+// El indice lo pintan las dos pantallas -el tablero y el movil-, que nombran
+// sus cajas distinto. Se resuelve aqui, como ya hace reloadDigitalContent.
+function digitalOpen(customId) {
+  const q = document.getElementById('digital-q') || document.getElementById('mob-digi-q');
+  if (q) q.value = customId;
+  const destino = document.getElementById('digital-content') || document.getElementById('mob-digital-content');
+  if (!destino) return;
+  htmx.ajax('GET','/digital/search/?q='+encodeURIComponent(customId),
+            {target:'#'+destino.id, swap:'innerHTML'});
+}
+</script>

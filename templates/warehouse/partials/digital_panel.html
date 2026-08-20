@@ -212,10 +212,12 @@ function reloadDigitalContent() {
 }
 
 function clearDigital() {
-  document.getElementById('digital-content').innerHTML =
-    '<div style="text-align:center;padding:40px;color:#94a3b8;font-size:13px">Enter a Custom ID above to load files.</div>';
-  const dq = document.getElementById('digital-q');
-  if (dq) dq.value = '';
+  // Cerrar un expediente devuelve al indice, no a un recuadro vacio.
+  const q = document.getElementById('digital-q') || document.getElementById('mob-digi-q');
+  if (q) q.value = '';
+  const destino = document.getElementById('digital-content') || document.getElementById('mob-digital-content');
+  if (!destino) return;
+  htmx.ajax('GET','/digital/search/',{target:'#'+destino.id, swap:'innerHTML'});
 }
 
 // Eliminar archivo en Digital con confirmación de contraseña
@@ -359,8 +361,35 @@ function extractError(html) {
 }
 </script>
 
+{% elif candidatos %}
+{% comment %}
+La busqueda era exacta o nada. Cuando el texto encaja con varios expedientes se
+ofrecen todos, en vez de responder que no hay ninguno.
+{% endcomment %}
+<div style="font-size:12px;color:#64748b;margin-bottom:10px">
+  {{ candidatos|length }} expediente{{ candidatos|pluralize:"s" }} coincide{{ candidatos|pluralize:"n" }} con
+  <span style="font-family:'IBM Plex Mono',monospace">{{ query }}</span>:
+</div>
+{% include 'warehouse/partials/digital_index.html' with expedientes=candidatos %}
+
 {% elif query %}
 <div class="msg-error">No operation found for "{{ query }}".</div>
+
+{% elif con_archivos %}
+{% comment %}
+El indice que faltaba: sin el, la pantalla solo abria un expediente si le
+tecleaban el Custom ID completo, y no habia forma de saber cuales tienen algo
+guardado.
+{% endcomment %}
+<div style="font-size:12px;color:#64748b;margin-bottom:10px">
+  Expedientes con archivos, del mas reciente al mas antiguo. Para uno que no
+  este aqui, busca su Custom ID arriba.
+</div>
+{% include 'warehouse/partials/digital_index.html' with expedientes=con_archivos %}
+
 {% else %}
-<div style="text-align:center;padding:40px;color:#94a3b8;font-size:13px">Enter a Custom ID above to load files.</div>
+<div style="text-align:center;padding:40px;color:#94a3b8;font-size:13px">
+  Todavia no hay ningun expediente con archivos. Busca un Custom ID arriba para
+  empezar a subirlos.
+</div>
 {% endif %}
