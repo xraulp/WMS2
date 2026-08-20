@@ -19,8 +19,8 @@ from django.http import HttpResponse
 from django.test import RequestFactory, TestCase, override_settings
 
 from .middleware import TenantMiddleware
-from .models import (Catalog, OperationDocument, Tenant, UserProfile,
-                     WarehouseOperation)
+from .models import (PREFIJO_PAPELERA, Catalog, OperationDocument, Tenant,
+                     UserProfile, WarehouseOperation)
 
 STORAGE_LOCAL = override_settings(STORAGES={
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage',
@@ -205,15 +205,20 @@ class BorradoDeDocumentosTests(DosTenantsTestBase):
         queda para poder devolverlo. Quien lo destruye es la purga, y esa es
         del administrador.
 
-        La contrapartida hay que tenerla presente: mientras este en la
-        papelera, quien ya tuviera la URL publica de R2 puede seguir abriendola.
+        Sobrevive, pero no donde estaba: se mueve bajo `papelera/`, de modo que
+        el enlace repartido antes deja de servir. Mientras compartieron ruta,
+        un archivo retirado de la pantalla seguia abriendose para quien tuviera
+        su URL, porque el bucket sirve sin preguntar quien mira.
         """
-        ruta = self.doc_uno.file.name
+        ruta_original = self.doc_uno.file.name
         storage = self.doc_uno.file.storage
 
         self._borrar(self.doc_uno)
 
-        self.assertTrue(storage.exists(ruta))
+        self.doc_uno.refresh_from_db()
+        self.assertTrue(storage.exists(self.doc_uno.file.name))
+        self.assertTrue(self.doc_uno.file.name.startswith(PREFIJO_PAPELERA))
+        self.assertFalse(storage.exists(ruta_original))
 
     def test_sin_motivo_no_se_borra(self):
         respuesta = self._borrar(self.doc_uno, motivo='')

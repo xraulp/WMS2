@@ -200,7 +200,8 @@ class LaPestanaDeletionsSeAbreTests(TestCase):
 
         cuerpo = self.client.get('/dashboard/').content.decode()
 
-        self.assertIn("'deletions'", cuerpo)          # esta en la lista de paneles
+        from .tests_papelera_remate import _lista_de_paneles
+        self.assertIn('deletions', _lista_de_paneles(cuerpo, 'tabs'))
         self.assertIn('#deletions-content', cuerpo)   # y algo lo carga
 
     def test_la_vista_de_la_papelera_responde(self):

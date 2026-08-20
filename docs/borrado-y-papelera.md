@@ -63,11 +63,45 @@ expresamente con `OperationDocument.todos`.
 la papelera: un nombre que ya salió impreso o adjunto en un correo no puede
 reasignarse, y menos cuando el archivo puede volver.
 
-**Lo que hay que tener presente:** mientras está en la papelera, el objeto sigue
-en R2 con la misma URL. Si el bucket tiene dominio público, quien ya tuviera ese
-enlace puede seguir abriéndolo. La purga del administrador sí borra el objeto.
-Si eso llega a importar, la salida es mover el archivo a un prefijo aparte al
-archivarlo, con lo que la URL vieja deja de servir.
+### El archivo cambia de sitio
+
+Al archivarlo se mueve bajo el prefijo `papelera/` del bucket, y al restaurarlo
+vuelve a su ruta. Mientras estuvo en su sitio de siempre, quien ya tuviera el
+enlace podía seguir abriéndolo aunque el archivo hubiera desaparecido de la
+pantalla: R2 sirve por URL, sin preguntar quién mira. Al cambiarlo de sitio, esa
+URL deja de servir.
+
+Dos detalles que conviene conocer:
+
+- **Si el almacén no responde, el archivado ocurre igual** y el archivo se queda
+  donde estaba. Quitar de la vista una foto mal subida no puede depender de que
+  R2 conteste; lo que no puede fallar es el registro y la papelera.
+- **Al restaurar no se pisa nada.** Si alguien subió otro archivo con ese nombre
+  mientras este estaba en la papelera, el que vuelve se coloca al lado con un
+  sufijo. Se pierde la ruta bonita, no un archivo.
+
+### La papelera se vacía sola si se le pide
+
+No hay purga automática: hay un comando, pensado para un cron.
+
+```
+python manage.py purgar_papelera                 # informe, no toca nada
+python manage.py purgar_papelera --confirmar     # destruye lo que pase de 90 días
+python manage.py purgar_papelera --dias 30 --confirmar
+python manage.py purgar_papelera --empresa norte --confirmar
+```
+
+Sin `--confirmar` solo enseña qué se llevaría, con nombre, expediente, empresa y
+fecha de entrada en la papelera. Lo que destruye es irreversible y no se vuelve a
+registrar: el renglón de la bitácora se escribió cuando el archivo entró, con
+quién lo quitó y por qué, y ese renglón se queda.
+
+### En el móvil también
+
+La papelera está en la barra de abajo, con el mismo permiso que en el tablero:
+la ven los roles de casa, no el staff. Antes desde el móvil se podía archivar
+pero no devolver, que es justo donde se sube la foto equivocada — en el andén,
+sin el escritorio a mano.
 
 ## La contraseña de borrado ya no se ve
 

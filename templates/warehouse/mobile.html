@@ -483,6 +483,22 @@ function closeCatalogEdit() {
   </div>
 </div>
 
+{% if profile.can_see_deletion_log %}
+{% comment %}
+Desde el movil se podia archivar un archivo del expediente pero no devolverlo:
+la papelera solo existia en el tablero de escritorio, que es justo el que no se
+tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
+{% endcomment %}
+<div class="panel" id="panel-deletions">
+  <div class="card">
+    <div class="card-title">Papelera y bitácora</div>
+    <div id="deletions-content">
+      <div style="color:var(--faint);font-size:13px;padding:20px">Loading…</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 </div><!-- /pg -->
 
 <!-- BOTTOM NAV — tabs shown based on role (#23) -->
@@ -504,6 +520,11 @@ function closeCatalogEdit() {
   <button class="nav-btn" id="nav-reports" onclick="mobShowTab('reports')">
     <span class="icon">📊</span>Reports
   </button>
+  {% if profile.can_see_deletion_log %}
+  <button class="nav-btn" id="nav-deletions" onclick="mobShowTab('deletions')">
+    <span class="icon">🗑</span>Papelera
+  </button>
+  {% endif %}
   <a href="#" class="nav-logout" onclick="confirmLogout(event)">
     <span style="font-size:20px">🚪</span>
   </a>
@@ -531,7 +552,7 @@ fetch('/debug/catalog/').then(r=>r.json()).then(d=>{
 });
 
 // Tab names for all panels
-const MOB_PANELS = ['new','database','catalog','digital','reports'];
+const MOB_PANELS = ['new','database','catalog','digital','reports','deletions'];
 
 function mobShowTab(t) {
   // Guardar la pestaña activa en localStorage
@@ -556,6 +577,9 @@ function mobShowTab(t) {
 
   if (t === 'reports') {
     htmx.ajax('GET', '{% url "report_generator" %}', {target:'#report-content', swap:'innerHTML'});
+  }
+  if (t === 'deletions') {
+    htmx.ajax('GET', '{% url "deletion_log" %}', {target:'#deletions-content', swap:'innerHTML'});
   }
   if (t === 'catalog') {
     htmx.ajax('GET', '{% url "catalog_list" %}?scope=operational', {target:'#catalog-table', swap:'innerHTML'});

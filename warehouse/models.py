@@ -1,6 +1,10 @@
+import logging
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 # warehouse/models.py (al inicio, después de los imports)
 ROLE_CHOICES = [
@@ -508,6 +512,12 @@ class WarehouseOperation(models.Model):
 ###Agrega esta función en models.py dentro de la clase WarehouseOperation
 ###Busca la sección donde están los métodos (después de get_customer_email) y agrega esto:052826
 
+# Donde viven los archivos mientras estan en la papelera. Es un prefijo del
+# almacen, no una carpeta del disco: cambiar de sitio el objeto es lo que hace
+# que su URL anterior deje de servir a quien ya la tuviera.
+PREFIJO_PAPELERA = 'papelera/'
+
+
 class DocumentosVivosManager(models.Manager):
     """
     Los documentos que siguen en el expediente.
@@ -556,20 +566,77 @@ class OperationDocument(models.Model):
     def en_papelera(self):
         return self.deleted_at is not None
 
+    def _mover_archivo(self, nuevo_nombre):
+        """
+        Cambia el archivo de sitio dentro del almacen y devuelve si se logro.
+
+        El objeto se copia al destino y se borra el origen: en R2 no hay
+        "mover". Lo importante es que la URL vieja deje de servir, asi que si el
+        borrado del origen falla se avisa pero no se deshace nada; la referencia
+        buena ya es la nueva.
+
+        Nunca lanza. Un almacen que no responde no puede impedir que alguien
+        saque de la vista un archivo mal subido: el registro y la papelera son
+        lo que no puede fallar, y el archivo se queda donde estaba.
+        """
+        viejo = self.file.name if self.file else ''
+        if not viejo or viejo == nuevo_nombre:
+            return False
+
+        almacen = self.file.storage
+        try:
+            with self.file.open('rb') as contenido:
+                guardado = almacen.save(nuevo_nombre, contenido)
+        except Exception as e:
+            logger.warning('No se pudo mover el archivo del documento %s a %s: %s',
+                           self.pk, nuevo_nombre, e)
+            return False
+
+        self.file.name = guardado
+        try:
+            almacen.delete(viejo)
+        except Exception as e:
+            # Queda una copia en la ruta anterior. Es lo unico que este metodo
+            # no puede garantizar, y conviene que se vea en el log.
+            logger.warning('Copia huerfana en %s tras mover el documento %s: %s',
+                           viejo, self.pk, e)
+        return True
+
     def archivar(self, usuario, motivo):
         """
         Lo saca del expediente sin destruir el archivo.
+
+        Ademas lo mueve bajo `papelera/`. Mientras estuvo en su ruta original,
+        quien ya tuviera el enlace podia seguir abriendolo aunque el archivo
+        hubiera desaparecido de la pantalla — el bucket sirve por URL, sin
+        preguntar quien mira. Al cambiarlo de sitio, esa URL deja de servir.
         """
+        movido = self._mover_archivo(PREFIJO_PAPELERA + (self.file.name or ''))
+
         self.deleted_at    = timezone.now()
         self.deleted_by    = usuario
         self.delete_reason = motivo or ''
-        self.save(update_fields=['deleted_at', 'deleted_by', 'delete_reason'])
+        campos = ['deleted_at', 'deleted_by', 'delete_reason']
+        if movido:
+            campos.append('file')
+        self.save(update_fields=campos)
 
     def restaurar(self):
+        """
+        Lo devuelve al expediente, y el archivo a su ruta de siempre.
+        """
+        nombre = self.file.name if self.file else ''
+        movido = False
+        if nombre.startswith(PREFIJO_PAPELERA):
+            movido = self._mover_archivo(nombre[len(PREFIJO_PAPELERA):])
+
         self.deleted_at    = None
         self.deleted_by    = None
         self.delete_reason = ''
-        self.save(update_fields=['deleted_at', 'deleted_by', 'delete_reason'])
+        campos = ['deleted_at', 'deleted_by', 'delete_reason']
+        if movido:
+            campos.append('file')
+        self.save(update_fields=campos)
 
     def __str__(self):
         return f"{self.get_file_type_display()} - {self.operation.custom_id}"
