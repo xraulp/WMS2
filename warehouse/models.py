@@ -624,6 +624,21 @@ class OperationDocument(models.Model):
         # archivado podria dejar de resolverse.
         base_manager_name = 'todos'
 
+        # El orden de los archivos es informacion, no presentacion. En una
+        # entrada se fotografia la misma pieza varias veces -la serie o el
+        # lote, el peso, la tabla nutrimental- y la documentacion aduanal se
+        # arma siguiendo esa secuencia: si el ZIP los entrega en otro orden, lo
+        # que llega al agente aduanal esta mal aunque no falte ningun archivo.
+        #
+        # Sin esta linea ninguna consulta pedia orden, asi que PostgreSQL
+        # devolvia las filas como le convenia. Coincidia con el de insercion
+        # por casualidad, y se rompia en cuanto una fila se actualizaba:
+        # archivar y restaurar un documento lo mandaba al final de la lista.
+        #
+        # `uploaded_at` es el orden en que se subieron, y `pk` desempata la
+        # subida multiple, donde varios archivos comparten el instante.
+        ordering = ['uploaded_at', 'pk']
+
     @property
     def en_papelera(self):
         return self.deleted_at is not None

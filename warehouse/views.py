@@ -569,7 +569,10 @@ def operation_download_all(request, pk):
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### operation_download_all 072526 20:11
     if not customer_can_access_op(request.user, op):
         return HttpResponse('Permission denied.', status=403)
-    docs = op.documents.all()
+    # El orden va explicito ademas del `ordering` del modelo: es el que decide
+    # la numeracion de los archivos dentro del ZIP, y eso no debe depender de
+    # que nadie toque el Meta mas adelante.
+    docs = op.documents.order_by('uploaded_at', 'pk')
 
     if not docs.exists():
         return HttpResponse('No files attached.', status=404)
@@ -596,19 +599,30 @@ def operation_download_all(request, pk):
 
     base_name = ' '.join(name_parts).replace('/', '_')
 
-    # Agrupar archivos por tipo (extensión)
+    # Los archivos se agrupan por tipo -foto, documento, video- y no por
+    # extension. Agrupar por extension partia la serie en dos en cuanto una
+    # foto llegaba como .jpeg y otra como .jpg: cada grupo empezaba a contar
+    # por su cuenta y aparecian dos "foto 1" distintas.
+    #
+    # Dentro de cada tipo se respeta el orden de subida, que es el orden en que
+    # se tomaron: en una misma pieza se fotografia la serie o el lote, luego el
+    # peso, luego la tabla nutrimental, y la documentacion aduanal se arma
+    # siguiendo esa secuencia. El orden lo garantiza el `ordering` del modelo.
     files_by_type = {}
     for doc in docs:
-        ext = os.path.splitext(doc.original_name or doc.file.name)[1].lower()
-        if ext not in files_by_type:
-            files_by_type[ext] = []
-        files_by_type[ext].append(doc)
+        files_by_type.setdefault(doc.file_type, []).append(doc)
 
     buf = BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for ext, file_list in files_by_type.items():
+        for tipo, file_list in files_by_type.items():
+            # Ceros a la izquierda. Sin ellos el ZIP metia los archivos en el
+            # orden bueno pero el explorador los mostraba alfabeticos -1, 10,
+            # 11, 2...-, y quien abre la carpeta ve la secuencia rota. Con dos
+            # cifras como minimo, y mas si hiciera falta.
+            ancho = max(2, len(str(len(file_list))))
             for idx, doc in enumerate(file_list, 1):
-                new_filename = f"{base_name} {idx}{ext}"
+                ext = os.path.splitext(doc.original_name or doc.file.name)[1].lower()
+                new_filename = f"{base_name} {idx:0{ancho}d}{ext}"
                 try:
                     # Se lee del storage en vez de usar `doc.file.path`: `path`
                     # no existe con R2, asi que el ZIP salia vacio en produccion
