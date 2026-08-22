@@ -563,6 +563,24 @@ def operation_label(request, pk):
     return resp
 
 
+# Cuantas cifras lleva el consecutivo de cada archivo dentro del ZIP.
+#
+# Los ceros a la izquierda no son cosmetica: sin ellos el ZIP metia los archivos
+# en el orden bueno pero el explorador los mostraba alfabeticos -1, 10, 11,
+# 2...-, y quien abre la carpeta ve la secuencia rota. En una entrada se
+# fotografia la misma pieza varias veces y de ese orden depende que la
+# documentacion aduanal salga bien.
+#
+# El minimo es tres porque una operacion puede pasar de cien fotos, y con dos
+# cifras volveria el mismo desorden a partir de la numero 100. Si alguna llegara
+# a pasar de mil, el ancho crece solo.
+MINIMO_DE_CIFRAS_EN_EL_ZIP = 3
+
+
+def _ancho_de_numeracion(cantidad):
+    return max(MINIMO_DE_CIFRAS_EN_EL_ZIP, len(str(cantidad)))
+
+
 @login_required
 def operation_download_all(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:00
@@ -615,11 +633,7 @@ def operation_download_all(request, pk):
     buf = BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
         for tipo, file_list in files_by_type.items():
-            # Ceros a la izquierda. Sin ellos el ZIP metia los archivos en el
-            # orden bueno pero el explorador los mostraba alfabeticos -1, 10,
-            # 11, 2...-, y quien abre la carpeta ve la secuencia rota. Con dos
-            # cifras como minimo, y mas si hiciera falta.
-            ancho = max(2, len(str(len(file_list))))
+            ancho = _ancho_de_numeracion(len(file_list))
             for idx, doc in enumerate(file_list, 1):
                 ext = os.path.splitext(doc.original_name or doc.file.name)[1].lower()
                 new_filename = f"{base_name} {idx:0{ancho}d}{ext}"

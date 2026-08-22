@@ -15,7 +15,7 @@ Nada lo garantizaba. Estas pruebas fijan las tres cosas que lo rompían:
   final de la lista.
 * **La numeración no llevaba ceros**, de modo que con diez archivos o más el
   explorador los mostraba 1, 10, 11, 2, 3… aunque dentro del ZIP fueran en
-  orden.
+  orden. Van a tres cifras porque una operación puede pasar de cien fotos.
 * **Agrupaba por extensión y no por tipo**, así que una foto `.jpeg` y otra
   `.jpg` abrían dos series y aparecían dos «foto 1» distintas.
 """
@@ -29,6 +29,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 
 from .models import Catalog, OperationDocument, Tenant, UserProfile, WarehouseOperation
+from .views import _ancho_de_numeracion
 
 STORAGE_LOCAL = override_settings(STORAGES={
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage',
@@ -78,7 +79,8 @@ class ElZipRespetaElOrdenDeSubida(BaseOrden):
 
         nombres = self._nombres_del_zip()
 
-        self.assertEqual([n[-6:] for n in nombres], ['01.jpg', '02.jpg', '03.jpg'])
+        self.assertEqual([n[-7:] for n in nombres],
+                         ['001.jpg', '002.jpg', '003.jpg'])
 
     def test_un_documento_restaurado_no_se_va_al_final(self):
         """Actualizar una fila la movia al final; archivar y restaurar lo hace."""
@@ -102,16 +104,16 @@ class ElZipRespetaElOrdenDeSubida(BaseOrden):
 
 class LaNumeracionSeLeeEnOrden(BaseOrden):
 
-    def test_con_diez_o_mas_los_numeros_llevan_cero_delante(self):
-        """Sin el cero, el explorador ordena 1, 10, 11, 2, 3... y rompe la secuencia."""
+    def test_con_diez_o_mas_los_numeros_llevan_ceros_delante(self):
+        """Sin los ceros, el explorador ordena 1, 10, 11, 2, 3... y rompe la secuencia."""
         for i in range(1, 13):
             self._subir('foto%02d.jpg' % i)
 
         nombres = sorted(self._nombres_del_zip())
 
-        self.assertTrue(nombres[0].endswith('01.jpg'), nombres[0])
-        self.assertTrue(nombres[1].endswith('02.jpg'), nombres[1])
-        self.assertTrue(nombres[-1].endswith('12.jpg'), nombres[-1])
+        self.assertTrue(nombres[0].endswith('001.jpg'), nombres[0])
+        self.assertTrue(nombres[1].endswith('002.jpg'), nombres[1])
+        self.assertTrue(nombres[-1].endswith('012.jpg'), nombres[-1])
 
     def test_el_orden_alfabetico_del_zip_coincide_con_el_de_subida(self):
         """Es la propiedad que de verdad importa: la carpeta se ve en orden."""
@@ -125,10 +127,11 @@ class LaNumeracionSeLeeEnOrden(BaseOrden):
 
         self.assertEqual(nombres, sorted(nombres))
 
-    def test_con_pocos_archivos_igual_llevan_dos_cifras(self):
+    def test_con_pocos_archivos_igual_llevan_tres_cifras(self):
+        """Un ancho fijo mantiene los nombres comparables entre operaciones."""
         self._subir('serie.jpg')
 
-        self.assertTrue(self._nombres_del_zip()[0].endswith('01.jpg'))
+        self.assertTrue(self._nombres_del_zip()[0].endswith('001.jpg'))
 
 
 class CadaTipoLLevaSuPropiaSerie(BaseOrden):
@@ -143,9 +146,9 @@ class CadaTipoLLevaSuPropiaSerie(BaseOrden):
 
         self.assertEqual(len(set(nombres)), 3)
         self.assertEqual(sorted(nombres), [
-            'ACM PO123 ED-0001 01.jpg',
-            'ACM PO123 ED-0001 02.jpeg',
-            'ACM PO123 ED-0001 03.jpg',
+            'ACM PO123 ED-0001 001.jpg',
+            'ACM PO123 ED-0001 002.jpeg',
+            'ACM PO123 ED-0001 003.jpg',
         ])
 
     def test_las_fotos_y_los_pdf_cuentan_por_separado(self):
@@ -156,9 +159,9 @@ class CadaTipoLLevaSuPropiaSerie(BaseOrden):
 
         nombres = self._nombres_del_zip()
 
-        self.assertIn('ACM PO123 ED-0001 01.pdf', nombres)
+        self.assertIn('ACM PO123 ED-0001 001.pdf', nombres)
         self.assertEqual(sorted(n for n in nombres if n.endswith('.jpg')),
-                         ['ACM PO123 ED-0001 01.jpg', 'ACM PO123 ED-0001 02.jpg'])
+                         ['ACM PO123 ED-0001 001.jpg', 'ACM PO123 ED-0001 002.jpg'])
 
     def test_cada_archivo_conserva_su_contenido(self):
         """Renombrar dentro del ZIP no puede mezclar los contenidos."""
@@ -174,3 +177,22 @@ class CadaTipoLLevaSuPropiaSerie(BaseOrden):
             nombres = zf.namelist()
             self.assertEqual(zf.read(nombres[0]), b'la serie')
             self.assertEqual(zf.read(nombres[1]), b'el peso')
+
+
+class ElAnchoDeLaNumeracion(TestCase):
+    """
+    Cuantas cifras lleva el consecutivo. Se prueba sobre la funcion y no
+    subiendo archivos porque los casos que importan -cien fotos, mil- no se
+    pueden montar en una prueba sin volverla lentisima, y son justo los que
+    decidieron el minimo.
+    """
+
+    def test_el_minimo_son_tres_cifras(self):
+        """Una operacion puede pasar de cien fotos; con dos, volvia el desorden."""
+        for cantidad in (1, 5, 99, 100, 999):
+            with self.subTest(cantidad=cantidad):
+                self.assertEqual(_ancho_de_numeracion(cantidad), 3)
+
+    def test_si_hicieran_falta_mas_el_ancho_crece(self):
+        self.assertEqual(_ancho_de_numeracion(1000), 4)
+        self.assertEqual(_ancho_de_numeracion(12345), 5)
