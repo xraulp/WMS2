@@ -357,13 +357,16 @@ def operation_create(request):
         if ext in ('pdf','doc','docx','xls','xlsx','csv'): return 'DOCUMENT'
         return 'OTHER'
 
+    # El `tenant` no se pasaba aqui -- si en la subida digital --, asi que todo
+    # documento adjuntado al crear la operacion quedaba con el campo en NULL.
+    # Es lo que le paso a cinco de los nueve documentos que habia en la base.
     for f in request.FILES.getlist('photos'):
         OperationDocument.objects.create(
-            operation=op, file_type=guess_type(f.name),
+            tenant=tenant, operation=op, file_type=guess_type(f.name),
             file=f, original_name=f.name, uploaded_by=request.user)
     for f in request.FILES.getlist('documents'):
         OperationDocument.objects.create(
-            operation=op, file_type=guess_type(f.name),
+            tenant=tenant, operation=op, file_type=guess_type(f.name),
             file=f, original_name=f.name, uploaded_by=request.user)
 
     released_entries = []

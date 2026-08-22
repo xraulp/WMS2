@@ -71,6 +71,13 @@ enlace podía seguir abriéndolo aunque el archivo hubiera desaparecido de la
 pantalla: R2 sirve por URL, sin preguntar quién mira. Al cambiarlo de sitio, esa
 URL deja de servir.
 
+> **Lo que esto no hace.** Invalida el enlace que alguien tuviera, y nada más. El
+> archivo sigue existiendo y su ruta nueva es igual de pública que la anterior
+> —comprobado con un `GET` desde fuera—, porque el bucket se sirve por un dominio
+> abierto. Archivar retira el archivo de la vista y del expediente; **no retira
+> el acceso a quien sepa dónde buscar**. Lo único que lo destruye es la purga.
+> Ver `docs/configurar-r2.md`.
+
 Dos detalles que conviene conocer:
 
 - **Si el almacén no responde, el archivado ocurre igual** y el archivo se queda

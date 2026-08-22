@@ -1,8 +1,12 @@
 import logging
+import os
+import re
+import uuid
 
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.text import slugify
 
 logger = logging.getLogger(__name__)
 
@@ -517,6 +521,61 @@ class WarehouseOperation(models.Model):
 # que su URL anterior deje de servir a quien ya la tuviera.
 PREFIJO_PAPELERA = 'papelera/'
 
+# Cuanto del nombre original se conserva en la ruta. Sirve para reconocer el
+# archivo al mirar el bucket; el nombre completo vive en `original_name`, que es
+# lo que se le enseña al usuario y lo que viaja en la descarga.
+LARGO_NOMBRE_EN_RUTA = 60
+
+
+def ruta_documento(instance, filename):
+    """
+    Donde se guarda el archivo de un documento del expediente.
+
+    Antes era `operations/%Y/%m/%d/` mas el nombre original tal cual, y eso
+    tenia tres problemas que se dieron los tres en produccion:
+
+    1. **Se perdian archivos.** Dos documentos con el mismo nombre subidos el
+       mismo dia daban la misma ruta, y `AWS_S3_FILE_OVERWRITE` -- que vale
+       `True` mientras nadie diga lo contrario -- hacia que el segundo pisara al
+       primero sin avisar. La base guardaba las dos filas apuntando al mismo
+       objeto, asi que la pantalla no mostraba ningun error: mostraba el archivo
+       equivocado.
+    2. **No aislaba las empresas.** La ruta no llevaba el tenant, de modo que el
+       `report.pdf` de una podia pisar el de otra del mismo dia.
+    3. **Era adivinable.** Fecha mas nombre corriente es una ruta que se acierta
+       probando, y el bucket se sirve por un dominio publico: quien conociera el
+       dominio -- cualquier usuario, porque sale en el HTML -- podia sondear
+       documentos ajenos sin pasar por el sistema.
+
+    El `uuid` corta los tres: la ruta deja de colisionar y deja de adivinarse.
+    El tenant va delante porque hace evidente de quien es cada archivo al mirar
+    el bucket, que es donde se diagnostica cuando algo va mal.
+    """
+    empresa = 'sin-empresa'
+    tenant = getattr(instance, 'tenant', None)
+    if tenant is None and getattr(instance, 'operation_id', None):
+        # El documento puede llegar sin tenant propio; el de su operacion es el
+        # mismo, y vale mas que mandarlo todo al cajon de los huerfanos.
+        tenant = getattr(instance.operation, 'tenant', None)
+    if tenant is not None and tenant.subdomain:
+        empresa = slugify(tenant.subdomain)[:40] or 'sin-empresa'
+
+    base, punto, extension = os.path.basename(filename or '').rpartition('.')
+    if not punto:
+        base, extension = extension, ''
+
+    nombre = slugify(base)[:LARGO_NOMBRE_EN_RUTA] or 'archivo'
+    extension = re.sub(r'[^A-Za-z0-9]', '', extension).lower()[:10]
+    if extension:
+        nombre = f'{nombre}.{extension}'
+
+    return 'operations/{empresa}/{fecha}/{unico}-{nombre}'.format(
+        empresa=empresa,
+        fecha=timezone.localtime().strftime('%Y/%m/%d'),
+        unico=uuid.uuid4().hex[:12],
+        nombre=nombre,
+    )
+
 
 class DocumentosVivosManager(models.Manager):
     """
@@ -537,7 +596,10 @@ class OperationDocument(models.Model):
     tenant        = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='documents')
     operation     = models.ForeignKey(WarehouseOperation, on_delete=models.CASCADE, related_name='documents')
     file_type     = models.CharField(max_length=10, choices=FILE_TYPE_CHOICES, default='OTHER')
-    file          = models.FileField(upload_to='operations/%Y/%m/%d/')
+    # `max_length` sube de los 100 por omision porque la ruta nueva es mas
+    # larga: lleva la empresa, el identificador unico y, mientras esta en la
+    # papelera, el prefijo por delante. Con 100 una ruta larga se rechazaba.
+    file          = models.FileField(upload_to=ruta_documento, max_length=255)
     original_name = models.CharField(max_length=255, blank=True)
     uploaded_by   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     uploaded_at   = models.DateTimeField(auto_now_add=True)
@@ -610,6 +672,10 @@ class OperationDocument(models.Model):
         quien ya tuviera el enlace podia seguir abriendolo aunque el archivo
         hubiera desaparecido de la pantalla — el bucket sirve por URL, sin
         preguntar quien mira. Al cambiarlo de sitio, esa URL deja de servir.
+
+        Lo que no hace: la ruta nueva es tan publica como la anterior, asi que
+        esto invalida el enlace que alguien tuviera, no el acceso al archivo.
+        Destruirlo es cosa de la purga.
         """
         movido = self._mover_archivo(PREFIJO_PAPELERA + (self.file.name or ''))
 

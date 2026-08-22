@@ -16,18 +16,66 @@ con el backend `s3boto3` apuntando al endpoint de Cloudflare.
 | `AWS_S3_CUSTOM_DOMAIN` | Dominio público desde el que se sirven los archivos, **sin** `https://` ni barra final |
 
 `AWS_S3_CUSTOM_DOMAIN` es la que decide la URL que devuelve `FieldFile.url`, o
-sea el enlace que el operador ve y abre. Si no está definida, `django-storages`
-firma URLs contra el endpoint privado de R2: funcionan, pero **caducan**, así que
-un enlace guardado o mandado por correo deja de servir al rato. En producción
-tiene que estar puesta.
+sea el enlace que el operador ve y abre, y `django-storages` toma uno de dos
+caminos según esté definida o no (`storages/backends/s3.py`, método `url()`):
 
-> **Pendiente de verificar en Render.** `settings.py` traía el dominio de
-> desarrollo `pub-7aa64bbc50bd414e93e88ea59d6561a7.r2.dev` escrito a mano, pero
-> un segundo bloque más abajo lo pisaba con `os.environ.get('AWS_S3_CUSTOM_DOMAIN')`,
-> así que ese valor fijo llevaba tiempo sin usarse. En la máquina de desarrollo
-> la variable no está definida y `python manage.py check_r2` lo dice con todas
-> sus letras. **Hay que confirmar que en Render sí está**; si no lo está, los
-> enlaces a los archivos del expediente caducan al rato de generarse.
+- **Sin ella**, firma una URL contra el endpoint privado de R2. El bucket puede
+  quedar cerrado, pero el enlace **caduca**: a falta de `AWS_QUERYSTRING_EXPIRE`
+  se toma el valor por omisión de la librería, **una hora**. Un enlace guardado
+  o pegado en un correo deja de servir.
+- **Con ella**, construye `https://<dominio>/<ruta>` sin firma ninguna. El
+  enlace no caduca nunca — y por lo mismo no lleva credencial, así que **el
+  bucket tiene que estar publicado** para que funcione.
+
+## El bucket es público, y lo que eso implica
+
+En producción la variable está puesta, así que estamos en el segundo caso:
+cualquiera que conozca la ruta de un archivo lo descarga sin pasar por el
+sistema. Comprobado con un `GET` desde fuera, sin sesión y sin credenciales.
+
+Dos cosas acotan el riesgo, y conviene tener claras las dos:
+
+- **El bucket no se puede enumerar.** Pedir la raíz del dominio devuelve 404, de
+  modo que hay que acertar la ruta, no listarla.
+- **La ruta dejó de ser adivinable.** Era `operations/<fecha>/<nombre original>`,
+  y con nombres como `report.pdf` eso se acierta probando. Ahora lleva un
+  identificador aleatorio: ver `ruta_documento` en `warehouse/models.py`.
+
+El dominio no es un secreto: sale en el HTML de cualquier pantalla que muestre un
+archivo, así que lo tiene cualquier usuario, incluido un cliente. Lo único que
+separa los documentos de una empresa de los de otra es que la ruta no se acierta.
+
+**La salida limpia, cuando haga falta**, es servir los archivos por una vista de
+Django que compruebe permisos y redirija a una URL firmada recién hecha: el
+enlace del sistema no caduca, el bucket queda cerrado y queda registro de quién
+abrió qué. El orden para eso es obligatorio — **primero la vista, después quitar
+la variable, después despublicar el bucket**. Al revés, todos los enlaces se
+rompen de golpe.
+
+## Dónde se guarda cada archivo
+
+La ruta la arma `ruta_documento` y tiene esta forma:
+
+```
+operations/<empresa>/<año>/<mes>/<día>/<12 hex>-<nombre-saneado>.<ext>
+```
+
+Cada tramo está por una razón que costó un incidente:
+
+- **La empresa**, porque sin ella el `report.pdf` de una podía pisar el de otra.
+- **El identificador aleatorio**, porque dos archivos con el mismo nombre subidos
+  el mismo día daban la misma ruta y **el segundo destruía al primero** — el
+  backend de S3 sobrescribe mientras no se le diga otra cosa. Pasó dos veces con
+  datos reales, sin ningún error visible: la base conservaba las dos filas
+  apuntando al mismo objeto, así que la pantalla mostraba el archivo equivocado.
+  De ahí también `AWS_S3_FILE_OVERWRITE = False` en `settings.py`, que es la red
+  de abajo.
+- **El nombre saneado y recortado**, para reconocer el archivo al mirar el bucket
+  sin arrastrar espacios ni tildes a la URL. El nombre completo, tal como lo puso
+  quien lo subió, vive en `original_name` y es lo que se le enseña al usuario.
+
+Las rutas de antes del cambio siguen como estaban: nada las reescribe. Las cubre
+`warehouse/tests_rutas_de_archivos.py`.
 
 Para comprobar que todo responde:
 

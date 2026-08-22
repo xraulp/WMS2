@@ -186,6 +186,14 @@ AWS_S3_SIGNATURE_VERSION = 's3v4'
 AWS_S3_USE_SSL = True
 AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
 
+# django-storages sobrescribe el objeto que ya ocupe la ruta mientras no se le
+# diga esto, y eso destruyo dos archivos en produccion: dos documentos con el
+# mismo nombre subidos el mismo dia daban la misma ruta y el segundo pisaba al
+# primero, sin error y sin rastro. Con `False`, Django le añade un sufijo al
+# nombre en vez de pisar. `ruta_documento` ya evita la colision por su cuenta;
+# esto es la red debajo, porque el valor por omision falla en silencio.
+AWS_S3_FILE_OVERWRITE = False
+
 # Dominio público desde el que se sirven los archivos. Es lo que decide la URL
 # que devuelve FieldFile.url; sin él django-storages firma URLs contra el
 # endpoint de R2, que caducan. Vive en el entorno porque el dominio de
