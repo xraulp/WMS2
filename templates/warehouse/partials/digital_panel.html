@@ -102,7 +102,7 @@ que comprueba la vista. El staff sube archivos pero no los borra.
   </div>
     <div style="height:80px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:32px;overflow:hidden">
       {% if doc.file_type == 'PHOTO' %}
-        <img src="{{ doc.file.url }}" style="width:100%;height:80px;object-fit:cover" onerror="this.parentElement.innerHTML='📷'">
+        <img src="{% url 'document_file' doc.pk %}" style="width:100%;height:80px;object-fit:cover" onerror="this.parentElement.innerHTML='📷'">
       {% elif doc.file_type == 'VIDEO' %}🎬
       {% elif doc.file_type == 'DOCUMENT' %}📄
       {% else %}📎{% endif %}
@@ -115,9 +115,9 @@ que comprueba la vista. El staff sube archivos pero no los borra.
       <div style="font-size:8px;color:#ef4444;font-family:monospace;">ID: {{ doc.pk }}</div>
     </div>
     <div style="display:flex;border-top:1px solid #e2e8f0">
-      <a href="{{ doc.file.url }}" target="_blank" download="{{ doc.original_name }}"
+      <a href="{% url 'document_file' doc.pk %}?download=1" target="_blank"
          style="flex:1;padding:4px;font-size:10px;color:#0ea5e9;text-decoration:none;text-align:center">⬇</a>
-      <a href="{{ doc.file.url }}" target="_blank"
+      <a href="{% url 'document_file' doc.pk %}" target="_blank"
          style="flex:1;padding:4px;font-size:10px;color:#64748b;text-decoration:none;text-align:center;border-left:1px solid #e2e8f0">👁</a>
       {% if profile.can_delete_documents %}
 

@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, FileResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
@@ -19,6 +19,7 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
                      NotificationLog, PlatformUser, PLATFORM_ROLE_CHOICES,
                      CATALOG_SCOPES, catalog_scope_of)
 from .utils import generate_pdf_report, generate_label_pdf
+from .almacen import url_firmada
 from . import notifications
 
 logger = logging.getLogger(__name__)
@@ -626,6 +627,75 @@ def operation_download_all(request, pk):
     resp = HttpResponse(buf.read(), content_type='application/zip')
     resp['Content-Disposition'] = f'attachment; filename="{base_name}.zip"'
     return resp
+
+
+@login_required
+@require_GET
+def document_file(request, doc_pk):
+    """
+    Entrega un archivo del expediente, comprobando antes quien lo pide.
+
+    Es la puerta que faltaba. Hasta ahora la pantalla enlazaba al bucket
+    directamente: el enlace no llevaba credencial, el bucket estaba publicado
+    para que eso funcionara, y en consecuencia cualquiera con la ruta se
+    llevaba el archivo sin sesion, sin permiso y sin dejar rastro. Aqui pasa lo
+    contrario de cada cosa: hay que estar dentro, hay que poder ver la
+    operacion, el enlace que se entrega caduca en minutos y la apertura queda
+    en el log.
+
+    El aislamiento es el mismo que el de `operation_detail`, y a proposito: si
+    alguien puede abrir la operacion puede abrir sus archivos, y si no, no. El
+    tenant sale de la operacion y no del documento porque hay documentos
+    antiguos con el campo en NULL —la causa esta arreglada, las filas viejas
+    no—, y esos tienen que seguir abriendose.
+
+    Un archivo en la papelera solo lo abre quien puede ver la papelera. Para
+    los demas ya no existe, que es lo que significa archivarlo.
+    """
+    tenant = get_tenant_or_404(request)
+    doc = get_object_or_404(
+        OperationDocument.todos.select_related('operation'),
+        pk=doc_pk, operation__tenant=tenant)
+
+    if not customer_can_access_op(request.user, doc.operation):
+        return HttpResponse('Permission denied.', status=403)
+
+    profile = get_profile(request.user)
+    if doc.en_papelera and not profile.can_see_deletion_log():
+        raise Http404('El documento esta archivado')
+
+    # Hay al menos una fila en produccion con archivo registrado y sin objeto
+    # en el bucket. Sin este guard el caso acabaria igual en 404 —abrir el
+    # archivo revienta y el except de abajo lo convierte—, pero por un camino
+    # que pasa antes por firmar y por el log: mas ruidoso y menos legible.
+    if not doc.file or not doc.file.name:
+        raise Http404('El documento no tiene archivo')
+
+    descargar = request.GET.get('download') == '1'
+    nombre = doc.original_name or os.path.basename(doc.file.name)
+
+    logger.info('Documento %s (%s) abierto por %s en %s%s',
+                doc.pk, doc.file.name, request.user.username, tenant.subdomain,
+                ' [descarga]' if descargar else '')
+
+    firmada = url_firmada(doc.file, descargar_como=nombre if descargar else None)
+    if firmada:
+        respuesta = redirect(firmada)
+        # La URL firmada caduca y este enlace no, asi que el navegador no debe
+        # quedarse con el redirect: al volver a entrar tiene que preguntar otra
+        # vez y recibir una firma nueva.
+        respuesta['Cache-Control'] = 'private, no-store'
+        return respuesta
+
+    # Sin almacen que sepa firmar —el sistema de archivos local, en desarrollo
+    # y en las pruebas— el archivo sale por aqui. Es mas lento porque pasa por
+    # el servidor, y es lo unico que mantiene la pantalla igual sin R2 detras.
+    try:
+        contenido = doc.file.open('rb')
+    except Exception as e:
+        logger.warning('No se pudo abrir el archivo del documento %s: %s', doc.pk, e)
+        raise Http404('El archivo no esta disponible')
+    return FileResponse(contenido, as_attachment=descargar, filename=nombre)
 
 
 def get_customer_abbreviation(operation):

@@ -23,6 +23,10 @@ urlpatterns = [
     path('operations/<int:pk>/email/', views.operation_send_email, name='operation_send_email'),
     path('operations/<int:pk>/whatsapp/', views.operation_send_whatsapp, name='operation_send_whatsapp'),
     path('operations/<int:pk>/download-all/', views.operation_download_all, name='operation_download_all'),
+    # Los archivos del expediente se sirven por aqui y no por el enlace
+    # publico del bucket: la vista comprueba quien pide y entrega una URL
+    # firmada de vida corta. Ver warehouse/almacen.py.
+    path('documents/<int:doc_pk>/file/', views.document_file, name='document_file'),
     # NUEVA URL: Filtrar operaciones por usuario creador
     path('operations/by-user/<int:user_id>/', views.operations_by_user, name='operations_by_user'),
     # Digital

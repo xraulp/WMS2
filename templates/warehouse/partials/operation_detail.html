@@ -35,8 +35,8 @@
       <div style="font-size:12px;font-weight:500">{{ doc.original_name|default:doc.file.name }}</div>
       <div style="font-size:10px;color:#94a3b8">{{ doc.get_file_type_display }} · {{ doc.uploaded_at|date:"Y-m-d" }}</div>
     </div>
-    <a href="{{ doc.file.url }}" target="_blank" download="{{ doc.original_name }}" class="btn btn-g btn-sm">⬇</a>
-    <a href="{{ doc.file.url }}" target="_blank" class="btn btn-g btn-sm">View</a>
+    <a href="{% url 'document_file' doc.pk %}?download=1" target="_blank" class="btn btn-g btn-sm">⬇</a>
+    <a href="{% url 'document_file' doc.pk %}" target="_blank" class="btn btn-g btn-sm">View</a>
   </div>
   {% endfor %}
 </div>

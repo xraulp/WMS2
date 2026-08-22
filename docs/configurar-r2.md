@@ -27,13 +27,42 @@ caminos según esté definida o no (`storages/backends/s3.py`, método `url()`):
   enlace no caduca nunca — y por lo mismo no lleva credencial, así que **el
   bucket tiene que estar publicado** para que funcione.
 
-## El bucket es público, y lo que eso implica
+## Los archivos se sirven por una vista, no por el bucket
 
-En producción la variable está puesta, así que estamos en el segundo caso:
-cualquiera que conozca la ruta de un archivo lo descarga sin pasar por el
-sistema. Comprobado con un `GET` desde fuera, sin sesión y sin credenciales.
+La pantalla ya no enlaza a R2. Cada archivo del expediente se pide a
+`/documents/<id>/file/` — la vista `document_file` en `warehouse/views.py` —, que
+hace tres cosas antes de entregar nada:
 
-Dos cosas acotan el riesgo, y conviene tener claras las dos:
+1. **Comprueba quién pide.** Hay que estar dentro, el documento tiene que ser del
+   tenant del request y, si quien mira es un cliente, de sus propias operaciones.
+   Es el mismo criterio que `operation_detail`, a propósito: lo que se puede
+   abrir coincide con lo que se puede ver.
+2. **Firma una URL nueva y de vida corta** — cinco minutos, en
+   `warehouse/almacen.py` — y redirige a ella. El enlace que guarda el navegador
+   es el del sistema y no caduca nunca; el que llega al bucket caduca en minutos.
+   La respuesta va con `Cache-Control: private, no-store` para que el navegador
+   no se quede con un redirect que va a dejar de servir.
+3. **Deja constancia** de quién abrió qué, en el log de la aplicación.
+
+Un archivo en la papelera solo lo abre quien puede ver la papelera. Para los
+demás deja de existir, que es lo que significa archivarlo.
+
+Firmar hace falta *aunque* `AWS_S3_CUSTOM_DOMAIN` siga puesta: mientras lo esté,
+`FieldFile.url` devuelve el enlace público sin firma. Por eso `url_firmada`
+trabaja sobre una copia del almacén con `custom_domain` en `None`. Cuando la
+variable se retire, esa copia dejará de tener trabajo y el código seguirá siendo
+correcto — no hay nada que tocar el día del cambio.
+
+Cuando el almacén no sabe firmar —el sistema de archivos local, en desarrollo y
+en las pruebas— la vista sirve el archivo ella misma. Ese camino no es un parche:
+es lo que mantiene la pantalla igual de funcional sin R2 detrás.
+
+### El bucket sigue siendo público, y qué falta para cerrarlo
+
+Servir por la vista quita el enlace público del HTML, que era lo que ponía la
+ruta al alcance de cualquier usuario, cliente incluido. Lo que **no** hace por sí
+solo es cerrar el bucket: quien ya tenga apuntada una ruta de las de antes sigue
+descargándola sin pasar por el sistema. Dos cosas acotan lo que queda:
 
 - **El bucket no se puede enumerar.** Pedir la raíz del dominio devuelve 404, de
   modo que hay que acertar la ruta, no listarla.
@@ -41,16 +70,17 @@ Dos cosas acotan el riesgo, y conviene tener claras las dos:
   y con nombres como `report.pdf` eso se acierta probando. Ahora lleva un
   identificador aleatorio: ver `ruta_documento` en `warehouse/models.py`.
 
-El dominio no es un secreto: sale en el HTML de cualquier pantalla que muestre un
-archivo, así que lo tiene cualquier usuario, incluido un cliente. Lo único que
-separa los documentos de una empresa de los de otra es que la ruta no se acierta.
+El orden es obligatorio, y el primer paso ya está hecho:
 
-**La salida limpia, cuando haga falta**, es servir los archivos por una vista de
-Django que compruebe permisos y redirija a una URL firmada recién hecha: el
-enlace del sistema no caduca, el bucket queda cerrado y queda registro de quién
-abrió qué. El orden para eso es obligatorio — **primero la vista, después quitar
-la variable, después despublicar el bucket**. Al revés, todos los enlaces se
-rompen de golpe.
+1. ~~Servir los archivos por una vista de Django.~~ **Hecho.**
+2. **Quitar `AWS_S3_CUSTOM_DOMAIN` del entorno de Render.** A partir de ahí
+   `FieldFile.url` firma por su cuenta y nada del sistema depende del dominio
+   público. Antes de hacerlo, comprobar que no queda ninguna plantilla usando
+   `doc.file.url` (`grep -rn "file.url" templates/`): hoy no queda ninguna.
+3. **Despublicar el bucket** en el panel de Cloudflare.
+
+Al revés, todos los enlaces se rompen de golpe — es exactamente lo que le pasa
+hoy al dominio viejo `pub-7aa64bbc...`, que devuelve 401.
 
 ## Dónde se guarda cada archivo
 
