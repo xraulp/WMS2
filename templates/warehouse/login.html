@@ -35,7 +35,15 @@
     <div class="login-logo">
       <h1>W<span>M</span>S</h1>
       <p>Warehouse Management System</p>
-      <p>DYSER Group LLC</p>
+      {% comment %}
+        El nombre de la empresa estaba escrito a mano, y desde que existe el
+        nivel de plataforma eso es incorrecto: el administrador del SaaS entra
+        por esta misma pantalla, y el dia que haya una segunda empresa sus
+        usuarios verian el nombre de la primera. El tenant solo se conoce aqui
+        si el subdominio lo dice -- en el login no hay usuario todavia --, asi
+        que por la direccion general no se nombra ninguna.
+      {% endcomment %}
+      {% if request.tenant %}<p>{{ request.tenant.name }}</p>{% endif %}
     </div>
     <div class="login-card">
       <div id="login-error">
