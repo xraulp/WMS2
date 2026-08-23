@@ -58,12 +58,25 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
       <td><span class="badge" style="background:#f1f5f9;color:#475569">{{ entry.get_category_display }}</span></td>
       <td><strong>{{ entry.name }}</strong></td>
       {% if scope == 'customers' %}
+      {% comment %}
+      El numero es el boton: quien ve que un cliente no tiene a nadie lo arregla
+      ahi mismo, sin cruzar a la pestana Users a buscar un formulario donde el
+      cliente se elige otra vez.
+      {% endcomment %}
       <td style="text-align:center">
-        {% if entry.usuarios %}
-          <span class="badge" style="background:#e0f2fe;color:#0369a1">{{ entry.usuarios }}</span>
+        {% if puede_dar_acceso %}
+        <button class="btn btn-g btn-sm" onclick="abrirAccesoDeCliente({{ entry.pk }}, '{{ entry.name|escapejs }}')"
+                title="Ver quien entra por parte de este cliente, y dar acceso"
+                style="{% if not entry.usuarios %}border-color:#f59e0b;color:#92400e;background:#fffbeb{% endif %}">
+          {% if entry.usuarios %}👤 {{ entry.usuarios }}{% else %}sin acceso{% endif %}
+        </button>
         {% else %}
-          <span class="badge" style="background:#fef3c7;color:#92400e"
-                title="Nadie de este cliente puede entrar al sistema">sin acceso</span>
+          {% if entry.usuarios %}
+            <span class="badge" style="background:#e0f2fe;color:#0369a1">{{ entry.usuarios }}</span>
+          {% else %}
+            <span class="badge" style="background:#fef3c7;color:#92400e"
+                  title="Nadie de este cliente puede entrar al sistema">sin acceso</span>
+          {% endif %}
         {% endif %}
       </td>
       {% endif %}

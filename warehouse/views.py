@@ -199,6 +199,11 @@ def dashboard(request):
         'customer_entries':    _catalog_entries(tenant, 'customers'),
         'can_edit_operational': profile.can_edit_catalog('SHIPPER'),
         'can_edit_customers':   profile.can_edit_catalog('CUSTOMER'),
+        # Repartir el acceso de un cliente va por el permiso de usuarios y no
+        # por el del catalogo: editar una ficha y dar una llave no son lo
+        # mismo. `_catalog_table_context` lo pone tambien, para cuando la tabla
+        # se repinta sola; aqui hace falta para la primera carga.
+        'puede_dar_acceso':     profile.can_manage_users(),
         'customers_json':    cat_json('CUSTOMER'),
         'shippers_json':     cat_json('SHIPPER'),
         'carriers_json':     cat_json('CARRIER'),
@@ -1577,6 +1582,10 @@ def _catalog_table_context(request, tenant, scope, **extra):
         # Manager y staff ven la pantalla de clientes para consultarla; los
         # botones de alta, edicion y baja solo se pintan a quien puede usarlos.
         'can_edit': profile.can_edit_catalog(CATALOG_SCOPES[scope][0]),
+        # Dar acceso es repartir una llave, asi que va por el permiso de
+        # usuarios y no por el del catalogo: son dos cosas distintas y la
+        # segunda la tiene mas gente.
+        'puede_dar_acceso': scope == 'customers' and profile.can_manage_users(),
     }
     contexto.update(extra)
     return contexto
@@ -1690,6 +1699,59 @@ def catalog_list(request):
     return render(request, 'warehouse/partials/catalog_table.html',
                   _catalog_table_context(request, tenant, scope))
     ##})
+
+
+@login_required
+def customer_access(request, pk):
+    """
+    Quien entra al sistema por parte de un cliente, y como darle acceso a otro.
+
+    Vive en la ficha del cliente y no en la pestana Users a proposito. Dar de
+    alta a un cliente y darle acceso eran dos caminos separados, y de ahi salian
+    las dos formas de quedarse a medias: un usuario 'customer' sin cliente
+    -- que no ve nada -- y un cliente sin nadie que pueda entrar. La primera ya
+    es imposible; la segunda ahora se ve en la propia lista, marcada "sin
+    acceso", y se arregla desde el mismo sitio donde se nota.
+
+    El permiso es el de usuarios y no el del catalogo: dar acceso es repartir
+    una llave, no editar una ficha.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if not profile.can_manage_users():
+        return HttpResponse('Permission denied.', status=403)
+
+    cliente = get_object_or_404(Catalog, pk=pk, tenant=tenant, category='CUSTOMER')
+
+    msg, msg_is_error = '', False
+    if request.method == 'POST':
+        uname = request.POST.get('username', '').strip()
+        pwd   = request.POST.get('password', '').strip()
+        if not (uname and pwd):
+            msg, msg_is_error = 'Username and password are both required.', True
+        elif User.objects.filter(username=uname).exists():
+            # El nombre de usuario es unico en toda la plataforma, no por
+            # empresa: sin esta comprobacion el alta reventaria a mitad.
+            msg = (f'Username "{uname}" is already taken. Nothing was created '
+                   f'— pick a different username.')
+            msg_is_error = True
+        else:
+            with transaction.atomic():
+                u = User.objects.create_user(username=uname, password=pwd)
+                UserProfile.objects.create(
+                    user=u, tenant=tenant, role='customer', customer=cliente)
+            msg = (f'"{uname}" can now sign in as {cliente.name}. The password '
+                   f'is not stored anywhere — hand it over now.')
+
+    usuarios = (User.objects
+                .filter(profile__tenant=tenant, profile__customer=cliente,
+                        profile__role='customer')
+                .order_by('username'))
+
+    return render(request, 'warehouse/partials/customer_access.html', {
+        'cliente': cliente, 'usuarios': usuarios,
+        'msg': msg, 'msg_is_error': msg_is_error,
+    })
 
 
 @login_required
@@ -1815,80 +1877,13 @@ def user_management(request):
                 else:
                     msg = f'Username "{uname}" already exists.'
                     msg_is_error = True
-        elif action == 'create_customer':
-            # Alta del cliente nivel 2 en un solo paso: el Catalog CUSTOMER y el
-            # usuario que lo va a usar se crean juntos. Antes eran dos pantallas
-            # y era facil terminar con un usuario 'customer' sin cliente asignado,
-            # que es justo el caso que customer_ops_filter bloquea por completo.
-            cname  = request.POST.get('customer_name', '').strip()
-            uname  = request.POST.get('username', '').strip()
-            pwd    = request.POST.get('password', '').strip()
-
-            existing = Catalog.objects.filter(
-                tenant=tenant, category='CUSTOMER', active=True, name__iexact=cname).first()
-
-            if not (cname and uname and pwd):
-                msg = 'Customer name, username and password are all required.'
-                msg_is_error = True
-            elif existing:
-                msg = (f'Customer "{existing.name}" already exists. Use "Create New User" '
-                       f'above and link the new user to it. Nothing was created.')
-                msg_is_error = True
-            elif User.objects.filter(username=uname).exists():
-                msg = (f'Username "{uname}" is already taken. Nothing was created — '
-                       f'pick a different username.')
-                msg_is_error = True
-            else:
-                # Atomico a proposito: si algo falla a mitad, no queremos dejar el
-                # cliente sin usuario ni el usuario sin cliente.
-                with transaction.atomic():
-                    cat = Catalog.objects.create(
-                        tenant=tenant, category='CUSTOMER', name=cname,
-                        abbreviation=request.POST.get('abbreviation', '').strip().upper() or None,
-                        contact_email=request.POST.get('contact_email', '').strip() or None,
-                        phone=request.POST.get('phone', '').strip() or None,
-                        whatsapp=request.POST.get('whatsapp', '').strip() or None,
-                    )
-                    u = User.objects.create_user(username=uname, password=pwd)
-                    UserProfile.objects.create(
-                        user=u, tenant=tenant, role='customer',
-                        customer=cat,
-                    )
-                msg = (f'Customer "{cat.name}" created, with login "{uname}" '
-                       f'already linked to it. The password is not stored '
-                       f'anywhere — write it down or set a new one later.')
-        elif action == 'create_customer_user':
-            # La segunda persona de un cliente que ya existe.
-            #
-            # Sin este camino, sacar 'customer' del desplegable del alta de
-            # personal dejaria sin forma de darle acceso a nadie mas: el alta de
-            # cliente crea el cliente **y** su primer usuario, y se niega si el
-            # cliente ya esta. Aqui el rol no se elige -- es 'customer' siempre --
-            # y el cliente es obligatorio, que es lo unico que define a un
-            # usuario de cliente.
-            uname = request.POST.get('username', '').strip()
-            pwd   = request.POST.get('password', '').strip()
-            cid   = request.POST.get('customer_id', '').strip()
-            cat   = (Catalog.objects.filter(pk=int(cid), tenant=tenant,
-                                            category='CUSTOMER').first()
-                     if cid.isdigit() else None)
-
-            if not (uname and pwd and cat):
-                msg = 'Customer, username and password are all required.'
-                msg_is_error = True
-            elif User.objects.filter(username=uname).exists():
-                msg = (f'Username "{uname}" is already taken. Nothing was '
-                       f'created — pick a different username.')
-                msg_is_error = True
-            else:
-                with transaction.atomic():
-                    u = User.objects.create_user(username=uname, password=pwd)
-                    UserProfile.objects.create(
-                        user=u, tenant=tenant, role='customer', customer=cat)
-                msg = (f'User "{uname}" created for "{cat.name}". It will only '
-                       f'ever see the operations of that customer. The password is '
-                       f'not stored anywhere — write it down or set a new one later.')
-
+        # Aqui vivian 'create_customer' -- el cliente y su primer usuario a la
+        # vez -- y 'create_customer_user'. Las dos se mudaron a la ficha del
+        # cliente (`customer_access`): el cliente y su acceso son la misma
+        # decision, y tenerlos en dos pantallas era lo que producia las dos
+        # formas de quedarse a medias -- un usuario sin cliente, que no ve nada,
+        # y un cliente sin nadie que pueda entrar. La segunda ahora se ve en la
+        # propia lista de clientes, marcada, y se arregla desde alli.
         elif action == 'delete':
             uid = request.POST.get('user_id')
             u   = get_object_or_404(User, pk=uid, profile__tenant=tenant)
@@ -2017,6 +2012,11 @@ def mobile_dashboard(request):
         'customer_entries':    _catalog_entries(tenant, 'customers'),
         'can_edit_operational': profile.can_edit_catalog('SHIPPER'),
         'can_edit_customers':   profile.can_edit_catalog('CUSTOMER'),
+        # Repartir el acceso de un cliente va por el permiso de usuarios y no
+        # por el del catalogo: editar una ficha y dar una llave no son lo
+        # mismo. `_catalog_table_context` lo pone tambien, para cuando la tabla
+        # se repinta sola; aqui hace falta para la primera carga.
+        'puede_dar_acceso':     profile.can_manage_users(),
         'customers_json':    cat_json('CUSTOMER'),
         'shippers_json':     cat_json('SHIPPER'),
         'carriers_json':     cat_json('CARRIER'),

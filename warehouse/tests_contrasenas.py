@@ -67,13 +67,19 @@ class AltaDeUsuarioTests(TestCase):
 
         self.assertIn('not stored', respuesta.content.decode())
 
-    def test_el_alta_de_cliente_con_login_tampoco_la_guarda(self):
-        self.client.post('/users/', {
-            'action': 'create_customer', 'customer_name': 'ACME',
-            'username': 'acme_user', 'password': CLAVE})
+    def test_el_acceso_que_se_da_a_un_cliente_tampoco_la_guarda(self):
+        """
+        El acceso de un cliente se reparte desde su ficha desde que dejo de
+        haber dos caminos para lo mismo. La regla de la contrasena no cambia
+        porque cambie la pantalla: se asigna, no se consulta.
+        """
+        cliente = Catalog.objects.create(
+            tenant=self.tenant, category='CUSTOMER', name='ACME')
+        self.client.post(f'/catalog/{cliente.pk}/access/',
+                         {'username': 'acme_user', 'password': CLAVE})
 
         perfil = UserProfile.objects.get(user__username='acme_user')
-        self.assertEqual(perfil.customer, Catalog.objects.get(name='ACME'))
+        self.assertEqual(perfil.customer, cliente)
         self.assertNotIn(CLAVE, valores_guardados(perfil))
         self.assertTrue(self.client.login(username='acme_user', password=CLAVE))
 

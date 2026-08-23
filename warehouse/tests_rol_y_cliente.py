@@ -148,68 +148,8 @@ class PorQueImportaTests(RolYClienteBase):
         self.assertEqual(visibles.count(), 2)
 
 
-class UsuarioParaUnClienteQueYaExisteTests(RolYClienteBase):
-    """
-    El camino propio para dar acceso a otra persona de un cliente.
-
-    Existe porque el alta de personal dejo de ofrecer el rol 'customer': era el
-    desplegable que permitia crear usuarios "para un cliente" con rol de
-    operador. Sin este formulario, un cliente que necesita que entren dos
-    personas se quedaria sin manera de conseguirlo -- el alta de cliente crea el
-    cliente y su primer usuario a la vez, y se niega si el cliente ya existe.
-    """
-
-    def _anadir(self, username, customer_id):
-        return self.client.post('/users/', {
-            'action': 'create_customer_user', 'username': username,
-            'password': 'secreta', 'customer_id': customer_id,
-        })
-
-    def test_el_usuario_nace_como_cliente_y_con_su_cliente(self):
-        self._anadir('segunda_persona', str(self.cliente.pk))
-
-        perfil = UserProfile.objects.get(user__username='segunda_persona')
-        self.assertEqual(perfil.role, 'customer')
-        self.assertEqual(perfil.customer, self.cliente)
-        self.assertEqual(perfil.tenant, self.tenant)
-
-    def test_el_rol_no_se_puede_elegir_por_aqui(self):
-        """Aunque el formulario mande un rol, este camino solo fabrica clientes."""
-        self.client.post('/users/', {
-            'action': 'create_customer_user', 'username': 'listillo',
-            'password': 'secreta', 'customer_id': str(self.cliente.pk),
-            'role': 'admin',
-        })
-
-        perfil = UserProfile.objects.get(user__username='listillo')
-        self.assertEqual(perfil.role, 'customer')
-
-    def test_sin_cliente_no_se_crea_nada(self):
-        resp = self._anadir('suelto', '')
-
-        self.assertFalse(User.objects.filter(username='suelto').exists())
-        self.assertTrue(resp.context['msg_is_error'])
-
-    def test_no_vale_un_cliente_de_otra_empresa(self):
-        ajeno = Catalog.objects.create(
-            tenant=Tenant.objects.create(name='Otra', type='organization',
-                                         subdomain='otra'),
-            category='CUSTOMER', name='Cliente Ajeno')
-        resp = self._anadir('colado', str(ajeno.pk))
-
-        self.assertFalse(User.objects.filter(username='colado').exists())
-        self.assertTrue(resp.context['msg_is_error'])
-
-    def test_un_nombre_ya_tomado_no_pisa_al_usuario_que_hay(self):
-        """
-        El nombre de usuario es unico en toda la plataforma, no por empresa: si
-        esto no se comprobara, el alta reventaria a mitad.
-        """
-        resp = self._anadir('jefa', str(self.cliente.pk))
-
-        self.assertTrue(resp.context['msg_is_error'])
-        self.assertIn('already taken', resp.context['msg'])
-        self.assertEqual(UserProfile.objects.get(user=self.jefa).role, 'admin')
+# El alta de un usuario de cliente se mudo a la ficha del cliente y se prueba en
+# tests_customer_signup.py: el cliente y su acceso son la misma decision.
 
 
 class ElDesplegableDeRolesTests(RolYClienteBase):

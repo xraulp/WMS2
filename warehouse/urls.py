@@ -57,6 +57,9 @@ urlpatterns = [
     path('catalog/layout/', views.catalog_layout, name='catalog_layout'),
     path('catalog/<int:pk>/edit/', views.catalog_edit, name='catalog_edit'),
     path('catalog/<int:pk>/delete/', views.catalog_delete, name='catalog_delete'),
+    # Quien entra al sistema por parte de un cliente. Cuelga de la ficha del
+    # cliente porque es ahi donde se nota que no tiene a nadie.
+    path('catalog/<int:pk>/access/', views.customer_access, name='customer_access'),
     path('catalog/autocomplete/', views.catalog_autocomplete, name='catalog_autocomplete'),
     # Users
     path('users/', views.user_management, name='user_management'),

@@ -144,8 +144,21 @@ Los tres niveles no se crean por el mismo camino, y eso es deliberado.
 |---|---|---|
 | Usuario de plataforma | `create_platform_user` por línea de comandos, o `/platform/users/` | `admin` o `staff` de plataforma |
 | Personal de la empresa | Pestaña Users → *Create New User* | `admin`, `manager` o `staff` |
-| Primera persona de un cliente | Pestaña Users → *New Customer + Login* | `customer`, siempre |
-| Otra persona de ese cliente | Pestaña Users → *Otro usuario para un cliente que ya existe* | `customer`, siempre |
+| Cualquier persona de un cliente | Pestaña **Customers** → el botón de la columna de usuarios | `customer`, siempre |
+
+**El acceso de un cliente se reparte desde su propia ficha**, y no desde la
+pestaña Users. Durante un tiempo hubo dos caminos separados —crear la ficha en
+Customers, crear el usuario en Users— y de ahí salían las dos formas de quedarse
+a medias: un usuario `customer` sin cliente, que por *fail-closed* no ve nada, y
+un cliente sin nadie que pueda entrar.
+
+La primera ya es imposible: el rol y el cliente se ponen juntos y ninguno de los
+dos se elige a mano. La segunda **se ve**: el cliente aparece marcado «sin
+acceso» en su propia lista, y ese aviso es el botón que lo arregla.
+
+Dar acceso va por `can_manage_users()` y no por el permiso del catálogo:
+repartir una llave y editar una ficha no son la misma decisión, y la segunda la
+tiene más gente.
 
 **El rol `customer` ya no aparece en el desplegable del alta de personal.**
 Ofrecerlo junto a los demás fue lo que permitió el error que apareció en

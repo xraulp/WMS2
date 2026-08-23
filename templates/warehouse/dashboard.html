@@ -544,7 +544,7 @@ tbody td:has(.btn-action) {
     </form>
     {% endif %}
     <div class="tw" id="customer-table">
-      {% include 'warehouse/partials/catalog_table.html' with catalog_entries=customer_entries scope='customers' table_id='customer-table' can_edit=can_edit_customers %}
+      {% include 'warehouse/partials/catalog_table.html' with catalog_entries=customer_entries scope='customers' table_id='customer-table' can_edit=can_edit_customers puede_dar_acceso=puede_dar_acceso %}
     </div>
   </div>
 </div>
@@ -570,7 +570,35 @@ function openCatalogEdit(pk) {
 function closeCatalogEdit() {
   document.getElementById('cat-edit-modal').style.display = 'none';
 }
+function abrirAccesoDeCliente(pk, nombre) {
+  document.getElementById('cust-access-title').textContent = nombre;
+  htmx.ajax('GET', '/catalog/'+pk+'/access/', {target:'#cust-access-body', swap:'innerHTML'});
+  document.getElementById('cust-access-modal').style.display = 'flex';
+}
+function cerrarAccesoDeCliente() {
+  document.getElementById('cust-access-modal').style.display = 'none';
+  // La cuenta de usuarios de la tabla acaba de cambiar.
+  htmx.ajax('GET','{% url "catalog_list" %}?scope=customers',{target:'#customer-table',swap:'innerHTML'});
+}
 </script>
+
+{% comment %}
+Quien entra por parte de un cliente. Como el de edicion del catalogo, vive aqui
+una sola vez y no dentro del partial de la tabla: hay dos tablas en la pagina y
+un modal por partial duplicaria los mismos id.
+{% endcomment %}
+<div id="cust-access-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;align-items:center;justify-content:center"
+     onclick="if(event.target===this)cerrarAccesoDeCliente()">
+  <div style="background:#fff;border-radius:10px;padding:20px;max-width:520px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">
+        Acceso &mdash; <span id="cust-access-title"></span>
+      </span>
+      <button onclick="cerrarAccesoDeCliente()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748b">✕</button>
+    </div>
+    <div id="cust-access-body"></div>
+  </div>
+</div>
 
 
 <div class="panel" id="panel-digital">
