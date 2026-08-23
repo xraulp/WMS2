@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+</head>
+<body style="margin:0; padding:0; background:#f8fafc;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;">
+    <tr>
+      <td align="center" style="padding:20px;">
+        <table width="450" cellpadding="0" cellspacing="0" border="0"
+               style="width:450px; background:#fff; border-radius:12px; box-shadow:0 4px 24px rgba(0,0,0,.08);">
+          <tr>
+            <td style="padding:0;">
+
+              <div style="background:#C62034; padding:24px 28px; border-radius:12px 12px 0 0;">
+                <h1 style="color:#fff; font-size:18px; margin:0 0 3px;">{{ tenant_name }}</h1>
+                <p style="color:#fff; font-size:12px; margin:0;">Mensaje nuevo sobre una operación</p>
+                <span style="display:inline-block; padding:4px 14px; border-radius:99px; font-size:12px;
+                             font-weight:700; letter-spacing:.06em; margin-top:10px; color:#fff; background:#0ea5e9;">
+                  {{ operation.custom_id }}
+                </span>
+              </div>
+
+              <div style="padding:28px;">
+                <div style="font-size:14px; line-height:1.7; color:#334155; margin-bottom:18px;">
+                  <b>{{ de_quien }}</b> escribió en el expediente de la operación
+                  <b>{{ operation.custom_id }}</b>.
+                </div>
+
+                {% if extracto %}
+                <div style="border-left:3px solid #0ea5e9; background:#f8fafc; padding:12px 16px;
+                            border-radius:0 8px 8px 0; margin-bottom:20px;">
+                  {% if firma %}
+                  <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;
+                              letter-spacing:.06em; margin-bottom:6px;">{{ firma }}</div>
+                  {% endif %}
+                  <div style="font-size:13px; line-height:1.6; color:#0f172a; white-space:pre-wrap;">{{ extracto }}{% if recortado %}…{% endif %}</div>
+                </div>
+                {% endif %}
+
+                <div style="border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; margin-bottom:20px;">
+                  <div style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#fff;">
+                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Operación</div>
+                    <div style="color:#0f172a;"><b>{{ operation.custom_id }}</b></div>
+                  </div>
+                  <div style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
+                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Fecha</div>
+                    <div style="color:#0f172a;">{{ operation.date|date:"F j, Y" }}</div>
+                  </div>
+                  <div style="display:flex; padding:9px 14px; font-size:13px; background:#fff;">
+                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Cliente</div>
+                    <div style="color:#0f172a;"><b>{{ operation.get_customer_display }}</b></div>
+                  </div>
+                </div>
+
+                <div style="text-align:center; margin-bottom:8px;">
+                  <a href="{{ digital_url }}"
+                     style="display:inline-block; padding:10px 22px; background:#0ea5e9; color:#fff;
+                            border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">
+                    Responder en el expediente
+                  </a>
+                </div>
+
+                <div style="font-size:12px; line-height:1.6; color:#94a3b8; margin-top:18px; text-align:center;">
+                  Este aviso no se repite por cada mensaje. Abra el expediente para ver la conversación completa.
+                </div>
+              </div>
+
+              <div style="padding:16px 28px; background:#f8fafc; border-top:1px solid #e2e8f0;
+                          font-size:11px; color:#94a3b8; text-align:center;">
+                Mensaje automático del Sistema de Gestión de Almacenes de {{ tenant_name }} · {{ operation.custom_id }}
+              </div>
+
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{% comment %}
+Solo los mensajes. Es lo que devuelve el polling, y por eso va aparte del panel:
+si el refresco reemplazara tambien el formulario, borraria lo que el operador
+lleva escrito cada vez que se cumplen los diez segundos.
+{% endcomment %}
+{% if error %}
+<div style="background:#fee2e2;color:#991b1b;font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px">
+  {{ error }}
+</div>
+{% endif %}
+
+{% if mensajes %}
+  {% for m in mensajes %}
+  <div style="display:flex;margin-bottom:8px;{% if m.side == mi_lado %}justify-content:flex-end{% endif %}">
+    <div style="max-width:78%;padding:8px 11px;border-radius:10px;
+                {% if m.side == mi_lado %}background:#0ea5e9;color:#fff;border-bottom-right-radius:3px
+                {% else %}background:#f1f5f9;color:#0f172a;border-bottom-left-radius:3px{% endif %}">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+                  margin-bottom:3px;{% if m.side == mi_lado %}color:#e0f2fe{% else %}color:#64748b{% endif %}">
+        {{ m.author_name|default:"—" }}{% if m.es_del_cliente %} · Cliente{% endif %}
+      </div>
+      <div style="font-size:13px;line-height:1.5;white-space:pre-wrap">{{ m.body }}</div>
+      <div style="font-size:10px;margin-top:4px;{% if m.side == mi_lado %}color:#bae6fd{% else %}color:#94a3b8{% endif %}">
+        {{ m.created_at|date:"Y-m-d H:i" }}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div style="font-size:12px;color:#94a3b8;text-align:center;padding:14px 0">
+    Todavia no hay mensajes sobre esta operacion.
+  </div>
+{% endif %}

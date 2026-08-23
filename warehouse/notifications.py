@@ -10,13 +10,15 @@ mal queda un renglón en `NotificationLog`.
 """
 import functools
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from .models import Catalog, NotificationLog, UserProfile
+from .models import (Catalog, NotificationLog, UserProfile,
+                     LADO_TENANT, LADO_CLIENTE)
 from .utils import (datos_del_emisor, generar_pdf_factura,
                     generate_pdf_report, operation_digital_url)
 
@@ -31,6 +33,7 @@ EVENT_CREATED   = 'OPERATION_CREATED'
 EVENT_RELEASED  = 'GOODS_RELEASED'
 EVENT_DOCUMENTS = 'DOCUMENTS_ADDED'
 EVENT_MANUAL    = 'MANUAL'
+EVENT_MESSAGE   = 'CHAT_MESSAGE'
 
 # Estados
 SENT    = 'SENT'
@@ -539,3 +542,111 @@ def enviar_factura(factura, triggered_by=None):
     factura.enviada_el = timezone.now()
     factura.save(update_fields=['enviada_el'])
     return True, destino
+
+
+# ── EL HILO DE LA OPERACIÓN ───────────────────────────────────────────────────
+
+# Cuánto se calla el aviso después de haber avisado a ese lado. El correo es lo
+# que hace que el chat exista —nadie se queda mirando la pantalla esperando—,
+# pero un correo por mensaje convierte una conversación de diez líneas en diez
+# correos y a la tercera vez el destinatario deja de abrirlos. Con esta espera
+# se avisa del primer mensaje y se callan los siguientes mientras la
+# conversación sigue viva; cuando se enfría, el siguiente mensaje vuelve a
+# avisar.
+AVISO_ESPERA = timedelta(minutes=15)
+
+# Cuánto del mensaje se copia en el correo. Lo suficiente para saber si hay que
+# atenderlo ahora; el resto se lee en el expediente, que es donde vive.
+AVISO_EXTRACTO = 300
+
+
+def correos_del_tenant(tenant):
+    """
+    A quién se avisa dentro de la empresa cuando escribe un cliente.
+
+    A todos los operadores activos que tengan correo, no solo a los
+    administradores: del lado de la empresa contesta quien esté en el turno, y
+    dirigir el aviso a una sola persona es la forma de que un mensaje se quede
+    esperando a que esa persona vuelva de vacaciones. Funciona como un buzón
+    compartido, y por eso importa la espera de `AVISO_ESPERA`.
+    """
+    if not tenant:
+        return []
+
+    correos, vistos = [], set()
+    perfiles = UserProfile.objects.filter(
+        tenant=tenant, user__is_active=True
+    ).exclude(role='customer').select_related('user')
+    for perfil in perfiles:
+        if not perfil.is_operator():
+            continue
+        addr = (perfil.user.email or '').strip()
+        if addr and addr.lower() not in vistos:
+            vistos.add(addr.lower())
+            correos.append(addr)
+    return correos
+
+
+def _hay_que_avisar(conversation, campo, ahora):
+    """Si toca avisar a ese lado o si todavía está dentro de la espera."""
+    ultimo = getattr(conversation, campo, None)
+    return not ultimo or (ahora - ultimo) >= AVISO_ESPERA
+
+
+@_never_breaks(lambda e: (False, str(e)))
+def avisar_mensaje_nuevo(conversation, lado, mensaje=None, triggered_by=None):
+    """
+    Avisa al otro lado de que hay un mensaje nuevo en el hilo.
+
+    `lado` es de quién viene el mensaje, así que el aviso va al contrario: lo
+    que escribe el cliente lo reciben los operadores de la empresa, y lo que
+    escribe la empresa lo recibe el cliente por los mismos correos a los que ya
+    se le mandan los avisos de sus operaciones.
+
+    Cuando la espera todavía no se cumplió no se manda nada, pero **sí queda el
+    renglón** en la bitácora con el motivo. Es a propósito: la pregunta que se
+    le hace a esa pantalla es «¿por qué no me avisaron?», y un silencio sin
+    registro no la responde.
+
+    Devuelve `(enviado, error)`, igual que el resto de avisos.
+    """
+    operation = conversation.operation
+    customer  = resolve_customer(operation)
+    ahora     = timezone.now()
+
+    if lado == LADO_CLIENTE:
+        destinatarios = correos_del_tenant(operation.tenant)
+        campo         = 'avisado_al_tenant_at'
+        quien         = customer.name if customer else operation.get_customer_display()
+    else:
+        destinatarios = email_recipients(customer)
+        campo         = 'avisado_al_cliente_at'
+        quien         = operation.tenant.name if operation.tenant else 'WMS'
+
+    subject = f"Mensaje nuevo | {build_subject(operation)}"
+
+    if not _hay_que_avisar(conversation, campo, ahora):
+        log_notification(operation, customer, EMAIL, EVENT_MESSAGE, SKIPPED,
+                         recipient=', '.join(destinatarios), subject=subject,
+                         detail='aviso_reciente', triggered_by=triggered_by)
+        return False, 'aviso_reciente'
+
+    cuerpo = render_to_string('warehouse/email/chat_email.html', {
+        'operation':   operation,
+        'tenant_name': operation.tenant.name if operation.tenant else 'WMS',
+        'de_quien':    quien,
+        'extracto':    (mensaje.body[:AVISO_EXTRACTO] if mensaje else ''),
+        'recortado':   bool(mensaje and len(mensaje.body) > AVISO_EXTRACTO),
+        'firma':       mensaje.author_name if mensaje else '',
+        'digital_url': operation_digital_url(operation, '/dashboard/'),
+    })
+
+    enviado, error = _deliver_email(
+        operation, customer, EVENT_MESSAGE, destinatarios, subject, cuerpo,
+        triggered_by=triggered_by)
+
+    if enviado:
+        setattr(conversation, campo, ahora)
+        conversation.save(update_fields=[campo])
+
+    return enviado, error

@@ -1184,6 +1184,8 @@ class NotificationLog(models.Model):
         # que se le manda a la empresa. Va en la misma bitacora porque la
         # pregunta que se responde es la misma -- "¿le llego o no?".
         ('INVOICE_SENT',      'Factura enviada'),
+        # El aviso de que hay un mensaje nuevo en el hilo de una operacion.
+        ('CHAT_MESSAGE',      'Mensaje en el hilo'),
     ]
     STATUS_CHOICES = [
         ('SENT',    'Enviada'),
@@ -1314,3 +1316,149 @@ class PlatformUser(models.Model):
 
     def is_platform_admin(self):
         return self.role == 'admin'
+
+
+# ── EL HILO DE LA OPERACION ──────────────────────────────────────────────────
+#
+# De que lado escribe cada quien. No es "quien es el usuario" sino "en nombre de
+# quien habla": del lado del tenant contesta el del turno, no siempre la misma
+# persona, y del lado del cliente puede escribir cualquiera de las personas que
+# ese cliente tenga dadas de alta. Por eso el hilo cuelga de la operacion y no
+# de una pareja de usuarios.
+LADO_TENANT   = 'TENANT'
+LADO_CLIENTE  = 'CUSTOMER'
+LADO_CHOICES  = [
+    (LADO_TENANT,  'Empresa'),
+    (LADO_CLIENTE, 'Cliente'),
+]
+
+
+class Conversation(models.Model):
+    """
+    El hilo de mensajes de una operacion, entre la empresa y su cliente.
+
+    Existe uno por operacion y se crea la primera vez que alguien escribe: una
+    operacion sin conversacion es lo normal, no una fila que falte.
+
+    Lo que se conversa sobre una operacion -"manden la foto de la etiqueta",
+    "el pedimento va con este numero", "ya llego mi carga"- es hoy informacion
+    que vive en el WhatsApp de alguien y que el turno siguiente no encuentra.
+    Colgar el hilo de la operacion es lo que la convierte en parte del
+    expediente: queda junto a las fotos y los documentos, y la lee quien tome
+    el caso manana.
+
+    No hay hilos internos. Todo lo que se escribe aqui lo ve el cliente, y esa
+    regla tiene que seguir siendo evidente para quien escribe. El dia que hagan
+    falta notas internas seran mensajes marcados y pintados aparte, no un
+    silencio que haya que recordar.
+    """
+    tenant     = models.ForeignKey('Tenant', on_delete=models.CASCADE,
+                                   related_name='conversations')
+    operation  = models.OneToOneField(WarehouseOperation, on_delete=models.CASCADE,
+                                      related_name='conversation')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Cuando entro el ultimo mensaje. Se guarda en vez de deducirse porque lo
+    # que lo pide es ordenar la lista de hilos y marcar los que tienen algo
+    # nuevo, y eso se consulta mucho mas de lo que se escribe.
+    last_message_at = models.DateTimeField(null=True, blank=True)
+
+    # Cuando se aviso por ultima vez a cada lado. El aviso por correo es lo que
+    # hace que el chat exista -nadie se queda mirando la pantalla- pero un
+    # correo por mensaje convierte una conversacion de diez lineas en diez
+    # correos, y a la tercera vez el destinatario deja de abrirlos. Con estas
+    # dos fechas se avisa del primer mensaje y se callan los siguientes
+    # mientras la conversacion sigue viva; ver AVISO_ESPERA en notifications.
+    avisado_al_tenant_at  = models.DateTimeField(null=True, blank=True)
+    avisado_al_cliente_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Conversacion"
+        verbose_name_plural = "Conversaciones"
+        ordering = ['-last_message_at', '-created_at']
+
+    def __str__(self):
+        return f"Hilo de {self.operation.custom_id}"
+
+    def sin_leer_para(self, user):
+        """
+        Cuantos mensajes tiene esta conversacion que ese usuario no ha visto.
+
+        Los propios nunca cuentan: uno no tiene mensajes sin leer de si mismo.
+        Quien nunca abrio el hilo los tiene todos sin leer, que es lo que hace
+        que el primer mensaje de un cliente nuevo se vea.
+        """
+        pendientes = self.messages.exclude(author_id=user.pk)
+        marca = self.reads.filter(user=user).first()
+        if marca and marca.last_read_at:
+            pendientes = pendientes.filter(created_at__gt=marca.last_read_at)
+        return pendientes.count()
+
+    def marcar_leida(self, user, cuando=None):
+        """Deja constancia de que ese usuario vio el hilo hasta este momento."""
+        ConversationRead.objects.update_or_create(
+            conversation=self, user=user,
+            defaults={'last_read_at': cuando or timezone.now()},
+        )
+
+
+class Message(models.Model):
+    """
+    Un mensaje del hilo. No se edita y no se borra.
+
+    Esa es la diferencia entre un chat y una nota: lo que se dijo sobre una
+    operacion forma parte de su historia, y de el pueden colgar decisiones -un
+    numero de pedimento, una instruccion de despacho- que despues alguien tiene
+    que poder consultar tal como se escribieron.
+    """
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE,
+                                     related_name='messages')
+    author       = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                     blank=True, related_name='mensajes_enviados')
+
+    # El nombre queda congelado en el mensaje, igual que el monto en la
+    # factura: si manana se da de baja a quien escribio, el hilo tiene que
+    # seguir diciendo quien dijo cada cosa.
+    author_name  = models.CharField(max_length=150, blank=True)
+
+    side         = models.CharField(max_length=10, choices=LADO_CHOICES)
+    body         = models.TextField()
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Mensaje"
+        verbose_name_plural = "Mensajes"
+        # El orden de una conversacion es su contenido. `pk` desempata los
+        # mensajes que caen en el mismo instante.
+        ordering = ['created_at', 'pk']
+        indexes = [models.Index(fields=['conversation', 'created_at'])]
+
+    def __str__(self):
+        return f"{self.author_name}: {self.body[:40]}"
+
+    @property
+    def es_del_cliente(self):
+        return self.side == LADO_CLIENTE
+
+
+class ConversationRead(models.Model):
+    """
+    Hasta donde ha leido cada persona.
+
+    Es por usuario y no por lado: del lado de la empresa hay varias personas
+    que ven el mismo hilo, y que lo haya abierto una no significa que las demas
+    ya se enteraron.
+    """
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE,
+                                     related_name='reads')
+    user         = models.ForeignKey(User, on_delete=models.CASCADE,
+                                     related_name='hilos_leidos')
+    last_read_at = models.DateTimeField()
+
+    class Meta:
+        verbose_name = "Marca de lectura"
+        verbose_name_plural = "Marcas de lectura"
+        unique_together = [('conversation', 'user')]
+
+    def __str__(self):
+        return f"{self.user.username} leyo {self.conversation_id} hasta {self.last_read_at}"

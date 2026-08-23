@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django.db.models import Q, Count, Sum, Max
+from django.db.models import Q, Count, Sum, Max, F, OuterRef, Subquery
 from django.db import connection, transaction
 from io import BytesIO
 from datetime import date, timedelta
@@ -20,7 +20,9 @@ import os, json, zipfile, re, logging
 from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
                      DeletionLog, DocumentSequence, Tenant, Subscription,
                      NotificationLog, PlatformUser, PLATFORM_ROLE_CHOICES,
-                     CATALOG_SCOPES, catalog_scope_of, Invoice)
+                     CATALOG_SCOPES, catalog_scope_of, Invoice,
+                     Conversation, ConversationRead, Message,
+                     LADO_TENANT, LADO_CLIENTE)
 from .utils import generate_pdf_report, generate_label_pdf, generar_pdf_factura
 from .almacen import url_firmada
 from . import notifications
@@ -187,7 +189,7 @@ def dashboard(request):
             for e in Catalog.objects.filter(category=category, active=True, tenant=tenant).order_by('name')
         ])
 
-    ops = customer_ops_filter(request.user, ops)[:200]
+    ops = anotar_hilos(request.user, customer_ops_filter(request.user, ops)[:200])
 
     context = {
         'operations': ops,
@@ -236,7 +238,7 @@ def operations_by_user(request, user_id):
         'customer', 'shipper', 'carrier', 'bundle_type', 'created_by')[:200]
 
     return render(request, 'warehouse/partials/operations_table.html', {
-        'operations': ops,
+        'operations': anotar_hilos(request.user, ops),
         'is_home': profile.is_home(),
         'profile': profile,
         'filter_user': target_user.username,
@@ -455,6 +457,12 @@ def operation_detail(request, pk):
         'email_subject':  _build_subject(op),
         'is_home':        is_home(request.user),
         'profile':        get_profile(request.user),
+        # De que lado del hilo habla quien mira, y si esta operacion tiene con
+        # quien conversar. Una operacion cuyo cliente se capturo a mano y no
+        # esta en el catalogo no tiene usuarios del otro lado, asi que no se
+        # ofrece el hilo en vez de ofrecer uno que nadie leeria.
+        'mi_lado':        lado_en_el_hilo(request.user),
+        'hay_con_quien':  notifications.resolve_customer(op) is not None,
     })
 
 
@@ -828,7 +836,8 @@ def operations_search(request):
         ops_list = [o for o in ops_list if o.status == status_filter]
     profile = get_profile(request.user)
     return render(request, 'warehouse/partials/operations_table.html',
-                  {'operations': ops_list[:200], 'search_query': q,
+                  {'operations': anotar_hilos(request.user, ops_list[:200]),
+                   'search_query': q,
                    'is_home': is_home(request.user), 'profile': profile})
 
 
@@ -2953,3 +2962,169 @@ def platform_dashboard(request):
         'tiene_empresa': UserProfile.objects.filter(
             user=request.user, tenant__isnull=False).exists(),
     })
+
+
+# ── EL HILO DE LA OPERACION ───────────────────────────────────────────────────
+
+# Lo mas largo que se acepta en un mensaje. No es una regla de negocio, es un
+# tope para que un pegado accidental no llene la pantalla ni la base.
+MENSAJE_MAX = 4000
+
+
+def lado_en_el_hilo(user):
+    """
+    En nombre de quien habla este usuario, o None si no le toca hablar.
+
+    No es "quien eres" sino "de que lado escribes": del lado de la empresa
+    contesta el operador del turno, sea staff o administrador, y del lado del
+    cliente cualquiera de las personas que ese cliente tenga dadas de alta.
+    Quien no tiene rol -el perfil vacio que devuelve get_profile- no escribe.
+    """
+    profile = get_profile(user)
+    if profile.is_customer():
+        return LADO_CLIENTE
+    if profile.is_operator():
+        return LADO_TENANT
+    return None
+
+
+def anotar_hilos(user, operaciones):
+    """
+    Le cuelga a cada operacion del listado si tiene hilo y cuantos mensajes
+    sin leer le quedan a quien mira.
+
+    Va en dos consultas y no en una por fila a proposito: el listado trae hasta
+    doscientas operaciones, y preguntarle a cada una serian cuatrocientas
+    consultas para pintar una tabla.
+
+    Devuelve la lista ya anotada. El indicador es lo que hace que el hilo
+    exista de verdad: sin el, un mensaje del cliente solo se descubre abriendo
+    la operacion que a nadie se le ocurre abrir.
+    """
+    ops = list(operaciones)
+    if not ops:
+        return ops
+
+    ids = [op.pk for op in ops]
+    con_hilo = set(Conversation.objects.filter(operation_id__in=ids)
+                   .values_list('operation_id', flat=True))
+
+    # Hasta donde leyo *este* usuario cada hilo. Sin marca, todo lo del otro
+    # lado cuenta como nuevo, que es lo que hace visible el primer mensaje.
+    leido_hasta = ConversationRead.objects.filter(
+        conversation=OuterRef('conversation'), user=user).values('last_read_at')[:1]
+    pendientes = (Message.objects
+                  .filter(conversation__operation_id__in=ids)
+                  .exclude(author_id=user.pk)
+                  .annotate(leido_hasta=Subquery(leido_hasta))
+                  .filter(Q(leido_hasta__isnull=True) |
+                          Q(created_at__gt=F('leido_hasta')))
+                  .values('conversation__operation_id')
+                  .annotate(n=Count('pk')))
+    conteo = {fila['conversation__operation_id']: fila['n'] for fila in pendientes}
+
+    for op in ops:
+        op.tiene_hilo = op.pk in con_hilo
+        op.sin_leer = conteo.get(op.pk, 0)
+    return ops
+
+
+def _operacion_del_hilo(request, pk):
+    """
+    La operacion cuyo hilo se pide, comprobando que quien lo pide pueda verla.
+
+    Devuelve (operacion, respuesta_de_error). Es el mismo criterio que
+    `operation_detail` -el tenant del request y, si mira un cliente, solo sus
+    operaciones-, porque quien puede abrir el expediente puede leer lo que se
+    conversa sobre el, y quien no, no.
+    """
+    tenant = get_tenant_or_404(request)
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
+    if not customer_can_access_op(request.user, op):
+        return None, HttpResponse('Permission denied.', status=403)
+    if lado_en_el_hilo(request.user) is None:
+        return None, HttpResponse('Permission denied.', status=403)
+    return op, None
+
+
+def _pintar_hilo(request, op, error=''):
+    """
+    El hilo tal como se ve, y de paso lo da por leido.
+
+    Marcar la lectura aqui y no en una llamada aparte es lo correcto: esta
+    vista es la que refresca el panel cada pocos segundos mientras alguien lo
+    tiene abierto, asi que pedirla *es* estar mirandolo. Cuando el panel se
+    cierra deja de pedirse y lo que llegue despues vuelve a contar como nuevo.
+    """
+    hilo = getattr(op, 'conversation', None)
+    mensajes = []
+    if hilo:
+        mensajes = list(hilo.messages.select_related('author'))
+        hilo.marcar_leida(request.user)
+    return render(request, 'warehouse/partials/chat_messages.html', {
+        'operation': op,
+        'mensajes': mensajes,
+        'mi_lado': lado_en_el_hilo(request.user),
+        'error': error,
+    })
+
+
+@login_required
+def operation_chat(request, pk):
+    """El hilo de una operacion. La pide el panel al abrirse y cada refresco."""
+    op, negado = _operacion_del_hilo(request, pk)
+    if negado:
+        return negado
+    return _pintar_hilo(request, op)
+
+
+@login_required
+@require_POST
+def operation_chat_send(request, pk):
+    """
+    Escribe un mensaje en el hilo.
+
+    El hilo se crea aqui, con el primer mensaje: una operacion sobre la que
+    nadie ha dicho nada no necesita una fila esperando por si acaso.
+    """
+    op, negado = _operacion_del_hilo(request, pk)
+    if negado:
+        return negado
+
+    cuerpo = (request.POST.get('body') or '').strip()
+    if not cuerpo:
+        return _pintar_hilo(request, op, error='Escribe un mensaje.')
+    if len(cuerpo) > MENSAJE_MAX:
+        return _pintar_hilo(request, op,
+                            error=f'El mensaje no puede pasar de {MENSAJE_MAX} caracteres.')
+
+    lado = lado_en_el_hilo(request.user)
+    hilo, _ = Conversation.objects.get_or_create(
+        operation=op, defaults={'tenant': op.tenant})
+
+    ahora = timezone.now()
+    mensaje = Message.objects.create(
+        conversation=hilo,
+        author=request.user,
+        author_name=_nombre_visible(request.user),
+        side=lado,
+        body=cuerpo,
+    )
+    hilo.last_message_at = ahora
+    hilo.save(update_fields=['last_message_at'])
+
+    # Quien escribe ya leyo todo lo anterior, incluido lo que acaba de mandar.
+    hilo.marcar_leida(request.user, ahora)
+
+    notifications.avisar_mensaje_nuevo(hilo, lado, mensaje=mensaje,
+                                       triggered_by=request.user)
+
+    return _pintar_hilo(request, op)
+
+
+def _nombre_visible(user):
+    """
+    Como se firma un mensaje. El nombre completo si lo hay, y si no el usuario.
+    """
+    completo = (user.get_full_name() or '').strip()
+    return completo or user.username

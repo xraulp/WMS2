@@ -104,6 +104,20 @@
           <td style="white-space:nowrap;">
             <div style="display:flex; gap:4px; align-items:center;">
               <button class="btn-action" onclick="openModal('{% url 'operation_detail' op.pk %}')">View</button>
+              {% comment %}
+              El hilo de la operacion. Se pinta en ambar con el numero cuando
+              hay mensajes que quien mira no ha visto, y en gris cuando el hilo
+              existe y esta al dia. Sin hilo no se pinta nada: lo que llama la
+              atencion tiene que ser lo que la merece.
+              {% endcomment %}
+              {% if op.sin_leer %}
+              <button class="btn-action" title="{{ op.sin_leer }} mensaje(s) sin leer"
+                      style="border-color:#f59e0b;color:#b45309;background:#fffbeb;font-weight:700"
+                      onclick="openModal('{% url 'operation_detail' op.pk %}')">💬 {{ op.sin_leer }}</button>
+              {% elif op.tiene_hilo %}
+              <button class="btn-action" title="Conversacion al dia"
+                      onclick="openModal('{% url 'operation_detail' op.pk %}')">💬</button>
+              {% endif %}
               <button class="btn-action" onclick="openEditModal({{ op.pk }})">Edit</button>
               <a class="btn-action" href="{% url 'operation_pdf' op.pk %}" target="_blank">PDF</a>
               <button class="btn-action" onclick="openDigitalWithId('{{ op.custom_id }}')">📱 Digital</button> <!-- agregado 061026-->

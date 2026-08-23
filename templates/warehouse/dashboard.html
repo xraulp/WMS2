@@ -1014,7 +1014,14 @@ function onAfterCustSave(e){
 
 function openModal(url){document.getElementById('modal').classList.add('on');htmx.ajax('GET',url,{target:'#modal-body',swap:'innerHTML'});}
 function openEditModal(pk){openModal('/operations/'+pk+'/edit/');}
-function closeModal(){document.getElementById('modal').classList.remove('on');}
+function closeModal(){
+  document.getElementById('modal').classList.remove('on');
+  // Vaciar el modal y no solo ocultarlo. El panel del hilo se refresca solo
+  // cada diez segundos mientras esta en el DOM: si al cerrar se queda escondido
+  // pero vivo, sigue pidiendo el hilo para siempre y dandolo por leido, asi que
+  // el aviso de la tabla no volveria a encenderse nunca.
+  document.getElementById('modal-body').innerHTML = '';
+}
 
 // Nueva versión de initActiveTab que respeta la URL//////// 061526
 // function initActiveTab() {
