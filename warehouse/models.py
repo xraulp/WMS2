@@ -577,6 +577,29 @@ def ruta_documento(instance, filename):
     )
 
 
+def ruta_logo(instance, filename):
+    """
+    Donde se guarda el logo de una empresa.
+
+    Mismo criterio que `ruta_documento`, y por las mismas razones: la empresa
+    delante para que se vea de quien es al mirar el bucket, y un identificador
+    aleatorio para que dos empresas que suban `logo.png` no colisionen y para
+    que cambiar el logo no deje el anterior sirviendose desde una ruta que
+    alguien tuviera cacheada.
+    """
+    empresa = slugify(getattr(instance, 'subdomain', '') or '')[:40] or 'sin-empresa'
+
+    base, punto, extension = os.path.basename(filename or '').rpartition('.')
+    if not punto:
+        base, extension = extension, ''
+    nombre = slugify(base)[:LARGO_NOMBRE_EN_RUTA] or 'logo'
+    extension = re.sub(r'[^A-Za-z0-9]', '', extension).lower()[:10]
+    if extension:
+        nombre = f'{nombre}.{extension}'
+
+    return f'logos/{empresa}/{uuid.uuid4().hex[:12]}-{nombre}'
+
+
 class DocumentosVivosManager(models.Manager):
     """
     Los documentos que siguen en el expediente.
@@ -801,6 +824,20 @@ class Tenant(models.Model):
     
     # Facturación (solo para organizations)
     billing_email = models.EmailField(blank=True, null=True, verbose_name="Email de Facturación")
+
+    # El logo que sale en los documentos que la empresa manda a sus clientes:
+    # reportes, etiquetas y lo que va adjunto en los correos.
+    #
+    # Estaba escrito en el codigo -- un unico archivo del repositorio, el de la
+    # primera empresa -- asi que cualquier otra empresa firmaba sus reportes con
+    # el logo ajeno. Es el mismo vicio que el nombre escrito a mano en la
+    # pantalla de entrada, y mas visible, porque una imagen no se lee por
+    # encima: se ve.
+    #
+    # Sin logo, los documentos caen al nombre de la empresa en texto, que es lo
+    # que ya hacian cuando el archivo no estaba.
+    logo = models.ImageField(upload_to=ruta_logo, max_length=255, blank=True,
+                             null=True, verbose_name="Logo")
     plan = models.CharField(
         max_length=50, 
         default='starter',

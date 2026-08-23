@@ -9,9 +9,12 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from io import BytesIO
+import logging
 import os
 
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 def tenant_public_url(tenant=None):
@@ -89,6 +92,34 @@ EXIT_BG   = colors.HexColor('#fee2e2')
 # REPORT PDF  —  Full operation report (sent by email)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def logo_de(tenant, ancho=1.0*inch, alto=0.6*inch):
+    """
+    El logo de una empresa como imagen de reportlab, o None si no tiene.
+
+    Antes cada documento cargaba un archivo escrito en el codigo: el reporte de
+    operacion, uno del repositorio -- el logo de la primera empresa, que asi
+    firmaba los reportes de todas --, y el reporte de operaciones, una ruta
+    absoluta de otra maquina (`/home/rdeluna/...`) que en produccion no existe,
+    de modo que ese PDF nunca llevo logo y nadie se entero porque el error se
+    lo tragaba un `except` mudo.
+
+    Ahora sale del tenant y se lee del almacen. Nunca lanza: un logo que no se
+    puede cargar no puede impedir que salga un reporte, y quien lo mira
+    entiende igual un documento sin logo que uno que no llega.
+    """
+    archivo = getattr(tenant, 'logo', None)
+    if not archivo or not getattr(archivo, 'name', ''):
+        return None
+    try:
+        with archivo.open('rb') as contenido:
+            datos = BytesIO(contenido.read())
+        return Image(datos, width=ancho, height=alto)
+    except Exception as e:
+        logger.warning('No se pudo cargar el logo de %s: %s',
+                       getattr(tenant, 'name', '—'), e)
+        return None
+
+
 def generate_pdf_report(operation):
     """Full A4 report: header, all operation fields, attached files list."""
     buffer = BytesIO()
@@ -126,10 +157,9 @@ def generate_pdf_report(operation):
     type_label = operation.get_operation_type_display().upper()
 
 
-    logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'media', 'Untitled-3.jpg')
+    logo_img = logo_de(operation.tenant)
 
-    if os.path.exists(logo_path):
-        logo_img = Image(logo_path, width=1.0*inch, height=0.6*inch)
+    if logo_img is not None:
         # Logo centrado verticalmente con espaciadores
         logo_cell = Table([
             [Spacer(1, -0.08*inch)],
@@ -625,7 +655,11 @@ ENTRY_COL = colors.HexColor('#008000')  # verde para ENTRY (si lo usas)
 EXIT_COL  = colors.HexColor('#FF0000')  # rojo para EXIT ef4444
 
 # aqui copeo el nuevo codigo def generate_operations_report_pdf
-def generate_operations_report_pdf(operations, title='Operations Report'):
+def generate_operations_report_pdf(operations, title='Operations Report',
+                                   tenant=None):
+    """El tenant decide el logo. Si no se pasa, se toma el de la primera
+    operacion de la lista: todas son del mismo, porque las vistas ya filtran
+    por empresa antes de llegar aqui."""
     from reportlab.platypus import Image  # importación necesaria para el logo
     buffer = BytesIO()
     import sys
@@ -648,29 +682,37 @@ def generate_operations_report_pdf(operations, title='Operations Report'):
     def S(name, **kw):
         return ParagraphStyle(name, parent=SS['Normal'], **kw)
 
+    if tenant is None and operations:
+        tenant = getattr(operations[0], 'tenant', None)
+
 
 
     # --- Logo (izquierda) ---
-    logo_path = '/home/rdeluna/DYSWMS/media/Untitled-3.jpg'
-    logo = None
-    try:
-        logo = Image(logo_path, width=1.0*inch, height=0.7*inch)
-    except:
-        pass
+    # Salia de una ruta absoluta de otra maquina, asi que en produccion este
+    # reporte nunca llevo logo: el archivo no existia y el `except` mudo lo
+    # tapaba. Ahora es el de la empresa de las operaciones que se listan.
+    logo = logo_de(tenant, ancho=1.0*inch, alto=0.7*inch)
 
     page_width = landscape(letter)[0]
     available_width = page_width - doc.leftMargin - doc.rightMargin
-    logo_width = 1.0*inch
+    logo_width = 1.3*inch
 
-    # Ajuste fino para centrar el título sobre el subtítulo
-    shift = -2.00 * inch   # ← cámbialo según necesites
-    logo_width += shift
-    title_width = available_width - logo_width
+    # El titulo se centra respecto a la pagina, y para eso la fila lleva una
+    # tercera columna vacia del ancho del logo: es el mismo patron que la
+    # cabecera del reporte de operacion.
+    #
+    # Antes habia aqui un "ajuste fino" que le restaba dos pulgadas al ancho del
+    # logo. Como el ancho era una, la columna quedaba en menos una pulgada y
+    # reportlab lanza al calcular la tabla. Nunca se vio porque esta rama no
+    # llego a ejecutarse jamas: el logo se cargaba de una ruta de otra maquina,
+    # asi que `logo` siempre era None y el reporte salia por el `else`.
+    title_width = available_width - (logo_width * 2)
 
     if logo:
         title_para = Paragraph(title, S('title', fontName='Helvetica-Bold', fontSize=16,
                                         textColor=DARK, alignment=1))
-        header_table = Table([[logo, title_para]], colWidths=[logo_width, title_width])
+        header_table = Table([[logo, title_para, '']],
+                             colWidths=[logo_width, title_width, logo_width])
         header_table.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('ALIGN', (0,0), (0,0), 'LEFT'),
@@ -692,7 +734,8 @@ def generate_operations_report_pdf(operations, title='Operations Report'):
     subtitle_para = Paragraph(subtitle_text, S('sub', fontName='Helvetica', fontSize=9,
                                                textColor=MID, alignment=1))
     if logo:
-        subtitle_table = Table([['', subtitle_para]], colWidths=[logo_width, title_width])
+        subtitle_table = Table([['', subtitle_para, '']],
+                               colWidths=[logo_width, title_width, logo_width])
         subtitle_table.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('ALIGN', (1,0), (1,0), 'CENTER'),

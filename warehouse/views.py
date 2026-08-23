@@ -2444,6 +2444,54 @@ def _sin_permiso_de_plataforma(user, solo_admin=False):
 
 
 
+# Formatos que reportlab sabe dibujar en un PDF y que un navegador enseña. El
+# SVG queda fuera a proposito: reportlab no lo pinta sin una libreria aparte, y
+# aceptarlo aqui daria un logo que se ve en la pantalla y desaparece en el
+# documento, que es donde hace falta.
+FORMATOS_DE_LOGO = ('.png', '.jpg', '.jpeg', '.gif')
+
+# Tope del archivo. Un logo es una imagen pequeña; lo que llega de mas suele ser
+# una foto sin recortar, y acaba en cada PDF que la empresa manda.
+MAX_LOGO_MB = 2
+
+
+def _guardar_logo(tenant, archivo):
+    """
+    Guarda el logo de una empresa. Devuelve el error, o cadena vacia si fue bien.
+
+    Devuelve el problema en vez de lanzarlo porque el alta de una empresa no
+    puede fallar entera por el logo: si la imagen no sirve, la empresa queda
+    creada -- con su administrador y su suscripcion -- y lo que se avisa es que
+    el logo no se puso.
+    """
+    if archivo is None:
+        return ''
+
+    nombre = (archivo.name or '').lower()
+    if not nombre.endswith(FORMATOS_DE_LOGO):
+        return (f'El logo no se guardo: tiene que ser '
+                f'{", ".join(FORMATOS_DE_LOGO)}.')
+    if archivo.size > MAX_LOGO_MB * 1024 * 1024:
+        return f'El logo no se guardo: pasa de {MAX_LOGO_MB} MB.'
+
+    anterior = tenant.logo.name if tenant.logo else ''
+    try:
+        tenant.logo = archivo
+        tenant.save(update_fields=['logo'])
+    except Exception as e:
+        logger.warning('No se pudo guardar el logo de %s: %s', tenant.name, e)
+        return 'El logo no se guardo: el almacen no respondio.'
+
+    # El anterior deja de estar referenciado por nadie: si se queda, el bucket
+    # acumula un logo por cada cambio y ninguno se puede distinguir del vivo.
+    if anterior and anterior != tenant.logo.name:
+        try:
+            tenant.logo.storage.delete(anterior)
+        except Exception as e:
+            logger.warning('Quedo un logo huerfano en %s: %s', anterior, e)
+    return ''
+
+
 @login_required
 def platform_tenant_list(request):
     negado = _sin_permiso_de_plataforma(request.user)
@@ -2482,8 +2530,16 @@ def platform_tenant_list(request):
                     name=name, type='organization', subdomain=subdomain,
                     is_active=True, plan=plan, billing_email=billing_email or None,
                 )
+                # El logo sale en los reportes y etiquetas que la empresa manda
+                # a sus clientes. Es opcional: sin el, los documentos llevan su
+                # nombre en texto.
+                error_logo = _guardar_logo(tenant, request.FILES.get('logo'))
                 Subscription.objects.create(tenant=tenant, plan=plan)
                 msg = f'Tenant "{name}" created (subdomain: {subdomain}).'
+                # El aviso del logo va detras del de creacion y no delante: la
+                # empresa quedo creada, que es lo primero que hay que leer.
+                if error_logo:
+                    msg += ' ' + error_logo
 
                 if admin_username and admin_password:
                     admin_user = User.objects.create_user(username=admin_username, password=admin_password)
@@ -2492,6 +2548,19 @@ def platform_tenant_list(request):
                     )
                     msg += (f' Admin user "{admin_username}" created for this tenant. '
                             f'Its password is not stored anywhere — hand it over now.')
+
+        elif action == 'set_logo':
+            t = get_object_or_404(Tenant, pk=request.POST.get('tenant_id'))
+            archivo = request.FILES.get('logo')
+            if archivo is None and request.POST.get('quitar') == '1':
+                if t.logo:
+                    t.logo.delete(save=False)
+                t.logo = None
+                t.save(update_fields=['logo'])
+                msg = f'Se quito el logo de "{t.name}".'
+            else:
+                error_logo = _guardar_logo(t, archivo)
+                msg = error_logo or f'Logo de "{t.name}" actualizado.'
 
         elif action == 'toggle_active':
             tid = request.POST.get('tenant_id')
