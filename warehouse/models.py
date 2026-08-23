@@ -1042,6 +1042,11 @@ class Invoice(models.Model):
     cancelada_el     = models.DateField(null=True, blank=True, verbose_name="Cancelada el")
     motivo_de_cancelacion = models.TextField(blank=True, verbose_name="Motivo de cancelación")
 
+    # Cuando se le mando al cliente, si es que se le mando. No es lo mismo que
+    # emitida: una factura puede existir en el sistema y no haber salido nunca,
+    # y esa diferencia es justo la que hay que ver antes de reclamar un pago.
+    enviada_el = models.DateTimeField(null=True, blank=True, verbose_name="Enviada el")
+
     notas      = models.TextField(blank=True, verbose_name="Notas")
     emitida_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
                                     blank=True, related_name='facturas_emitidas')
@@ -1138,6 +1143,10 @@ class NotificationLog(models.Model):
         ('GOODS_RELEASED',    'Mercancía liberada'),
         ('DOCUMENTS_ADDED',   'Documentos agregados'),
         ('MANUAL',            'Envío manual'),
+        # Este no sale de una operacion sino de la plataforma: es la factura
+        # que se le manda a la empresa. Va en la misma bitacora porque la
+        # pregunta que se responde es la misma -- "¿le llego o no?".
+        ('INVOICE_SENT',      'Factura enviada'),
     ]
     STATUS_CHOICES = [
         ('SENT',    'Enviada'),

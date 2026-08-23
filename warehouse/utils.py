@@ -807,3 +807,220 @@ def generate_operations_report_pdf(operations, title='Operations Report'):
 
 # aqui termina el nuevo codigo def generate_operations_report_pdf
 
+# ── FACTURA DE LA PLATAFORMA ─────────────────────────────────────────────────
+
+def datos_del_emisor():
+    """
+    Quien factura, para la cabecera del PDF.
+
+    Sale de la configuracion y no del codigo por la misma razon por la que el
+    nombre de la empresa dejo de estar escrito a mano en la pantalla de
+    entrada: quien opera esta plataforma puede no ser quien la escribio. Sin
+    configurar nada sale un nombre neutro, que es preferible a inventar uno.
+
+    Se pone en el entorno:
+
+        PLATFORM_BILLING_NAME="RDL Systems LLC"
+        PLATFORM_BILLING_EMAIL="billing@ejemplo.com"
+        PLATFORM_BILLING_ADDRESS="1234 Example St, Laredo TX"
+    """
+    return {
+        'nombre':    getattr(settings, 'PLATFORM_BILLING_NAME', '') or 'WMS Platform',
+        'email':     getattr(settings, 'PLATFORM_BILLING_EMAIL', '') or '',
+        'direccion': getattr(settings, 'PLATFORM_BILLING_ADDRESS', '') or '',
+    }
+
+
+def sello_de_estado(factura):
+    """
+    El renglon de estado que va impreso en el PDF: (texto, fondo, letra).
+
+    Sale aparte del dibujo por dos razones. La primera es que se pueda
+    comprobar sin abrir el PDF: una prueba que solo mire que el archivo empieza
+    por %PDF no distingue un documento correcto de uno que le dice "pendiente"
+    al cliente de algo que ya pago. La segunda es que esto no es decoracion --
+    el mismo PDF se adjunta al emitir y se vuelve a descargar meses despues, y
+    lo que dice aqui tiene que ser lo de hoy, no lo del dia que se emitio.
+    """
+    if factura.estado == factura.PAGADA:
+        texto = 'PAID · {}'.format(factura.pagada_el.strftime('%Y-%m-%d'))
+        if factura.referencia_de_pago:
+            texto += ' · {}'.format(factura.referencia_de_pago)
+        return texto, colors.HexColor('#dcfce7'), colors.HexColor('#166534')
+
+    if factura.estado == factura.CANCELADA:
+        return 'CANCELLED', colors.HexColor('#f1f5f9'), colors.HexColor('#64748b')
+
+    # El orden de las tres guardas de arriba es lo que impide que una pagada
+    # fuera de plazo salga marcada como vencida: para cuando se llega aqui, ya
+    # se sabe que sigue pendiente. `esta_vencida` lo comprueba igual por su
+    # cuenta, asi que son dos redes y no una.
+    if factura.esta_vencida:
+        return ('OVERDUE · {} day(s) past due'.format(factura.dias_de_atraso),
+                colors.HexColor('#fee2e2'), colors.HexColor('#991b1b'))
+
+    return ('PENDING · due {}'.format(factura.vence_el.strftime('%Y-%m-%d')),
+            colors.HexColor('#e0f2fe'), colors.HexColor('#075985'))
+
+
+def generar_pdf_factura(factura):
+    """
+    El PDF de una factura de la plataforma, listo para adjuntar o descargar.
+
+    Es un documento de cobro, asi que lleva lo que hace falta para reclamarlo y
+    para casarlo con un pago: quien cobra, a quien, que periodo cubre, cuanto y
+    para cuando. El estado va impreso -pagada, vencida o pendiente- porque el
+    mismo PDF se manda al emitir y se vuelve a descargar despues, y lo peor que
+    puede hacer es decir "pendiente" de algo que ya se cobro.
+    """
+    emisor = datos_del_emisor()
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter,
+        rightMargin=0.75*inch, leftMargin=0.75*inch,
+        topMargin=0.75*inch, bottomMargin=0.75*inch,
+        title=factura.numero,
+    )
+
+    base = getSampleStyleSheet()['Normal']
+
+    def style(name, **kw):
+        return ParagraphStyle(name, parent=base, **kw)
+
+    S = {
+        'emisor':   style('em', fontName='Helvetica-Bold', fontSize=15,
+                          textColor=colors.HexColor('#0f172a')),
+        'pequeno':  style('pq', fontName='Helvetica', fontSize=8.5,
+                          textColor=colors.HexColor('#64748b'), leading=12),
+        'titulo':   style('ti', fontName='Helvetica-Bold', fontSize=22,
+                          textColor=colors.HexColor('#0f172a'), alignment=TA_RIGHT),
+        'numero':   style('nu', fontName='Helvetica-Bold', fontSize=11,
+                          textColor=colors.HexColor('#0ea5e9'), alignment=TA_RIGHT),
+        'etiqueta': style('et', fontName='Helvetica-Bold', fontSize=7.5,
+                          textColor=colors.HexColor('#94a3b8')),
+        'valor':    style('va', fontName='Helvetica', fontSize=10,
+                          textColor=colors.HexColor('#0f172a')),
+        'pie':      style('pi', fontName='Helvetica', fontSize=7.5,
+                          textColor=colors.HexColor('#94a3b8'), alignment=TA_CENTER),
+    }
+
+    story = []
+
+    # ── Cabecera: quien cobra, y que documento es esto
+    izquierda = [Paragraph(emisor['nombre'], S['emisor'])]
+    detalle = [d for d in (emisor['direccion'], emisor['email']) if d]
+    if detalle:
+        izquierda.append(Spacer(1, 3))
+        izquierda.append(Paragraph('<br/>'.join(detalle), S['pequeno']))
+
+    cabecera = Table(
+        [[izquierda,
+          [Paragraph('INVOICE', S['titulo']), Paragraph(factura.numero, S['numero'])]]],
+        colWidths=[3.6*inch, 3.4*inch])
+    cabecera.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    story += [cabecera, Spacer(1, 6),
+              HRFlowable(width='100%', thickness=1,
+                         color=colors.HexColor('#e2e8f0')),
+              Spacer(1, 14)]
+
+    # ── A quien se cobra y las fechas que importan
+    def bloque(etiqueta, valor):
+        return [Paragraph(etiqueta.upper(), S['etiqueta']),
+                Spacer(1, 2),
+                Paragraph(valor or '—', S['valor'])]
+
+    empresa = [Paragraph('BILL TO', S['etiqueta']), Spacer(1, 2),
+               Paragraph(factura.tenant.name, S['valor'])]
+    if factura.tenant.billing_email:
+        empresa += [Spacer(1, 2),
+                    Paragraph(factura.tenant.billing_email, S['pequeno'])]
+
+    fechas = Table([
+        [Paragraph('ISSUED', S['etiqueta']), Paragraph('DUE', S['etiqueta'])],
+        [Paragraph(factura.emitida_el.strftime('%Y-%m-%d'), S['valor']),
+         Paragraph(factura.vence_el.strftime('%Y-%m-%d'), S['valor'])],
+    ], colWidths=[1.7*inch, 1.7*inch])
+    fechas.setStyle(TableStyle([
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 2),
+    ]))
+
+    story += [Table([[empresa, fechas]], colWidths=[3.6*inch, 3.4*inch],
+                    style=TableStyle([
+                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ])),
+              Spacer(1, 18)]
+
+    # ── El concepto. Una sola linea: un periodo de servicio.
+    periodo = '{} → {}'.format(factura.periodo_inicio.strftime('%Y-%m-%d'),
+                               factura.periodo_fin.strftime('%Y-%m-%d'))
+    concepto = 'Warehouse Management System — service period'
+    if factura.plan:
+        concepto += ' ({} plan)'.format(factura.plan)
+
+    detalle = Table([
+        ['DESCRIPTION', 'PERIOD', 'AMOUNT USD'],
+        [Paragraph(concepto, S['valor']),
+         Paragraph(periodo, S['pequeno']),
+         Paragraph('{:,.2f}'.format(factura.monto_usd), S['valor'])],
+    ], colWidths=[3.6*inch, 1.9*inch, 1.5*inch])
+    detalle.setStyle(TableStyle([
+        ('FONTNAME',   (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE',   (0, 0), (-1, 0), 7.5),
+        ('TEXTCOLOR',  (0, 0), (-1, 0), colors.HexColor('#94a3b8')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f8fafc')),
+        ('ALIGN',      (2, 0), (2, -1), 'RIGHT'),
+        ('VALIGN',     (0, 0), (-1, -1), 'TOP'),
+        ('LINEBELOW',  (0, 0), (-1, 0), 0.5, colors.HexColor('#e2e8f0')),
+        ('LINEBELOW',  (0, 1), (-1, 1), 0.5, colors.HexColor('#e2e8f0')),
+        ('TOPPADDING',    (0, 0), (-1, -1), 7),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+    ]))
+    story += [detalle, Spacer(1, 10)]
+
+    # ── El total, que es lo que se busca al abrir el documento
+    total = Table([['TOTAL', '{:,.2f} USD'.format(factura.monto_usd)]],
+                  colWidths=[5.5*inch, 1.5*inch])
+    total.setStyle(TableStyle([
+        ('FONTNAME',  (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE',  (0, 0), (0, 0), 9),
+        ('FONTSIZE',  (1, 0), (1, 0), 13),
+        ('TEXTCOLOR', (0, 0), (0, 0), colors.HexColor('#64748b')),
+        ('ALIGN',     (0, 0), (-1, -1), 'RIGHT'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    story += [total, Spacer(1, 16)]
+
+    # ── Estado, tal como esta hoy.
+    texto, fondo, letra = sello_de_estado(factura)
+
+    sello = Table([[Paragraph(texto, style('se', fontName='Helvetica-Bold',
+                                           fontSize=9, textColor=letra))]],
+                  colWidths=[7.0*inch])
+    sello.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), fondo),
+        ('TOPPADDING', (0, 0), (-1, -1), 7),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+    ]))
+    story += [sello]
+
+    if factura.notas:
+        story += [Spacer(1, 14), Paragraph('NOTES', S['etiqueta']), Spacer(1, 3),
+                  Paragraph(factura.notas, S['pequeno'])]
+
+    story += [Spacer(1, 26),
+              HRFlowable(width='100%', thickness=0.5,
+                         color=colors.HexColor('#e2e8f0')),
+              Spacer(1, 6),
+              Paragraph('{} · {}'.format(factura.numero, emisor['nombre']), S['pie'])]
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()

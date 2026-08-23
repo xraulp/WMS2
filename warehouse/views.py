@@ -21,7 +21,7 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
                      DeletionLog, DocumentSequence, Tenant, Subscription,
                      NotificationLog, PlatformUser, PLATFORM_ROLE_CHOICES,
                      CATALOG_SCOPES, catalog_scope_of, Invoice)
-from .utils import generate_pdf_report, generate_label_pdf
+from .utils import generate_pdf_report, generate_label_pdf, generar_pdf_factura
 from .almacen import url_firmada
 from . import notifications
 
@@ -2624,6 +2624,16 @@ def _accion_de_facturacion(request):
             return '', str(e)
         return f'{factura.numero} marcada como pagada.', ''
 
+    if accion == 'enviar':
+        factura = get_object_or_404(Invoice, pk=request.POST.get('invoice_id'))
+        if factura.estado == Invoice.CANCELADA:
+            return '', 'Una factura cancelada no se le manda a nadie.'
+        enviado, detalle = notifications.enviar_factura(
+            factura, triggered_by=request.user)
+        if not enviado:
+            return '', detalle
+        return f'{factura.numero} enviada a {detalle}.', ''
+
     if accion == 'cancelar':
         factura = get_object_or_404(Invoice, pk=request.POST.get('invoice_id'))
         motivo = (request.POST.get('motivo') or '').strip()
@@ -2744,6 +2754,32 @@ def _resumen_de_facturacion():
         'cobrado_total':   total(pagadas),    'cobrado_cuenta':   pagadas.count(),
         'anio': hoy.year,
     }
+
+
+@login_required
+@require_GET
+def platform_invoice_pdf(request, pk):
+    """
+    El PDF de una factura, para descargarlo o reenviarlo por otro camino.
+
+    Lo alcanzan los dos niveles de plataforma: el soporte no emite ni cobra,
+    pero atiende al cliente que dice no haber recibido nada, y para eso tiene
+    que poder abrir el documento del que se habla.
+
+    Se genera al vuelo y no se guarda. Una factura ya no cambia despues de
+    emitida -- monto y plan quedan congelados -- asi que el PDF de hoy y el de
+    dentro de un año son el mismo documento, salvo el sello de estado, que es
+    precisamente lo que interesa que este al dia.
+    """
+    negado = _sin_permiso_de_plataforma(request.user)
+    if negado:
+        return negado
+
+    factura = get_object_or_404(Invoice.objects.select_related('tenant'), pk=pk)
+    respuesta = HttpResponse(generar_pdf_factura(factura),
+                             content_type='application/pdf')
+    respuesta['Content-Disposition'] = f'inline; filename="{factura.numero}.pdf"'
+    return respuesta
 
 
 @login_required

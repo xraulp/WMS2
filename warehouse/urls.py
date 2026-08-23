@@ -58,6 +58,7 @@ urlpatterns = [
     path('platform/tenants/', views.platform_tenant_list, name='platform_tenant_list'),
     path('platform/notifications/', views.platform_notifications, name='platform_notifications'),
     path('platform/invoices/', views.platform_invoices, name='platform_invoices'),
+    path('platform/invoices/<int:pk>/pdf/', views.platform_invoice_pdf, name='platform_invoice_pdf'),
     path('platform/users/', views.platform_users, name='platform_users'),
     # Debug
     path('debug/catalog/', views.debug_catalog, name='debug_catalog'),

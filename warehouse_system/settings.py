@@ -226,6 +226,18 @@ STORAGES = {
 #     python manage.py check_r2
 
 # ====================================================
+# FACTURACIÓN DE LA PLATAFORMA
+# ====================================================
+# Quién factura, para la cabecera del PDF de las facturas. Vive en el entorno y
+# no en el código por la misma razón por la que el nombre de la empresa dejó de
+# estar escrito a mano en la pantalla de entrada: quien opera esta plataforma
+# puede no ser quien la escribió. Sin configurar nada sale un nombre neutro, que
+# es preferible a inventar uno.
+PLATFORM_BILLING_NAME = os.environ.get('PLATFORM_BILLING_NAME', '')
+PLATFORM_BILLING_EMAIL = os.environ.get('PLATFORM_BILLING_EMAIL', '')
+PLATFORM_BILLING_ADDRESS = os.environ.get('PLATFORM_BILLING_ADDRESS', '')
+
+# ====================================================
 # CONFIGURACIÓN DE EMAIL
 # ====================================================
 # Render bloquea la salida SMTP (puertos 25, 465 y 587) en los servicios web del

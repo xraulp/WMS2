@@ -1,0 +1,68 @@
+{% comment %}
+El correo con el que la plataforma le manda una factura a una empresa.
+
+Sobrio a propósito: lo que importa va en el PDF adjunto, y el cuerpo solo tiene
+que decir de qué se trata, cuánto y para cuándo, de modo que se entienda en la
+vista previa del móvil sin abrir nada.
+{% endcomment %}
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 0">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0"
+             style="width:560px;max-width:94%;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+
+        <tr>
+          <td style="padding:20px 28px;background:#0f172a;color:#ffffff">
+            <div style="font-size:16px;font-weight:600">{{ emisor.nombre }}</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:2px">Invoice {{ factura.numero }}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 28px">
+            <p style="margin:0 0 16px;font-size:14px;color:#0f172a">
+              Hello {{ factura.tenant.name }},
+            </p>
+            <p style="margin:0 0 18px;font-size:14px;color:#334155;line-height:1.5">
+              Please find attached invoice <strong>{{ factura.numero }}</strong> for the
+              service period {{ factura.periodo_inicio|date:"Y-m-d" }} to
+              {{ factura.periodo_fin|date:"Y-m-d" }}.
+            </p>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                   style="border:1px solid #e2e8f0;border-radius:8px">
+              <tr>
+                <td style="padding:12px 14px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b">Amount due</td>
+                <td style="padding:12px 14px;border-bottom:1px solid #f1f5f9;font-size:16px;font-weight:600;color:#0f172a;text-align:right">
+                  {{ factura.monto_usd }} USD
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 14px;font-size:12px;color:#64748b">Due date</td>
+                <td style="padding:12px 14px;font-size:14px;color:#0f172a;text-align:right">
+                  {{ factura.vence_el|date:"Y-m-d" }}
+                </td>
+              </tr>
+            </table>
+
+            {% if factura.notas %}
+            <p style="margin:16px 0 0;font-size:12px;color:#64748b;line-height:1.5">{{ factura.notas }}</p>
+            {% endif %}
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:14px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center">
+            {{ emisor.nombre }}{% if emisor.email %} · {{ emisor.email }}{% endif %}
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

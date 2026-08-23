@@ -137,8 +137,24 @@ comprobar el rol en cada POST.
         {% else %}
           <span class="badge b-sent">Pending</span>
         {% endif %}
+        {% comment %}
+          Emitida y enviada no son lo mismo: una factura puede llevar semanas en
+          el sistema sin haber salido nunca, y eso hay que verlo antes de
+          reclamar un pago.
+        {% endcomment %}
+        {% if f.estado != 'cancelada' and not f.enviada_el %}
+          <div style="font-size:10px;color:#b45309">not sent</div>
+        {% endif %}
       </td>
       <td style="white-space:nowrap;text-align:right">
+        <a href="{% url 'platform_invoice_pdf' f.pk %}" target="_blank" class="btn btn-sm btn-g"
+           style="text-decoration:none">PDF</a>
+        {% if is_platform_admin and f.estado != 'cancelada' %}
+        <button class="btn btn-sm btn-g" onclick="enviarFactura({{ f.pk }}, '{{ f.numero|escapejs }}')"
+                title="{% if f.enviada_el %}Sent {{ f.enviada_el|date:'Y-m-d H:i' }}{% else %}Not sent yet{% endif %}">
+          {% if f.enviada_el %}Resend{% else %}Send{% endif %}
+        </button>
+        {% endif %}
         {% if is_platform_admin and f.estado == 'pendiente' %}
         <button class="btn btn-sm btn-g" onclick="cobrarFactura({{ f.pk }}, '{{ f.numero|escapejs }}')">Mark paid</button>
         <button class="btn btn-sm btn-d" onclick="cancelarFactura({{ f.pk }}, '{{ f.numero|escapejs }}')">Cancel</button>
@@ -179,6 +195,11 @@ function cobrarFactura(id, numero) {
   const ref = prompt('Payment reference for ' + numero + ' (optional):', '');
   if (ref === null) return;
   _enviarAccionFactura('pagar', id, ref, '');
+}
+
+function enviarFactura(id, numero) {
+  if (!confirm('Email ' + numero + ' to the company billing address?')) return;
+  _enviarAccionFactura('enviar', id, '', '');
 }
 
 function cancelarFactura(id, numero) {

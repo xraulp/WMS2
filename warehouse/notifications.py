@@ -17,7 +17,8 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from .models import Catalog, NotificationLog, UserProfile
-from .utils import generate_pdf_report, operation_digital_url
+from .utils import (datos_del_emisor, generar_pdf_factura,
+                    generate_pdf_report, operation_digital_url)
 
 logger = logging.getLogger(__name__)
 
@@ -148,14 +149,20 @@ def _never_breaks(default):
 # ── BITÁCORA ──────────────────────────────────────────────────────────────────
 
 def log_notification(operation, customer, channel, event, status,
-                     recipient='', subject='', detail='', triggered_by=None):
+                     recipient='', subject='', detail='', triggered_by=None,
+                     tenant=None):
     """
     Deja constancia de un envío. Nunca propaga: una bitácora rota no puede
     impedir que se registre la operación que la originó.
+
+    `tenant` se pasa a mano en lo que no nace de una operación —hoy, la factura
+    que la plataforma le manda a una empresa—. Sin él, ese renglón quedaría sin
+    empresa y no se podría filtrar en la bitácora de envíos, que es para lo que
+    se mira.
     """
     try:
         return NotificationLog.objects.create(
-            tenant=getattr(operation, 'tenant', None) if operation else None,
+            tenant=(getattr(operation, 'tenant', None) if operation else None) or tenant,
             operation=operation,
             operation_custom_id=(operation.custom_id or '') if operation else '',
             customer=customer,
@@ -482,3 +489,53 @@ def mark_email_sent(operation):
     operation.email_sent = True
     operation.email_sent_at = timezone.now()
     operation.save(update_fields=['email_sent', 'email_sent_at'])
+
+
+# ── FACTURACIÓN DE LA PLATAFORMA ──────────────────────────────────────────────
+
+def enviar_factura(factura, triggered_by=None):
+    """
+    Manda la factura al correo de facturación de la empresa, con el PDF adjunto.
+
+    Devuelve (enviado, motivo). El motivo es lo que se le enseña a quien pulsó
+    el botón, así que dice qué falta en vez de "error".
+
+    Queda registrado en la misma bitácora de envíos que los avisos a clientes.
+    Es de otro nivel —lo manda la plataforma, no una empresa— pero la pregunta
+    que se le hace a esa pantalla es la misma: «¿le llegó o no?». Tener dos
+    sitios donde mirar es lo que hace que nadie mire en ninguno.
+    """
+    destino = (factura.tenant.billing_email or '').strip()
+    if not destino:
+        log_notification(None, None, EMAIL, 'INVOICE_SENT', SKIPPED,
+                         subject=factura.numero, detail='no_billing_email',
+                         triggered_by=triggered_by, tenant=factura.tenant)
+        return False, ('%s no tiene correo de facturación. Se pone al crear la '
+                       'empresa o en su ficha.' % factura.tenant.name)
+
+    asunto = 'Invoice %s · %s' % (factura.numero, factura.tenant.name)
+    cuerpo = render_to_string('warehouse/email/invoice_email.html', {
+        'factura': factura,
+        'emisor': datos_del_emisor(),
+    })
+
+    try:
+        correo = EmailMessage(subject=asunto, body=cuerpo, to=[destino])
+        correo.content_subtype = 'html'
+        correo.attach('%s.pdf' % factura.numero,
+                      generar_pdf_factura(factura), 'application/pdf')
+        correo.send()
+    except Exception as e:
+        log_notification(None, None, EMAIL, 'INVOICE_SENT', FAILED,
+                         recipient=destino, subject=asunto, detail=str(e),
+                         triggered_by=triggered_by, tenant=factura.tenant)
+        logger.warning('Fallo el envio de la factura %s: %s', factura.numero, e)
+        return False, 'No se pudo enviar: %s' % e
+
+    log_notification(None, None, EMAIL, 'INVOICE_SENT', SENT,
+                     recipient=destino, subject=asunto,
+                     triggered_by=triggered_by, tenant=factura.tenant)
+
+    factura.enviada_el = timezone.now()
+    factura.save(update_fields=['enviada_el'])
+    return True, destino

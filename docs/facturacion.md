@@ -96,11 +96,54 @@ cliente recibe dos cobros por lo mismo —, así que la pantalla avisa y no lo h
 salvo que se confirme marcando la casilla. Una factura **cancelada** no cuenta
 para ese aviso: si se canceló, ese mes sigue sin cobrarse.
 
+## El PDF y el envío
+
+Cada factura tiene su PDF, que se genera al vuelo y no se guarda en ningún
+sitio: una factura ya no cambia después de emitida —monto y plan quedan
+congelados— así que el PDF de hoy y el de dentro de un año son el mismo
+documento. Con una excepción deliberada: **el sello de estado dice lo de hoy**.
+El mismo PDF se adjunta al emitir y se vuelve a descargar meses después, y lo
+peor que puede hacer es seguir diciendo «pendiente» de algo que ya se cobró.
+Por eso ese sello vive en `sello_de_estado()`, aparte del dibujo: para poder
+comprobarlo sin abrir el PDF.
+
+El botón **Send** manda la factura al correo de facturación de la empresa
+(`billing_email`), con el PDF adjunto y un cuerpo sobrio que dice cuánto y para
+cuándo. Si la empresa no tiene ese correo, no se manda y el mensaje dice
+exactamente eso, en vez de «error».
+
+**Emitida y enviada no son lo mismo**, y la pantalla las distingue: una factura
+sin salir lleva un «not sent» en amarillo. Una factura puede llevar semanas en
+el sistema sin que el cliente sepa nada, y eso hay que verlo antes de reclamar
+un pago. Una vez enviada, el botón pasa a decir **Resend** y su fecha de envío
+sale al pasar el ratón por encima.
+
+Cada intento queda en la **bitácora de envíos**, la misma pantalla donde se mira
+si a un cliente le llegan los correos de sus operaciones —incluidos los que no
+salieron, con el motivo—. Es de otro nivel, pero la pregunta que se le hace a
+esa pantalla es la misma: «¿le llegó o no?». Tener dos sitios donde mirar es lo
+que hace que nadie mire en ninguno.
+
+El PDF lo pueden **descargar los dos niveles**, soporte incluido: quien atiende
+al cliente que dice no haber recibido nada tiene que poder abrir el documento
+del que se habla. Mandarlo sigue siendo del administrador.
+
+### Quién factura, en la cabecera del PDF
+
+Sale de tres variables de entorno, no del código —el mismo criterio por el que
+el nombre de la empresa dejó de estar escrito a mano en la pantalla de entrada—:
+
+```
+PLATFORM_BILLING_NAME="RDL Systems LLC"
+PLATFORM_BILLING_EMAIL="billing@ejemplo.com"
+PLATFORM_BILLING_ADDRESS="1234 Example St, Laredo TX"
+```
+
+Sin configurarlas, la cabecera dice `WMS Platform`. Es un nombre neutro y a
+propósito: preferible a inventar uno que acabe impreso en un documento de cobro.
+
 ## Lo que todavía no hace
 
-- **No genera un PDF de la factura** ni la manda por correo. Hoy es un registro
-  interno de cobro: sirve para saber quién debe, no para entregarle un documento
-  al cliente.
 - **No calcula el monto.** Se captura a mano. Las métricas de uso
   (`operations_count`, `storage_used_gb` en `Subscription`) están ahí y nadie
   las mira todavía.
@@ -108,6 +151,10 @@ para ese aviso: si se canceló, ese mes sigue sin cobrarse.
   cancelar.
 - **No hay impuestos**: un solo importe. Lo fiscal vive en el sistema contable.
 - **No avisa de los vencimientos.** El resumen los muestra en rojo cuando se
-  abre la pantalla; nadie recibe un correo.
+  abre la pantalla y el PDF lo dice al abrirlo; nadie recibe un correo
+  automático.
+- **No hay recordatorio ni reenvío programado.** Reenviar es un botón que
+  alguien pulsa.
 
-Cubierto por `warehouse/tests_facturacion.py`.
+Cubierto por `warehouse/tests_facturacion.py` y
+`warehouse/tests_factura_pdf.py`.
