@@ -113,6 +113,34 @@ que comprueba la vista. El staff sube archivos pero no los borra.
       </div>
       <div style="font-size:9px;color:#94a3b8">{{ doc.uploaded_at|date:"Y-m-d" }}</div>
       <div style="font-size:8px;color:#ef4444;font-family:monospace;">ID: {{ doc.pk }}</div>
+      {% comment %}
+        La posición dentro del expediente. Va a la vista porque es el número con
+        el que sale en el ZIP -- ahí es el consecutivo del nombre --, y quien
+        ordena tiene que poder comprobar que quedó como queria sin descargarlo.
+      {% endcomment %}
+      <div style="font-size:9px;color:#64748b;font-family:'IBM Plex Mono',monospace">#{{ forloop.counter }}</div>
+    </div>
+    {% comment %}
+      Reordenar. El orden de las fotos es información: en una entrada se
+      fotografía la misma pieza varias veces -la serie o el lote, el peso, la
+      tabla nutrimental- y la documentación aduanal se arma siguiendo esa
+      secuencia. Cuando las fotos se suben en bloque desde la PC, el navegador
+      las manda como le parece y la secuencia llega mal.
+
+      De una en una y no arrastrando: esta pantalla se usa sobre todo desde el
+      móvil, y así funciona igual en los dos sitios.
+    {% endcomment %}
+    <div style="display:flex;border-top:1px solid #e2e8f0">
+      <button hx-post="{% url 'digital_reorder' doc.pk %}" hx-vals='{"direccion":"arriba"}'
+              hx-target="#digital-content" hx-swap="innerHTML"
+              hx-include="[name=csrfmiddlewaretoken]"
+              title="Move earlier" {% if forloop.first %}disabled{% endif %}
+              style="flex:1;padding:3px;font-size:11px;background:none;border:none;cursor:pointer;color:{% if forloop.first %}#cbd5e1{% else %}#64748b{% endif %}">◀</button>
+      <button hx-post="{% url 'digital_reorder' doc.pk %}" hx-vals='{"direccion":"abajo"}'
+              hx-target="#digital-content" hx-swap="innerHTML"
+              hx-include="[name=csrfmiddlewaretoken]"
+              title="Move later" {% if forloop.last %}disabled{% endif %}
+              style="flex:1;padding:3px;font-size:11px;background:none;border:none;border-left:1px solid #e2e8f0;cursor:pointer;color:{% if forloop.last %}#cbd5e1{% else %}#64748b{% endif %}">▶</button>
     </div>
     <div style="display:flex;border-top:1px solid #e2e8f0">
       <a href="{% url 'document_file' doc.pk %}?download=1" target="_blank"

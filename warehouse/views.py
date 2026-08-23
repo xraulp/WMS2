@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django.db.models import Q, Count, Sum
+from django.db.models import Q, Count, Sum, Max
 from django.db import connection, transaction
 from io import BytesIO
 from datetime import date, timedelta
@@ -597,7 +597,12 @@ def operation_download_all(request, pk):
     # El orden va explicito ademas del `ordering` del modelo: es el que decide
     # la numeracion de los archivos dentro del ZIP, y eso no debe depender de
     # que nadie toque el Meta mas adelante.
-    docs = op.documents.order_by('uploaded_at', 'pk')
+    #
+    # `orden` va primero y no se puede omitir: es la posicion puesta a mano
+    # desde el panel, y sin ella el ZIP entregaria las fotos como se subieron
+    # aunque alguien las hubiera reordenado -- que es justo para lo que se
+    # reordenan. Este orden explicito ya se comio esa equivocacion una vez.
+    docs = op.documents.order_by('orden', 'uploaded_at', 'pk')
 
     if not docs.exists():
         return HttpResponse('No files attached.', status=404)
@@ -985,6 +990,15 @@ def digital_upload(request, pk):
     consecutivos = _reservar_consecutivos(tenant, today_str, len(archivos))
 
     uploaded = []
+    # Las posiciones arrancan donde acaba lo que ya hay: un archivo nuevo va al
+    # final del expediente, no al principio.
+    #
+    # Que cada uno de la misma tanda avance una posicion no llega a notarse:
+    # con todos en la misma, el desempate por fecha de subida los deja en el
+    # mismo sitio. Se hace igual porque dos archivos en la posicion 5 es una
+    # mentira que alguien acabara leyendo, y porque asi el orden no depende de
+    # una segunda regla.
+    posicion = _siguiente_orden(op)
     for f, consecutive in zip(archivos, consecutivos):
         digital_name = f'{today_str}-{consecutive}'
         ext = f.name.rsplit('.',1)[-1].lower() if '.' in f.name else ''
@@ -997,7 +1011,8 @@ def digital_upload(request, pk):
             tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 4.2. digital_upload Al crear el documento, asignar tenant: 072526 19:55
             operation=op, file_type=ftype, file=f,
             original_name=f.name, digital_name=digital_name,
-            uploaded_by=request.user)
+            uploaded_by=request.user, orden=posicion)
+        posicion += 1
         uploaded.append(doc)
 
     profile = get_profile(request.user)
@@ -1010,6 +1025,84 @@ def digital_upload(request, pk):
         'profile': profile,
         'upload_success': f'{len(uploaded)} file(s) uploaded.',
     })
+
+def _siguiente_orden(op):
+    """
+    La posicion que le toca al proximo archivo de este expediente.
+
+    Hace falta porque un expediente ya reordenado tiene posiciones 1..N, y un
+    archivo nuevo con la posicion en cero se colaria **al principio** de la
+    secuencia en vez de al final. Lo que se sube despues va despues.
+    """
+    mayor = op.documents.aggregate(m=Max('orden'))['m'] or 0
+    return mayor + 1
+
+
+def _renumerar_expediente(docs):
+    """
+    Deja las posiciones en 1..N siguiendo el orden de la lista que se le pasa.
+
+    Renumerar entero -y no solo los dos que se intercambian- es lo que arregla
+    de una vez los expedientes viejos, donde todos los documentos valen cero y
+    el orden lo lleva la fecha de subida. Solo escribe los que cambian.
+    """
+    for posicion, doc in enumerate(docs, 1):
+        if doc.orden != posicion:
+            doc.orden = posicion
+            doc.save(update_fields=['orden'])
+
+
+@login_required
+@require_POST
+def digital_reorder(request, doc_pk):
+    """
+    Sube o baja un archivo una posicion dentro de su expediente.
+
+    El orden de las fotos es informacion: en una entrada se fotografia la misma
+    pieza varias veces -la serie o el lote, el peso, la tabla nutrimental- y la
+    documentacion aduanal se arma siguiendo esa secuencia. El orden de subida
+    la conserva cuando las fotos se toman y se suben una a una desde el movil,
+    pero no cuando el operador las selecciona de un tiron desde la PC: ahi el
+    navegador las manda como le parece y la secuencia nace mal. Hasta ahora la
+    unica salida era borrarlas y volver a subirlas.
+
+    Mueve de uno en uno a proposito. Arrastrar seria mas comodo con muchas
+    fotos, pero necesita JavaScript que hay que probar en el movil, que es
+    donde mas se usa esta pantalla; esto funciona en los dos sitios y no puede
+    dejar el expediente a medias.
+
+    Quien puede subir archivos puede ordenarlos: mismo criterio que
+    `digital_upload`, para que no haya que explicar dos reglas distintas sobre
+    la misma pantalla.
+    """
+    tenant = get_tenant_or_404(request)
+    doc = get_object_or_404(OperationDocument.objects.select_related('operation'),
+                            pk=doc_pk, operation__tenant=tenant)
+    op = doc.operation
+    if not customer_can_access_op(request.user, op):
+        return HttpResponse('Permission denied.', status=403)
+
+    direccion = request.POST.get('direccion')
+    documentos = list(op.documents.all())
+    posiciones = [d.pk for d in documentos]
+    # Segunda red: el manager de arriba ya deja fuera lo archivado, y esto lo
+    # vuelve a cerrar desde otro lado. Se comprobo cambiando el manager por el
+    # que si ve la papelera: el 404 sigue saliendo, por aqui.
+    if doc.pk not in posiciones:
+        raise Http404('El documento no esta en el expediente')
+
+    actual = posiciones.index(doc.pk)
+    destino = actual - 1 if direccion == 'arriba' else actual + 1
+
+    if 0 <= destino < len(documentos):
+        documentos[actual], documentos[destino] = documentos[destino], documentos[actual]
+        _renumerar_expediente(documentos)
+    # Fuera de rango no es un error: es el primero al que le dan a subir. La
+    # pantalla se devuelve igual, sin tocar nada.
+
+    op.refresh_from_db()
+    return _panel_digital(request, op, get_profile(request.user))
+
 
 def _delete_stored_file(doc):
     """

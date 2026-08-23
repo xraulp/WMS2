@@ -605,6 +605,19 @@ class OperationDocument(models.Model):
     uploaded_at   = models.DateTimeField(auto_now_add=True)
     digital_name  = models.CharField(max_length=100, blank=True, null=True)
 
+    # Posicion dentro del expediente, para poder arreglar una secuencia que
+    # nacio desordenada. El orden de subida sirve cuando las fotos se toman y
+    # se suben una a una desde el movil, pero si el operador las selecciona de
+    # un tiron en el explorador, el navegador las manda en el orden que le
+    # parece -normalmente alfabetico- y la secuencia llega mal desde el
+    # principio. Eso importa porque de ese orden depende que la documentacion
+    # aduanal salga bien.
+    #
+    # Cero significa "nunca se reordeno a mano", y ahi manda la fecha de
+    # subida: por eso el `ordering` los encadena. Asi los documentos que ya
+    # existian siguen exactamente donde estaban, sin migracion de datos.
+    orden         = models.PositiveIntegerField(default=0, verbose_name="Orden")
+
     # Papelera. Un archivo del expediente ya salio impreso y adjunto en un
     # correo, asi que quitarlo de la vista y destruirlo no son la misma
     # decision: lo primero lo hace quien opera, lo segundo el administrador.
@@ -635,9 +648,10 @@ class OperationDocument(models.Model):
         # por casualidad, y se rompia en cuanto una fila se actualizaba:
         # archivar y restaurar un documento lo mandaba al final de la lista.
         #
-        # `uploaded_at` es el orden en que se subieron, y `pk` desempata la
-        # subida multiple, donde varios archivos comparten el instante.
-        ordering = ['uploaded_at', 'pk']
+        # `orden` es la posicion puesta a mano, y vale cero mientras nadie la
+        # toque; `uploaded_at` es el orden en que se subieron, y `pk` desempata
+        # la subida multiple, donde varios archivos comparten el instante.
+        ordering = ['orden', 'uploaded_at', 'pk']
 
     @property
     def en_papelera(self):
