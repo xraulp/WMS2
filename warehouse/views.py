@@ -1544,9 +1544,22 @@ def _catalog_scope(request, default='operational'):
 
 
 def _catalog_entries(tenant, scope):
-    return Catalog.objects.filter(
+    """
+    Las entradas del catalogo de una pantalla.
+
+    A los clientes se les cuenta ademas cuantas personas tienen dadas de alta.
+    Es la pregunta que no se podia responder sin ir a la pestana Users y leerla
+    entera: un cliente con cero usuarios no puede entrar al sistema, y hasta
+    ahora eso solo se descubria cuando el cliente llamaba.
+    """
+    entradas = Catalog.objects.filter(
         active=True, tenant=tenant, category__in=CATALOG_SCOPES[scope]
     ).order_by('category', 'name')
+    if scope == 'customers':
+        entradas = entradas.annotate(
+            usuarios=Count('userprofile',
+                           filter=Q(userprofile__role='customer'), distinct=True))
+    return entradas
 
 
 def _catalog_table_id(scope):
@@ -1702,6 +1715,24 @@ def _perfil_de(user):
     return UserProfile.objects.filter(user=user).first()
 
 
+def _usuarios_agrupados(tenant):
+    """
+    Los usuarios de la empresa, con los de cada cliente juntos.
+
+    Por nombre de usuario quedaban repartidos por toda la lista, asi que para
+    ver quien tiene acceso por parte de un cliente habia que leerla entera y ir
+    apuntando. Ahora van primero los de la casa -- los que no cuelgan de ningun
+    cliente -- y despues cada cliente con su gente seguida.
+
+    `nulls_first` es lo que pone arriba a los de la casa: no tener cliente es
+    justamente lo que los define.
+    """
+    return (User.objects
+            .filter(profile__tenant=tenant)
+            .select_related('profile', 'profile__customer')
+            .order_by(F('profile__customer__name').asc(nulls_first=True), 'username'))
+
+
 def _incoherencia_rol_cliente(role, cid):
     """
     Por que un usuario no puede llevar a la vez un cliente y un rol de la casa.
@@ -1738,7 +1769,7 @@ def user_management(request):
     profile = get_profile(request.user)
     if not profile.can_manage_users():
         return HttpResponse('Permission denied.', status=403)
-    users    = User.objects.filter(profile__tenant=tenant).order_by('username')
+    users    = _usuarios_agrupados(tenant)
     profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
     customers = Catalog.objects.filter(category='CUSTOMER', active=True, tenant=tenant).order_by('name')
     msg = ''
@@ -1898,10 +1929,10 @@ def user_management(request):
                     p.set_delete_password(del_pwd)
                 p.save()
                 msg = f'User "{u.username}" updated.'
-        users    = User.objects.filter(profile__tenant=tenant).order_by('username')
+        users    = _usuarios_agrupados(tenant)
         profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
 
-    users    = User.objects.filter(profile__tenant=tenant).order_by('username')
+    users    = _usuarios_agrupados(tenant)
     profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
     # Se recalcula despues del POST para que incluya un cliente recien creado.
     customers = Catalog.objects.filter(category='CUSTOMER', active=True, tenant=tenant).order_by('name')
@@ -2607,6 +2638,46 @@ def platform_tenant_list(request):
                 error_logo = _guardar_logo(t, archivo)
                 msg = error_logo or f'Logo de "{t.name}" actualizado.'
 
+        elif action == 'update':
+            # Corregir un alta. Faltaba por completo: una empresa se creaba y
+            # ya no habia forma de arreglarle el nombre, el plan ni el correo
+            # de facturacion sin entrar al admin de Django.
+            t = get_object_or_404(Tenant, pk=request.POST.get('tenant_id'))
+            nombre   = request.POST.get('name', '').strip()
+            plan     = request.POST.get('plan', t.plan)
+            correo   = request.POST.get('billing_email', '').strip()
+            subdom_in = request.POST.get('subdomain', '').strip()
+            subdominio = re.sub(r'[^a-z0-9-]', '', slugify(subdom_in)) if subdom_in else t.subdomain
+
+            if not nombre:
+                msg = 'Tenant name is required. Nothing was changed.'
+            elif not subdominio:
+                msg = 'Could not derive a valid subdomain. Nothing was changed.'
+            elif Tenant.objects.filter(subdomain=subdominio).exclude(pk=t.pk).exists():
+                msg = f'Subdomain "{subdominio}" is already in use. Nothing was changed.'
+            else:
+                cambio_subdominio = subdominio != t.subdomain
+                anterior = t.subdomain
+                t.name = nombre
+                t.plan = plan
+                t.billing_email = correo or None
+                t.subdomain = subdominio
+                t.save(update_fields=['name', 'plan', 'billing_email', 'subdomain'])
+
+                # El plan vive en dos sitios -- la empresa y su suscripcion --
+                # y hasta ahora solo coincidian porque el alta los escribia a la
+                # vez. Editar uno solo los dejaba discordes, y la facturacion
+                # lee el de la suscripcion.
+                Subscription.objects.filter(tenant=t).update(plan=plan)
+
+                msg = f'Tenant "{t.name}" updated.'
+                if cambio_subdominio:
+                    # Es la direccion por la que entra su gente: cambiarla no es
+                    # un detalle de captura.
+                    msg += (f' The subdomain changed from "{anterior}" to '
+                            f'"{subdominio}" — anyone using the old address will '
+                            f'no longer reach this company.')
+
         elif action == 'toggle_active':
             tid = request.POST.get('tenant_id')
             t = get_object_or_404(Tenant, pk=tid)
@@ -2614,8 +2685,22 @@ def platform_tenant_list(request):
             t.save(update_fields=['is_active'])
             msg = f'Tenant "{t.name}" is now {"active" if t.is_active else "inactive"}.'
 
+    # Las cantidades que hacen falta para saber como va cada empresa sin abrir
+    # sus datos. Contar no es ver: el nivel de plataforma sigue sin alcanzar ni
+    # una operacion, ni un documento, ni el nombre de un cliente.
+    #
+    # `user_count` cuenta solo a la gente de la casa. Antes contaba tambien a
+    # los usuarios de los clientes, asi que una empresa con cuatro operarios y
+    # treinta clientes aparecia con treinta y cuatro "usuarios" y ese numero no
+    # respondia a ninguna pregunta.
     tenants = Tenant.objects.filter(type='organization').annotate(
-        user_count=Count('users', distinct=True),
+        user_count=Count('users', distinct=True,
+                         filter=~Q(users__role='customer')),
+        customer_user_count=Count('users', distinct=True,
+                                  filter=Q(users__role='customer')),
+        customer_count=Count('catalog_entries', distinct=True,
+                             filter=Q(catalog_entries__category='CUSTOMER',
+                                      catalog_entries__active=True)),
         op_count=Count('operations', distinct=True),
     ).order_by('name')
 

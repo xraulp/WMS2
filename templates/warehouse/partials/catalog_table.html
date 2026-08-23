@@ -38,6 +38,13 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
     <tr>
       <th>Category</th>
       <th>Name / Value</th>
+      {% comment %}
+      Cuantas personas tiene dadas de alta ese cliente. Un cliente con cero
+      usuarios no puede entrar al sistema, y hasta ahora eso solo se descubria
+      cuando llamaba: la cuenta estaba en la pestana Users y habia que leerla
+      entera para sacarla.
+      {% endcomment %}
+      {% if scope == 'customers' %}<th title="Usuarios con acceso">Usuarios</th>{% endif %}
       <th>Abreviatura</th>
       <th>Email</th><th>Phone</th>
       <th style="color:#7dd3fc">WhatsApp</th>
@@ -50,6 +57,16 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
     <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
       <td><span class="badge" style="background:#f1f5f9;color:#475569">{{ entry.get_category_display }}</span></td>
       <td><strong>{{ entry.name }}</strong></td>
+      {% if scope == 'customers' %}
+      <td style="text-align:center">
+        {% if entry.usuarios %}
+          <span class="badge" style="background:#e0f2fe;color:#0369a1">{{ entry.usuarios }}</span>
+        {% else %}
+          <span class="badge" style="background:#fef3c7;color:#92400e"
+                title="Nadie de este cliente puede entrar al sistema">sin acceso</span>
+        {% endif %}
+      </td>
+      {% endif %}
       <td>{{ entry.abbreviation|default:"—" }}</td>
       <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis" title="{{ entry.contact_email }}">{{ entry.contact_email|default:"—" }}</td>
       <td>{{ entry.phone|default:"—" }}</td>

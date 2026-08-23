@@ -78,7 +78,17 @@
       <th>Plan</th>
       <th>Billing Email</th>
       <th>Logo</th>
-      <th>Users</th>
+      {% comment %}
+      Las cantidades de cada empresa. Contar no es ver: el nivel de plataforma
+      sigue sin alcanzar una operacion, un documento ni el nombre de un cliente.
+
+      "Users" contaba antes a todo el mundo, gente de la casa y usuarios de los
+      clientes juntos, asi que una empresa con cuatro operarios y treinta
+      clientes salia con treinta y cuatro y ese numero no respondia a nada.
+      {% endcomment %}
+      <th title="Personal de la empresa">Users</th>
+      <th title="Clientes dados de alta en su catalogo">Customers</th>
+      <th title="Usuarios que pertenecen a esos clientes">Cust. users</th>
       <th>Operations</th>
       <th>Status</th>
       <th>Created</th>
@@ -102,6 +112,11 @@
         {% else %}<span style="color:#94a3b8">—</span>{% endif %}
       </td>
       <td style="text-align:center">{{ t.user_count }}</td>
+      <td style="text-align:center">{{ t.customer_count }}</td>
+      <td style="text-align:center">
+        {% if t.customer_user_count %}{{ t.customer_user_count }}
+        {% else %}<span style="color:#94a3b8" title="Ningun cliente de esta empresa tiene acceso">—</span>{% endif %}
+      </td>
       <td style="text-align:center">{{ t.op_count }}</td>
       <td>
         <span class="badge {% if t.is_active %}b-entry{% else %}b-exit{% endif %}">
@@ -111,6 +126,10 @@
       <td style="color:#94a3b8;font-size:11px">{{ t.created_at|date:"Y-m-d" }}</td>
       {% if is_platform_admin %}
       <td>
+        <button class="btn btn-g btn-sm" onclick="abrirEdicionDeEmpresa(this)"
+                data-t-id="{{ t.pk }}" data-t-name="{{ t.name }}"
+                data-t-sub="{{ t.subdomain }}" data-t-plan="{{ t.plan }}"
+                data-t-mail="{{ t.billing_email|default:'' }}">Edit</button>
         <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML"
               hx-encoding="multipart/form-data" style="display:inline">
           {% csrf_token %}
@@ -145,8 +164,93 @@
       {% endif %}
     </tr>
     {% empty %}
-    <tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:20px">No companies yet.</td></tr>
+    <tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:20px">No companies yet.</td></tr>
     {% endfor %}
   </tbody>
 </table>
 </div>
+
+{% comment %}
+Corregir el alta de una empresa. Faltaba por completo: una empresa se creaba y
+ya no habia forma de arreglarle el nombre, el plan ni el correo de facturacion
+sin entrar al admin de Django, que es la puerta a los datos de todas.
+
+Un solo formulario para todas las filas, relleno desde los `data-` del boton.
+Uno por fila repetiria los mismos id tantas veces como empresas haya.
+{% endcomment %}
+{% if is_platform_admin %}
+<div id="tenant-edit-modal"
+     style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:1000;
+            align-items:center;justify-content:center"
+     onclick="if(event.target===this)cerrarEdicionDeEmpresa()">
+  <div style="background:#fff;border-radius:12px;padding:22px;max-width:440px;width:92%;
+              box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;
+                margin-bottom:14px;color:#0f172a">
+      Edit <span id="tenant-edit-title"></span>
+    </div>
+    <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content"
+          hx-swap="innerHTML" hx-on::after-request="cerrarEdicionDeEmpresa()">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="update">
+      <input type="hidden" name="tenant_id" id="tenant-edit-id">
+
+      <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.05em;color:#64748b;margin-bottom:3px">Name</label>
+      <input type="text" name="name" id="tenant-edit-name" required maxlength="200"
+             style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;
+                    font-size:13px;margin-bottom:12px">
+
+      <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.05em;color:#64748b;margin-bottom:3px">Subdomain</label>
+      <input type="text" name="subdomain" id="tenant-edit-sub" required maxlength="50"
+             style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;
+                    font-size:13px;font-family:'IBM Plex Mono',monospace">
+      <div style="font-size:11px;color:#b45309;background:#fffbeb;padding:6px 9px;
+                  border-radius:6px;margin:5px 0 12px">
+        Es la direccion por la que entra su gente. Si la cambias, quien use la
+        anterior deja de llegar a esta empresa.
+      </div>
+
+      <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.05em;color:#64748b;margin-bottom:3px">Plan</label>
+      <select name="plan" id="tenant-edit-plan"
+              style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;
+                     font-size:13px;margin-bottom:12px">
+        <option value="starter">Starter</option>
+        <option value="pro">Pro</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+
+      <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.05em;color:#64748b;margin-bottom:3px">Billing email</label>
+      <input type="email" name="billing_email" id="tenant-edit-mail"
+             style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;
+                    font-size:13px;margin-bottom:16px">
+
+      <div style="display:flex;gap:10px">
+        <button type="submit" class="btn btn-p" style="flex:1">Save</button>
+        <button type="button" class="btn btn-g" style="flex:1"
+                onclick="cerrarEdicionDeEmpresa()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function abrirEdicionDeEmpresa(boton){
+  const d = boton.dataset;
+  document.getElementById('tenant-edit-id').value    = d.tId;
+  document.getElementById('tenant-edit-name').value  = d.tName;
+  document.getElementById('tenant-edit-sub').value   = d.tSub;
+  document.getElementById('tenant-edit-plan').value  = d.tPlan;
+  document.getElementById('tenant-edit-mail').value  = d.tMail;
+  document.getElementById('tenant-edit-title').textContent = d.tName;
+  document.getElementById('tenant-edit-modal').style.display = 'flex';
+}
+function cerrarEdicionDeEmpresa(){
+  const m = document.getElementById('tenant-edit-modal');
+  if (m) m.style.display = 'none';
+}
+</script>
+{% endif %}

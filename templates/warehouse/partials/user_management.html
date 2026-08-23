@@ -123,6 +123,20 @@
   <tbody>
     {% for u in users %}
     {% with p=profiles|get_item:u.pk %}
+    {% comment %}
+    Un renglon de separacion cada vez que cambia el cliente, para que la gente
+    de cada uno se lea junta. Los de la casa -- los que no cuelgan de ningun
+    cliente -- van primero, bajo su propio encabezado.
+    {% endcomment %}
+    {% ifchanged p.customer_id %}
+    <tr>
+      <td colspan="8" style="background:#f1f5f9;padding:5px 9px;font-size:10px;font-weight:700;
+                             text-transform:uppercase;letter-spacing:.07em;color:#475569;
+                             border-top:2px solid #cbd5e1">
+        {% if p.customer %}👤 {{ p.customer.name }}{% else %}🏢 De la empresa{% endif %}
+      </td>
+    </tr>
+    {% endifchanged %}
     <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
       <!-- Username (not editable) -->
       <td>
