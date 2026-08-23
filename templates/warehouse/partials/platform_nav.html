@@ -1,8 +1,12 @@
 {% comment %}
 Navegación entre las pantallas del nivel de plataforma.
 
-Las tres cargan sobre el mismo contenedor (#platform-content), así que la
+Las cuatro cargan sobre el mismo contenedor (#platform-content), así que la
 pestaña activa se pasa por parámetro: {% include ... with activa='tenants' %}
+
+"Billing" la ven los dos niveles: el soporte necesita saber si una empresa
+esta al corriente para responder cuando llama. Emitir, cobrar y cancelar son
+del administrador, y eso lo comprueba la vista en cada POST.
 
 "Platform Users" solo se ofrece al administrador: repartir este acceso es lo
 más crítico que hay aquí, porque quien lo tiene puede dar de alta empresas y
@@ -16,6 +20,10 @@ nombrar a sus administradores.
   <button class="btn btn-sm {% if activa == 'notifications' %}btn-p{% else %}btn-g{% endif %}"
           hx-get="{% url 'platform_notifications' %}" hx-target="#platform-content" hx-swap="innerHTML">
     Delivery Log
+  </button>
+  <button class="btn btn-sm {% if activa == 'invoices' %}btn-p{% else %}btn-g{% endif %}"
+          hx-get="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML">
+    Billing
   </button>
   {% if platform_role == 'admin' %}
   <button class="btn btn-sm {% if activa == 'users' %}btn-p{% else %}btn-g{% endif %}"

@@ -7,9 +7,12 @@ from django.views.decorators.http import require_POST, require_GET
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Sum
 from django.db import connection, transaction
 from io import BytesIO
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
+import calendar
 from django.http import Http404
 from django.utils.text import slugify
 import os, json, zipfile, re, logging
@@ -17,12 +20,16 @@ import os, json, zipfile, re, logging
 from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
                      DeletionLog, DocumentSequence, Tenant, Subscription,
                      NotificationLog, PlatformUser, PLATFORM_ROLE_CHOICES,
-                     CATALOG_SCOPES, catalog_scope_of)
+                     CATALOG_SCOPES, catalog_scope_of, Invoice)
 from .utils import generate_pdf_report, generate_label_pdf
 from .almacen import url_firmada
 from . import notifications
 
 logger = logging.getLogger(__name__)
+
+# Plazo que propone el formulario de facturacion. Es solo la sugerencia de
+# la fecha que aparece escrita: quien emite puede cambiarla.
+DIAS_DE_VENCIMIENTO = 15
 
 now_local = timezone.localtime(timezone.now())
 generated_at = now_local.strftime('%Y-%m-%d %H:%M')
@@ -2450,6 +2457,200 @@ def platform_notifications(request):
         'estados': NotificationLog.STATUS_CHOICES,
         'platform_role': platform_role(request.user),
     })
+
+
+@login_required
+def platform_invoices(request):
+    """
+    Facturacion de la plataforma: quien pago, quien debe y quien va tarde.
+
+    Lo que habia antes eran tres campos sueltos dentro de `Subscription`, que
+    es una fila por empresa: cabia una sola factura por cliente y emitir la del
+    mes borraba la del mes anterior. Esta pantalla es la primera vez que se
+    puede facturar de verdad.
+
+    **El soporte mira y el administrador actua.** El staff de plataforma ve el
+    listado completo y el estado de cada empresa -que es lo que necesita para
+    responder «¿este cliente esta al corriente?»- pero emitir, cobrar y
+    cancelar son del administrador. Cada POST lo vuelve a comprobar: esconder
+    los botones no es un permiso.
+    """
+    negado = _sin_permiso_de_plataforma(request.user)
+    if negado:
+        return negado
+    es_admin = _es_admin_de_plataforma(request.user)
+
+    msg = error = ''
+    if request.method == 'POST':
+        negado = _sin_permiso_de_plataforma(request.user, solo_admin=True)
+        if negado:
+            return negado
+        msg, error = _accion_de_facturacion(request)
+
+    facturas = Invoice.objects.select_related('tenant', 'emitida_por')
+
+    tenant_id = (request.GET.get('tenant') or '').strip()
+    estado    = (request.GET.get('status') or '').strip()
+    if tenant_id.isdigit():
+        facturas = facturas.filter(tenant_id=int(tenant_id))
+    if estado == 'vencida':
+        # No es un estado guardado: es pendiente con la fecha pasada.
+        facturas = facturas.filter(estado=Invoice.PENDIENTE,
+                                   vence_el__lt=timezone.localdate())
+    elif estado:
+        facturas = facturas.filter(estado=estado)
+
+    return render(request, 'warehouse/partials/platform_invoices.html', {
+        'facturas': facturas[:200],
+        'resumen': _resumen_de_facturacion(),
+        'tenants': Tenant.objects.filter(type='organization').order_by('name'),
+        'tenant_id': tenant_id,
+        'estado': estado,
+        'estados': Invoice.ESTADOS,
+        'hoy': timezone.localdate(),
+        'vencimiento_sugerido': timezone.localdate() + timedelta(days=DIAS_DE_VENCIMIENTO),
+        'mes_sugerido': timezone.localdate().strftime('%Y-%m'),
+        'msg': msg, 'error': error,
+        'platform_role': platform_role(request.user),
+        'is_platform_admin': es_admin,
+    })
+
+
+def _accion_de_facturacion(request):
+    """Ejecuta la accion del POST y devuelve (mensaje, error)."""
+    accion = request.POST.get('action')
+
+    if accion == 'emitir':
+        return _emitir_factura(request)
+
+    if accion == 'pagar':
+        factura = get_object_or_404(Invoice, pk=request.POST.get('invoice_id'))
+        try:
+            factura.marcar_pagada(referencia=request.POST.get('referencia', ''))
+        except ValueError as e:
+            return '', str(e)
+        return f'{factura.numero} marcada como pagada.', ''
+
+    if accion == 'cancelar':
+        factura = get_object_or_404(Invoice, pk=request.POST.get('invoice_id'))
+        motivo = (request.POST.get('motivo') or '').strip()
+        if not motivo:
+            # Cancelar deja el numero ocupado para siempre; que conste por que.
+            return '', 'Hace falta un motivo para cancelar una factura.'
+        try:
+            factura.cancelar(motivo)
+        except ValueError as e:
+            return '', str(e)
+        return f'{factura.numero} cancelada.', ''
+
+    return '', ''
+
+
+def _emitir_factura(request):
+    """
+    Da de alta una factura nueva.
+
+    El numero se aparta al final y dentro de la transaccion, ya validado todo
+    lo demas: un numero apartado no vuelve, asi que gastarlo para acabar
+    rechazando el formulario deja un hueco en la serie sin ninguna razon.
+    """
+    tenant_id = (request.POST.get('tenant_id') or '').strip()
+    if not tenant_id.isdigit():
+        return '', 'Elige la empresa a la que se factura.'
+    empresa = Tenant.objects.filter(pk=int(tenant_id), type='organization').first()
+    if empresa is None:
+        return '', 'Esa empresa no existe.'
+
+    monto = _monto_valido(request.POST.get('monto'))
+    if monto is None:
+        return '', 'El monto tiene que ser un número mayor que cero.'
+
+    periodo = _periodo_del_mes(request.POST.get('periodo'))
+    if periodo is None:
+        return '', 'El periodo no es un mes válido.'
+    periodo_inicio, periodo_fin = periodo
+
+    vence = _fecha_valida(request.POST.get('vence_el'))
+    if vence is None:
+        return '', 'La fecha de vencimiento no es válida.'
+
+    ya_existe = Invoice.objects.filter(
+        tenant=empresa, periodo_inicio=periodo_inicio,
+        estado__in=[Invoice.PENDIENTE, Invoice.PAGADA]).first()
+    if ya_existe:
+        # Duplicar el mes es el error caro: el cliente recibe dos cobros por lo
+        # mismo. Se avisa y se deja pasar solo si lo confirma a proposito.
+        if request.POST.get('confirmar_duplicado') != '1':
+            return '', (f'{empresa.name} ya tiene la factura {ya_existe.numero} '
+                        f'para ese periodo. Marca la casilla si aun así quieres '
+                        f'emitir otra.')
+
+    hoy = timezone.localdate()
+    with transaction.atomic():
+        factura = Invoice.objects.create(
+            tenant=empresa,
+            numero=Invoice.siguiente_numero(hoy.year),
+            periodo_inicio=periodo_inicio, periodo_fin=periodo_fin,
+            emitida_el=hoy, vence_el=vence,
+            plan=empresa.plan or '',
+            monto_usd=monto,
+            notas=(request.POST.get('notas') or '').strip(),
+            emitida_por=request.user,
+        )
+    return f'Factura {factura.numero} emitida a {empresa.name} por {monto} USD.', ''
+
+
+def _monto_valido(texto):
+    try:
+        monto = Decimal((texto or '').strip().replace(',', ''))
+    except (InvalidOperation, AttributeError):
+        return None
+    if monto <= 0:
+        return None
+    return monto.quantize(Decimal('0.01'))
+
+
+def _periodo_del_mes(texto):
+    """De `2026-08` a los dos extremos del mes."""
+    try:
+        anio, mes = (texto or '').split('-')
+        inicio = date(int(anio), int(mes), 1)
+    except (ValueError, TypeError):
+        return None
+    dias = calendar.monthrange(inicio.year, inicio.month)[1]
+    return inicio, date(inicio.year, inicio.month, dias)
+
+
+def _fecha_valida(texto):
+    try:
+        anio, mes, dia = (texto or '').split('-')
+        return date(int(anio), int(mes), int(dia))
+    except (ValueError, TypeError):
+        return None
+
+
+def _resumen_de_facturacion():
+    """
+    Lo que se lee de un vistazo: cobrado, por cobrar y atrasado.
+
+    El vencido va aparte del pendiente aunque sea un subconjunto suyo, porque
+    es la unica cifra que pide hacer algo hoy.
+    """
+    hoy = timezone.localdate()
+    pendientes = Invoice.objects.filter(estado=Invoice.PENDIENTE)
+    vencidas   = pendientes.filter(vence_el__lt=hoy)
+    pagadas    = Invoice.objects.filter(estado=Invoice.PAGADA,
+                                        emitida_el__year=hoy.year)
+
+    def total(qs):
+        return qs.aggregate(t=Sum('monto_usd'))['t'] or Decimal('0.00')
+
+    return {
+        'pendiente_total': total(pendientes), 'pendiente_cuenta': pendientes.count(),
+        'vencido_total':   total(vencidas),   'vencido_cuenta':   vencidas.count(),
+        'cobrado_total':   total(pagadas),    'cobrado_cuenta':   pagadas.count(),
+        'anio': hoy.year,
+    }
 
 
 @login_required

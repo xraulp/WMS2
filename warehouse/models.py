@@ -3,7 +3,7 @@ import os
 import re
 import uuid
 
-from django.db import models
+from django.db import connection, models, transaction
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.utils.text import slugify
@@ -920,7 +920,14 @@ class Subscription(models.Model):
     storage_used_gb = models.FloatField(default=0, verbose_name="Almacenamiento usado (GB)")
     operations_count = models.IntegerField(default=0, verbose_name="Número de Operaciones")
     
-    # Facturación
+    # Facturación — OBSOLETO. Lo sustituye el modelo `Invoice`.
+    #
+    # Estos tres campos viven en una fila por empresa, así que solo cabía una
+    # factura por cliente: emitir la de septiembre pisaba la de agosto. Sin
+    # historial, sin estado de pago y sin forma de saber quién debía.
+    #
+    # Se conservan para no perder lo que hubiera capturado antes de `Invoice`.
+    # Nada los escribe ya, y ninguna pantalla los lee.
     invoice_number = models.CharField(max_length=50, blank=True, null=True, verbose_name="Número de Factura")
     invoice_date = models.DateField(null=True, blank=True, verbose_name="Fecha de Factura")
     amount_usd = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Monto (USD)")
@@ -932,6 +939,171 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.tenant.name} - {self.plan}"
+
+
+class InvoiceSequence(models.Model):
+    """
+    Contador de facturas, uno por año.
+
+    Una numeración de facturas no puede tener huecos ni repeticiones: es el
+    identificador con el que un cliente reclama y con el que se cuadra el
+    cobro. Contar las que existen no sirve -cancelar una liberaría su número,
+    que ya salió al cliente-, así que el contador se guarda y solo sube, igual
+    que el de los documentos del expediente.
+
+    Va por año porque el número lleva el año dentro: `INV-2026-0001`. El primer
+    día de enero la serie vuelve a empezar en 1 sin que nadie tenga que
+    acordarse.
+    """
+    year       = models.PositiveIntegerField(unique=True)
+    last_value = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Consecutivo de facturas"
+        verbose_name_plural = "Consecutivos de facturas"
+
+    def __str__(self):
+        return f"{self.year} → {self.last_value}"
+
+
+class Invoice(models.Model):
+    """
+    Una factura emitida a una empresa de la plataforma.
+
+    Antes esto vivía dentro de `Subscription`, en tres campos sueltos
+    -`invoice_number`, `invoice_date`, `amount_usd`- y `Subscription` es una
+    fila por empresa. Es decir: cabía **una sola factura por cliente**, y
+    emitir la de septiembre borraba la de agosto. No había historial, no había
+    estado de pago y no había forma de saber quién debía. En la práctica no se
+    podía facturar.
+
+    Decisiones que conviene no deshacer sin pensarlo:
+
+    * **El monto se congela aquí.** Se captura al emitir y se queda. Si mañana
+      sube el precio del plan, las facturas ya emitidas no cambian: dicen lo
+      que se cobró.
+    * **El plan también se copia**, por lo mismo. La empresa puede cambiar de
+      plan después, y la factura tiene que seguir diciendo qué se le facturó.
+    * **«Vencida» no es un estado guardado**, se deduce de la fecha. Guardarlo
+      obligaría a un proceso diario que fuera marcándolas, y ese proceso es
+      justo lo que no tenemos: el día que no corriera, la pantalla mentiría.
+    * **Una factura emitida no se borra**, se cancela con su motivo. El número
+      ya salió al cliente y no vuelve a usarse.
+    """
+    PENDIENTE = 'pendiente'
+    PAGADA    = 'pagada'
+    CANCELADA = 'cancelada'
+    ESTADOS = [
+        (PENDIENTE, 'Pendiente'),
+        (PAGADA,    'Pagada'),
+        (CANCELADA, 'Cancelada'),
+    ]
+
+    # PROTECT y no CASCADE: una factura es un registro de cobro y no puede
+    # desaparecer porque alguien dé de baja la empresa en el admin. Dar de baja
+    # se hace con `is_active`, que no borra nada.
+    tenant   = models.ForeignKey('Tenant', on_delete=models.PROTECT,
+                                 related_name='invoices', verbose_name="Empresa")
+    numero   = models.CharField(max_length=20, unique=True, verbose_name="Número")
+
+    # Qué periodo cubre. Se guarda entero y no solo el mes porque un ajuste o
+    # una primera factura a mitad de mes no empiezan el día 1.
+    periodo_inicio = models.DateField(verbose_name="Periodo desde")
+    periodo_fin    = models.DateField(verbose_name="Periodo hasta")
+
+    emitida_el = models.DateField(verbose_name="Emitida el")
+    vence_el   = models.DateField(verbose_name="Vence el")
+
+    plan      = models.CharField(max_length=50, blank=True, verbose_name="Plan facturado")
+    monto_usd = models.DecimalField(max_digits=10, decimal_places=2,
+                                    verbose_name="Monto (USD)")
+
+    estado = models.CharField(max_length=12, choices=ESTADOS, default=PENDIENTE,
+                              verbose_name="Estado")
+
+    pagada_el          = models.DateField(null=True, blank=True, verbose_name="Pagada el")
+    referencia_de_pago = models.CharField(max_length=120, blank=True,
+                                          verbose_name="Referencia de pago")
+
+    cancelada_el     = models.DateField(null=True, blank=True, verbose_name="Cancelada el")
+    motivo_de_cancelacion = models.TextField(blank=True, verbose_name="Motivo de cancelación")
+
+    notas      = models.TextField(blank=True, verbose_name="Notas")
+    emitida_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                    blank=True, related_name='facturas_emitidas')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Factura"
+        verbose_name_plural = "Facturas"
+        # De la más reciente a la más vieja, que es como se lee un estado de
+        # cuenta. `numero` desempata las emitidas el mismo día.
+        ordering = ['-emitida_el', '-numero']
+
+    def __str__(self):
+        return f"{self.numero} · {self.tenant.name} · {self.monto_usd} USD"
+
+    @property
+    def esta_vencida(self):
+        """Pendiente y con la fecha pasada. No se guarda: se mira al preguntar."""
+        return (self.estado == self.PENDIENTE
+                and self.vence_el < timezone.localdate())
+
+    @property
+    def dias_de_atraso(self):
+        if not self.esta_vencida:
+            return 0
+        return (timezone.localdate() - self.vence_el).days
+
+    def marcar_pagada(self, cuando=None, referencia=''):
+        """
+        Registra el cobro.
+
+        Solo desde pendiente: una factura cancelada no se cobra, y volver a
+        cobrar una pagada seria pisar la fecha del cobro real.
+        """
+        if self.estado != self.PENDIENTE:
+            raise ValueError('Solo una factura pendiente puede marcarse pagada.')
+        self.estado = self.PAGADA
+        self.pagada_el = cuando or timezone.localdate()
+        self.referencia_de_pago = (referencia or '').strip()
+        self.save(update_fields=['estado', 'pagada_el', 'referencia_de_pago'])
+
+    def cancelar(self, motivo):
+        """
+        La deja sin efecto, conservando el numero.
+
+        Una factura pagada no se cancela: lo que hubo fue un cobro, y borrarlo
+        de esta manera dejaria el dinero sin explicacion. Para ese caso se
+        emite una nota de credito, que hoy no existe y por eso esto se niega en
+        vez de improvisar.
+        """
+        if self.estado == self.PAGADA:
+            raise ValueError('Una factura pagada no se cancela.')
+        if self.estado == self.CANCELADA:
+            return
+        self.estado = self.CANCELADA
+        self.cancelada_el = timezone.localdate()
+        self.motivo_de_cancelacion = (motivo or '').strip()
+        self.save(update_fields=['estado', 'cancelada_el', 'motivo_de_cancelacion'])
+
+    @classmethod
+    def siguiente_numero(cls, anio=None):
+        """
+        Aparta el siguiente numero de la serie del año y lo devuelve.
+
+        Con la fila bloqueada donde el motor lo permite: sin eso, dos personas
+        emitiendo a la vez leen el mismo valor y se llevan el mismo numero, que
+        en una serie de facturas es el peor de los errores posibles.
+        """
+        anio = anio or timezone.localdate().year
+        with transaction.atomic():
+            fila, _ = InvoiceSequence.objects.get_or_create(year=anio)
+            if connection.features.has_select_for_update:
+                fila = InvoiceSequence.objects.select_for_update().get(pk=fila.pk)
+            fila.last_value += 1
+            fila.save(update_fields=['last_value'])
+            return f'INV-{anio}-{fila.last_value:04d}'
 
 
 class NotificationLog(models.Model):

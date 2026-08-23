@@ -1,0 +1,191 @@
+{% include 'warehouse/partials/platform_nav.html' with activa='invoices' %}
+
+{% if msg %}<div class="msg-success" style="margin-bottom:12px">✓ {{ msg }}</div>{% endif %}
+{% if error %}<div class="msg-error" style="margin-bottom:12px">✕ {{ error }}</div>{% endif %}
+
+{% comment %}
+Facturación de la plataforma. El soporte mira y el administrador actúa: aquí se
+esconden los formularios, pero quien decide de verdad es la vista, que vuelve a
+comprobar el rol en cada POST.
+{% endcomment %}
+
+<!-- Resumen -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px">
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8">Por cobrar</div>
+    <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px">{{ resumen.pendiente_total }} <span style="font-size:11px;color:#94a3b8">USD</span></div>
+    <div style="font-size:11px;color:#64748b">{{ resumen.pendiente_cuenta }} factura(s) pendiente(s)</div>
+  </div>
+  <div style="background:{% if resumen.vencido_cuenta %}#fef2f2{% else %}#f8fafc{% endif %};border:1px solid {% if resumen.vencido_cuenta %}#fecaca{% else %}#e2e8f0{% endif %};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:{% if resumen.vencido_cuenta %}#991b1b{% else %}#94a3b8{% endif %}">Vencido</div>
+    <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px;color:{% if resumen.vencido_cuenta %}#991b1b{% else %}#0f172a{% endif %}">{{ resumen.vencido_total }} <span style="font-size:11px;color:#94a3b8">USD</span></div>
+    <div style="font-size:11px;color:#64748b">{{ resumen.vencido_cuenta }} factura(s) pasada(s) de fecha</div>
+  </div>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8">Cobrado en {{ resumen.anio }}</div>
+    <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px">{{ resumen.cobrado_total }} <span style="font-size:11px;color:#94a3b8">USD</span></div>
+    <div style="font-size:11px;color:#64748b">{{ resumen.cobrado_cuenta }} factura(s) pagada(s)</div>
+  </div>
+</div>
+
+{% if not is_platform_admin %}
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#1e40af">
+  Support access: you can review every invoice and see which companies are up to
+  date, but issuing, collecting and cancelling are reserved to a platform
+  administrator.
+</div>
+{% endif %}
+
+{% if is_platform_admin %}
+<!-- Emitir factura -->
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:10px">Issue Invoice</div>
+  <form hx-post="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML"
+        style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+    {% csrf_token %}<input type="hidden" name="action" value="emitir">
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Company</label>
+      <select name="tenant_id" required style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;width:190px">
+        <option value="">— select —</option>
+        {% for t in tenants %}<option value="{{ t.pk }}">{{ t.name }}{% if not t.is_active %} (inactive){% endif %}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Period</label>
+      <input type="month" name="periodo" required value="{{ mes_sugerido }}"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;width:140px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Amount USD</label>
+      <input type="text" inputmode="decimal" name="monto" required placeholder="250.00"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:110px;font-family:'IBM Plex Mono',monospace">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Due date</label>
+      <input type="date" name="vence_el" required value="{{ vencimiento_sugerido|date:'Y-m-d' }}"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;width:140px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:160px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Notes</label>
+      <input type="text" name="notas" placeholder="optional"
+             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
+    </div>
+    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#64748b;height:28px">
+      <input type="checkbox" name="confirmar_duplicado" value="1">
+      Issue even if the period is already invoiced
+    </label>
+    <button type="submit" class="btn btn-p btn-sm" style="height:28px">Issue</button>
+  </form>
+</div>
+{% endif %}
+
+<!-- Filtros -->
+<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap">
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Company</label>
+    <select name="tenant" hx-get="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML"
+            hx-include="[name='status']"
+            style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;width:180px">
+      <option value="">All companies</option>
+      {% for t in tenants %}<option value="{{ t.pk }}" {% if tenant_id == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Status</label>
+    <select name="status" hx-get="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML"
+            hx-include="[name='tenant']"
+            style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;width:150px">
+      <option value="">All</option>
+      <option value="vencida" {% if estado == 'vencida' %}selected{% endif %}>Overdue</option>
+      {% for valor, etiqueta in estados %}<option value="{{ valor }}" {% if estado == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}
+    </select>
+  </div>
+</div>
+
+<!-- Listado -->
+<div style="overflow-x:auto">
+<table>
+  <thead>
+    <tr>
+      <th>Number</th><th>Company</th><th>Period</th><th>Issued</th><th>Due</th>
+      <th style="text-align:right">Amount</th><th>Status</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in facturas %}
+    <tr>
+      <td class="mono" style="white-space:nowrap;font-size:12px">{{ f.numero }}</td>
+      <td style="font-size:12px">{{ f.tenant.name }}
+        {% if f.plan %}<div style="font-size:10px;color:#94a3b8">{{ f.plan }}</div>{% endif %}
+      </td>
+      <td style="font-size:11px;color:#64748b;white-space:nowrap">{{ f.periodo_inicio|date:"Y-m-d" }} → {{ f.periodo_fin|date:"Y-m-d" }}</td>
+      <td style="font-size:11px;color:#64748b;white-space:nowrap">{{ f.emitida_el|date:"Y-m-d" }}</td>
+      <td style="font-size:11px;white-space:nowrap;{% if f.esta_vencida %}color:#991b1b;font-weight:600{% else %}color:#64748b{% endif %}">
+        {{ f.vence_el|date:"Y-m-d" }}
+        {% if f.esta_vencida %}<div style="font-size:10px">{{ f.dias_de_atraso }} day(s) late</div>{% endif %}
+      </td>
+      <td class="mono" style="text-align:right;white-space:nowrap">{{ f.monto_usd }}</td>
+      <td style="white-space:nowrap">
+        {% if f.estado == 'pagada' %}
+          <span class="badge b-entry">Paid</span>
+          <div style="font-size:10px;color:#94a3b8">{{ f.pagada_el|date:"Y-m-d" }}{% if f.referencia_de_pago %} · {{ f.referencia_de_pago }}{% endif %}</div>
+        {% elif f.estado == 'cancelada' %}
+          <span class="badge" style="background:#f1f5f9;color:#64748b">Cancelled</span>
+          <div style="font-size:10px;color:#94a3b8" title="{{ f.motivo_de_cancelacion }}">{{ f.motivo_de_cancelacion|truncatechars:40 }}</div>
+        {% elif f.esta_vencida %}
+          <span class="badge b-exit">Overdue</span>
+        {% else %}
+          <span class="badge b-sent">Pending</span>
+        {% endif %}
+      </td>
+      <td style="white-space:nowrap;text-align:right">
+        {% if is_platform_admin and f.estado == 'pendiente' %}
+        <button class="btn btn-sm btn-g" onclick="cobrarFactura({{ f.pk }}, '{{ f.numero|escapejs }}')">Mark paid</button>
+        <button class="btn btn-sm btn-d" onclick="cancelarFactura({{ f.pk }}, '{{ f.numero|escapejs }}')">Cancel</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="8" style="text-align:center;color:#94a3b8;font-size:12px;padding:18px">No invoices yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if is_platform_admin %}
+<form id="factura-accion" hx-post="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML" style="display:none">
+  {% csrf_token %}
+  <input type="hidden" name="action" id="factura-action">
+  <input type="hidden" name="invoice_id" id="factura-id">
+  <input type="hidden" name="referencia" id="factura-referencia">
+  <input type="hidden" name="motivo" id="factura-motivo">
+</form>
+
+<script>
+{% comment %}
+Las dos acciones piden un dato antes de mandarse: la referencia del cobro y el
+motivo de la cancelación. El motivo no es opcional -cancelar deja el número
+ocupado para siempre- y la vista lo vuelve a exigir.
+{% endcomment %}
+function _enviarAccionFactura(accion, id, referencia, motivo) {
+  document.getElementById('factura-action').value = accion;
+  document.getElementById('factura-id').value = id;
+  document.getElementById('factura-referencia').value = referencia || '';
+  document.getElementById('factura-motivo').value = motivo || '';
+  htmx.trigger('#factura-accion', 'submit');
+}
+
+function cobrarFactura(id, numero) {
+  const ref = prompt('Payment reference for ' + numero + ' (optional):', '');
+  if (ref === null) return;
+  _enviarAccionFactura('pagar', id, ref, '');
+}
+
+function cancelarFactura(id, numero) {
+  const motivo = prompt('Why is ' + numero + ' being cancelled? The number stays used.');
+  if (motivo === null) return;
+  if (!motivo.trim()) { alert('A reason is required to cancel an invoice.'); return; }
+  _enviarAccionFactura('cancelar', id, '', motivo);
+}
+</script>
+{% endif %}
