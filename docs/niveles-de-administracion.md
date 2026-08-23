@@ -135,3 +135,60 @@ de una empresa muestra la lista de todas las empresas dentro de esa pantalla,
 duplicando lo que ya vive en `/platform/`. Hoy cuelga del mismo permiso que el
 panel, así que no es un hueco; es una mezcla de niveles que valdría la pena
 deshacer.
+
+## Cómo se da de alta a cada quien
+
+Los tres niveles no se crean por el mismo camino, y eso es deliberado.
+
+| Quién | Dónde | Rol |
+|---|---|---|
+| Usuario de plataforma | `create_platform_user` por línea de comandos, o `/platform/users/` | `admin` o `staff` de plataforma |
+| Personal de la empresa | Pestaña Users → *Create New User* | `admin`, `manager` o `staff` |
+| Primera persona de un cliente | Pestaña Users → *New Customer + Login* | `customer`, siempre |
+| Otra persona de ese cliente | Pestaña Users → *Otro usuario para un cliente que ya existe* | `customer`, siempre |
+
+**El rol `customer` ya no aparece en el desplegable del alta de personal.**
+Ofrecerlo junto a los demás fue lo que permitió el error que apareció en
+producción: se elegía un cliente en el formulario y se dejaba el `staff` que
+viene por omisión, con lo que la cuenta quedaba con cliente **y** con rol de la
+casa. Como `customer_ops_filter` acota por rol y no por tener cliente, esa
+persona veía todas las operaciones de la empresa mientras quien la creó creía
+haber dado un acceso limitado.
+
+En la edición sí se ofrece, pero **solo a quien ya es `customer`**: sin la
+opción en su propio desplegable, guardar cualquier otro cambio suyo lo
+convertiría en personal de la empresa sin querer.
+
+Y la comprobación de fondo no está en el HTML sino en la vista: un cliente
+asignado obliga al rol `customer`, y el rol `customer` obliga a un cliente.
+
+## El nombre de usuario es único en toda la plataforma
+
+`User.username` es único en la base entera, no por empresa. Mientras exista un
+usuario llamado `admin`, **ninguna otra empresa podrá tener el suyo**. Y el
+login tampoco distingue empresa: se entra con usuario y contraseña, y el sistema
+deduce la empresa del perfil.
+
+Por eso el administrador de la primera empresa se renombró de `admin` a
+`dyser`: la convención es **el nombre de la empresa**, adoptada mientras había
+una sola y no cuando ya hubiera cinco. Renombrar no toca la contraseña ni el
+histórico — las operaciones siguen siendo suyas, porque cuelgan del id y no del
+nombre.
+
+Que cada empresa pueda tener literalmente su propio `admin` exigiría autenticar
+contra el subdominio, que es un cambio mayor: Django impone el usuario único, así
+que habría que guardar un nombre de acceso por empresa y componer el username
+real, o autenticar por correo.
+
+### Cuidado con `create_superuser.py`
+
+Ese script corre **en cada deploy** desde `build.sh` y crea el usuario que diga
+`SUPERUSER_USERNAME`, que por omisión es `admin`. Renombrar al `admin` de una
+empresa dejaba ese nombre libre, así que el siguiente deploy habría fabricado un
+superusuario nuevo —con el admin de Django y los datos de todas las empresas
+dentro— sin que nadie lo pidiera.
+
+Ahora el script **no crea nada mientras exista un administrador de plataforma**.
+Es la misma regla que ya aplica `platform_role`: la llave maestra existe para
+resolver el huevo y la gallina, y deja de valer en cuanto el sucesor existe. Sin
+esa condición, el script era una puerta que se volvía a abrir sola.

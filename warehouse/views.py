@@ -1757,6 +1757,8 @@ def _incoherencia_rol_cliente(role, cid):
         return (f'A user linked to a customer must have the role "customer". '
                 f'"{role}" is a company role and would see every operation of '
                 f'every customer. Nothing was changed.')
+    # El desplegable del alta de personal ya no ofrece 'customer', pero eso es
+    # solo el HTML: el rechazo tiene que estar aqui, que es donde se decide.
     if role == 'customer' and not cid:
         return ('A customer user needs the customer it belongs to; without it '
                 'the account cannot see a single operation. Nothing was changed.')
@@ -1855,6 +1857,38 @@ def user_management(request):
                 msg = (f'Customer "{cat.name}" created, with login "{uname}" '
                        f'already linked to it. The password is not stored '
                        f'anywhere — write it down or set a new one later.')
+        elif action == 'create_customer_user':
+            # La segunda persona de un cliente que ya existe.
+            #
+            # Sin este camino, sacar 'customer' del desplegable del alta de
+            # personal dejaria sin forma de darle acceso a nadie mas: el alta de
+            # cliente crea el cliente **y** su primer usuario, y se niega si el
+            # cliente ya esta. Aqui el rol no se elige -- es 'customer' siempre --
+            # y el cliente es obligatorio, que es lo unico que define a un
+            # usuario de cliente.
+            uname = request.POST.get('username', '').strip()
+            pwd   = request.POST.get('password', '').strip()
+            cid   = request.POST.get('customer_id', '').strip()
+            cat   = (Catalog.objects.filter(pk=int(cid), tenant=tenant,
+                                            category='CUSTOMER').first()
+                     if cid.isdigit() else None)
+
+            if not (uname and pwd and cat):
+                msg = 'Customer, username and password are all required.'
+                msg_is_error = True
+            elif User.objects.filter(username=uname).exists():
+                msg = (f'Username "{uname}" is already taken. Nothing was '
+                       f'created — pick a different username.')
+                msg_is_error = True
+            else:
+                with transaction.atomic():
+                    u = User.objects.create_user(username=uname, password=pwd)
+                    UserProfile.objects.create(
+                        user=u, tenant=tenant, role='customer', customer=cat)
+                msg = (f'User "{uname}" created for "{cat.name}". It will only '
+                       f'ever see the operations of that customer. The password is '
+                       f'not stored anywhere — write it down or set a new one later.')
+
         elif action == 'delete':
             uid = request.POST.get('user_id')
             u   = get_object_or_404(User, pk=uid, profile__tenant=tenant)

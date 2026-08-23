@@ -9,7 +9,18 @@
 
 <!-- Create user form -->
 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:10px">Create New User</div>
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:2px">Create New User &mdash; personal de la empresa</div>
+  {% comment %}
+  Aqui se da de alta a la gente de la casa. El rol 'customer' se saco del
+  desplegable a proposito: ofrecerlo junto a los demas fue lo que permitio crear
+  usuarios "para un cliente" con rol de operador, que veian todas las
+  operaciones de la empresa. Los usuarios de un cliente se dan de alta por los
+  dos formularios de abajo, donde el cliente es obligatorio y el rol no se
+  elige.
+  {% endcomment %}
+  <div style="font-size:11px;color:#64748b;margin-bottom:10px">
+    Para dar acceso a alguien de un cliente, usa los formularios azules de abajo.
+  </div>
   <form hx-post="{% url 'user_management' %}" hx-target="#users-content" hx-swap="innerHTML"
         style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
     {% csrf_token %}<input type="hidden" name="action" value="create">
@@ -28,19 +39,7 @@
         {% if profile|can_assign_role:'admin' %}<option value="admin">Admin</option>{% endif %}
         <option value="manager">Manager</option>
         <option value="staff" selected>Staff</option>
-        <option value="customer">Customer</option>
       </select>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Link to Customer</label>
-      <div style="position:relative;min-width:160px">
-        <input type="text" id="new-cust-input" placeholder="Type customer name..." autocomplete="off"
-               style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:100%"
-               oninput="userCustFilter('new')" onfocus="userCustOpen('new')"
-               onblur="setTimeout(()=>{const d=document.getElementById('new-cust-drop');if(d)d.style.display='none'},200)">
-        <input type="hidden" name="customer_id" id="new-cust-id">
-        <div id="new-cust-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #0ea5e9;border-top:none;border-radius:0 0 6px 6px;z-index:999;max-height:140px;overflow-y:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)"></div>
-      </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Delete Password</label>
@@ -102,6 +101,47 @@
              style="height:28px;padding:4px 8px;border:1px solid #bae6fd;border-radius:6px;font-size:12px;width:150px">
     </div>
     <button type="submit" class="btn btn-p" style="height:28px">+ Create Customer &amp; Login</button>
+  </form>
+</div>
+
+{% comment %}
+La segunda persona de un cliente que ya esta dado de alta. Sin este camino,
+sacar 'customer' del desplegable de arriba dejaria sin forma de hacerlo: el
+formulario de al lado crea el cliente **y** su primer usuario, y se niega si el
+cliente ya existe.
+
+El rol no se elige, es siempre 'customer', y el cliente es obligatorio: las dos
+cosas juntas son lo unico que define a un usuario de cliente.
+{% endcomment %}
+<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;margin-bottom:16px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#0284c7;margin-bottom:2px">Otro usuario para un cliente que ya existe</div>
+  <div style="font-size:11px;color:#64748b;margin-bottom:10px">
+    Para cuando un cliente necesita que entren dos o mas personas. Solo vera las
+    operaciones de ese cliente.
+  </div>
+  <form hx-post="{% url 'user_management' %}" hx-target="#users-content" hx-swap="innerHTML"
+        style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+    {% csrf_token %}<input type="hidden" name="action" value="create_customer_user">
+
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Cliente *</label>
+      <select name="customer_id" required
+              style="height:28px;padding:4px 8px;border:1px solid #bae6fd;border-radius:6px;font-family:inherit;font-size:12px;min-width:190px">
+        <option value="">— elige el cliente —</option>
+        {% for c in customers %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Username *</label>
+      <input type="text" name="username" required placeholder="Their login"
+             style="height:28px;padding:4px 8px;border:1px solid #bae6fd;border-radius:6px;font-size:12px;width:130px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Password *</label>
+      <input type="text" name="password" required placeholder="Write it down"
+             style="height:28px;padding:4px 8px;border:1px solid #bae6fd;border-radius:6px;font-size:12px;width:150px">
+    </div>
+    <button type="submit" class="btn btn-p" style="height:28px">+ Añadir usuario</button>
   </form>
 </div>
 
@@ -217,7 +257,13 @@
               {% if profile|can_assign_role:'admin' or p.role == 'admin' %}<option value="admin" {% if p and p.role == 'admin' %}selected{% endif %}>Admin</option>{% endif %}
               <option value="manager"    {% if not p or p.role == 'manager' %}selected{% endif %}>Manager</option>
               <option value="staff"      {% if p and p.role == 'staff' %}selected{% endif %}>Staff</option>
-              <option value="customer"   {% if p and p.role == 'customer' %}selected{% endif %}>Customer</option>
+              {% comment %}
+              A quien ya es usuario de un cliente hay que seguir ofreciendole su
+              propio rol: sin la opcion, guardar cualquier otro cambio suyo lo
+              convertiria en personal de la empresa sin querer. Lo que no se
+              ofrece es convertir en cliente a quien no lo es.
+              {% endcomment %}
+              {% if p and p.role == 'customer' %}<option value="customer" selected>Customer</option>{% endif %}
             </select>
           </div>
 

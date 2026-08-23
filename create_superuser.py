@@ -18,6 +18,25 @@ django.setup()
 
 from django.contrib.auth.models import User
 
+from warehouse.models import PlatformUser
+
+# Si ya hay un administrador de plataforma, este script no tiene nada que hacer.
+#
+# Es la misma regla que ya aplica `platform_role`: la llave maestra existe para
+# resolver el huevo y la gallina -- hace falta una llave para crear al primer
+# administrador -- y deja de valer en cuanto ese sucesor existe.
+#
+# Sin esta comprobacion el script es una puerta que se vuelve a abrir sola.
+# Basta con que el usuario llamado como `SUPERUSER_USERNAME` deje de existir
+# -- porque se renombro, por ejemplo -- para que el siguiente deploy fabrique
+# un superusuario nuevo, con el admin de Django y los datos de todas las
+# empresas dentro, sin que nadie lo haya pedido.
+if PlatformUser.objects.filter(role='admin').exists():
+    print("Ya hay un administrador de plataforma; no se crea ningun "
+          "superusuario. Si de verdad hiciera falta uno, se crea a mano con "
+          "'python manage.py createsuperuser'.")
+    sys.exit(0)
+
 username = os.environ.get('SUPERUSER_USERNAME', 'admin')
 email = os.environ.get('SUPERUSER_EMAIL', '')
 password = os.environ.get('SUPERUSER_PASSWORD', '')
