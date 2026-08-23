@@ -1021,7 +1021,46 @@ function closeModal(){
   // pero vivo, sigue pidiendo el hilo para siempre y dandolo por leido, asi que
   // el aviso de la tabla no volveria a encenderse nunca.
   document.getElementById('modal-body').innerHTML = '';
+  // Al salir de un hilo su aviso acaba de quedar en cero: es el momento exacto
+  // en que la tabla esta mintiendo.
+  refrescarAvisosDeChat();
 }
+
+// Los avisos de mensajes de la tabla, al dia sin recargar la pantalla.
+//
+// La tabla se pinta una vez y se queda quieta, asi que un mensaje que llega no
+// se veria hasta la siguiente recarga y el aviso de un hilo ya leido seguiria
+// encendido. Recargar la tabla entera no es opcion -- doscientas filas, el
+// scroll horizontal puesto a mano y los menus abiertos -- asi que solo viajan
+// los numeros y aqui se reparten.
+async function refrescarAvisosDeChat(){
+  const botones = document.querySelectorAll('[data-chat-op]');
+  if (!botones.length) return;
+  try {
+    const resp = await fetch('/operations/chat-badges/');
+    if (!resp.ok) return;
+    const datos = await resp.json();
+    botones.forEach(function(boton){
+      const sinLeer = datos.hilos[boton.dataset.chatOp];
+      if (sinLeer === undefined) {           // esa operacion no tiene hilo
+        boton.classList.remove('visible', 'con-pendientes');
+        return;
+      }
+      boton.classList.add('visible');
+      boton.classList.toggle('con-pendientes', sinLeer > 0);
+      boton.querySelector('.chat-n').textContent = sinLeer > 0 ? ' ' + sinLeer : '';
+      boton.title = sinLeer > 0
+        ? sinLeer + ' mensaje(s) sin leer'
+        : 'Conversacion de la operacion';
+    });
+  } catch (e) {
+    // Un fallo de red no puede romper la tabla: el aviso se queda como estaba
+    // y el siguiente intento lo corrige.
+  }
+}
+// Mas espaciado que el hilo abierto: aqui solo se decide si algo se pinta en
+// ambar, y treinta segundos de retraso en eso no le cuestan nada a nadie.
+setInterval(refrescarAvisosDeChat, 30000);
 
 // Nueva versión de initActiveTab que respeta la URL//////// 061526
 // function initActiveTab() {

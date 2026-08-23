@@ -346,6 +346,59 @@ class IndicadorEnElListadoTests(HiloBase):
         self.assertEqual(sum(op.sin_leer for op in anotadas), 6)
 
 
+class AvisosAlDiaSinRecargarTests(HiloBase):
+    """
+    La tabla se pinta una vez y se queda quieta. Estos son los numeros que la
+    ponen al dia sin recargarla: sin ellos, un mensaje que llega no se ve hasta
+    que a alguien se le ocurre recargar, y el aviso de un hilo ya leido sigue
+    encendido mintiendo.
+    """
+
+    def test_devuelve_lo_que_falta_por_leer(self):
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+
+        self.client.force_login(self.staff)
+        datos = self.client.get('/operations/chat-badges/').json()
+        self.assertEqual(datos['hilos'][str(self.op.pk)], 1)
+
+    def test_no_menciona_las_operaciones_sin_hilo(self):
+        """Una operacion sobre la que nadie dijo nada no tiene nada que encender."""
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+
+        self.client.force_login(self.staff)
+        datos = self.client.get('/operations/chat-badges/').json()
+        self.assertIn(str(self.op.pk), datos['hilos'])
+        self.assertNotIn(str(self.op_b.pk), datos['hilos'])
+
+    def test_un_hilo_leido_va_en_cero_y_no_desaparece(self):
+        """
+        Tiene que seguir apareciendo con cero: es lo que distingue «hay
+        conversacion y esta al dia» de «no hay conversacion», y lo que apaga el
+        ambar sin borrar el boton.
+        """
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+
+        self.client.force_login(self.staff)
+        datos = self.client.get('/operations/chat-badges/').json()
+        self.assertEqual(datos['hilos'][str(self.op.pk)], 0)
+
+    def test_un_cliente_no_se_entera_de_los_hilos_de_otro(self):
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+        self._escribir(self.staff, self.op_b, 'La suya tambien.')
+
+        self.client.force_login(self.usuario_a)
+        datos = self.client.get('/operations/chat-badges/').json()
+        self.assertIn(str(self.op.pk), datos['hilos'])
+        self.assertNotIn(str(self.op_b.pk), datos['hilos'])
+
+    def test_quien_no_tiene_rol_no_recibe_nada(self):
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+
+        self.client.force_login(self.sin_rol)
+        datos = self.client.get('/operations/chat-badges/').json()
+        self.assertEqual(datos['hilos'], {})
+
+
 class AvisoPorCorreoTests(HiloBase):
     def setUp(self):
         mail.outbox = []

@@ -133,3 +133,44 @@ por fila dejaría de cargar en cuanto la empresa lleve unos meses trabajando.
 El panel y la lista van **en dos plantillas a propósito**: el refresco cada diez
 segundos reemplaza solo la lista. Si reemplazara el panel entero, borraría lo
 que el operador lleva escrito cada vez que se cumplen los diez segundos.
+
+## Dos cosas que la pantalla tiene que hacer sola
+
+Ambas se descubrieron probando en producción, y sin ellas el hilo parece roto
+aunque el servidor esté haciendo lo correcto.
+
+**El panel baja al último mensaje.** Mide 260 px: con once mensajes quedaban
+590 px ocultos por debajo, así que lo que llegaba entraba fuera de la vista y
+parecía que no llegaba nada. Baja solo cada vez que entra contenido — salvo
+para quien subió a leer algo, que se queda donde estaba (`data-abajo` en
+`chat_thread.html`).
+
+**Los avisos de la tabla se refrescan sin recargar.** La tabla se pinta una vez
+y se queda quieta, de modo que un mensaje nuevo no se veía hasta la siguiente
+recarga y el aviso de un hilo ya leído seguía encendido. `chat_badges` devuelve
+solo los números —recargar doscientas filas con su scroll horizontal a mano y
+sus menús abiertos no es opción— y `refrescarAvisosDeChat` los reparte cada 30
+segundos y al cerrar el modal, que es el momento exacto en que la tabla está
+mintiendo. El botón existe en todas las filas, oculto: si solo se pintara donde
+ya hay conversación, el primer mensaje de una operación no tendría dónde
+aparecer.
+
+## El rol de un usuario de cliente
+
+Un usuario de cliente lleva rol `customer` **y** su cliente. La pantalla de
+usuarios ofrecía los dos campos sueltos, así que se podía dar de alta a alguien
+«para un cliente» dejándole el `staff` que viene por omisión: el perfil quedaba
+con cliente y con rol de la casa, y como `customer_ops_filter` acota por rol,
+esa cuenta **veía todas las operaciones de la empresa**, incluidas las de los
+demás clientes, mientras quien la creó creía haber dado un acceso limitado.
+
+Ahora el alta y la edición rechazan las dos incoherencias:
+
+- **Cliente asignado con rol de la casa** — el caso peligroso.
+- **Rol `customer` sin cliente** — no abre nada de más, pero entrega una cuenta
+  que no alcanza ni una sola operación, y el «no veo mis operaciones» tarda días
+  en llegar.
+
+El filtro sigue acotando por rol y así debe seguir: el `customer` del perfil de
+un operador no significa nada. La puerta se cierra en la pantalla, que es donde
+se describe mal a una persona. Está en `warehouse/tests_rol_y_cliente.py`.

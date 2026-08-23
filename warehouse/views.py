@@ -1702,6 +1702,36 @@ def _perfil_de(user):
     return UserProfile.objects.filter(user=user).first()
 
 
+def _incoherencia_rol_cliente(role, cid):
+    """
+    Por que un usuario no puede llevar a la vez un cliente y un rol de la casa.
+
+    El formulario ofrece el rol y el cliente como dos campos sueltos, asi que
+    se podia dar de alta a alguien "para un cliente" y dejarle el rol `staff`
+    que viene por omision. El perfil quedaba con cliente y con rol de operador,
+    y `customer_ops_filter` solo acota a quien tiene rol 'customer': ese
+    usuario veia **todas las operaciones de la empresa**, incluidas las de los
+    demas clientes, mientras quien lo creo pensaba que le habia dado un acceso
+    limitado. No era un fallo del filtro sino de la pantalla que permitia
+    describir mal a una persona.
+
+    Al reves tambien importa, aunque no abra nada: un 'customer' sin cliente no
+    alcanza ninguna operacion -- es el fail-closed de `customer_ops_filter` --,
+    asi que se le entrega a alguien una cuenta que no le sirve para nada y el
+    "no veo mis operaciones" tarda dias en llegar.
+
+    Devuelve el texto del rechazo, o cadena vacia si la combinacion es buena.
+    """
+    if cid and role != 'customer':
+        return (f'A user linked to a customer must have the role "customer". '
+                f'"{role}" is a company role and would see every operation of '
+                f'every customer. Nothing was changed.')
+    if role == 'customer' and not cid:
+        return ('A customer user needs the customer it belongs to; without it '
+                'the account cannot see a single operation. Nothing was changed.')
+    return ''
+
+
 @login_required
 def user_management(request):
     tenant  = get_tenant_or_404(request)
@@ -1731,6 +1761,9 @@ def user_management(request):
                 # un administrador podia nombrar un 'superadmin' y quedar por
                 # debajo de alguien a quien acababa de crear.
                 msg = f'You cannot create a user with the role "{role}".'
+                msg_is_error = True
+            elif uname and pwd and _incoherencia_rol_cliente(role, cid):
+                msg = _incoherencia_rol_cliente(role, cid)
                 msg_is_error = True
             elif uname and pwd:
                 if not User.objects.filter(username=uname).exists():
@@ -1851,6 +1884,9 @@ def user_management(request):
             u    = get_object_or_404(User, pk=uid, profile__tenant=tenant)
             if not profile.can_manage_user(_perfil_de(u)) or not profile.can_assign_role(role):
                 msg = f'You cannot assign the role "{role}" to "{u.username}".'
+                msg_is_error = True
+            elif _incoherencia_rol_cliente(role, cid):
+                msg = _incoherencia_rol_cliente(role, cid)
                 msg_is_error = True
             else:
                 p, _ = UserProfile.objects.get_or_create(user=u, defaults={'tenant': tenant})
@@ -3128,3 +3164,30 @@ def _nombre_visible(user):
     """
     completo = (user.get_full_name() or '').strip()
     return completo or user.username
+
+
+@login_required
+@require_GET
+def chat_badges(request):
+    """
+    Cuantos mensajes sin leer tiene cada hilo, para refrescar los avisos de la
+    tabla sin recargar la pantalla.
+
+    La tabla se pinta una vez y se queda quieta: sin esto, un mensaje que llega
+    no se ve hasta que alguien recarga, y el aviso de un hilo recien leido sigue
+    encendido hasta la recarga siguiente. Recargar la tabla entera cada pocos
+    segundos no es opcion -- son doscientas filas, un scroll horizontal a mano y
+    varios menus abiertos -- asi que solo viajan los numeros.
+
+    Devuelve unicamente las operaciones que quien pregunta puede ver y que ya
+    tienen hilo; las demas no tienen nada que encender.
+    """
+    tenant = get_tenant_or_404(request)
+    if lado_en_el_hilo(request.user) is None:
+        return JsonResponse({'hilos': {}})
+
+    ops = WarehouseOperation.objects.filter(
+        tenant=tenant, conversation__isnull=False)
+    ops = customer_ops_filter(request.user, ops)[:500]
+    anotadas = anotar_hilos(request.user, ops)
+    return JsonResponse({'hilos': {str(op.pk): op.sin_leer for op in anotadas}})

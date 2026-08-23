@@ -25,6 +25,8 @@ urlpatterns = [
     path('operations/<int:pk>/download-all/', views.operation_download_all, name='operation_download_all'),
     # El hilo de la operacion. El GET lo pide el panel al abrirse y cada
     # refresco del polling; el POST escribe.
+    # Los numeros de los avisos de la tabla, para no recargarla entera.
+    path('operations/chat-badges/', views.chat_badges, name='chat_badges'),
     path('operations/<int:pk>/chat/', views.operation_chat, name='operation_chat'),
     path('operations/<int:pk>/chat/send/', views.operation_chat_send, name='operation_chat_send'),
     # Los archivos del expediente se sirven por aqui y no por el enlace

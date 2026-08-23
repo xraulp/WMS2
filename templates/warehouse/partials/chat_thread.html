@@ -14,10 +14,22 @@ bajo el boton esta para que quien escribe no tenga que acordarse.
   cierra deja de pedirse, que es lo que hace que el hilo cuente como no leido
   otra vez.
   {% endcomment %}
+  {% comment %}
+  El panel baja solo al ultimo mensaje cada vez que llega contenido. Sin esto el
+  hilo es inservible en cuanto pasa de tres o cuatro mensajes: el contenedor mide
+  260 px, lo nuevo entra por abajo y se queda fuera de la vista, asi que parece
+  que no ha llegado nada. Con once mensajes quedaban 590 px ocultos.
+
+  Lo que no baja es el hilo de quien subio a leer algo: `data-abajo` recuerda si
+  estaba pegado al final, y solo entonces se le mueve el scroll. Arrancar sin el
+  atributo cuenta como pegado, que es lo que hace que al abrir se vea lo ultimo.
+  {% endcomment %}
   <div id="chat-mensajes"
        hx-get="{% url 'operation_chat' operation.pk %}"
        hx-trigger="load, every 10s"
        hx-swap="innerHTML"
+       onscroll="this.dataset.abajo = (this.scrollHeight - this.scrollTop - this.clientHeight < 40) ? '1' : '0'"
+       hx-on::after-swap="if (this.dataset.abajo !== '0') this.scrollTop = this.scrollHeight"
        style="max-height:260px;overflow-y:auto;padding:4px 2px;margin-bottom:10px">
     <div style="font-size:12px;color:#94a3b8;text-align:center;padding:14px 0">Cargando…</div>
   </div>

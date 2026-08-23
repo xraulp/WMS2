@@ -26,6 +26,13 @@
       <thead>
         <tr>
           <th style="background:#1e293b; color:#94a3b8; white-space:nowrap;">#</th>
+          {% comment %}
+          El aviso del hilo va aqui, junto al numero, y no al final con las
+          acciones: la tabla mide 2200 px y nadie cruza esa distancia para
+          descubrir si un cliente escribio. Lo que avisa tiene que verse sin
+          mover la barra horizontal.
+          {% endcomment %}
+          <th style="background:#1e293b; color:#94a3b8; white-space:nowrap;" title="Mensajes">💬</th>
           <th style="white-space:nowrap;">Date</th>
           <th style="white-space:nowrap;">Custom ID</th>
           <th style="white-space:nowrap;">Entries Disp.</th>
@@ -60,6 +67,19 @@
         {% for op in operations %}
         <tr style="background:{% cycle '#ffffff' '#f8fafc' %};">
           <td style="color:#94a3b8; font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">{{ op.pk }}</td>
+          <td style="white-space:nowrap; text-align:center;">
+            {% comment %}
+            El boton existe en todas las filas, oculto mientras no haya hilo, y
+            lo enciende `refrescarAvisosDeChat`. Si solo se pintara donde ya hay
+            conversacion, el primer mensaje de una operacion no tendria donde
+            aparecer hasta que alguien recargara la pantalla -- que es justo el
+            momento en que mas falta hace que se vea.
+            {% endcomment %}
+            <button class="btn-action chat-aviso{% if op.tiene_hilo %} visible{% endif %}{% if op.sin_leer %} con-pendientes{% endif %}"
+                    data-chat-op="{{ op.pk }}"
+                    title="{% if op.sin_leer %}{{ op.sin_leer }} mensaje(s) sin leer{% else %}Conversacion de la operacion{% endif %}"
+                    onclick="openModal('{% url 'operation_detail' op.pk %}')">💬<span class="chat-n">{% if op.sin_leer %} {{ op.sin_leer }}{% endif %}</span></button>
+          </td>
           <td style="white-space:nowrap;">{{ op.date|date:"Y-m-d" }}</td>
           <td class="mono" style="white-space:nowrap;">{{ op.custom_id }}</td>
           <td style="white-space:nowrap;" title="{{ op.entry_dispatched }}">{{ op.entry_dispatched|default:"—"|truncatechars:20 }}</td>
@@ -104,20 +124,6 @@
           <td style="white-space:nowrap;">
             <div style="display:flex; gap:4px; align-items:center;">
               <button class="btn-action" onclick="openModal('{% url 'operation_detail' op.pk %}')">View</button>
-              {% comment %}
-              El hilo de la operacion. Se pinta en ambar con el numero cuando
-              hay mensajes que quien mira no ha visto, y en gris cuando el hilo
-              existe y esta al dia. Sin hilo no se pinta nada: lo que llama la
-              atencion tiene que ser lo que la merece.
-              {% endcomment %}
-              {% if op.sin_leer %}
-              <button class="btn-action" title="{{ op.sin_leer }} mensaje(s) sin leer"
-                      style="border-color:#f59e0b;color:#b45309;background:#fffbeb;font-weight:700"
-                      onclick="openModal('{% url 'operation_detail' op.pk %}')">💬 {{ op.sin_leer }}</button>
-              {% elif op.tiene_hilo %}
-              <button class="btn-action" title="Conversacion al dia"
-                      onclick="openModal('{% url 'operation_detail' op.pk %}')">💬</button>
-              {% endif %}
               <button class="btn-action" onclick="openEditModal({{ op.pk }})">Edit</button>
               <a class="btn-action" href="{% url 'operation_pdf' op.pk %}" target="_blank">PDF</a>
               <button class="btn-action" onclick="openDigitalWithId('{{ op.custom_id }}')">📱 Digital</button> <!-- agregado 061026-->
@@ -158,6 +164,15 @@
 .btn-action-danger {
   border-color:#fca5a5;
   color:#ef4444;
+}
+/* El aviso del hilo. Nace oculto y lo enciende refrescarAvisosDeChat. */
+.chat-aviso { display:none; }
+.chat-aviso.visible { display:inline-flex; }
+.chat-aviso.con-pendientes {
+  border-color:#f59e0b;
+  color:#b45309;
+  background:#fffbeb;
+  font-weight:700;
 }
 .btn-action:hover {
   background:#f1f5f9;
