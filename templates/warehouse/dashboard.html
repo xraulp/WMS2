@@ -40,6 +40,11 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink
 .tabs{background:#fff;border-bottom:1px solid var(--bdr);display:flex;padding:0 18px;position:fixed;top:44px;left:0;right:0;z-index:199;overflow-x:auto}
 .tab{background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:500;color:var(--soft);padding:9px 14px;transition:all .15s;white-space:nowrap}
 .tab:hover{color:var(--ink)}.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+/* El contador global de mensajes sin leer: a la derecha del todo, en ambar
+   como los avisos de la tabla, y sin pintarse cuando no hay nada. */
+.tab-sin-leer{margin-left:auto;color:#b45309;font-weight:700;background:#fffbeb;border-bottom-color:#f59e0b}
+.tab-sin-leer:hover{color:#92400e;background:#fef3c7}
+.tab-sin-leer.vacio{display:none}
 
 .pg{padding:14px 18px;max-width:1500px;margin:0 auto;margin-top:88px}
 .panel{display:none}.panel.on{display:block}
@@ -182,6 +187,22 @@ tbody td:has(.btn-action) {
   {% if platform_role %}
   <button class="tab" id="tab-platform" onclick="showTab('platform')">🛠 Platform</button>
   {% endif %}
+  {% comment %}
+  El contador global de mensajes sin leer. No es una pestana con panel propio:
+  es un atajo que lleva a la base de datos con la tabla ya acotada a lo que
+  espera respuesta.
+
+  Hace falta porque el aviso ambar de una fila solo sirve si esa fila esta a la
+  vista, y la tabla trae doscientas operaciones ordenadas por fecha: un mensaje
+  sobre una carga de hace tres meses no lo ve nadie. Va a la derecha del todo,
+  separado de las pestanas, para que aparecer y desaparecer no las desplace.
+
+  Nace oculto cuando no hay nada -- un contador en cero es ruido -- y lo
+  enciende y apaga `refrescarAvisosDeChat` cada treinta segundos.
+  {% endcomment %}
+  <button class="tab tab-sin-leer{% if not sin_leer.mensajes %} vacio{% endif %}"
+          id="tab-sin-leer" onclick="verSinLeer()"
+          title="Operations with unread messages">💬 <span id="sin-leer-n">{{ sin_leer.mensajes|default:0 }}</span> unread</button>
 </div>
 
 <div class="pg">
@@ -780,6 +801,30 @@ function filterByUser(userId) {
   }
 }
 
+// A donde lleva el contador global: la base de datos con la tabla acotada a las
+// operaciones que esperan respuesta. Los demas filtros se limpian porque la
+// tabla que llega ya no los obedece, y dejarlos puestos haria creer que si.
+function verSinLeer() {
+  showTab('database');
+  limpiarFiltrosDeLaTabla();
+  htmx.ajax('GET', '{% url "operations_unread" %}', {target:'#ops-table', swap:'innerHTML'});
+}
+
+// El camino de vuelta desde la tabla acotada.
+function verTodasLasOperaciones() {
+  limpiarFiltrosDeLaTabla();
+  htmx.ajax('GET', '{% url "operations_search" %}', {target:'#ops-table', swap:'innerHTML'});
+}
+
+function limpiarFiltrosDeLaTabla() {
+  const busqueda = document.querySelector('#panel-database input[name="q"]');
+  if (busqueda) busqueda.value = '';
+  const porUsuario = document.getElementById('filter-user');
+  if (porUsuario) porUsuario.value = '';
+  const porEstado = document.getElementById('status-filter-sel');
+  if (porEstado) porEstado.value = '';
+}
+
 // Todas las entradas al panel digital pasan por aqui: abrir la pestana, pulsar
 // Search, y la carga inicial. Antes cada una hacia su propia peticion, con dos
 // consecuencias: si la unica que correspondia no llegaba a ejecutarse el panel
@@ -1063,11 +1108,22 @@ function closeModal(){
 // los numeros y aqui se reparten.
 async function refrescarAvisosDeChat(){
   const botones = document.querySelectorAll('[data-chat-op]');
-  if (!botones.length) return;
+  const contador = document.getElementById('tab-sin-leer');
+  // Sin la tabla a la vista el contador sigue haciendo falta: quien esta en
+  // otra pestana es justo a quien hay que avisarle de que le escribieron.
+  if (!botones.length && !contador) return;
   try {
     const resp = await fetch('/operations/chat-badges/');
     if (!resp.ok) return;
     const datos = await resp.json();
+    if (contador) {
+      const total = datos.mensajes || 0;
+      document.getElementById('sin-leer-n').textContent = total;
+      contador.classList.toggle('vacio', total === 0);
+      contador.title = total === 0
+        ? 'Operations with unread messages'
+        : total + ' unread message(s) in ' + (datos.operaciones || 0) + ' operation(s)';
+    }
     botones.forEach(function(boton){
       const sinLeer = datos.hilos[boton.dataset.chatOp];
       if (sinLeer === undefined) {           // esa operacion no tiene hilo

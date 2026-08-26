@@ -209,6 +209,10 @@ def dashboard(request):
         'carriers_json':     cat_json('CARRIER'),
         'bundle_types_json': cat_json('BUNDLE_TYPE'),
         'active_tab': request.GET.get('tab', 'form'),
+        # El contador global de mensajes sin leer. Se pinta en la primera carga
+        # y lo mantiene al dia `refrescarAvisosDeChat`; sin esto, quien entra y
+        # no toca nada durante treinta segundos no sabe que le escribieron.
+        'sin_leer': resumen_sin_leer(request.user, tenant),
         'profile': profile,
         'is_home': profile.is_home(),
         'users': users,
@@ -3184,6 +3188,73 @@ def anotar_hilos(user, operaciones):
     return ops
 
 
+def hilos_pendientes(user, tenant):
+    """
+    Las operaciones que ese usuario puede ver y sobre las que le han escrito
+    algo que todavia no ha leido, lo nuevo primero.
+
+    Es la misma cuenta que hace `anotar_hilos` pero al reves: alli la pregunta
+    es "de estas doscientas filas, cuales tienen aviso", y aqui es "de todo el
+    almacen, cuales me estan esperando". Hacen falta las dos porque la tabla
+    trae doscientas operaciones ordenadas por fecha: un mensaje sobre una carga
+    de hace tres meses enciende un aviso en una fila que nadie tiene a la vista.
+
+    Se ordena por el ultimo mensaje y no por la fecha de la operacion, porque
+    lo que se busca aqui es la conversacion viva, no la carga reciente.
+    """
+    if lado_en_el_hilo(user) is None:
+        return WarehouseOperation.objects.none()
+
+    # Se parte de los mensajes y no de las conversaciones a proposito: un
+    # `exclude` sobre los mensajes de un hilo descarta el hilo entero en cuanto
+    # el usuario haya escrito una vez en el, que es justo el caso normal --
+    # nadie responde y luego deja de tener mensajes pendientes ahi.
+    leido_hasta = ConversationRead.objects.filter(
+        conversation=OuterRef('conversation'), user=user).values('last_read_at')[:1]
+    con_pendientes = (Message.objects
+                      .filter(conversation__tenant=tenant)
+                      .exclude(author_id=user.pk)
+                      .annotate(leido_hasta=Subquery(leido_hasta))
+                      .filter(Q(leido_hasta__isnull=True) |
+                              Q(created_at__gt=F('leido_hasta')))
+                      .values('conversation__operation_id'))
+
+    ops = WarehouseOperation.objects.filter(
+        tenant=tenant, pk__in=con_pendientes).select_related(
+        'customer', 'shipper', 'carrier', 'bundle_type', 'created_by')
+    return customer_ops_filter(user, ops).order_by(
+        '-conversation__last_message_at')
+
+
+def resumen_sin_leer(user, tenant):
+    """
+    Cuantos mensajes sin leer tiene esta persona y en cuantas operaciones.
+
+    Va en una sola consulta agregada y sin tope: el numero del contador global
+    tiene que ser el de todo lo que le espera, no el de las quinientas
+    operaciones que quepan en una pantalla. Un contador que dice "3" cuando hay
+    doce miente peor que no estar.
+    """
+    if lado_en_el_hilo(user) is None:
+        return {'mensajes': 0, 'operaciones': 0}
+
+    visibles = customer_ops_filter(user, WarehouseOperation.objects.filter(
+        tenant=tenant, conversation__isnull=False))
+    leido_hasta = ConversationRead.objects.filter(
+        conversation=OuterRef('conversation'), user=user).values('last_read_at')[:1]
+    pendientes = (Message.objects
+                  .filter(conversation__operation__in=visibles)
+                  .exclude(author_id=user.pk)
+                  .annotate(leido_hasta=Subquery(leido_hasta))
+                  .filter(Q(leido_hasta__isnull=True) |
+                          Q(created_at__gt=F('leido_hasta'))))
+    cuenta = pendientes.aggregate(
+        mensajes=Count('pk'),
+        operaciones=Count('conversation_id', distinct=True))
+    return {'mensajes': cuenta['mensajes'] or 0,
+            'operaciones': cuenta['operaciones'] or 0}
+
+
 def _operacion_del_hilo(request, pk):
     """
     La operacion cuyo hilo se pide, comprobando que quien lo pide pueda verla.
@@ -3303,10 +3374,51 @@ def chat_badges(request):
     """
     tenant = get_tenant_or_404(request)
     if lado_en_el_hilo(request.user) is None:
-        return JsonResponse({'hilos': {}})
+        return JsonResponse({'hilos': {}, 'mensajes': 0, 'operaciones': 0})
 
     ops = WarehouseOperation.objects.filter(
         tenant=tenant, conversation__isnull=False)
     ops = customer_ops_filter(request.user, ops)[:500]
     anotadas = anotar_hilos(request.user, ops)
-    return JsonResponse({'hilos': {str(op.pk): op.sin_leer for op in anotadas}})
+    # El total viaja con los avisos de fila porque los dos caducan a la vez: el
+    # momento en que un aviso se apaga es el mismo en que el contador global
+    # baja, y pedirlos por separado los deja discrepando entre peticiones.
+    datos = resumen_sin_leer(request.user, tenant)
+    return JsonResponse({
+        'hilos': {str(op.pk): op.sin_leer for op in anotadas},
+        'mensajes':    datos['mensajes'],
+        'operaciones': datos['operaciones'],
+    })
+
+
+@login_required
+@require_GET
+def operations_unread(request):
+    """
+    La tabla de operaciones, acotada a las que tienen mensajes sin leer.
+
+    Es a donde lleva el contador global. Sin esto el contador seria un numero
+    sin destino: diria que hay cuatro mensajes esperando y dejaria al operador
+    buscandolos a mano por doscientas filas ordenadas por fecha.
+
+    No aparta las que se acaban de leer mientras se mira: la lista se pide una
+    vez y se queda quieta, asi que abrir un hilo desde aqui no hace desaparecer
+    la fila bajo el raton. El contador de arriba si baja, que es donde se
+    espera ver el efecto.
+    """
+    tenant = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+
+    # `hilos_pendientes` es quien decide que filas entran; `anotar_hilos` solo
+    # les pone su numero. No se vuelve a filtrar aqui a proposito: si algun dia
+    # los dos criterios divergieran, una fila con el ambar apagado se ve y se
+    # entiende, mientras que una fila que desaparece no deja rastro de nada.
+    ops = list(hilos_pendientes(request.user, tenant)[:200])
+    anotadas = anotar_hilos(request.user, ops)
+
+    return render(request, 'warehouse/partials/operations_table.html', {
+        'operations': anotadas,
+        'is_home':    is_home(request.user),
+        'profile':    profile,
+        'solo_sin_leer': True,
+    })

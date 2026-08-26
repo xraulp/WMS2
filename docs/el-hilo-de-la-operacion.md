@@ -119,12 +119,51 @@ El conteo se calcula en **dos consultas para todo el listado** (`anotar_hilos`),
 no una por fila: la tabla trae hasta doscientas operaciones y con una consulta
 por fila dejaría de cargar en cuanto la empresa lleve unos meses trabajando.
 
+## El contador global
+
+Un aviso en una fila **solo sirve si esa fila está a la vista**. La tabla trae
+doscientas operaciones ordenadas por fecha, así que un mensaje sobre una carga
+de hace tres meses enciende un ámbar que nadie va a ver: está mil setecientos
+píxeles por debajo del borde de la pantalla.
+
+Por eso, a la derecha de las pestañas va un contador con **todo lo que le espera
+a quien mira**, y al pulsarlo la tabla llega acotada a las operaciones que
+esperan respuesta.
+
+| Pieza | Qué hace |
+|---|---|
+| `resumen_sin_leer(user, tenant)` | El total, en una sola consulta agregada y **sin tope**: un contador que dice «3» cuando hay doce miente peor que no estar |
+| `hilos_pendientes(user, tenant)` | Las operaciones con algo sin leer, la conversación más reciente primero |
+| `operations_unread` | La tabla acotada, a donde lleva el contador |
+| `verSinLeer()` en el tablero | Abre *Database*, limpia los demás filtros y pide esa tabla |
+
+Detalles que no son casuales:
+
+- **El total viaja con los avisos de fila**, en la misma respuesta de
+  `chat_badges`. Los dos caducan en el mismo instante —cuando un aviso se apaga
+  el total baja— y pedirlos por separado los deja discrepando entre peticiones.
+- **Se ordena por el último mensaje**, no por la fecha de la operación: lo que
+  se busca aquí es la conversación viva, no la carga reciente.
+- **La consulta parte de los mensajes, no de las conversaciones.** Un `exclude`
+  sobre los mensajes de un hilo descarta el hilo entero en cuanto uno haya
+  escrito en él una vez, que es justo el caso normal: la empresa contesta y el
+  cliente vuelve a escribir.
+- **La fila leída no desaparece bajo el ratón.** La lista se pide una vez y se
+  queda quieta, así que abrir un hilo desde ahí no reordena lo que se está
+  mirando. El contador de arriba sí baja, que es donde se espera ver el efecto.
+- **En cero no se pinta.** Un contador que siempre está ahí diciendo «0» deja de
+  leerse a la semana. Va separado de las pestañas para que aparecer y
+  desaparecer no las desplace.
+- **La tabla acotada dice que lo está**, con el camino de vuelta al lado: una
+  tabla que de pronto muestra dos filas de doscientas, sin explicación, se lee
+  como que se perdieron las demás.
+
 ## Cómo está hecho
 
 | Pieza | Dónde |
 |---|---|
 | `Conversation`, `Message`, `ConversationRead` | `warehouse/models.py` |
-| `lado_en_el_hilo`, `anotar_hilos`, las dos vistas | `warehouse/views.py` |
+| `lado_en_el_hilo`, `anotar_hilos`, `resumen_sin_leer`, `hilos_pendientes` y las vistas | `warehouse/views.py` |
 | `avisar_mensaje_nuevo`, `correos_del_tenant` | `warehouse/notifications.py` |
 | El panel y la lista de mensajes | `templates/warehouse/partials/chat_thread.html` y `chat_messages.html` |
 | El correo | `templates/warehouse/email/chat_email.html` |

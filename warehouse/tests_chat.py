@@ -481,3 +481,217 @@ class AvisoPorCorreoTests(HiloBase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(Message.objects.count(), 1)
+
+
+class ContadorGlobalTests(HiloBase):
+    """
+    El contador de mensajes sin leer que va junto a las pestanas, y la tabla
+    acotada a la que lleva.
+
+    El aviso ambar de una fila solo sirve si esa fila esta a la vista, y la
+    tabla trae doscientas operaciones ordenadas por fecha: un mensaje sobre una
+    carga de hace tres meses no lo ve nadie. Esto es lo que hace que se vea.
+    """
+
+    def test_cuenta_todo_lo_que_espera_a_esa_persona(self):
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+        self._escribir(self.usuario_b, self.op_b, 'La mia cuando llega?')
+        self._escribir(self.usuario_b, self.op_b, 'Es urgente.')
+
+        self.client.force_login(self.staff)
+        datos = self.client.get('/operations/chat-badges/').json()
+        self.assertEqual(datos['mensajes'], 3)
+        self.assertEqual(datos['operaciones'], 2)
+
+    def test_los_propios_no_cuentan_en_el_total(self):
+        """Un contador que sube cuando uno mismo escribe no avisa de nada."""
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+
+        self.client.force_login(self.staff)
+        datos = self.client.get('/operations/chat-badges/').json()
+        self.assertEqual(datos['mensajes'], 0)
+        self.assertEqual(datos['operaciones'], 0)
+
+    def test_cada_cliente_solo_cuenta_lo_suyo(self):
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+        self._escribir(self.staff, self.op_b, 'La suya tambien.')
+
+        self.client.force_login(self.usuario_a)
+        datos = self.client.get('/operations/chat-badges/').json()
+        self.assertEqual(datos['mensajes'], 1)
+        self.assertEqual(datos['operaciones'], 1)
+
+    def test_quien_no_tiene_rol_no_tiene_contador(self):
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+
+        self.client.force_login(self.sin_rol)
+        datos = self.client.get('/operations/chat-badges/').json()
+        self.assertEqual(datos['mensajes'], 0)
+        self.assertEqual(datos['operaciones'], 0)
+
+    def test_los_propios_no_cuentan_ni_sin_marca_de_lectura(self):
+        """
+        Escribir por la pantalla deja marca de lectura, y esa marca ya tapa los
+        mensajes propios aunque el conteo no los excluyera. Aqui el mensaje se
+        crea por el ORM, sin marca, que es como entraria por un comando o por
+        una API: es la unica forma de comprobar que el conteo los descarta por
+        su cuenta.
+        """
+        hilo = Conversation.objects.create(operation=self.op, tenant=self.tenant)
+        Message.objects.create(conversation=hilo, author=self.staff,
+                               author_name='operador', side=LADO_TENANT,
+                               body='Su carga llego completa.')
+
+        self.client.force_login(self.staff)
+        datos = self.client.get('/operations/chat-badges/').json()
+        self.assertEqual(datos['mensajes'], 0)
+        self.assertEqual(datos['operaciones'], 0)
+
+    def test_el_tablero_no_le_cuenta_nada_a_quien_no_tiene_rol(self):
+        """
+        `chat_badges` corta antes a quien no tiene lado, pero el tablero llama
+        al conteo directamente: sin su propia guarda, un alta a medias veria en
+        el contador cuantos mensajes se estan cruzando en la empresa.
+        """
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+
+        self.client.force_login(self.sin_rol)
+        resp = self.client.get('/dashboard/')
+        self.assertEqual(resp.context['sin_leer']['mensajes'], 0)
+
+    def test_el_contador_baja_al_leer(self):
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+        self.client.force_login(self.staff)
+        self.assertEqual(
+            self.client.get('/operations/chat-badges/').json()['mensajes'], 1)
+
+        self.client.get(f'/operations/{self.op.pk}/chat/')
+
+        self.assertEqual(
+            self.client.get('/operations/chat-badges/').json()['mensajes'], 0)
+
+    def test_el_tablero_trae_el_contador_en_la_primera_carga(self):
+        """
+        Quien entra y no toca nada durante treinta segundos tiene que ver que
+        le escribieron: el refresco por JavaScript llega despues.
+        """
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+
+        self.client.force_login(self.staff)
+        resp = self.client.get('/dashboard/')
+        self.assertEqual(resp.context['sin_leer']['mensajes'], 1)
+
+
+class TablaSoloSinLeerTests(HiloBase):
+    """
+    La tabla acotada a las operaciones que esperan respuesta, que es a donde
+    lleva el contador. Sin ella el contador seria un numero sin destino.
+    """
+
+    def test_trae_solo_las_que_tienen_algo_sin_leer(self):
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+        self._escribir(self.staff, self.op_b, 'Su carga llego completa.')
+
+        self.client.force_login(self.staff)
+        resp = self.client.get('/operations/unread/')
+        traidas = [op.pk for op in resp.context['operations']]
+        self.assertEqual(traidas, [self.op.pk])
+
+    def test_sigue_apareciendo_aunque_uno_haya_escrito_en_ese_hilo(self):
+        """
+        El caso normal: la empresa contesta y el cliente vuelve a escribir.
+        Descartar los hilos donde uno ha participado dejaria fuera justo las
+        conversaciones vivas, que son las unicas que importan.
+        """
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+        self._escribir(self.usuario_a, self.op, 'Falta un bulto.')
+
+        self.client.force_login(self.staff)
+        resp = self.client.get('/operations/unread/')
+        traidas = [op.pk for op in resp.context['operations']]
+        self.assertEqual(traidas, [self.op.pk])
+
+    def test_no_trae_una_operacion_por_los_mensajes_de_uno_mismo(self):
+        """
+        Igual que en el contador: el mensaje se crea por el ORM, sin la marca
+        de lectura que deja escribir por la pantalla, para que lo que se
+        compruebe sea el conteo y no esa marca.
+        """
+        hilo = Conversation.objects.create(operation=self.op, tenant=self.tenant)
+        Message.objects.create(conversation=hilo, author=self.staff,
+                               author_name='operador', side=LADO_TENANT,
+                               body='Su carga llego completa.')
+
+        self.client.force_login(self.staff)
+        resp = self.client.get('/operations/unread/')
+        self.assertEqual(list(resp.context['operations']), [])
+
+    def test_lo_ultimo_que_llego_va_primero(self):
+        """
+        Se ordena por el ultimo mensaje y no por la fecha de la operacion:
+        aqui lo que se busca es la conversacion viva, no la carga reciente.
+
+        Las dos fechas se ponen al reves a proposito -- la operacion reciente
+        es la que lleva el mensaje viejo -- porque si coincidieran, ordenar por
+        fecha daria el mismo resultado y la prueba no diria nada.
+        """
+        hoy = timezone.now().date()
+        WarehouseOperation.objects.filter(pk=self.op.pk).update(date=hoy)
+        WarehouseOperation.objects.filter(pk=self.op_b.pk).update(
+            date=hoy - timedelta(days=30))
+
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+        self._escribir(self.usuario_b, self.op_b, 'La mia cuando llega?')
+
+        self.client.force_login(self.staff)
+        resp = self.client.get('/operations/unread/')
+        traidas = [op.pk for op in resp.context['operations']]
+        self.assertEqual(traidas, [self.op_b.pk, self.op.pk])
+
+    def test_cada_fila_llega_con_su_numero(self):
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+        self._escribir(self.usuario_a, self.op, 'Y el pedimento.')
+
+        self.client.force_login(self.staff)
+        resp = self.client.get('/operations/unread/')
+        self.assertEqual(resp.context['operations'][0].sin_leer, 2)
+
+    def test_la_tabla_dice_que_esta_acotada(self):
+        """
+        Una tabla que de pronto muestra una fila de doscientas, sin decir por
+        que, se lee como que se perdieron las demas.
+        """
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+
+        self.client.force_login(self.staff)
+        resp = self.client.get('/operations/unread/')
+        self.assertTrue(resp.context['solo_sin_leer'])
+        self.assertContains(resp, 'Showing only operations with unread messages')
+
+    def test_un_cliente_no_alcanza_los_hilos_de_otro(self):
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+        self._escribir(self.staff, self.op_b, 'La suya tambien.')
+
+        self.client.force_login(self.usuario_a)
+        resp = self.client.get('/operations/unread/')
+        traidas = [op.pk for op in resp.context['operations']]
+        self.assertEqual(traidas, [self.op.pk])
+
+    def test_quien_no_tiene_rol_no_alcanza_ninguna(self):
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+
+        self.client.force_login(self.sin_rol)
+        resp = self.client.get('/operations/unread/')
+        self.assertEqual(list(resp.context['operations']), [])
+
+    def test_cuando_no_queda_nada_lo_dice_asi(self):
+        """
+        El vacio de esta tabla no es «no hay operaciones» sino «no hay nada
+        esperandote», que es una buena noticia y no un almacen sin registrar.
+        """
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+
+        self.client.force_login(self.staff)
+        resp = self.client.get('/operations/unread/')
+        self.assertEqual(list(resp.context['operations']), [])
+        self.assertContains(resp, 'Nothing waiting for you')
