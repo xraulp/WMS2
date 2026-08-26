@@ -17,9 +17,46 @@ lleva escrito cada vez que se cumplen los diez segundos.
                 {% else %}background:#f1f5f9;color:#0f172a;border-bottom-left-radius:3px{% endif %}">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
                   margin-bottom:3px;{% if m.side == mi_lado %}color:#e0f2fe{% else %}color:#64748b{% endif %}">
-        {{ m.author_name|default:"—" }}{% if m.es_del_cliente %} · Cliente{% endif %}
+        {% comment %}
+        La empresa primero y la persona despues. Un mensaje firmado solo con el
+        nombre de usuario no le dice nada a quien lo lee del otro lado: lo que
+        necesita saber primero es si le escribe su almacen o su cliente.
+        {% endcomment %}
+        {{ m.firma|default:m.author_name|default:"—" }}
       </div>
+      {% if m.body %}
       <div style="font-size:13px;line-height:1.5;white-space:pre-wrap">{{ m.body }}</div>
+      {% endif %}
+
+      {% comment %}
+      Los adjuntos del mensaje. Son documentos del expediente, asi que si
+      alguien los manda a la papelera desaparecen tambien de aqui: el hilo no
+      puede seguir ofreciendo un archivo que ya se retiro del expediente.
+
+      Las fotos se ven; lo demas se enlaza por nombre. Una miniatura de un PDF
+      no dice nada, y el nombre digital si -- es el que aparece en el ZIP y en
+      los correos.
+      {% endcomment %}
+      {% for a in m.adjuntos.all %}
+      <div style="margin-top:6px">
+        {% if a.file_type == 'PHOTO' %}
+        <a href="{% url 'document_file' a.pk %}" target="_blank" title="{{ a.original_name }}">
+          <img src="{% url 'document_file' a.pk %}" alt="{{ a.original_name }}"
+               style="max-width:190px;max-height:150px;border-radius:7px;display:block"
+               onerror="this.replaceWith(document.createTextNode('📷 {{ a.digital_name }}'))">
+        </a>
+        {% else %}
+        <a href="{% url 'document_file' a.pk %}" target="_blank" title="{{ a.original_name }}"
+           style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 9px;
+                  border-radius:7px;text-decoration:none;
+                  {% if m.side == mi_lado %}background:rgba(255,255,255,.22);color:#fff
+                  {% else %}background:#e2e8f0;color:#0f172a{% endif %}">
+          {% if a.file_type == 'VIDEO' %}🎬{% elif a.file_type == 'DOCUMENT' %}📄{% else %}📎{% endif %}
+          <span style="font-family:'IBM Plex Mono',monospace">{{ a.digital_name|default:a.original_name }}</span>
+        </a>
+        {% endif %}
+      </div>
+      {% endfor %}
       <div style="font-size:10px;margin-top:4px;{% if m.side == mi_lado %}color:#bae6fd{% else %}color:#94a3b8{% endif %}">
         {{ m.created_at|date:"Y-m-d H:i" }}
       </div>

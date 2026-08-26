@@ -50,9 +50,11 @@ blanco —un alta a medias— no escribe ni lee.
 - **Los mensajes no se editan ni se borran.** Es la diferencia entre un chat y
   una nota: de lo que se dijo cuelgan decisiones, y hay que poder consultarlo
   tal como se escribió.
-- **No hay adjuntos, todavía.** Lo que se manda va al expediente digital, que
-  es donde el ZIP y los correos lo van a buscar. Un adjunto que viviera solo en
-  el chat sería una segunda verdad, justo lo que este hilo vino a evitar.
+- **Los adjuntos no viven en el chat.** Lo que se manda por el hilo entra al
+  expediente digital como cualquier otro documento, que es donde el ZIP y los
+  correos lo van a buscar; el mensaje solo guarda la marca de por dónde entró.
+  Un archivo que viviera dentro de la conversación sería una segunda verdad,
+  justo lo que este hilo vino a evitar. Ver **Los adjuntos**, más abajo.
 - **No se ofrece el hilo si el cliente no está en el catálogo.** Una operación
   con el cliente capturado a mano y sin alta no tiene usuarios del otro lado;
   ofrecer el hilo sería ofrecer un buzón que nadie abre.
@@ -158,13 +160,89 @@ Detalles que no son casuales:
   tabla que de pronto muestra dos filas de doscientas, sin explicación, se lee
   como que se perdieron las demás.
 
+## Los adjuntos
+
+Se puede mandar un archivo dentro del hilo, y esa es la mitad del valor de la
+conversación: «mándenos la foto del pedimento» se contesta con la foto, no con
+una explicación de dónde subirla.
+
+**Un adjunto del chat es un documento del expediente.** No hay una segunda
+colección: se crea un `OperationDocument` normal —con su nombre digital, su tipo
+y su posición al final del expediente— y lo único que lo distingue es el campo
+`mensaje`, que dice por dónde entró. Si fueran dos caminos, el ZIP y los correos
+tendrían que aprender el segundo, y el día que se olvidaran el archivo estaría en
+la conversación pero no en el expediente.
+
+| Decisión | Por qué |
+|---|---|
+| El campo va en `OperationDocument`, no en `Message` | Así un mensaje lleva varios archivos. Quien manda tres fotos de la misma tarima está diciendo una sola cosa; tres mensajes con una foto cada uno la convierten en tres |
+| Hasta **5 archivos** por mensaje | No es un límite técnico: es para que el hilo siga siendo una conversación. Quien sube veinte fotos está armando un expediente, y para eso está el panel Digital, que además deja ordenarlas |
+| Hasta **25 MB** por archivo | Este sí es técnico: el archivo se lee para subirlo al bucket |
+| Un archivo **solo**, sin texto, es un mensaje completo | Mandar la foto de la etiqueta sin escribir nada es una respuesta |
+| Si la subida falla, **el mensaje se queda escrito** | El archivo viaja al bucket, que está al otro lado de la red. Un 500 ahí le borraría al operador lo que acababa de escribir sin decirle por qué; en su lugar se avisa de que el archivo no subió |
+| Un archivo mandado a la papelera **desaparece del hilo** | El hilo no puede seguir ofreciendo algo que ya se retiró del expediente. Lo que se dijo se queda: los mensajes no se borran |
+
+En el globo, las fotos se ven y lo demás se enlaza por su **nombre digital** —el
+mismo que tendrá en el ZIP—. Una miniatura de un PDF no dice nada; el nombre sí.
+
+## Con qué nombre se firma cada mensaje
+
+Un mensaje firmado solo con el nombre de usuario —`custtes1`— no le dice nada a
+quien lo lee del otro lado: lo primero que necesita saber es si le escribe su
+almacén o su cliente, y solo después quién en concreto. Por eso la firma lleva
+las dos cosas, la empresa primero:
+
+```
+DYSER · Ana Ruiz              Customer Test · Juan
+```
+
+La empresa **no se guarda en el mensaje**: sale del lado, que sí está guardado.
+Si mañana la empresa se cambia el nombre, los mensajes viejos pasan a mostrar el
+nuevo, que es lo correcto —es la misma empresa—. El nombre de la persona, en
+cambio, queda congelado en el mensaje desde que se escribió, para que dar de baja
+una cuenta no borre quién dijo qué.
+
+`utils.nombre_corto` recorta el nombre para que quepa: corta en la primera coma
+y quita las formas societarias del final, porque «Customer Test, SA. de CV» no
+es una firma sino un dato del acta constitutiva, y ocupa media línea sin aportar
+nada frente a «Customer Test». No pretende ser exacto —una empresa puede
+llamarse «Ltd» de verdad— sino legible, y si al recortar no quedara nada
+devuelve el nombre entero: es preferible una firma larga a una firma vacía.
+
+## El aviso no se espera
+
+El aviso por correo sale **fuera de la petición**, en su propio hilo.
+
+Se midió con el correo tal como estaba: escribir un mensaje costaba **diez
+segundos justos** —el `EMAIL_TIMEOUT`— porque el envío iba dentro de la petición
+y el panel no se repintaba hasta que el servidor de correo terminaba de no
+contestar. Y no era solo el primer mensaje: la espera de 15 minutos que calla
+los avisos seguidos solo cuenta cuando el envío **salió bien**, así que cada
+mensaje volvía a intentarlo y volvía a costar diez segundos. Escribir en el chat
+era insoportable por una razón que no tenía nada que ver con el chat.
+
+> **Esto no vale para todos los avisos.** El alta de una operación le dice al
+> operador en pantalla si el correo salió o falló; mandarlo aparte convertiría
+> ese aviso en una mentira. `notifications.en_segundo_plano` es para los envíos
+> cuyo resultado no se está mirando —hoy, el del chat—, donde lo único que la
+> espera consigue es dejar la pantalla quieta.
+
+**En local no se usa.** Producción va sobre PostgreSQL, que aguanta varias
+escrituras a la vez; SQLite no, y cortaba la petición con «database is locked»
+cuando el hilo escribía su renglón en la bitácora mientras la vista todavía
+guardaba el mensaje. Se vio en un navegador: el POST daba 500 en local y
+funcionaba en el servidor. El camino real lo cubre la prueba
+`LaPantallaNoEsperaAlCorreoTests`, que además **mide el tiempo**: sin medirlo, un
+envío en línea de quince segundos también devuelve 200 y la prueba pasaría igual.
+
 ## Cómo está hecho
 
 | Pieza | Dónde |
 |---|---|
-| `Conversation`, `Message`, `ConversationRead` | `warehouse/models.py` |
+| `Conversation`, `Message`, `ConversationRead`, `OperationDocument.mensaje` | `warehouse/models.py` |
 | `lado_en_el_hilo`, `anotar_hilos`, `resumen_sin_leer`, `hilos_pendientes` y las vistas | `warehouse/views.py` |
-| `avisar_mensaje_nuevo`, `correos_del_tenant` | `warehouse/notifications.py` |
+| `avisar_mensaje_nuevo`, `correos_del_tenant`, `en_segundo_plano` | `warehouse/notifications.py` |
+| `nombre_corto` | `warehouse/utils.py` |
 | El panel y la lista de mensajes | `templates/warehouse/partials/chat_thread.html` y `chat_messages.html` |
 | El correo | `templates/warehouse/email/chat_email.html` |
 | Las pruebas | `warehouse/tests_chat.py` |

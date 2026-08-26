@@ -7,17 +7,29 @@ servidor y no el formulario, que la marca de lectura cuente lo que debe, y que
 el aviso por correo salga una vez y se calle mientras la conversacion sigue
 viva -- que es lo unico que separa un aviso util de diez correos seguidos.
 """
+import tempfile
+import threading
+import time
 from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core import mail
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from . import notifications
 from .models import (Catalog, Conversation, LADO_CLIENTE, LADO_TENANT, Message,
-                     NotificationLog, Tenant, UserProfile, WarehouseOperation)
+                     NotificationLog, OperationDocument, Tenant, UserProfile,
+                     WarehouseOperation)
+
+# Los archivos de prueba van a un directorio temporal, no al bucket.
+STORAGE_LOCAL = override_settings(STORAGES={
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage',
+                'OPTIONS': {'location': tempfile.mkdtemp()}},
+    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+})
 
 
 class HiloBase(TestCase):
@@ -695,3 +707,390 @@ class TablaSoloSinLeerTests(HiloBase):
         resp = self.client.get('/operations/unread/')
         self.assertEqual(list(resp.context['operations']), [])
         self.assertContains(resp, 'Nothing waiting for you')
+
+
+class LaPantallaNoEsperaAlCorreoTests(HiloBase):
+    """
+    El aviso del chat sale fuera de la peticion.
+
+    Se midio con el correo tal como esta hoy: escribir un mensaje costaba diez
+    segundos justos -- el `EMAIL_TIMEOUT` -- porque el envio iba dentro de la
+    peticion y el hilo no se repintaba hasta que el servidor de correo terminaba
+    de no contestar.
+    """
+
+    def test_el_mensaje_se_pinta_sin_esperar_al_envio(self):
+        """
+        El envio se bloquea a proposito hasta que la prueba lo suelta. Si la
+        vista lo esperara, este POST no volveria nunca y la prueba caeria por
+        timeout en vez de por asercion -- que es exactamente lo que le pasa al
+        operador delante de la pantalla.
+        """
+        arranco = threading.Event()
+        suelta  = threading.Event()
+        ESPERA  = 15   # lo que tardaria el envio si la vista lo esperara
+
+        def envio_que_no_termina(*args, **kwargs):
+            arranco.set()
+            suelta.wait(ESPERA)
+            return True, ''
+
+        with override_settings(AVISOS_EN_HILO=True):
+            with patch.object(notifications, 'avisar_mensaje_nuevo',
+                              side_effect=envio_que_no_termina):
+                try:
+                    empezo = time.monotonic()
+                    resp = self._escribir(self.staff, self.op, 'Su carga llego.')
+                    tardo = time.monotonic() - empezo
+
+                    self.assertEqual(resp.status_code, 200)
+                    self.assertContains(resp, 'Su carga llego.')
+                    # El mensaje ya esta escrito aunque el aviso siga colgado.
+                    self.assertEqual(Message.objects.count(), 1)
+                    # Lo que se comprueba es **que no espero**. Sin medir el
+                    # tiempo, un envio en linea de quince segundos tambien
+                    # devuelve 200 y la prueba pasaria igual -- que es justo lo
+                    # que hacia la version anterior de esta prueba.
+                    self.assertLess(tardo, 3, 'la vista se quedo esperando al correo')
+                    # Y el aviso se intenta de verdad, no se pierde.
+                    self.assertTrue(arranco.wait(10), 'el aviso nunca arranco')
+                finally:
+                    suelta.set()
+
+    def test_en_las_pruebas_el_aviso_va_en_linea(self):
+        """
+        Con el interruptor apagado -- que es como corre la suite -- el envio
+        ocurre dentro de la peticion. Sin esto, cada prueba que mira
+        `mail.outbox` justo despues de escribir estaria mirando algo que
+        todavia no ha pasado.
+        """
+        mail.outbox = []
+        with override_settings(AVISOS_EN_HILO=False):
+            self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+        self.assertEqual(len(mail.outbox), 1)
+
+
+class FirmaDeLosMensajesTests(HiloBase):
+    """
+    Con que nombre sale firmado cada mensaje.
+
+    Un mensaje firmado solo con el nombre de usuario -`custtes1`- no le dice
+    nada a quien lo lee del otro lado: lo primero que necesita saber es si le
+    escribe su almacen o su cliente.
+    """
+
+    def _firmas(self, quien_mira, op=None):
+        self.client.force_login(quien_mira)
+        resp = self.client.get('/operations/%s/chat/' % (op or self.op).pk)
+        return [m.firma for m in resp.context['mensajes']]
+
+    def test_la_empresa_firma_con_su_nombre_y_la_persona(self):
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+        self.assertEqual(self._firmas(self.staff), [u'Almacen Uno · Ana Ruiz'])
+
+    def test_el_cliente_firma_con_el_nombre_del_cliente(self):
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+        self.assertEqual(self._firmas(self.staff), [u'Cliente A · cliente_a'])
+
+    def test_los_dos_lados_ven_la_misma_firma(self):
+        """
+        La firma sale del lado del mensaje, no de quien mira: el cliente tiene
+        que leer el nombre del almacen igual que el almacen lee el suyo.
+        """
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+        self._escribir(self.usuario_a, self.op, 'Gracias.')
+
+        self.assertEqual(self._firmas(self.staff), self._firmas(self.usuario_a))
+
+    def test_se_le_quita_la_forma_societaria_al_nombre(self):
+        """
+        «Customer Test, SA. de CV» no es una firma, es un dato del acta: ocupa
+        la mitad del globo y no aporta nada frente a «Customer Test».
+        """
+        self.cliente_a.name = u'Customer Test, SA. de CV'
+        self.cliente_a.save(update_fields=['name'])
+        self._escribir(self.usuario_a, self.op, u'Necesito la factura.')
+
+        self.assertEqual(self._firmas(self.staff), [u'Customer Test · cliente_a'])
+
+    def test_la_firma_sobrevive_a_la_baja_de_quien_escribio(self):
+        """
+        El nombre de la persona esta congelado en el mensaje; el de la empresa
+        se vuelve a calcular. Ninguno de los dos depende de que la cuenta siga
+        existiendo.
+        """
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+        self.staff.delete()
+
+        self.assertEqual(self._firmas(self.admin), [u'Almacen Uno · Ana Ruiz'])
+
+    def test_si_la_empresa_se_renombra_los_mensajes_viejos_la_siguen(self):
+        """
+        Es la misma empresa: un mensaje de hace un ano no puede seguir firmado
+        con un nombre que ya no existe.
+        """
+        self._escribir(self.staff, self.op, 'Su carga llego completa.')
+        self.tenant.name = 'Almacenes del Norte'
+        self.tenant.save(update_fields=['name'])
+
+        self.assertEqual(self._firmas(self.staff),
+                         [u'Almacenes del Norte · Ana Ruiz'])
+
+    def test_el_correo_firma_con_el_nombre_corto(self):
+        """
+        En la firma y en el «fulano escribio» va el nombre corto, que es donde
+        estorba el del acta. En la ficha de datos de la operacion, en cambio, el
+        renglon «Cliente» conserva el nombre completo a proposito: ahi no es una
+        firma, es el dato del expediente.
+        """
+        self.cliente_a.name = u'Customer Test, SA. de CV'
+        self.cliente_a.save(update_fields=['name'])
+        mail.outbox = []
+        self._escribir(self.usuario_a, self.op, u'Necesito la factura.')
+
+        cuerpo = mail.outbox[0].body
+        self.assertIn(u'<b>Customer Test</b> escribió', cuerpo)
+        self.assertIn(u'Customer Test · cliente_a', cuerpo)
+        self.assertNotIn(u'Customer Test, SA. de CV ·', cuerpo)
+        # Y el dato de la operacion sigue completo.
+        self.assertIn(u'<b>Customer Test, SA. de CV</b>', cuerpo)
+
+
+class NombreCortoTests(TestCase):
+    """
+    El nombre de una empresa, recortado para caber en una firma. No pretende
+    ser exacto -- una empresa puede llamarse «Ltd» de verdad -- sino legible.
+    """
+
+    def test_quita_la_forma_societaria(self):
+        from .utils import nombre_corto
+        casos = {
+            u'Customer Test, SA. de CV':  u'Customer Test',
+            # Este es el que obliga a cortar por la coma: lo que va detras no
+            # es una forma societaria, asi que quitar sufijos no lo alcanza.
+            u'Transportes del Valle, Division Norte': u'Transportes del Valle',
+            u'DYSER GROUP SA DE CV':      u'DYSER GROUP',
+            u'RDL Systems LLC':           u'RDL Systems',
+            u'Nadie Entra SA':            u'Nadie Entra',
+            u'Zapatos Zeta':              u'Zapatos Zeta',
+        }
+        for entra, sale in casos.items():
+            self.assertEqual(nombre_corto(entra), sale, entra)
+
+    def test_nunca_devuelve_una_firma_vacia(self):
+        """
+        Si al recortar no quedara nada, es preferible una firma larga a una
+        firma en blanco.
+        """
+        from .utils import nombre_corto
+        self.assertEqual(nombre_corto(u'Ltd'), u'Ltd')
+        self.assertEqual(nombre_corto(u'  '), u'')
+        self.assertEqual(nombre_corto(None), u'')
+
+    def test_un_nombre_larguisimo_se_recorta(self):
+        """
+        El globo del mensaje no crece: sin esto la firma partiria el renglon y
+        el mensaje empezaria mas abajo en unas filas que en otras.
+        """
+        from .utils import nombre_corto
+        largo = nombre_corto(u'Comercializadora Internacional del Noroeste, S.A. de C.V.')
+        self.assertLessEqual(len(largo), 22)
+        self.assertTrue(largo.endswith(u'…'))
+
+
+@STORAGE_LOCAL
+class AdjuntosEnElHiloTests(HiloBase):
+    """
+    Lo que se adjunta en el hilo.
+
+    La regla que gobierna todo lo demas: **un adjunto del chat es un documento
+    del expediente**, no una coleccion aparte. Lo que se manda por aqui es lo
+    mismo que el ZIP y los correos van a buscar despues, y un archivo que
+    viviera solo dentro de una conversacion seria una segunda verdad -- justo
+    lo que el hilo vino a evitar.
+    """
+
+    def _mandar(self, user, op, texto='', archivos=()):
+        self.client.force_login(user)
+        datos = {'body': texto}
+        if archivos:
+            datos['adjuntos'] = list(archivos)
+        return self.client.post('/operations/%s/chat/send/' % op.pk, datos)
+
+    def _foto(self, nombre='etiqueta.jpg', contenido=b'una foto'):
+        return SimpleUploadedFile(nombre, contenido, content_type='image/jpeg')
+
+    def test_lo_adjuntado_entra_al_expediente(self):
+        self._mandar(self.staff, self.op, 'Ahi va la etiqueta.', [self._foto()])
+
+        doc = OperationDocument.objects.get(operation=self.op)
+        self.assertEqual(doc.original_name, 'etiqueta.jpg')
+        self.assertEqual(doc.file_type, 'PHOTO')
+        self.assertEqual(doc.tenant, self.tenant)
+        self.assertEqual(doc.uploaded_by, self.staff)
+        # Y lleva nombre digital, como cualquier documento del expediente.
+        self.assertTrue(doc.digital_name)
+
+    def test_el_documento_sabe_de_que_mensaje_vino(self):
+        self._mandar(self.staff, self.op, 'Ahi va.', [self._foto()])
+
+        mensaje = Message.objects.get()
+        doc = OperationDocument.objects.get(operation=self.op)
+        self.assertEqual(doc.mensaje, mensaje)
+        self.assertEqual(list(mensaje.adjuntos.all()), [doc])
+
+    def test_un_mensaje_puede_llevar_varios_archivos(self):
+        """
+        Quien manda tres fotos de la misma tarima esta diciendo una sola cosa;
+        tres mensajes seguidos con una foto cada uno la convierten en tres.
+        """
+        self._mandar(self.staff, self.op, 'La tarima completa.',
+                     [self._foto('a.jpg'), self._foto('b.jpg'), self._foto('c.jpg')])
+
+        self.assertEqual(Message.objects.count(), 1)
+        self.assertEqual(Message.objects.get().adjuntos.count(), 3)
+
+    def test_un_archivo_solo_es_un_mensaje_completo(self):
+        """Mandar la foto de la etiqueta sin escribir nada es una respuesta."""
+        resp = self._mandar(self.staff, self.op, '', [self._foto()])
+
+        self.assertEqual(resp.status_code, 200)
+        mensaje = Message.objects.get()
+        self.assertEqual(mensaje.body, '')
+        self.assertEqual(mensaje.adjuntos.count(), 1)
+
+    def test_sin_texto_y_sin_archivo_no_hay_mensaje(self):
+        resp = self._mandar(self.staff, self.op, '   ')
+
+        self.assertEqual(Message.objects.count(), 0)
+        self.assertContains(resp, 'Escribe un mensaje o adjunta un archivo.')
+
+    def test_el_cliente_tambien_puede_adjuntar(self):
+        """
+        Es la mitad del valor: «mandenos la foto del pedimento» se contesta con
+        la foto, no con una explicacion de donde subirla.
+        """
+        self._mandar(self.usuario_a, self.op, 'Aqui esta.', [self._foto('ped.jpg')])
+
+        doc = OperationDocument.objects.get(operation=self.op)
+        self.assertEqual(doc.uploaded_by, self.usuario_a)
+        self.assertEqual(Message.objects.get().side, LADO_CLIENTE)
+
+    def test_los_adjuntos_van_al_final_del_expediente(self):
+        """Lo que se sube despues va despues: el orden del expediente es dato."""
+        ya_estaba = OperationDocument.objects.create(
+            tenant=self.tenant, operation=self.op, file_type='PHOTO',
+            original_name='vieja.jpg', file=SimpleUploadedFile('vieja.jpg', b'x'),
+            orden=1)
+
+        self._mandar(self.staff, self.op, 'Y esta.', [self._foto('nueva.jpg')])
+
+        nueva = OperationDocument.objects.get(original_name='nueva.jpg')
+        self.assertGreater(nueva.orden, ya_estaba.orden)
+
+    def test_no_se_aceptan_mas_de_cinco_archivos(self):
+        """
+        El tope no es tecnico: es para que el hilo siga siendo una
+        conversacion. Quien sube veinte fotos esta armando un expediente, y
+        para eso esta el panel Digital, que ademas deja ordenarlas.
+        """
+        resp = self._mandar(self.staff, self.op, 'Todas.',
+                            [self._foto('%s.jpg' % i) for i in range(6)])
+
+        self.assertEqual(Message.objects.count(), 0)
+        self.assertEqual(OperationDocument.objects.count(), 0)
+        self.assertContains(resp, 'No mas de 5 archivos por mensaje.')
+
+    def test_no_se_acepta_un_archivo_enorme(self):
+        from .views import ADJUNTO_MAX_MB
+
+        gordo = SimpleUploadedFile(
+            'video.mp4', b'x' * (ADJUNTO_MAX_MB * 1024 * 1024 + 1),
+            content_type='video/mp4')
+        resp = self._mandar(self.staff, self.op, 'Mira esto.', [gordo])
+
+        self.assertEqual(Message.objects.count(), 0)
+        self.assertEqual(OperationDocument.objects.count(), 0)
+        self.assertContains(resp, 'pasa de %s MB' % ADJUNTO_MAX_MB)
+
+    def test_lo_rechazado_no_deja_el_mensaje_escrito(self):
+        """
+        La comprobacion va antes de crear nada: un mensaje que quedara escrito
+        sin su archivo diria «ahi va la etiqueta» sin etiqueta ninguna.
+        """
+        gordo = SimpleUploadedFile('video.mp4', b'x' * (26 * 1024 * 1024))
+        self._mandar(self.staff, self.op, 'Ahi va la etiqueta.', [gordo])
+
+        self.assertFalse(Message.objects.exists())
+        self.assertFalse(Conversation.objects.filter(operation=self.op).exists())
+
+    def test_el_hilo_ensena_lo_adjuntado(self):
+        self._mandar(self.staff, self.op, 'Ahi va.', [self._foto()])
+
+        self.client.force_login(self.usuario_a)
+        resp = self.client.get('/operations/%s/chat/' % self.op.pk)
+        doc = OperationDocument.objects.get()
+        self.assertContains(resp, '/documents/%s/file/' % doc.pk)
+
+    def test_un_archivo_retirado_del_expediente_desaparece_del_hilo(self):
+        """
+        El hilo no puede seguir ofreciendo un archivo que ya se mando a la
+        papelera. Lo que si se queda es lo que se dijo: los mensajes no se
+        borran.
+        """
+        self._mandar(self.staff, self.op, 'Ahi va.', [self._foto()])
+        doc = OperationDocument.objects.get()
+        doc.deleted_at = timezone.now()
+        doc.save(update_fields=['deleted_at'])
+
+        self.client.force_login(self.staff)
+        resp = self.client.get('/operations/%s/chat/' % self.op.pk)
+        self.assertNotContains(resp, '/documents/%s/file/' % doc.pk)
+        self.assertContains(resp, 'Ahi va.')
+
+    def test_el_aviso_por_correo_dice_que_hay_archivo(self):
+        """
+        Un mensaje que es solo un archivo dejaba el aviso sin nada que ensenar:
+        decia que alguien escribio y no mostraba ni una linea.
+        """
+        mail.outbox = []
+        self._mandar(self.usuario_a, self.op, '', [self._foto('pedimento.jpg')])
+
+        cuerpo = mail.outbox[0].body
+        self.assertIn('1 archivo en el expediente', cuerpo)
+        doc = OperationDocument.objects.get()
+        self.assertIn(doc.digital_name, cuerpo)
+
+    def test_una_subida_que_falla_no_tumba_la_pantalla(self):
+        """
+        El archivo viaja al bucket, que esta al otro lado de la red: un corte o
+        un rechazo del almacenamiento son cosas que pasan. Se descubrio en un
+        navegador -- un POST devolvio 500 y el operador perdio lo que acababa de
+        escribir sin saber por que.
+
+        Lo que se dijo se queda escrito; lo que falta es el archivo, y eso el
+        aviso lo dice.
+        """
+        with patch('warehouse.views.guardar_en_expediente',
+                   side_effect=OSError('el bucket no responde')):
+            resp = self._mandar(self.staff, self.op, 'Ahi va la etiqueta.',
+                                [self._foto()])
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(Message.objects.get().body, 'Ahi va la etiqueta.')
+        self.assertContains(resp, 'el archivo no se pudo subir')
+        self.assertEqual(OperationDocument.objects.count(), 0)
+
+    def test_si_falla_la_subida_el_aviso_sale_igual(self):
+        """
+        El del otro lado tiene que enterarse de que le escribieron aunque el
+        archivo se haya quedado en el camino: el texto ya dice algo.
+        """
+        mail.outbox = []
+        with patch('warehouse.views.guardar_en_expediente',
+                   side_effect=OSError('el bucket no responde')):
+            self._mandar(self.usuario_a, self.op, 'Aqui esta el pedimento.',
+                         [self._foto()])
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Aqui esta el pedimento.', mail.outbox[0].body)

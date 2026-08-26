@@ -641,6 +641,23 @@ class OperationDocument(models.Model):
     # existian siguen exactamente donde estaban, sin migracion de datos.
     orden         = models.PositiveIntegerField(default=0, verbose_name="Orden")
 
+    # De que mensaje del hilo llego este archivo, si es que llego por ahi.
+    #
+    # Los adjuntos del chat **son** documentos del expediente, no una segunda
+    # coleccion: lo que se manda por el hilo es lo mismo que el ZIP y los
+    # correos van a buscar despues, y un archivo que viviera solo dentro de una
+    # conversacion seria una segunda verdad -- justo lo que el hilo vino a
+    # evitar. Por eso el adjunto se guarda como cualquier otro documento y esto
+    # es solo la marca de por donde entro, que es lo que permite pintarlo
+    # dentro del globo del mensaje.
+    #
+    # Va aqui y no en `Message` para que un mensaje pueda llevar varios
+    # archivos: quien manda tres fotos de la misma tarima esta diciendo una
+    # sola cosa, y tres mensajes seguidos con una foto cada uno convierten esa
+    # cosa en tres.
+    mensaje = models.ForeignKey('Message', on_delete=models.SET_NULL, null=True,
+                                blank=True, related_name='adjuntos')
+
     # Papelera. Un archivo del expediente ya salio impreso y adjunto en un
     # correo, asi que quitarlo de la vista y destruirlo no son la misma
     # decision: lo primero lo hace quien opera, lo segundo el administrador.

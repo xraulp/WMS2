@@ -1,4 +1,5 @@
 import os
+import sys
 import dj_database_url
 from pathlib import Path
 
@@ -135,6 +136,27 @@ else:
         }
     }
 
+# SQLite y las escrituras a la vez.
+#
+# Producción va sobre PostgreSQL, que aguanta varias escrituras simultáneas.
+# SQLite no: en cuanto dos conexiones escriben a la vez, la segunda muere con
+# «database is locked» -- y eso es exactamente lo que pasa desde que el aviso
+# del chat sale en su propio hilo, porque escribe su renglón en la bitácora
+# mientras la petición todavía está guardando el mensaje. Se descubrió en un
+# navegador: el POST del chat devolvía 500 en local y funcionaba en producción.
+#
+# `timeout` hace que la segunda espere en vez de rendirse, y WAL permite que
+# lectores y escritor convivan. Es la configuración recomendada de Django para
+# SQLite, y aquí además es lo que mantiene el desarrollo local parecido a
+# producción.
+_SQLITE_OPTIONS = {
+    'timeout': 20,
+    'init_command': 'PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;',
+}
+for _conf in DATABASES.values():
+    if 'sqlite3' in _conf.get('ENGINE', ''):
+        _conf.setdefault('OPTIONS', {}).update(_SQLITE_OPTIONS)
+
 # ====================================================
 # VALIDACIÓN DE CONTRASEÑAS
 # ====================================================
@@ -218,6 +240,26 @@ STORAGES = {
     },
 }
 
+# Guardar los archivos en el disco de aquí en vez de en el bucket.
+#
+# El bucket es **uno solo** y no depende de DEBUG: una prueba lanzada en el
+# portátil, contra la base de datos local, sube igualmente al mismo sitio que
+# producción. Pasó -- probando los adjuntos del hilo en un navegador quedaron
+# nueve archivos de prueba en `django-wms`, y hubo que borrarlos a mano.
+#
+# La ruta lleva el subdominio del tenant, así que no se mezclan con los de
+# nadie, pero siguen siendo basura en un bucket que se paga. Con
+# `MEDIA_LOCAL=1` delante del `runserver`, lo que se suba probando se queda en
+# `media/` y no sale de la máquina.
+if os.getenv('MEDIA_LOCAL') == '1':
+    MEDIA_ROOT = BASE_DIR / 'media'
+    MEDIA_URL = '/media/'
+    STORAGES['default'] = {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {'location': str(MEDIA_ROOT)},
+    }
+    print('[INFO] MEDIA_LOCAL: los archivos se guardan en', MEDIA_ROOT)
+
 # La política CORS del bucket se configura en el panel de Cloudflare, no aquí.
 # Estaba pegada en este archivo como un literal JSON suelto que Python evaluaba
 # y tiraba en cada arranque. Quedó documentada en docs/configurar-r2.md.
@@ -277,6 +319,37 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 # aviso de que el correo no salió. Pasó en producción: la salida al puerto 465
 # desde Render se queda esperando sin respuesta.
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', 10))
+
+# Si el aviso del chat se manda fuera de la peticion.
+#
+# Se midio: con el correo caido, escribir un mensaje costaba 10 segundos justos
+# -- el EMAIL_TIMEOUT de arriba -- porque el envio va dentro de la peticion y la
+# pantalla no repinta el hilo hasta que termina. Y no era solo el primero: la
+# espera de 15 minutos que calla los avisos seguidos solo cuenta cuando el envio
+# salio bien, asi que cada mensaje volvia a intentarlo y volvia a costar diez
+# segundos. Escribir en el chat era insoportable por una razon que no tenia nada
+# que ver con el chat.
+#
+# En las pruebas se desactiva: casi todas comprueban `mail.outbox` o la bitacora
+# justo despues de escribir, y con el aviso en otro hilo estarian mirando algo
+# que todavia no ha pasado.
+# Tampoco con SQLite. Producción va sobre PostgreSQL, que aguanta varias
+# escrituras a la vez; SQLite no. El hilo del aviso escribe su renglón en la
+# bitácora mientras la petición todavía está guardando el mensaje, y SQLite
+# corta la segunda con «database is locked» -- sin esperar siquiera el
+# `busy_timeout`, porque es un conflicto de instantánea y no una espera. Se vio
+# en un navegador: el POST del chat daba 500 en local y funcionaba en el
+# servidor.
+#
+# Antes que ir añadiendo PRAGMAs para que SQLite aguante un patrón que no es lo
+# suyo, en local el aviso vuelve a ir dentro de la petición: ahí el correo es
+# de consola o de memoria, así que no cuesta nada. El camino real, el de
+# producción, lo cubre la prueba `LaPantallaNoEsperaAlCorreoTests`.
+_HAY_SQLITE = any('sqlite3' in c.get('ENGINE', '') for c in DATABASES.values())
+
+TESTING = 'test' in sys.argv
+AVISOS_EN_HILO = ((os.getenv('AVISOS_EN_HILO', '1') == '1')
+                  and not TESTING and not _HAY_SQLITE)
 
 # Tope por archivo adjunto. Los expedientes traen fotos y hasta video; además de
 # que ningún servidor acepta un correo de 40 MB, leerlo entero en memoria en un

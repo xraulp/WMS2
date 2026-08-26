@@ -10,8 +10,10 @@ mal queda un renglón en `NotificationLog`.
 """
 import functools
 import logging
+import threading
 from datetime import timedelta
 
+from django import db
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
@@ -20,7 +22,7 @@ from django.utils import timezone
 from .models import (Catalog, NotificationLog, UserProfile,
                      LADO_TENANT, LADO_CLIENTE)
 from .utils import (datos_del_emisor, generar_pdf_factura,
-                    generate_pdf_report, operation_digital_url)
+                    generate_pdf_report, nombre_corto, operation_digital_url)
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +149,52 @@ def _never_breaks(default):
                 return default(e) if callable(default) else default
         return wrapper
     return decorator
+
+
+# ── FUERA DE LA PETICIÓN ──────────────────────────────────────────────────────
+
+def en_segundo_plano(fn, *args, **kwargs):
+    """
+    Manda un aviso sin que la pantalla lo espere.
+
+    Se midió con el correo tal como está hoy: escribir un mensaje del chat
+    costaba **diez segundos justos** —el `EMAIL_TIMEOUT`— porque el envío iba
+    dentro de la petición y el hilo no se repintaba hasta que el servidor de
+    correo terminaba de no contestar. Y no era solo el primer mensaje: la espera
+    de 15 minutos que calla los avisos seguidos solo cuenta cuando el envío salió
+    bien, así que cada mensaje volvía a intentarlo y volvía a costar diez
+    segundos.
+
+    **No sirve para todos los avisos.** El alta de una operación le dice al
+    operador en pantalla si el correo salió o falló; mandarlo aparte convertiría
+    ese aviso en una mentira. Esto es para los envíos cuyo resultado no se está
+    mirando —hoy, el del chat—, donde lo único que la espera consigue es que la
+    pantalla se quede quieta.
+
+    El hilo **no** es `daemon`: si el servidor se está apagando, conviene que
+    espere a que el aviso salga en vez de matarlo a medias. La conexión a la
+    base se cierra al terminar porque cada hilo abre la suya, y dejarlas
+    abiertas es quedarse sin cupo en el servidor de base de datos.
+    """
+    if not getattr(settings, 'AVISOS_EN_HILO', True):
+        return fn(*args, **kwargs)
+
+    # No todo lo que se puede llamar tiene nombre: un `partial` no lo tiene, y
+    # un doble de prueba tampoco. El nombre es para leer un log y un volcado de
+    # hilos, asi que no puede ser lo que reviente el aviso.
+    como_se_llama = getattr(fn, '__name__', repr(fn))
+
+    def tarea():
+        try:
+            fn(*args, **kwargs)
+        except Exception:
+            logger.exception('Fallo avisando en segundo plano desde %s', como_se_llama)
+        finally:
+            db.connections.close_all()
+
+    hilo = threading.Thread(target=tarea, name='aviso-%s' % como_se_llama)
+    hilo.start()
+    return hilo
 
 
 # ── BITÁCORA ──────────────────────────────────────────────────────────────────
@@ -617,11 +665,16 @@ def avisar_mensaje_nuevo(conversation, lado, mensaje=None, triggered_by=None):
     if lado == LADO_CLIENTE:
         destinatarios = correos_del_tenant(operation.tenant)
         campo         = 'avisado_al_tenant_at'
-        quien         = customer.name if customer else operation.get_customer_display()
+        # El nombre de la empresa como se firma, no como esta en el acta: en el
+        # asunto y en la primera linea del correo, «Customer Test, SA. de CV»
+        # ocupa el ancho util sin decir mas que «Customer Test».
+        quien         = nombre_corto(
+            customer.name if customer else operation.get_customer_display())
     else:
         destinatarios = email_recipients(customer)
         campo         = 'avisado_al_cliente_at'
-        quien         = operation.tenant.name if operation.tenant else 'WMS'
+        quien         = nombre_corto(
+            operation.tenant.name if operation.tenant else 'WMS')
 
     subject = f"Mensaje nuevo | {build_subject(operation)}"
 
@@ -637,8 +690,17 @@ def avisar_mensaje_nuevo(conversation, lado, mensaje=None, triggered_by=None):
         'de_quien':    quien,
         'extracto':    (mensaje.body[:AVISO_EXTRACTO] if mensaje else ''),
         'recortado':   bool(mensaje and len(mensaje.body) > AVISO_EXTRACTO),
-        'firma':       mensaje.author_name if mensaje else '',
+        # La firma del correo lleva las dos: arriba ya se dijo que empresa
+        # escribio, y aqui quien de esa empresa lo hizo.
+        'firma':       ('%s · %s' % (quien, mensaje.author_name)
+                        if mensaje and mensaje.author_name else ''),
         'digital_url': operation_digital_url(operation, '/dashboard/'),
+        # Un mensaje puede ser solo un archivo, y entonces el extracto va
+        # vacio: sin esto el aviso diria que alguien escribio y no ensenaria
+        # nada. Van los nombres digitales, que son los que ese archivo va a
+        # tener en el expediente y en el ZIP.
+        'adjuntos':    ([a.digital_name or a.original_name
+                         for a in mensaje.adjuntos.all()] if mensaje else []),
     })
 
     enviado, error = _deliver_email(

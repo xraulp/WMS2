@@ -4,3 +4,9 @@ __pycache__/
 .env
 venv/
 bak/
+scratchpad/
+# Lo que se sube probando con MEDIA_LOCAL=1: archivos de prueba, no del proyecto.
+media/
+# Los diarios de SQLite en modo WAL.
+db.sqlite3-shm
+db.sqlite3-wal

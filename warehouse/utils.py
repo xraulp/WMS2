@@ -17,6 +17,58 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+# Lo que se le quita al final del nombre de una empresa para poder firmar con
+# el. No es una lista de formas societarias validas: es lo que estorba cuando
+# hay que poner un nombre en un renglon estrecho.
+_SUFIJOS_SOCIETARIOS = [
+    'sa de cv', 'sa. de cv', 's.a. de c.v.', 's. a. de c. v.', 'sapi de cv',
+    's de rl de cv', 'srl de cv', 's.a.s.', 'sas', 'sa', 's.a.',
+    'llc', 'l.l.c.', 'inc', 'inc.', 'corp', 'corp.', 'ltd', 'ltd.',
+    'co', 'co.', 'sl', 's.l.', 'sc', 's.c.',
+]
+
+
+def nombre_corto(nombre, tope=22):
+    """
+    El nombre de una empresa como se firma un mensaje.
+
+    «Customer Test, SA. de CV» no es una firma, es un dato del acta
+    constitutiva: ocupa la mitad del ancho del globo y lo unico que aporta
+    respecto de «Customer Test» es ruido. Se corta en la primera coma y se le
+    quitan las formas societarias del final.
+
+    No pretende ser exacto -- una empresa puede llamarse «Ltd» de verdad -- sino
+    legible. Por eso, si al recortar no quedara nada, se devuelve el nombre tal
+    como estaba: es preferible una firma larga a una firma vacia.
+    """
+    limpio = (nombre or '').strip()
+    if not limpio:
+        return ''
+
+    corto = limpio.split(',')[0].strip()
+
+    # Los sufijos se quitan uno tras otro: «Algo SA de CV» y «Algo, S.A.» caen
+    # en la misma pasada, y un «Algo SA de CV.» con punto tambien.
+    seguir = True
+    while seguir:
+        seguir = False
+        sin_punto = corto.rstrip('.').strip()
+        for sufijo in _SUFIJOS_SOCIETARIOS:
+            if sin_punto.lower().endswith(' ' + sufijo):
+                corto = sin_punto[:-len(sufijo)].strip().rstrip(',').strip()
+                seguir = True
+                break
+
+    if not corto:
+        return limpio
+    # Un nombre que sigue siendo larguisimo se recorta con puntos suspensivos:
+    # el globo del mensaje no crece, asi que sin esto la firma partiria el
+    # renglon en dos y el mensaje empezaria mas abajo en unas filas que en otras.
+    if len(corto) > tope:
+        return corto[:tope - 1].rstrip() + '…'
+    return corto
+
+
 def tenant_public_url(tenant=None):
     """
     URL pública base del tenant, para los enlaces y QR que salen impresos.

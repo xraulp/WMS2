@@ -35,14 +35,33 @@ bajo el boton esta para que quien escribe no tenga que acordarse.
   </div>
 
   {% if mi_lado %}
+  {% comment %}
+  El formulario va en multipart porque ahora puede llevar archivos. El textarea
+  ya no es obligatorio: mandar la foto de la etiqueta sin escribir nada es una
+  respuesta completa, y el servidor rechaza el caso de mandar los dos vacios.
+
+  Lo que se adjunta aqui entra al expediente digital como cualquier otro
+  documento -- no vive dentro de la conversacion --, y el aviso de abajo lo
+  dice: quien manda una foto tiene que saber donde va a quedar.
+  {% endcomment %}
   <form hx-post="{% url 'operation_chat_send' operation.pk %}"
         hx-target="#chat-mensajes" hx-swap="innerHTML"
-        hx-on::after-request="if(event.detail.successful) this.reset()">
+        hx-encoding="multipart/form-data"
+        hx-on::after-request="if(event.detail.successful){this.reset();document.getElementById('chat-elegidos').textContent='';}">
     {% csrf_token %}
+    <div id="chat-elegidos" style="font-size:10px;color:#0369a1;margin-bottom:5px;
+                                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
     <div style="display:flex;gap:7px;align-items:flex-end">
-      <textarea name="body" rows="2" class="fi-m" required maxlength="4000"
+      <textarea name="body" rows="2" class="fi-m" maxlength="4000"
                 placeholder="Escribe un mensaje…"
                 style="flex:1;resize:vertical;min-height:38px"></textarea>
+      <input type="file" name="adjuntos" id="chat-adjuntos" multiple
+             style="display:none"
+             onchange="document.getElementById('chat-elegidos').textContent =
+                       Array.from(this.files).map(function(f){return f.name;}).join('  ·  ');">
+      <button type="button" class="btn btn-g" title="Adjuntar archivo"
+              onclick="document.getElementById('chat-adjuntos').click()"
+              style="padding:0 11px">📎</button>
       <button type="submit" class="btn btn-p">Enviar</button>
     </div>
     <div style="font-size:10px;color:#94a3b8;margin-top:5px">
@@ -51,6 +70,7 @@ bajo el boton esta para que quien escribe no tenga que acordarse.
       {% else %}
         Lo que escribas lo ve el cliente. Los mensajes no se editan ni se borran.
       {% endif %}
+      Los archivos que adjuntes quedan en el expediente digital de la operacion.
     </div>
   </form>
   {% endif %}

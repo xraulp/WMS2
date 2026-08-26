@@ -23,7 +23,8 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
                      CATALOG_SCOPES, catalog_scope_of, Invoice,
                      Conversation, ConversationRead, Message,
                      LADO_TENANT, LADO_CLIENTE)
-from .utils import generate_pdf_report, generate_label_pdf, generar_pdf_factura
+from .utils import (generate_pdf_report, generate_label_pdf, generar_pdf_factura,
+                    nombre_corto)
 from .almacen import url_firmada
 from . import notifications
 
@@ -1002,36 +1003,8 @@ def digital_upload(request, pk):
     if not customer_can_access_op(request.user, op):
         return HttpResponse('Permission denied.', status=403)
 
-    from datetime import date as date_cls
-    today_str = date_cls.today().strftime('%d%m%y')
-    archivos = request.FILES.getlist('files')
-    consecutivos = _reservar_consecutivos(tenant, today_str, len(archivos))
-
-    uploaded = []
-    # Las posiciones arrancan donde acaba lo que ya hay: un archivo nuevo va al
-    # final del expediente, no al principio.
-    #
-    # Que cada uno de la misma tanda avance una posicion no llega a notarse:
-    # con todos en la misma, el desempate por fecha de subida los deja en el
-    # mismo sitio. Se hace igual porque dos archivos en la posicion 5 es una
-    # mentira que alguien acabara leyendo, y porque asi el orden no depende de
-    # una segunda regla.
-    posicion = _siguiente_orden(op)
-    for f, consecutive in zip(archivos, consecutivos):
-        digital_name = f'{today_str}-{consecutive}'
-        ext = f.name.rsplit('.',1)[-1].lower() if '.' in f.name else ''
-        if ext in ('jpg','jpeg','png','gif','webp','heic'):  ftype = 'PHOTO'
-        elif ext in ('mp4','mov','avi','mkv','webm'):         ftype = 'VIDEO'
-        elif ext in ('pdf','doc','docx','xls','xlsx','csv'): ftype = 'DOCUMENT'
-        else:                                                  ftype = 'OTHER'
-
-        doc = OperationDocument.objects.create(
-            tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 4.2. digital_upload Al crear el documento, asignar tenant: 072526 19:55
-            operation=op, file_type=ftype, file=f,
-            original_name=f.name, digital_name=digital_name,
-            uploaded_by=request.user, orden=posicion)
-        posicion += 1
-        uploaded.append(doc)
+    uploaded = guardar_en_expediente(op, request.FILES.getlist('files'),
+                                     request.user)
 
     profile = get_profile(request.user)
     # No se le avisa al cliente de los archivos que él mismo acaba de subir.
@@ -1043,6 +1016,66 @@ def digital_upload(request, pk):
         'profile': profile,
         'upload_success': f'{len(uploaded)} file(s) uploaded.',
     })
+
+def tipo_de_archivo(nombre):
+    """De que clase es un archivo, por su extension."""
+    ext = nombre.rsplit('.', 1)[-1].lower() if '.' in nombre else ''
+    if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'):
+        return 'PHOTO'
+    if ext in ('mp4', 'mov', 'avi', 'mkv', 'webm'):
+        return 'VIDEO'
+    if ext in ('pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv'):
+        return 'DOCUMENT'
+    return 'OTHER'
+
+
+def guardar_en_expediente(op, archivos, user, mensaje=None):
+    """
+    Mete archivos en el expediente digital de una operacion.
+
+    Es el mismo camino para lo que se sube por el panel Digital y para lo que
+    se adjunta en el hilo, y eso es lo importante: un adjunto del chat no es
+    otra cosa, es un documento del expediente que ademas sabe por que mensaje
+    entro. Si fueran dos caminos, el ZIP y los correos tendrian que aprender el
+    segundo, y el dia que se olvidaran de hacerlo el archivo estaria en la
+    conversacion pero no en el expediente.
+
+    Las posiciones arrancan donde acaba lo que ya hay: un archivo nuevo va al
+    final del expediente, no al principio.
+
+    Que cada uno de la misma tanda avance una posicion no llega a notarse: con
+    todos en la misma, el desempate por fecha de subida los deja en el mismo
+    sitio. Se hace igual porque dos archivos en la posicion 5 es una mentira
+    que alguien acabara leyendo, y porque asi el orden no depende de una
+    segunda regla.
+    """
+    from datetime import date as date_cls
+
+    archivos = list(archivos)
+    if not archivos:
+        return []
+
+    hoy = date_cls.today().strftime('%d%m%y')
+    consecutivos = _reservar_consecutivos(op.tenant, hoy, len(archivos))
+    posicion = _siguiente_orden(op)
+
+    guardados = []
+    for f, consecutivo in zip(archivos, consecutivos):
+        doc = OperationDocument.objects.create(
+            tenant=op.tenant,
+            operation=op,
+            file_type=tipo_de_archivo(f.name),
+            file=f,
+            original_name=f.name,
+            digital_name='%s-%s' % (hoy, consecutivo),
+            uploaded_by=user,
+            orden=posicion,
+            mensaje=mensaje,
+        )
+        posicion += 1
+        guardados.append(doc)
+    return guardados
+
 
 def _siguiente_orden(op):
     """
@@ -3129,6 +3162,17 @@ def platform_dashboard(request):
 # tope para que un pegado accidental no llene la pantalla ni la base.
 MENSAJE_MAX = 4000
 
+# Cuantos archivos caben en un mensaje y cuanto puede pesar cada uno.
+#
+# El tope de archivos no es tecnico: es para que el hilo siga siendo una
+# conversacion. Quien tiene que subir veinte fotos de una tarima esta haciendo
+# un expediente, y para eso esta el panel Digital, que ademas deja ordenarlas.
+#
+# El de tamano si lo es: el archivo se lee para subirlo al bucket, y varios
+# videos a la vez en un plan chico es la forma rapida de quedarse sin memoria.
+ADJUNTOS_MAX    = 5
+ADJUNTO_MAX_MB  = 25
+
 
 def lado_en_el_hilo(user):
     """
@@ -3285,7 +3329,16 @@ def _pintar_hilo(request, op, error=''):
     hilo = getattr(op, 'conversation', None)
     mensajes = []
     if hilo:
-        mensajes = list(hilo.messages.select_related('author'))
+        # `prefetch_related` y no una consulta por mensaje: el panel se repinta
+        # cada diez segundos mientras alguien lo mira.
+        mensajes = list(hilo.messages.select_related('author')
+                        .prefetch_related('adjuntos'))
+        # Cada mensaje se firma con la empresa de su lado y la persona que lo
+        # escribio. La empresa sale del lado, que ya esta guardado; el nombre de
+        # la persona esta congelado en el mensaje desde que se escribio.
+        firmas = _firmas_del_hilo(op)
+        for m in mensajes:
+            m.firma = _firmar(firmas.get(m.side, ''), m.author_name)
         hilo.marcar_leida(request.user)
     return render(request, 'warehouse/partials/chat_messages.html', {
         'operation': op,
@@ -3318,11 +3371,25 @@ def operation_chat_send(request, pk):
         return negado
 
     cuerpo = (request.POST.get('body') or '').strip()
-    if not cuerpo:
-        return _pintar_hilo(request, op, error='Escribe un mensaje.')
+    archivos = request.FILES.getlist('adjuntos')
+
+    # Un mensaje puede ser solo un archivo: mandar una foto de la etiqueta sin
+    # escribir nada es una respuesta completa. Lo que no puede es estar vacio
+    # del todo.
+    if not cuerpo and not archivos:
+        return _pintar_hilo(request, op, error='Escribe un mensaje o adjunta un archivo.')
     if len(cuerpo) > MENSAJE_MAX:
         return _pintar_hilo(request, op,
                             error=f'El mensaje no puede pasar de {MENSAJE_MAX} caracteres.')
+    if len(archivos) > ADJUNTOS_MAX:
+        return _pintar_hilo(request, op, error=(
+            f'No mas de {ADJUNTOS_MAX} archivos por mensaje. '
+            'Para un expediente completo usa el panel Digital.'))
+    grande = next((f for f in archivos if f.size > ADJUNTO_MAX_MB * 1024 * 1024), None)
+    if grande:
+        return _pintar_hilo(request, op, error=(
+            f'"{grande.name}" pasa de {ADJUNTO_MAX_MB} MB. '
+            'Los archivos grandes van por el panel Digital.'))
 
     lado = lado_en_el_hilo(request.user)
     hilo, _ = Conversation.objects.get_or_create(
@@ -3336,16 +3403,39 @@ def operation_chat_send(request, pk):
         side=lado,
         body=cuerpo,
     )
+
+    # Los adjuntos entran al expediente digital como cualquier otro documento y
+    # solo se marcan con el mensaje del que vinieron. Van despues de crear el
+    # mensaje porque necesitan su clave.
+    #
+    # Que la subida falle no puede tumbar la peticion. El archivo viaja al
+    # bucket, que esta al otro lado de la red: un corte, una lentitud o un
+    # rechazo del almacenamiento son cosas que pasan, y un 500 ahi le borraria
+    # al operador lo que acababa de escribir sin decirle por que. Lo que se dijo
+    # se queda escrito y el aviso explica que el archivo no subio.
+    fallo_al_subir = ''
+    try:
+        guardar_en_expediente(op, archivos, request.user, mensaje=mensaje)
+    except Exception:
+        logger.exception('No se pudo guardar un adjunto del hilo de %s', op.custom_id)
+        fallo_al_subir = ('Tu mensaje se envio, pero el archivo no se pudo subir. '
+                          'Vuelve a intentarlo desde el panel Digital.')
     hilo.last_message_at = ahora
     hilo.save(update_fields=['last_message_at'])
 
     # Quien escribe ya leyo todo lo anterior, incluido lo que acaba de mandar.
     hilo.marcar_leida(request.user, ahora)
 
-    notifications.avisar_mensaje_nuevo(hilo, lado, mensaje=mensaje,
-                                       triggered_by=request.user)
+    # El aviso sale fuera de la peticion. Iba dentro, y con el correo caido
+    # costaba diez segundos justos por mensaje: el hilo no se repintaba hasta
+    # que el servidor de correo terminaba de no contestar. Aqui nadie mira el
+    # resultado del envio -- para eso esta la bitacora de avisos --, asi que
+    # esperarlo solo servia para dejar la pantalla quieta.
+    notifications.en_segundo_plano(
+        notifications.avisar_mensaje_nuevo, hilo, lado,
+        mensaje=mensaje, triggered_by=request.user)
 
-    return _pintar_hilo(request, op)
+    return _pintar_hilo(request, op, error=fallo_al_subir)
 
 
 def _nombre_visible(user):
@@ -3354,6 +3444,33 @@ def _nombre_visible(user):
     """
     completo = (user.get_full_name() or '').strip()
     return completo or user.username
+
+
+def _firmas_del_hilo(op):
+    """
+    Con que nombre de empresa firma cada lado en esta operacion.
+
+    Un mensaje firmado solo con el nombre de usuario -`custtes1`- no le dice
+    nada a quien lo lee del otro lado: lo que necesita saber primero es si le
+    escribe su almacen o su cliente, y solo despues quien en concreto.
+
+    No se guarda en el mensaje porque no hace falta: el lado ya esta guardado, y
+    de el salen la empresa y el cliente de la operacion. Si manana la empresa se
+    cambia el nombre, los mensajes viejos pasan a mostrar el nuevo, que es lo
+    correcto -- es la misma empresa.
+    """
+    cliente = notifications.resolve_customer(op)
+    del_cliente = cliente.name if cliente else op.get_customer_display()
+    return {
+        LADO_TENANT:  nombre_corto(op.tenant.name if op.tenant else 'WMS'),
+        LADO_CLIENTE: nombre_corto(del_cliente),
+    }
+
+
+def _firmar(organizacion, autor):
+    """La empresa primero y la persona despues, que es el orden en que se leen."""
+    partes = [p for p in (organizacion, autor) if p]
+    return ' · '.join(partes) or '—'
 
 
 @login_required

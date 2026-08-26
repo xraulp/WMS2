@@ -156,3 +156,34 @@ Al tocar código que maneje archivos, usar siempre la interfaz del storage:
 | `open(f.path)` | `f.open()` / `f.read()` |
 | `os.remove(f.path)` | `f.delete(save=False)` |
 | `zf.write(f.path, nombre)` | `zf.writestr(nombre, f.read())` |
+
+
+## El bucket es uno solo: `MEDIA_LOCAL=1` para probar
+
+`STORAGES['default']` es S3/R2 **siempre**, y no depende de `DEBUG`. Una prueba
+lanzada en el portátil, contra la base de datos local, sube igualmente al mismo
+bucket que producción.
+
+Pasó: probando los adjuntos del hilo en un navegador quedaron nueve archivos de
+prueba en `django-wms`, y hubo que borrarlos a mano. La ruta lleva el subdominio
+del tenant —`operations/pruebalocal/…`—, así que no se mezclan con los de
+ninguna empresa de verdad ni aparecen en ninguna pantalla, pero siguen siendo
+basura en un bucket que se paga.
+
+Para que lo que se suba probando se quede en la máquina:
+
+```bash
+DATABASE_URL="" MEDIA_LOCAL=1 python manage.py runserver
+```
+
+Con esa variable los archivos van a `media/` en el propio proyecto. Las pruebas
+de Django ya lo hacen por su cuenta —cada módulo que sube archivos redefine
+`STORAGES` a un directorio temporal—; esto es para cuando se prueba **a mano o
+con un navegador**, que es donde no hay nada que lo impida.
+
+> Al terminar, comprobar que no quedó nada:
+>
+> ```python
+> from warehouse.models import OperationDocument
+> OperationDocument.todos.filter(operation__custom_id='LO-QUE-SEA')
+> ```
