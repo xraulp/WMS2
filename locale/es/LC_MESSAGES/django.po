@@ -56,7 +56,7 @@ msgid "Available Entries"
 msgstr "Entradas disponibles"
 
 msgid "Bundle Qty"
-msgstr "Cantidad de bultos"
+msgstr "Bultos"
 
 msgid "Bundle Type"
 msgstr "Tipo de bulto"
@@ -581,4 +581,133 @@ msgstr "Su nombre de acceso"
 
 msgid "Write it down"
 msgstr "Apúntala"
+
+msgid "Access"
+msgstr "Acceso"
+
+msgid "The code goes in front of every location in that warehouse:"
+msgstr "El código va delante de cada posición de esa bodega:"
+
+msgid "Add the first one above. While there is none, registering an operation does not ask for the location."
+msgstr "Da de alta la primera arriba. Mientras no haya ninguna, el alta de operaciones no pregunta por la ubicación."
+
+msgid "Use the generator above: A,B in Zone and 1-10 in Aisle give you twenty locations at once."
+msgstr "Usa el generador de arriba: con A,B en Zona y 1-10 en Pasillo salen veinte posiciones de una vez."
+
+msgid "Comma-separated lists (A,B,C) or number ranges (1-10; 01-12 keeps the leading zero). Every level you fill in is crossed with the rest, and the ones you leave blank are skipped. What already exists is not duplicated, so you can generate again to extend a warehouse."
+msgstr "Listas separadas por comas (A,B,C) o rangos de números (1-10; 01-12 conserva el cero). Se cruzan todos los niveles que rellenes y los que dejes en blanco se saltan. Lo que ya existe no se duplica, así que puedes volver a generar para ampliar una bodega."
+
+msgid "No warehouses yet"
+msgstr "Todavía no hay bodegas"
+
+msgid "No locations in this warehouse"
+msgstr "Esta bodega no tiene posiciones"
+
+msgid "Nothing stored yet"
+msgstr "Todavía no hay nada guardado"
+
+msgid "No location has goods waiting to be released."
+msgstr "Ninguna posición tiene mercancía sin liberar."
+
+msgid "See every location"
+msgstr "Ver todas las posiciones"
+
+msgid "See all"
+msgstr "Ver todas"
+
+msgid "Show all"
+msgstr "Ver todas"
+
+msgid "in total"
+msgstr "en total"
+
+msgid "first 400 shown"
+msgstr "se muestran las primeras 400"
+
+msgid "with goods"
+msgstr "con mercancía"
+
+msgid "Read only: setting up warehouses and locations is the job of whoever administers the company."
+msgstr "Solo puedes consultar: dar de alta bodegas y posiciones es cosa de quien administra la empresa."
+
+msgid "Users with access"
+msgstr "Usuarios con acceso"
+
+msgid "See who signs in for this customer, and give access"
+msgstr "Ver quién entra por parte de este cliente, y dar acceso"
+
+msgid "Nobody from this customer can sign in"
+msgstr "Nadie de este cliente puede entrar al sistema"
+
+msgid "Write a message..."
+msgstr "Escribe un mensaje…"
+
+msgid "Entry (Goods Receipt)"
+msgstr "Entrada (recepción de mercancía)"
+
+msgid "Exit (Goods Dispatch)"
+msgstr "Salida (despacho de mercancía)"
+
+msgid "Entries Dispatched"
+msgstr "Entradas despachadas"
+
+msgid "Damage Description"
+msgstr "Descripción del daño"
+
+msgid "Photos and documents"
+msgstr "Fotos y documentos"
+
+msgid "Camera"
+msgstr "Cámara"
+
+msgid "Files"
+msgstr "Archivos"
+
+msgid "Digital — loading and unloading"
+msgstr "Digital — carga y descarga"
+
+msgid "Trash and log"
+msgstr "Papelera y bitácora"
+
+msgid "Reports"
+msgstr "Informes"
+
+msgid "Trash"
+msgstr "Papelera"
+
+msgid "Detail"
+msgstr "Detalle"
+
+msgid "Tap to select customer..."
+msgstr "Toca para elegir cliente..."
+
+msgid "Tap to select shipper..."
+msgstr "Toca para elegir remitente..."
+
+msgid "Tap to select carrier..."
+msgstr "Toca para elegir transportista..."
+
+msgid "Tap to select bundle type..."
+msgstr "Toca para elegir tipo de bulto..."
+
+msgid "Auto-filled from selection below..."
+msgstr "Se rellena solo con lo que elijas abajo..."
+
+msgid "Invoice number..."
+msgstr "Número de factura..."
+
+msgid "Describe the damage..."
+msgstr "Describe el daño..."
+
+msgid "Search..."
+msgstr "Buscar..."
+
+msgid "Enter Custom ID..."
+msgstr "Escribe el Custom ID..."
+
+msgid "aging"
+msgstr "vencidas"
+
+msgid "urgent"
+msgstr "urgentes"
 

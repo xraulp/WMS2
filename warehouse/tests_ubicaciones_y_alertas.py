@@ -410,6 +410,22 @@ class OcupacionTests(BaseConPosiciones):
 
         self.assertEqual(self.panel().context['posiciones_ocupadas'], 1)
 
+    def test_la_tabla_tiene_tantas_celdas_como_cabeceras(self):
+        """
+        Al meter la columna de ocupacion se perdio la de Kind, y todo lo que
+        venia detras se corrio un sitio: el numero de guardado se leia bajo
+        "Kind" y el estado bajo "Stored". La pantalla seguia pintandose sin
+        quejarse, asi que solo se ve mirandola.
+        """
+        self.guardar(self.a1)
+
+        html = self.panel().content.decode()
+        cuerpo = html.split('<tbody>')[1].split('</tbody>')[0]
+        primera_fila = cuerpo.split('<tr')[1]
+
+        self.assertEqual(primera_fila.count('<td'),
+                         html.split('<thead>')[1].split('</thead>')[0].count('<th'))
+
     def test_la_tabla_se_puede_acotar_a_una_posicion(self):
         aqui = self.guardar(self.a1)
         self.guardar(self.a2)

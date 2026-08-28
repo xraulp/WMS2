@@ -199,7 +199,7 @@ tbody td:has(.btn-action) {
   <button class="tab" id="tab-deletions" onclick="showTab('deletions')">{% trans "Deletions" %}</button>
   {% endif %}
   {% if platform_role %}
-  <button class="tab" id="tab-platform" onclick="showTab('platform')">🛠 Platform</button>
+  <button class="tab" id="tab-platform" onclick="showTab('platform')">🛠 {% trans "Platform" %}</button>
   {% endif %}
   {% comment %}
   El contador global de mensajes sin leer. No es una pestana con panel propio:
@@ -225,7 +225,7 @@ tbody td:has(.btn-action) {
   {% endcomment %}
   <button class="tab tab-vencidas{% if not alertas.total %} vacio{% endif %}"
           id="tab-vencidas" onclick="verVencidas()"
-          title="{% trans "Goods past their agreed time in the warehouse" %}">&#9200; <span id="vencidas-n">{{ alertas.total|default:0 }}</span> aging{% if alertas.urgentes %} <span style="font-weight:400">({{ alertas.urgentes }} urgent)</span>{% endif %}</button>
+          title="{% trans "Goods past their agreed time in the warehouse" %}">&#9200; <span id="vencidas-n">{{ alertas.total|default:0 }}</span> {% trans "aging" %}{% if alertas.urgentes %} <span style="font-weight:400">({{ alertas.urgentes }} {% trans "urgent" %})</span>{% endif %}</button>
 </div>
 
 <div class="pg">
@@ -237,9 +237,9 @@ tbody td:has(.btn-action) {
     <div id="form-msg-wrap"><div id="form-msg"></div></div>
     <div id="print-bar" style="display:none;background:var(--asoft);border:1px solid var(--accent);border-radius:var(--rL);padding:10px 14px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="font-size:12px;font-weight:600;color:var(--adark)" id="print-bar-id"></span>
-      <a id="btn-print-report" href="#" target="_blank" class="btn btn-g btn-sm">📄 Full Report PDF</a>
-      <a id="btn-print-label"  href="#" target="_blank" class="btn btn-p btn-sm">🏷 Print Labels</a>
-      <button onclick="document.getElementById('print-bar').style.display='none'" class="btn btn-g btn-sm" style="margin-left:auto">✕ Close</button>
+      <a id="btn-print-report" href="#" target="_blank" class="btn btn-g btn-sm">📄 {% trans "Full Report PDF" %}</a>
+      <a id="btn-print-label"  href="#" target="_blank" class="btn btn-p btn-sm">🏷 {% trans "Print Labels" %}</a>
+      <button onclick="document.getElementById('print-bar').style.display='none'" class="btn btn-g btn-sm" style="margin-left:auto">✕ {% trans "Close" %}</button>
     </div>
 
     <form id="op-form"
@@ -487,7 +487,7 @@ tbody td:has(.btn-action) {
 
       {% if profile.is_superadmin or profile.is_home or profile.is_manager %}
       <div class="cf-g">
-        <label>👤 User</label>
+        <label>👤 {% trans "User" %}</label>
         <select name="user" id="filter-user" class="cf-i" style="height:32px; min-width:150px"
                 hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
                 hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
@@ -501,7 +501,7 @@ tbody td:has(.btn-action) {
 
       {% if not profile.is_customer %}
       <div class="cf-g">
-        <label>🏢 Customer</label>
+        <label>🏢 {% trans "Customer" %}</label>
         <select name="customer" id="filter-customer" class="cf-i" style="height:32px; min-width:160px"
                 hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
                 hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
@@ -515,7 +515,7 @@ tbody td:has(.btn-action) {
 
       {% if warehouses %}
       <div class="cf-g">
-        <label>🏬 Warehouse</label>
+        <label>🏬 {% trans "Warehouse" %}</label>
         <select name="warehouse" id="filter-warehouse" class="cf-i" style="height:32px; min-width:140px"
                 hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
                 hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
@@ -528,7 +528,7 @@ tbody td:has(.btn-action) {
       {% endif %}
 
       <div class="cf-g">
-        <label>↔ Type</label>
+        <label>↔ {% trans "Type" %}</label>
         <select name="type" id="filter-type" class="cf-i" style="height:32px; min-width:120px"
                 hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
                 hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
@@ -540,7 +540,7 @@ tbody td:has(.btn-action) {
       </div>
 
       <div class="cf-g">
-        <label>◼ Status</label>
+        <label>◼ {% trans "Status" %}</label>
         <select name="status" id="status-filter-sel" class="cf-i" style="height:32px; min-width:140px"
                 hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
                 hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
@@ -553,7 +553,7 @@ tbody td:has(.btn-action) {
       <div class="cf-g">
         <label>&nbsp;</label>
         <button type="button" class="btn btn-g btn-sm" style="height:32px"
-                onclick="verTodasLasOperaciones()" title="{% trans "Clear all filters" %}">✕ Clear</button>
+                onclick="verTodasLasOperaciones()" title="{% trans "Clear all filters" %}">✕ {% trans "Clear" %}</button>
       </div>
       <span class="htmx-indicator spin" id="s-spin"></span>
     </div>
@@ -764,7 +764,7 @@ un modal por partial duplicaria los mismos id.
   <div style="background:var(--surface);border-radius:10px;padding:20px;max-width:520px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">
-        Acceso &mdash; <span id="cust-access-title"></span>
+        {% trans "Access" %} &mdash; <span id="cust-access-title"></span>
       </span>
       <button onclick="cerrarAccesoDeCliente()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--soft)">✕</button>
     </div>

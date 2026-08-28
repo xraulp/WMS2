@@ -26,9 +26,9 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
     <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Import Excel:" %}</label>
     <input type="file" name="import_file" accept=".xlsx,.xls" required
            style="font-size:11px;height:26px;border:1px solid var(--bdr);border-radius:6px;padding:2px 6px;background:var(--surface)">
-    <button type="submit" class="btn btn-g btn-sm" style="color:var(--green);border-color:var(--green)">⬆ Import</button>
+    <button type="submit" class="btn btn-g btn-sm" style="color:var(--green);border-color:var(--green)">⬆ {% trans "Import" %}</button>
   </form>
-  <a href="{% url 'catalog_layout' %}" class="btn btn-g btn-sm" style="color:var(--accent);border-color:var(--accent)">⬇ Download Layout</a>
+  <a href="{% url 'catalog_layout' %}" class="btn btn-g btn-sm" style="color:var(--accent);border-color:var(--accent)">⬇ {% trans "Download Layout" %}</a>
 </div>
 {% endif %}
 
@@ -45,7 +45,7 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
       cuando llamaba: la cuenta estaba en la pestana Users y habia que leerla
       entera para sacarla.
       {% endcomment %}
-      {% if scope == 'customers' %}<th title="Usuarios con acceso">{% trans "Users" %}</th>{% endif %}
+      {% if scope == 'customers' %}<th title="{% trans "Users with access" %}">{% trans "Users" %}</th>{% endif %}
       <th>{% trans "Abbreviation" %}</th>
       <th>{% trans "Email" %}</th><th>{% trans "Phone" %}</th>
       <th style="color:var(--th-ink-acento)">WhatsApp</th>
@@ -67,7 +67,7 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
       <td style="text-align:center">
         {% if puede_dar_acceso %}
         <button class="btn btn-g btn-sm" onclick="abrirAccesoDeCliente({{ entry.pk }}, '{{ entry.name|escapejs }}')"
-                title="Ver quien entra por parte de este cliente, y dar acceso"
+                title="{% trans "See who signs in for this customer, and give access" %}"
                 style="{% if not entry.usuarios %}border-color:var(--warn);color:var(--warn-ink);background:var(--warn-bg-suave){% endif %}">
           {% if entry.usuarios %}👤 {{ entry.usuarios }}{% else %}sin acceso{% endif %}
         </button>
@@ -76,7 +76,7 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
             <span class="badge" style="background:var(--asoft);color:var(--accent-ink)">{{ entry.usuarios }}</span>
           {% else %}
             <span class="badge" style="background:var(--warn-bg);color:var(--warn-ink)"
-                  title="Nadie de este cliente puede entrar al sistema">{% trans "no access" %}</span>
+                  title="{% trans "Nobody from this customer can sign in" %}">{% trans "no access" %}</span>
           {% endif %}
         {% endif %}
       </td>

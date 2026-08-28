@@ -180,7 +180,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
         <label>{% trans "Customer" %} <span style="color:var(--red)">*</span></label>
         <div class="cb" id="mob-cb-customer">
           <input type="text" class="cb-input" id="mob-cb-customer-input"
-                 placeholder="Tap to select customer..." autocomplete="off" readonly
+                 placeholder="{% trans "Tap to select customer..." %}" autocomplete="off" readonly
                  onclick="mobCbOpen('customer')">
           <input type="hidden" name="customer_id"   id="mob-cb-customer-id">
           <input type="hidden" name="customer_text" id="mob-cb-customer-text">
@@ -192,15 +192,15 @@ tbody td:has(button), tbody td:has(.btn-action) {
         <label>{% trans "Type of Operation" %} <span style="color:var(--red)">*</span></label>
         <select name="operation_type" id="mob-op-type" class="form-input" onchange="mobOnTypeChange(this.value)">
           <option value="">{% trans "— Select —" %}</option>
-          <option value="ENTRY">Entry (Goods Receipt)</option>
-          <option value="EXIT">Exit (Goods Dispatch)</option>
+          <option value="ENTRY">{% trans "Entry (Goods Receipt)" %}</option>
+          <option value="EXIT">{% trans "Exit (Goods Dispatch)" %}</option>
         </select>
       </div>
 
       <div class="form-row" id="mob-ed-row" style="display:none">
-        <label>Entries Dispatched</label>
+        <label>{% trans "Entries Dispatched" %}</label>
         <input type="text" name="entry_dispatched" id="mob-ed" class="form-input"
-               placeholder="Auto-filled from selection below..." readonly>
+               placeholder="{% trans "Auto-filled from selection below..." %}" readonly>
         <div id="mob-entries-list" style="margin-top:8px"></div>
       </div>
 
@@ -208,7 +208,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
         <label>{% trans "Shipper" %}</label>
         <div class="cb" id="mob-cb-shipper">
           <input type="text" class="cb-input" id="mob-cb-shipper-input"
-                 placeholder="Tap to select shipper..." autocomplete="off" readonly
+                 placeholder="{% trans "Tap to select shipper..." %}" autocomplete="off" readonly
                  onclick="mobCbOpen('shipper')">
           <input type="hidden" name="shipper_id"   id="mob-cb-shipper-id">
           <input type="hidden" name="shipper_text" id="mob-cb-shipper-text">
@@ -218,7 +218,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
 
       <div class="form-row">
         <label>{% trans "Invoice" %}</label>
-        <input type="text" name="invoice" class="form-input" placeholder="Invoice number...">
+        <input type="text" name="invoice" class="form-input" placeholder="{% trans "Invoice number..." %}">
       </div>
 
       <div class="form-row">
@@ -230,7 +230,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
         <label>{% trans "Carrier" %}</label>
         <div class="cb" id="mob-cb-carrier">
           <input type="text" class="cb-input" id="mob-cb-carrier-input"
-                 placeholder="Tap to select carrier..." autocomplete="off" readonly
+                 placeholder="{% trans "Tap to select carrier..." %}" autocomplete="off" readonly
                  onclick="mobCbOpen('carrier')">
           <input type="hidden" name="carrier_id"   id="mob-cb-carrier-id">
           <input type="hidden" name="carrier_text" id="mob-cb-carrier-text">
@@ -242,7 +242,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
         <label>{% trans "Bundle Type" %}</label>
         <div class="cb" id="mob-cb-bundle_type">
           <input type="text" class="cb-input" id="mob-cb-bundle_type-input"
-                 placeholder="Tap to select bundle type..." autocomplete="off" readonly
+                 placeholder="{% trans "Tap to select bundle type..." %}" autocomplete="off" readonly
                  onclick="mobCbOpen('bundle_type')">
           <input type="hidden" name="bundle_type_id"   id="mob-cb-bundle_type-id">
           <input type="hidden" name="bundle_type_text" id="mob-cb-bundle_type-text">
@@ -288,8 +288,8 @@ tbody td:has(button), tbody td:has(.btn-action) {
         </label>
       </div>
       <div class="form-row" id="mob-dmg-desc" style="display:none">
-        <label>Damage Description</label>
-        <textarea name="damage_description" class="form-input" placeholder="Describe the damage..."></textarea>
+        <label>{% trans "Damage Description" %}</label>
+        <textarea name="damage_description" class="form-input" placeholder="{% trans "Describe the damage..." %}"></textarea>
       </div>
 
       <!-- NUEVOS CAMPOS: REF AA, DYS, PEDIMENTO -->
@@ -299,7 +299,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
       </div>
       <div class="form-row">
         <label>DYS</label>
-        <input type="text" name="ref_dys" class="form-input" placeholder="Referencia DYS...">
+        <input type="text" name="ref_dys" class="form-input" placeholder="{% trans "DYS reference..." %}">
       </div>
       <div class="form-row">
         <label>PEDIMENTO</label>
@@ -307,15 +307,15 @@ tbody td:has(button), tbody td:has(.btn-action) {
       </div>
 
       <div class="form-row">
-        <label>Photos &amp; Documents</label>
+        <label>{% trans "Photos and documents" %}</label>
         <div class="btn-row" style="margin-bottom:10px">
           <button type="button" class="btn btn-cam"
                   onclick="document.getElementById('mob-cam').click()">
-            📷 Camera
+            📷 {% trans "Camera" %}
           </button>
           <button type="button" class="btn btn-g"
                   onclick="document.getElementById('mob-files').click()">
-            📁 Files
+            📁 {% trans "Files" %}
           </button>
         </div>
         <!-- Single unified input that accumulates all files -->
@@ -353,7 +353,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
 <div class="panel {% if not profile|can_see_tab:'form' %}on{% endif %}" id="panel-database">
   <div class="card">
     <div class="card-title">{% trans "Operations" %}</div>
-    <input type="text" id="mob-db-q" class="form-input" placeholder="Search..."
+    <input type="text" id="mob-db-q" class="form-input" placeholder="{% trans "Search..." %}"
            style="margin-bottom:10px"
            hx-get="{% url 'operations_search' %}" hx-target="#mob-ops-table"
            hx-trigger="keyup changed delay:400ms" name="q">
@@ -467,9 +467,9 @@ function closeCatalogEdit() {
 <!-- ══════ DIGITAL ══════ -->
 <div class="panel" id="panel-digital">
   <div class="card">
-    <div class="card-title">Digital — Loading &amp; Unloading</div>
+    <div class="card-title">{% trans "Digital — loading and unloading" %}</div>
     <div style="display:flex;gap:8px;margin-bottom:14px">
-      <input type="text" id="mob-digi-q" class="form-input" placeholder="Enter Custom ID..."
+      <input type="text" id="mob-digi-q" class="form-input" placeholder="{% trans "Enter Custom ID..." %}"
              style="flex:1" onkeydown="if(event.key==='Enter')mobDigiSearch()">
       <button onclick="mobDigiSearch()" class="btn btn-p" style="width:auto;padding:11px 18px;margin:0">{% trans "Search" %}</button>
     </div>
@@ -500,7 +500,7 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
 {% endcomment %}
 <div class="panel" id="panel-deletions">
   <div class="card">
-    <div class="card-title">Papelera y bitácora</div>
+    <div class="card-title">{% trans "Trash and log" %}</div>
     <div id="deletions-content">
       <div style="color:var(--faint);font-size:13px;padding:20px">{% trans "Loading..." %}</div>
     </div>
@@ -527,11 +527,11 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
     <span class="icon">📁</span>{% trans "Digital" %}
   </button>
   <button class="nav-btn" id="nav-reports" onclick="mobShowTab('reports')">
-    <span class="icon">📊</span>Reports
+    <span class="icon">📊</span>{% trans "Reports" %}
   </button>
   {% if profile.can_see_deletion_log %}
   <button class="nav-btn" id="nav-deletions" onclick="mobShowTab('deletions')">
-    <span class="icon">🗑</span>Papelera
+    <span class="icon">🗑</span>{% trans "Trash" %}
   </button>
   {% endif %}
   <a href="#" class="nav-logout" onclick="confirmLogout(event)">
@@ -544,7 +544,7 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
 <div id="mobile-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; padding:16px; overflow-y:auto;">
   <div style="background:var(--surface); border-radius:12px; max-width:100%; width:100%; max-height:90vh; overflow-y:auto; font-family:'IBM Plex Sans',sans-serif; font-size:14px;">
     <div style="position:sticky; top:0; background:var(--surface); padding:12px 16px; border-bottom:1px solid var(--bdr); display:flex; justify-content:space-between; align-items:center;">
-      <span style="font-weight:600; font-family:'IBM Plex Mono',monospace; color:var(--ink);">Detalle</span>
+      <span style="font-weight:600; font-family:'IBM Plex Mono',monospace; color:var(--ink);">{% trans "Detail" %}</span>
       <button onclick="closeMobileModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--soft);">✕</button>
     </div>
     <div id="mobile-modal-body" style="padding:16px;"></div>

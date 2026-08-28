@@ -116,6 +116,15 @@ queda claro cuando todo lo demas se pone oscuro.
    un <input type=date>, el desplegable de un <select>. Sin esto quedan blancos
    en medio de una pantalla oscura. */
 :root[data-theme="light"]{ color-scheme:light; }
+
+/* Suelo para los campos. Un textarea al que su regla no le declara fondo se
+   queda con el gris que le pone el navegador en modo oscuro, que no es
+   ninguno de los grises de la pantalla. Va con selector de tipo -- la
+   especificidad mas baja que hay -- para que cualquier regla propia lo gane.
+   Las casillas y el boton de archivo se quedan fuera: los pinta el navegador
+   y `color-scheme` ya los pone del color correcto. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select, textarea { background-color:var(--surface); color:var(--ink); }
 </style>
 
 <script>

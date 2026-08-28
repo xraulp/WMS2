@@ -37,8 +37,7 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
 
 {% if not puede_configurar %}
 <p style="font-size:11px;color:var(--faint);margin:-4px 0 10px">
-  Solo puedes consultar: dar de alta bodegas y posiciones es cosa de quien
-  administra la empresa.
+  {% trans "Read only: setting up warehouses and locations is the job of whoever administers the company." %}
 </p>
 {% endif %}
 
@@ -63,7 +62,7 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
       <button type="submit" class="btn btn-p" style="height:30px">{% trans "Add" %}</button>
     </form>
     <div class="loc-pista">
-      El codigo va delante de cada posicion de esa bodega: <span class="loc-chip">LRD-A-03-2</span>
+      {% trans "The code goes in front of every location in that warehouse:" %} <span class="loc-chip">LRD-A-03-2</span>
     </div>
   </div>
   {% endif %}
@@ -120,10 +119,7 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
       </div>
     </form>
     <div class="loc-pista">
-      Listas separadas por comas (<span class="loc-chip">A,B,C</span>) o rangos de
-      numeros (<span class="loc-chip">1-10</span>, <span class="loc-chip">01-12</span> conserva el cero).
-      Se cruzan todos los niveles que rellenes y los que dejes en blanco se saltan.
-      Lo que ya existe no se duplica, asi que puedes volver a generar para ampliar.
+      {% trans "Comma-separated lists (A,B,C) or number ranges (1-10; 01-12 keeps the leading zero). Every level you fill in is crossed with the rest, and the ones you leave blank are skipped. What already exists is not duplicated, so you can generate again to extend a warehouse." %}
     </div>
   </div>
   {% endif %}
@@ -146,16 +142,15 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
     {% if bodega_filtrada %}
     <button type="button" class="btn btn-g btn-sm"
             hx-get="{% url 'locations_panel' %}" hx-target="#locations-content" hx-swap="innerHTML">
-      &#10005; Show all
+      &#10005; {% trans "Show all" %}
     </button>
     {% endif %}
   </div>
 </div>
 {% else %}
 <div class="es" style="margin-top:14px">
-  <h3>No warehouses yet</h3>
-  <p>Da de alta la primera arriba. Mientras no haya ninguna, el alta de
-     operaciones no pregunta por la ubicacion.</p>
+  <h3>{% trans "No warehouses yet" %}</h3>
+  <p>{% trans "Add the first one above. While there is none, registering an operation does not ask for the location." %}</p>
 </div>
 {% endif %}
 
@@ -165,8 +160,8 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
   <div class="loc-t" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <span>{% trans "Locations" %}</span>
     <span style="text-transform:none;letter-spacing:0;color:var(--soft)">
-      &mdash; {{ total_ubicaciones }} en total{% if total_ubicaciones > 400 %}, se muestran las primeras 400{% endif %},
-      {{ posiciones_ocupadas }} con mercancia
+      &mdash; {{ total_ubicaciones }} {% trans "in total" %}{% if total_ubicaciones > 400 %}, {% trans "first 400 shown" %}{% endif %},
+      {{ posiciones_ocupadas }} {% trans "with goods" %}
     </span>
     {% comment %}
     El paso a "solo ocupadas". Una bodega con seiscientas posiciones y treinta
@@ -176,7 +171,7 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
     <button type="button" class="btn btn-g btn-sm" style="text-transform:none;letter-spacing:0"
             hx-get="{% url 'locations_panel' %}?{% if bodega_filtrada %}warehouse={{ bodega_filtrada }}&amp;{% endif %}{% if not solo_ocupadas %}ocupadas=1{% endif %}"
             hx-target="#locations-content" hx-swap="innerHTML">
-      {% if solo_ocupadas %}&#10005; Ver todas{% else %}Solo ocupadas{% endif %}
+      {% if solo_ocupadas %}&#10005; {% trans "See all" %}{% else %}{% trans "Occupied only" %}{% endif %}
     </button>
   </div>
   <div class="tabla-navegable" data-columnas-fijas="2">
@@ -207,6 +202,7 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
             <td>{{ u.rack|default:"&mdash;" }}</td>
             <td>{{ u.level|default:"&mdash;" }}</td>
             <td>{{ u.position|default:"&mdash;" }}</td>
+            <td>{{ u.get_kind_display }}</td>
             {% comment %}
             Lo que hay guardado ahi: entradas que no se han liberado. El numero
             lleva a la tabla de Operaciones acotada a esa posicion, que es la
@@ -254,14 +250,13 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
 </div>
 {% elif solo_ocupadas %}
 <div class="es" style="margin-top:14px">
-  <h3>Nothing stored yet</h3>
-  <p>Ninguna posicion tiene mercancia sin liberar.
-     <a href="#" onclick="htmx.ajax('GET','{% url 'locations_panel' %}',{target:'#locations-content',swap:'innerHTML'});return false">Ver todas las posiciones</a>.</p>
+  <h3>{% trans "Nothing stored yet" %}</h3>
+  <p>{% trans "No location has goods waiting to be released." %}
+     <a href="#" onclick="htmx.ajax('GET','{% url 'locations_panel' %}',{target:'#locations-content',swap:'innerHTML'});return false">{% trans "See every location" %}</a>.</p>
 </div>
 {% elif bodegas %}
 <div class="es" style="margin-top:14px">
-  <h3>No locations in this warehouse</h3>
-  <p>Usa el generador de arriba: con <span class="loc-chip">A,B</span> en Zone y
-     <span class="loc-chip">1-10</span> en Aisle salen veinte posiciones de una vez.</p>
+  <h3>{% trans "No locations in this warehouse" %}</h3>
+  <p>{% trans "Use the generator above: A,B in Zone and 1-10 in Aisle give you twenty locations at once." %}</p>
 </div>
 {% endif %}
