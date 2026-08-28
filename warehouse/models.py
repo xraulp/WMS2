@@ -91,6 +91,13 @@ class Catalog(models.Model):
     notify_on_documents = models.BooleanField(default=False,
                             verbose_name='Avisar al agregar documentos')
 
+    # Los dias que la mercancia de este cliente puede estar en bodega antes de
+    # que la pantalla avise. Vacio significa "lo que diga la empresa": asi el
+    # plazo general se puede cambiar en un sitio sin repasar cliente por cliente.
+    alert_days          = models.PositiveIntegerField(null=True, blank=True,
+                            verbose_name='Dias en bodega antes de avisar',
+                            help_text='Vacio = usar el plazo general de la empresa')
+
     class Meta:
         ordering = ['category', 'name']
 
@@ -341,14 +348,147 @@ class UserProfile(models.Model):
         return f"{self.user.username} ({self.role})"
 
 
+class Warehouse(models.Model):
+    """
+    Una bodega del tenant. Multi-ubicacion: una empresa puede operar varias
+    --Laredo, Monterrey, el patio de al lado-- y hasta ahora el sistema daba por
+    hecho que solo habia una, de modo que no se podia decir donde entro la
+    mercancia.
+
+    El `code` es lo que se teclea y lo que sale en las etiquetas; el `name` es
+    para la pantalla.
+    """
+    tenant     = models.ForeignKey('Tenant', on_delete=models.CASCADE,
+                                   related_name='warehouses')
+    name       = models.CharField(max_length=120, verbose_name='Nombre')
+    code       = models.CharField(max_length=10, verbose_name='Codigo',
+                                  help_text='Corto, sale en el codigo de la ubicacion (ej. LRD)')
+    address    = models.TextField(blank=True, null=True)
+    notes      = models.TextField(blank=True, null=True)
+    active     = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        # El codigo identifica la bodega dentro de su empresa, no en todo el
+        # sistema: dos empresas distintas pueden tener las dos su bodega "MTY".
+        unique_together = [('tenant', 'code')]
+
+    def __str__(self):
+        return f'{self.code} - {self.name}'
+
+
+class Location(models.Model):
+    """
+    Una posicion dentro de una bodega: zona, pasillo, estante, nivel y hueco.
+
+    Los cinco campos son texto libre y ninguno es obligatorio, a proposito. Una
+    bodega chica trabaja con "Zona A" y nada mas; una grande numera hasta el
+    hueco. Obligar a rellenar los cinco convertiria el alta en un tramite y
+    acabaria con ubicaciones llamadas "-" para poder guardar.
+    """
+    TIPOS = [
+        ('STORAGE',    'Almacenaje'),
+        ('RECEIVING',  'Recepcion'),
+        ('SHIPPING',   'Embarque'),
+        ('STAGING',    'Anden / Preparacion'),
+        ('PICKING',    'Picking'),
+        ('QUARANTINE', 'Cuarentena'),
+        ('DAMAGED',    'Mercancia danada'),
+        ('RETURNS',    'Devoluciones'),
+    ]
+
+    tenant    = models.ForeignKey('Tenant', on_delete=models.CASCADE,
+                                  related_name='locations')
+    warehouse = models.ForeignKey('Warehouse', on_delete=models.CASCADE,
+                                  related_name='locations', verbose_name='Bodega')
+    zone      = models.CharField(max_length=20, blank=True, null=True, verbose_name='Zona')
+    aisle     = models.CharField(max_length=20, blank=True, null=True, verbose_name='Pasillo')
+    rack      = models.CharField(max_length=20, blank=True, null=True, verbose_name='Estante')
+    level     = models.CharField(max_length=20, blank=True, null=True, verbose_name='Nivel')
+    position  = models.CharField(max_length=20, blank=True, null=True, verbose_name='Posicion')
+    kind      = models.CharField(max_length=12, choices=TIPOS, default='STORAGE',
+                                 verbose_name='Tipo de ubicacion')
+    # El codigo que se lee y se dicta. Se arma solo con lo que se haya rellenado
+    # y se guarda, en vez de calcularse al vuelo, para poder buscarlo en la base
+    # y para que una ubicacion ya usada no cambie de nombre si manana alguien
+    # decide numerar los niveles.
+    code      = models.CharField(max_length=80, blank=True, verbose_name='Codigo')
+    notes     = models.TextField(blank=True, null=True)
+    active    = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['warehouse__code', 'zone', 'aisle', 'rack', 'level', 'position']
+        unique_together = [('warehouse', 'code')]
+
+    def componer_codigo(self):
+        partes = [self.warehouse.code if self.warehouse_id else '']
+        partes += [p for p in (self.zone, self.aisle, self.rack, self.level, self.position)
+                   if p and p.strip()]
+        return '-'.join(p.strip() for p in partes if p and p.strip())
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = self.componer_codigo()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.code or f'Ubicacion {self.pk}'
+
+    @property
+    def descripcion(self):
+        """Lo que se lee cuando el codigo no basta: "Zona A / Pasillo 3 / Nivel 2"."""
+        etiquetas = [('Zona', self.zone), ('Pasillo', self.aisle), ('Estante', self.rack),
+                     ('Nivel', self.level), ('Posicion', self.position)]
+        return ' / '.join(f'{nombre} {valor}' for nombre, valor in etiquetas
+                          if valor and valor.strip())
+
+
 class WarehouseOperation(models.Model):
-    TYPE_CHOICES = [('ENTRY', 'Entry'), ('EXIT', 'Exit')]
+    # Los dos tipos de siempre mas los dos que pidio la operacion: el trasbordo
+    # (TD), cuando la mercancia sale hacia otro transporte sin llegar a
+    # almacenarse, y el reacomodo (RD), cuando solo cambia de sitio dentro de la
+    # bodega. El codigo corto es el que ya se usa hablando, y es tambien el
+    # prefijo del Custom ID.
+    TYPE_CHOICES = [
+        ('ENTRY', 'Entry'),
+        ('EXIT',  'Exit'),
+        ('TD',    'Transfer'),
+        ('RD',    'Relocation'),
+    ]
+
+    # El prefijo con el que nace el Custom ID de cada tipo. `SD` importa mas de
+    # lo que parece: `status` lee `entry_dispatched` buscando un token que
+    # empiece por SD para decidir si una entrada esta liberada.
+    PREFIJO_DEL_TIPO = {'ENTRY': 'ED', 'EXIT': 'SD', 'TD': 'TD', 'RD': 'RD'}
+
+    # Los tipos que consumen entradas ya guardadas. Un reacomodo no: la
+    # mercancia no se va, solo cambia de sitio.
+    TIPOS_QUE_DESPACHAN = ('EXIT', 'TD')
     tenant               = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, 
                                              related_name='operations')
     date                 = models.DateField(default=timezone.now)
     operation_type       = models.CharField(max_length=5, choices=TYPE_CHOICES)
     custom_id            = models.CharField(max_length=20, unique=True, blank=True)
     entry_dispatched     = models.CharField(max_length=500, blank=True, null=True)
+    # Donde esta la mercancia. Los dos campos son opcionales porque hay ochenta
+    # y seis operaciones ya guardadas sin ubicacion, y porque una empresa que
+    # trabaja con una sola bodega sin posiciones no tiene por que rellenarlos.
+    warehouse            = models.ForeignKey('Warehouse', on_delete=models.SET_NULL,
+                                             null=True, blank=True,
+                                             related_name='operations',
+                                             verbose_name='Bodega')
+    location             = models.ForeignKey('Location', on_delete=models.SET_NULL,
+                                             null=True, blank=True,
+                                             related_name='operations',
+                                             verbose_name='Ubicacion')
+    # De donde salio, y solo tiene sentido en un reacomodo: un reacomodo que no
+    # dice de donde venia la mercancia no cuenta lo que paso.
+    location_from        = models.ForeignKey('Location', on_delete=models.SET_NULL,
+                                             null=True, blank=True,
+                                             related_name='operations_desde',
+                                             verbose_name='Ubicacion anterior')
     customer             = models.ForeignKey(Catalog, on_delete=models.SET_NULL, null=True, blank=True,
                                              related_name='operations_as_customer',
                                              limit_choices_to={'category': 'CUSTOMER'})
@@ -435,6 +575,52 @@ class WarehouseOperation(models.Model):
                     return 'Released Goods'
         return 'In Warehouse'
 
+    # ── Permanencia en bodega ────────────────────────────────────────────────
+    # La pregunta que nadie podia contestar sin repasar la tabla a ojo: que
+    # llevaba demasiado tiempo guardado. Se calcula al mirar, no se guarda: un
+    # campo "dias" habria que recalcularlo todas las noches, y aqui no hay cron.
+
+    @property
+    def dias_en_bodega(self):
+        """Dias desde la fecha de la operacion. None si ya no cuenta."""
+        if self.operation_type != 'ENTRY' or self.status != 'In Warehouse':
+            return None
+        return (timezone.now().date() - self.date).days
+
+    @property
+    def plazo_de_alerta(self):
+        """
+        Los dias que esta mercancia puede estar guardada sin avisar.
+
+        Manda el plazo del cliente; si no tiene, el de la empresa. Un cliente
+        sin ficha --los que se teclean a mano-- se rige por el de la empresa.
+        """
+        if self.customer and self.customer.alert_days:
+            return self.customer.alert_days
+        if self.tenant_id and self.tenant.alert_days_default:
+            return self.tenant.alert_days_default
+        return None
+
+    @property
+    def alerta_permanencia(self):
+        """
+        'vencida', 'urgente' o None.
+
+        Se avisa al cumplirse el plazo y se sube de tono al doble. Dos niveles y
+        no cinco: lo que hace falta distinguir es "hay que moverlo" de "esto ya
+        se nos paso", y una escala mas fina se convierte en un semaforo que
+        nadie mira.
+        """
+        dias  = self.dias_en_bodega
+        plazo = self.plazo_de_alerta
+        if dias is None or not plazo:
+            return None
+        if dias >= plazo * 2:
+            return 'urgente'
+        if dias >= plazo:
+            return 'vencida'
+        return None
+
     def get_customer_display(self):
         return self.customer.name if self.customer else (self.customer_name_manual or '—')
 
@@ -484,7 +670,7 @@ class WarehouseOperation(models.Model):
         return None
 
     def generate_custom_id(self):
-        prefix = 'ED' if self.operation_type == 'ENTRY' else 'SD'
+        prefix = self.PREFIJO_DEL_TIPO.get(self.operation_type, 'OP')
         date_str = self.date.strftime('%y%m%d')
         count = WarehouseOperation.objects.filter(
             operation_type=self.operation_type, date=self.date
@@ -841,6 +1027,13 @@ class Tenant(models.Model):
     
     # Facturación (solo para organizations)
     billing_email = models.EmailField(blank=True, null=True, verbose_name="Email de Facturación")
+
+    # A los cuantos dias en bodega una entrada empieza a avisar. Es el plazo de
+    # la casa; cada cliente puede tener el suyo (`Catalog.alert_days`), porque
+    # una semana para uno es lo normal y para otro ya es una factura de
+    # almacenaje. Siete dias es lo que pidio la operacion como punto de partida.
+    alert_days_default = models.PositiveIntegerField(
+        default=7, verbose_name='Dias en bodega antes de avisar')
 
     # El logo que sale en los documentos que la empresa manda a sus clientes:
     # reportes, etiquetas y lo que va adjunto en los correos.

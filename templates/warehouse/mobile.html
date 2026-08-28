@@ -80,6 +80,11 @@ input:checked + .toggle-slider::before{transform:translateX(22px)}
 .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .b-entry{background:var(--gsoft);color:var(--green)}
 .b-exit{background:var(--rsoft);color:var(--red)}
+.b-td{background:#fef3c7;color:#b45309}
+.b-rd{background:#ede9fe;color:#6d28d9}
+/* El aviso de permanencia: la mercancia que lleva demasiado tiempo guardada. */
+.aging-vencida{background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap}
+.aging-urgente{background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{width:18px;height:18px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
 .htmx-indicator{display:none}.htmx-request .htmx-indicator{display:flex}

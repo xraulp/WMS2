@@ -10,6 +10,13 @@ que de pronto muestra cuatro filas de doscientas, sin explicacion, se lee como
 que se perdieron las demas -- y el camino de vuelta tiene que estar aqui, no en
 recordar que el buscador vacio las trae todas.
 {% endcomment %}
+{% if solo_vencidas %}
+<div style="margin-bottom:10px;padding:8px 12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+  <span style="font-size:12px;color:#b91c1c;font-weight:600">&#9200; Showing only goods past their agreed time in the warehouse, oldest first</span>
+  <button onclick="verTodasLasOperaciones()" class="btn btn-g btn-sm" style="color:#b91c1c;border-color:#fca5a5">Show all</button>
+</div>
+{% endif %}
+
 {% if solo_sin_leer %}
 <div style="margin-bottom:10px;padding:8px 12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
   <span style="font-size:12px;color:#92400e;font-weight:600">💬 Showing only operations with unread messages</span>
@@ -64,6 +71,8 @@ vista.
           <th style="white-space:nowrap;">Type</th>
           <th style="background:#1e3a5f; color:#7dd3fc; white-space:nowrap;">Status</th>
           <th style="white-space:nowrap;">Customer</th>
+          <th style="white-space:nowrap;">Warehouse</th>
+          <th style="white-space:nowrap;">Location</th>
           <th style="white-space:nowrap;">Shipper</th>
           <th style="white-space:nowrap;">Invoice</th>
           <th style="white-space:nowrap;">PO/Order</th>
@@ -105,15 +114,19 @@ vista.
                     title="{% if op.sin_leer %}{{ op.sin_leer }} mensaje(s) sin leer{% else %}Conversacion de la operacion{% endif %}"
                     onclick="openModal('{% url 'operation_detail' op.pk %}')">💬<span class="chat-n">{% if op.sin_leer %} {{ op.sin_leer }}{% endif %}</span></button>
           </td>
-          <td style="white-space:nowrap;">{{ op.date|date:"Y-m-d" }}</td>
+          <td style="white-space:nowrap;">
+            {{ op.date|date:"Y-m-d" }}
+            {% if op.alerta_permanencia %}
+            <span class="{{ op.alerta_permanencia|clase_de_alerta }}"
+                  title="{{ op.dias_en_bodega }} dias en bodega; lo acordado son {{ op.plazo_de_alerta }}">
+              {{ op.dias_en_bodega }}d
+            </span>
+            {% endif %}
+          </td>
           <td class="mono" style="white-space:nowrap;">{{ op.custom_id }}</td>
           <td style="white-space:nowrap;" title="{{ op.entry_dispatched }}">{{ op.entry_dispatched|default:"—"|truncatechars:20 }}</td>
           <td style="white-space:nowrap;">
-            {% if op.operation_type == 'ENTRY' %}
-              <span class="badge b-entry">Entry</span>
-            {% else %}
-              <span class="badge b-exit">Exit</span>
-            {% endif %}
+            <span class="badge {{ op.operation_type|clase_de_tipo }}">{{ op.get_operation_type_display }}</span>
           </td>
           <td style="white-space:nowrap;">
             {% if op.operation_type == 'ENTRY' %}
@@ -127,6 +140,11 @@ vista.
             {% endif %}
           </td>
           <td style="white-space:nowrap;" title="{{ op.get_customer_display }}">{{ op.get_customer_display|truncatechars:20 }}</td>
+          <td style="white-space:nowrap;">{{ op.warehouse.code|default:"—" }}</td>
+          <td style="white-space:nowrap;" title="{{ op.location.descripcion }}">
+            {% if op.location %}<span class="mono">{{ op.location.code }}</span>{% else %}—{% endif %}
+            {% if op.location_from %}<span style="color:#94a3b8;font-size:10px"> ← {{ op.location_from.code }}</span>{% endif %}
+          </td>
           <td style="white-space:nowrap;" title="{{ op.get_shipper_display }}">{{ op.get_shipper_display|truncatechars:20 }}</td>
           <td style="white-space:nowrap;">{{ op.invoice|default:"—" }}</td>
           <td style="white-space:nowrap;">{{ op.po_order|default:"—" }}</td>

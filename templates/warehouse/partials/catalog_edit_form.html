@@ -73,6 +73,29 @@
           <input type="checkbox" name="notify_on_documents" {% if entry.notify_on_documents %}checked{% endif %}> Al agregar documentos
         </label>
       </div>
+
+      {% comment %}
+      El plazo de permanencia de este cliente. Va aqui, en su ficha, y no en una
+      pantalla de configuracion aparte, porque es una condicion suya: una semana
+      para uno es lo normal y para otro ya es una factura de almacenaje.
+      {% endcomment %}
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b;margin:12px 0 6px">
+        Alerta de permanencia
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px">
+        <label style="display:flex;align-items:center;gap:6px">
+          Avisar cuando la mercancía lleve
+          <input type="number" name="alert_days" min="1" max="3650"
+                 value="{{ entry.alert_days|default_if_none:'' }}"
+                 placeholder="{{ entry.tenant.alert_days_default|default:7 }}"
+                 style="width:70px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
+          días en bodega
+        </label>
+        <span style="font-size:10px;color:#94a3b8">
+          En blanco = usar el plazo general de la empresa
+          ({{ entry.tenant.alert_days_default|default:7 }} días).
+        </span>
+      </div>
     </div>
     {% endif %}
   </div>

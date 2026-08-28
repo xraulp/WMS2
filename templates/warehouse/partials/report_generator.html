@@ -94,8 +94,9 @@ exige ya.
     <label>&#8596; Type</label>
     <select name="op_type" class="rpt-i" style="min-width:120px">
       <option value="">All types</option>
-      <option value="ENTRY" {% if filters.op_type == 'ENTRY' %}selected{% endif %}>Entry only</option>
-      <option value="EXIT"  {% if filters.op_type == 'EXIT'  %}selected{% endif %}>Exit only</option>
+      {% for valor, etiqueta in tipos_de_operacion %}
+      <option value="{{ valor }}" {% if filters.op_type == valor %}selected{% endif %}>{{ etiqueta }} only</option>
+      {% endfor %}
     </select>
   </div>
 
@@ -195,7 +196,7 @@ exige ya.
           <td style="color:#94a3b8;font-size:10px">{{ op.pk }}</td>
           <td>{{ op.date|date:"Y-m-d" }}</td>
           <td class="mono">{{ op.custom_id }}</td>
-          <td>{% if op.operation_type == 'ENTRY' %}<span class="badge b-entry">Entry</span>{% else %}<span class="badge b-exit">Exit</span>{% endif %}</td>
+          <td><span class="badge {{ op.operation_type|clase_de_tipo }}">{{ op.get_operation_type_display }}</span></td>
           <td>
             {% if op.operation_type == 'ENTRY' %}
               {% if op.status == 'Released Goods' %}

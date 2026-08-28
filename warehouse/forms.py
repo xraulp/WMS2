@@ -12,7 +12,7 @@ class WarehouseOperationForm(forms.Form):
     date             = forms.DateField(required=True)
     customer_id      = forms.IntegerField(required=False)   # FK id from combobox
     customer_text    = forms.CharField(required=False)      # manual text fallback
-    operation_type   = forms.ChoiceField(choices=[('ENTRY','Entry'),('EXIT','Exit')])
+    operation_type   = forms.ChoiceField(choices=WarehouseOperation.TYPE_CHOICES)
     entry_dispatched = forms.CharField(required=False)
     shipper_id       = forms.IntegerField(required=False)
     shipper_text     = forms.CharField(required=False)

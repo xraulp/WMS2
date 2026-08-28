@@ -1,0 +1,229 @@
+{% load wms_filters %}
+{% comment %}
+Bodegas y posiciones.
+
+La pantalla entera se repinta con cada accion --alta, generacion, apagar una
+posicion-- porque todo lo que se ve depende de todo lo demas: crear una bodega
+cambia el desplegable del generador, y generar cambia el contador de la bodega.
+Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
+{% endcomment %}
+<style>
+.loc-cols { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; }
+.loc-caja { border:1px solid #e2e8f0; border-radius:10px; padding:12px; background:#fff; }
+.loc-t { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600;
+         text-transform:uppercase; letter-spacing:.09em; color:#94a3b8;
+         margin-bottom:10px; padding-left:8px; border-left:3px solid #0ea5e9; }
+.loc-g { display:flex; flex-direction:column; gap:3px; }
+.loc-g > label { font-size:10px; font-weight:600; text-transform:uppercase;
+                 letter-spacing:.05em; color:#64748b; }
+.loc-i { height:30px; padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px;
+         font-family:inherit; font-size:12px; background:#fff; color:#0f172a; }
+.loc-fila { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+.loc-pista { font-size:10px; color:#94a3b8; margin-top:6px; }
+.loc-chip { display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10px;
+            background:#f1f5f9; border:1px solid #e2e8f0; border-radius:4px;
+            padding:1px 5px; color:#475569; }
+.loc-apagada { opacity:.5; }
+</style>
+
+{% if error %}<div class="msg-error" style="margin-bottom:10px">&#9888; {{ error }}</div>{% endif %}
+{% if exito %}<div class="msg-success" style="margin-bottom:10px">&#10003; {{ exito }}</div>{% endif %}
+
+{% if not puede_configurar %}
+<p style="font-size:11px;color:#94a3b8;margin:-4px 0 10px">
+  Solo puedes consultar: dar de alta bodegas y posiciones es cosa de quien
+  administra la empresa.
+</p>
+{% endif %}
+
+<div class="loc-cols">
+
+  {% comment %} ── Alta de bodega ── {% endcomment %}
+  {% if puede_configurar %}
+  <div class="loc-caja" style="flex:1; min-width:280px">
+    <div class="loc-t">New warehouse</div>
+    <form hx-post="{% url 'warehouse_create' %}" hx-target="#locations-content" hx-swap="innerHTML"
+          class="loc-fila">
+      {% csrf_token %}
+      <div class="loc-g" style="flex:1; min-width:140px">
+        <label>Name</label>
+        <input type="text" name="name" class="loc-i" placeholder="Bodega Laredo" required>
+      </div>
+      <div class="loc-g" style="width:90px">
+        <label>Code</label>
+        <input type="text" name="code" class="loc-i" placeholder="LRD" maxlength="10" required
+               style="text-transform:uppercase">
+      </div>
+      <button type="submit" class="btn btn-p" style="height:30px">Add</button>
+    </form>
+    <div class="loc-pista">
+      El codigo va delante de cada posicion de esa bodega: <span class="loc-chip">LRD-A-03-2</span>
+    </div>
+  </div>
+  {% endif %}
+
+  {% comment %}
+  ── El generador ──
+  Es lo que hace practicable la funcion. Tres zonas, diez pasillos y cuatro
+  niveles son ciento veinte posiciones; a mano no las da de alta nadie, y una
+  bodega sin posiciones deja el desplegable del alta vacio para siempre.
+  {% endcomment %}
+  {% if puede_configurar and bodegas %}
+  <div class="loc-caja" style="flex:2; min-width:420px">
+    <div class="loc-t">Generate locations</div>
+    <form hx-post="{% url 'locations_generate' %}" hx-target="#locations-content" hx-swap="innerHTML">
+      {% csrf_token %}
+      <div class="loc-fila">
+        <div class="loc-g" style="min-width:150px">
+          <label>Warehouse</label>
+          <select name="warehouse" class="loc-i" required>
+            {% for b in bodegas %}
+            <option value="{{ b.pk }}">{{ b.code }} &mdash; {{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="loc-g" style="width:110px">
+          <label>Zone</label>
+          <input type="text" name="zones" class="loc-i" placeholder="A,B,C">
+        </div>
+        <div class="loc-g" style="width:110px">
+          <label>Aisle</label>
+          <input type="text" name="aisles" class="loc-i" placeholder="1-10">
+        </div>
+        <div class="loc-g" style="width:110px">
+          <label>Rack</label>
+          <input type="text" name="racks" class="loc-i" placeholder="01-04">
+        </div>
+        <div class="loc-g" style="width:100px">
+          <label>Level</label>
+          <input type="text" name="levels" class="loc-i" placeholder="1-4">
+        </div>
+        <div class="loc-g" style="width:100px">
+          <label>Position</label>
+          <input type="text" name="positions" class="loc-i" placeholder="A,B">
+        </div>
+        <div class="loc-g" style="min-width:150px">
+          <label>Kind</label>
+          <select name="kind" class="loc-i">
+            {% for valor, etiqueta in tipos_de_ubicacion %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-p" style="height:30px">Generate</button>
+      </div>
+    </form>
+    <div class="loc-pista">
+      Listas separadas por comas (<span class="loc-chip">A,B,C</span>) o rangos de
+      numeros (<span class="loc-chip">1-10</span>, <span class="loc-chip">01-12</span> conserva el cero).
+      Se cruzan todos los niveles que rellenes y los que dejes en blanco se saltan.
+      Lo que ya existe no se duplica, asi que puedes volver a generar para ampliar.
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% comment %} ── Las bodegas ── {% endcomment %}
+{% if bodegas %}
+<div style="margin-top:14px">
+  <div class="loc-t">Warehouses</div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap">
+    {% for b in bodegas %}
+    <button type="button" class="btn btn-g btn-sm"
+            hx-get="{% url 'locations_panel' %}?warehouse={{ b.pk }}"
+            hx-target="#locations-content" hx-swap="innerHTML"
+            style="{% if bodega_filtrada == b.pk|stringformat:'s' %}border-color:#0ea5e9;color:#0284c7{% endif %}">
+      {{ b.code }} &middot; {{ b.name }}
+      <span class="loc-chip" style="margin-left:6px">{{ b.num_ubicaciones }}</span>
+    </button>
+    {% endfor %}
+    {% if bodega_filtrada %}
+    <button type="button" class="btn btn-g btn-sm"
+            hx-get="{% url 'locations_panel' %}" hx-target="#locations-content" hx-swap="innerHTML">
+      &#10005; Show all
+    </button>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="es" style="margin-top:14px">
+  <h3>No warehouses yet</h3>
+  <p>Da de alta la primera arriba. Mientras no haya ninguna, el alta de
+     operaciones no pregunta por la ubicacion.</p>
+</div>
+{% endif %}
+
+{% comment %} ── Las posiciones ── {% endcomment %}
+{% if ubicaciones %}
+<div style="margin-top:14px">
+  <div class="loc-t">
+    Locations
+    <span style="text-transform:none;letter-spacing:0;color:#64748b">
+      &mdash; {{ total_ubicaciones }} en total{% if total_ubicaciones > 400 %}, se muestran las primeras 400{% endif %}
+    </span>
+  </div>
+  <div class="tabla-navegable" data-columnas-fijas="2">
+    <div class="tabla-nav-marco">
+      <table style="min-width:900px; width:100%; border-collapse:collapse">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Warehouse</th>
+            <th>Zone</th>
+            <th>Aisle</th>
+            <th>Rack</th>
+            <th>Level</th>
+            <th>Position</th>
+            <th>Kind</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in ubicaciones %}
+          <tr style="background:{% cycle '#ffffff' '#f8fafc' %}" class="{% if not u.active %}loc-apagada{% endif %}">
+            <td class="mono">{{ u.code }}</td>
+            <td>{{ u.warehouse.code }}</td>
+            <td>{{ u.zone|default:"&mdash;" }}</td>
+            <td>{{ u.aisle|default:"&mdash;" }}</td>
+            <td>{{ u.rack|default:"&mdash;" }}</td>
+            <td>{{ u.level|default:"&mdash;" }}</td>
+            <td>{{ u.position|default:"&mdash;" }}</td>
+            <td>{{ u.get_kind_display }}</td>
+            <td>
+              {% if u.active %}
+              <span class="badge b-entry">Active</span>
+              {% else %}
+              <span class="badge b-exit">Off</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if puede_configurar %}
+              <button type="button" class="btn-action"
+                      hx-post="{% url 'location_toggle' u.pk %}"
+                      hx-target="#locations-content" hx-swap="innerHTML"
+                      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                {% if u.active %}Turn off{% else %}Turn on{% endif %}
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="tabla-nav-barra">
+      <button type="button" class="nav-h" data-ir="inicio" title="Primera columna">&#9198; Start</button>
+      <span class="tabla-nav-pista">Shift + scroll wheel to move across columns</span>
+      <button type="button" class="nav-h" data-ir="final" title="Ultima columna">End &#9197;</button>
+    </div>
+  </div>
+  {% include 'warehouse/partials/tabla_navegable.html' %}
+</div>
+{% elif bodegas %}
+<div class="es" style="margin-top:14px">
+  <h3>No locations in this warehouse</h3>
+  <p>Usa el generador de arriba: con <span class="loc-chip">A,B</span> en Zone y
+     <span class="loc-chip">1-10</span> en Aisle salen veinte posiciones de una vez.</p>
+</div>
+{% endif %}

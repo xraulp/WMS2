@@ -45,6 +45,12 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink
 .tab-sin-leer{margin-left:auto;color:#b45309;font-weight:700;background:#fffbeb;border-bottom-color:#f59e0b}
 .tab-sin-leer:hover{color:#92400e;background:#fef3c7}
 .tab-sin-leer.vacio{display:none}
+/* El de mercancia pasada de tiempo. `margin-left:auto` solo lo lleva el
+   primero de los dos, o se separarian entre ellos. */
+.tab-vencidas{color:#b91c1c;font-weight:700;background:#fef2f2;border-bottom-color:#ef4444}
+.tab-vencidas:hover{color:#991b1b;background:#fee2e2}
+.tab-vencidas.vacio{display:none}
+.tab-sin-leer.vacio + .tab-vencidas{margin-left:auto}
 
 .pg{padding:14px 18px;max-width:1500px;margin:0 auto;margin-top:88px}
 .panel{display:none}.panel.on{display:block}
@@ -93,6 +99,11 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink
 .badge{display:inline-flex;align-items:center;padding:2px 6px;border-radius:99px;font-size:10px;font-weight:600;font-family:'IBM Plex Mono',monospace;text-transform:uppercase}
 .b-entry{background:var(--gsoft);color:var(--green)}
 .b-exit{background:var(--rsoft);color:var(--red)}
+.b-td{background:#fef3c7;color:#b45309}
+.b-rd{background:#ede9fe;color:#6d28d9}
+/* El aviso de permanencia: la mercancia que lleva demasiado tiempo guardada. */
+.aging-vencida{background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap}
+.aging-urgente{background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap}
 .b-sent{background:var(--asoft);color:var(--adark)}
 .tw{overflow-x:auto;border-radius:var(--rL);border:1px solid var(--bdr)}
 table{width:100%;border-collapse:collapse}
@@ -176,6 +187,13 @@ tbody td:has(.btn-action) {
   {% if profile|can_see_tab:'customers' %}
   <button class="tab" id="tab-customers" onclick="showTab('customers')">Customers</button>
   {% endif %}
+  {% comment %}
+  Bodegas y posiciones. No se le pinta al cliente: donde tiene la empresa
+  guardada su mercancia es cosa de la casa.
+  {% endcomment %}
+  {% if not profile.is_customer %}
+  <button class="tab" id="tab-locations" onclick="showTab('locations')">Locations</button>
+  {% endif %}
   <button class="tab" id="tab-digital" onclick="showTab('digital')">Digital</button>
   <button class="tab" id="tab-reports" onclick="showTab('reports')">Report Generator</button>
   {% if profile.can_manage_users %}
@@ -203,6 +221,15 @@ tbody td:has(.btn-action) {
   <button class="tab tab-sin-leer{% if not sin_leer.mensajes %} vacio{% endif %}"
           id="tab-sin-leer" onclick="verSinLeer()"
           title="Operations with unread messages">💬 <span id="sin-leer-n">{{ sin_leer.mensajes|default:0 }}</span> unread</button>
+  {% comment %}
+  Y el de la mercancia que lleva mas dias guardados de los acordados. Mismo
+  sitio y mismo motivo que el anterior: el aviso de una fila no se ve si la fila
+  no esta a la vista, y estas son justo las mas viejas, las que la tabla manda
+  al fondo.
+  {% endcomment %}
+  <button class="tab tab-vencidas{% if not alertas.total %} vacio{% endif %}"
+          id="tab-vencidas" onclick="verVencidas()"
+          title="Goods past their agreed time in the warehouse">&#9200; <span id="vencidas-n">{{ alertas.total|default:0 }}</span> aging{% if alertas.urgentes %} <span style="font-weight:400">({{ alertas.urgentes }} urgent)</span>{% endif %}</button>
 </div>
 
 <div class="pg">
@@ -250,13 +277,61 @@ tbody td:has(.btn-action) {
           <div class="fi">
             <select name="operation_type" id="id_op_type" onchange="onTypeChange(this.value)">
               <option value="">— Select —</option>
-              <option value="ENTRY">Entry</option>
-              <option value="EXIT">Exit</option>
+              {% for valor, etiqueta in tipos_de_operacion %}
+              <option value="{{ valor }}">{{ etiqueta }}{% if valor == 'TD' or valor == 'RD' %} ({{ valor }}){% endif %}</option>
+              {% endfor %}
             </select>
           </div>
 
           <div class="fl">Entries Disp.</div>
           <div class="fi"><input type="text" name="entry_dispatched" id="id_ed" placeholder="Auto for EXIT..." readonly></div>
+
+          {% comment %}
+          Donde queda la mercancia. El bloque entero no se pinta si la empresa no
+          ha dado de alta ninguna bodega: quien trabaja con una sola nave y sin
+          posiciones no tiene por que ver dos desplegables vacios.
+
+          Las posiciones viajan todas en el HTML y se filtran aqui al elegir
+          bodega. Va bien con las cientos que tiene una bodega normal; el dia que
+          una empresa numere hasta el hueco y sean miles, esto tiene que pasar a
+          pedirselas al servidor.
+          {% endcomment %}
+          {% if warehouses %}
+          <div class="fl">Warehouse</div>
+          <div class="fi">
+            <select name="warehouse_id" id="id_warehouse" onchange="filtrarUbicaciones()">
+              <option value="">— None —</option>
+              {% for w in warehouses %}
+              <option value="{{ w.pk }}">{{ w.code }} — {{ w.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="fl">Location</div>
+          <div class="fi">
+            <select name="location_id" id="id_location">
+              <option value="">— None —</option>
+              {% for l in locations %}
+              <option value="{{ l.pk }}" data-bodega="{{ l.warehouse_id }}">{{ l.code }}{% if l.descripcion %} · {{ l.descripcion }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          {% comment %}
+          La ubicacion de la que sale la carga. Solo se pinta en un reacomodo:
+          en los demas tipos no significa nada, y un reacomodo que no dice de
+          donde venia no cuenta lo que paso.
+          {% endcomment %}
+          <div class="fl" id="fl-origen" style="display:none">From</div>
+          <div class="fi" id="fi-origen" style="display:none">
+            <select name="location_from_id" id="id_location_from">
+              <option value="">— None —</option>
+              {% for l in locations %}
+              <option value="{{ l.pk }}" data-bodega="{{ l.warehouse_id }}">{{ l.code }}{% if l.descripcion %} · {{ l.descripcion }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
 
           <div class="fl">Shipper <span style="color:#ef4444;">*</span></div>
           <div class="fi" style="overflow:visible">
@@ -453,14 +528,29 @@ tbody td:has(.btn-action) {
       </div>
       {% endif %}
 
+      {% if warehouses %}
+      <div class="cf-g">
+        <label>🏬 Warehouse</label>
+        <select name="warehouse" id="filter-warehouse" class="cf-i" style="height:32px; min-width:140px"
+                hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
+                hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
+          <option value="">All warehouses</option>
+          {% for w in warehouses %}
+          <option value="{{ w.pk }}">{{ w.code }} — {{ w.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
       <div class="cf-g">
         <label>↔ Type</label>
         <select name="type" id="filter-type" class="cf-i" style="height:32px; min-width:120px"
                 hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
                 hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
           <option value="">All types</option>
-          <option value="ENTRY">Entry</option>
-          <option value="EXIT">Exit</option>
+          {% for valor, etiqueta in tipos_de_operacion %}
+          <option value="{{ valor }}">{{ etiqueta }}</option>
+          {% endfor %}
         </select>
       </div>
 
@@ -487,6 +577,19 @@ tbody td:has(.btn-action) {
     </div>
   </div>
 </div>
+
+{% if not profile.is_customer %}
+<div class="panel" id="panel-locations">
+  <div class="card">
+    <div class="ct">Warehouses &amp; Locations</div>
+    <p style="font-size:11px;color:#94a3b8;margin:-6px 0 10px">
+      Las bodegas de la empresa y las posiciones de cada una. Lo que se da de
+      alta aqui es lo que se puede elegir al registrar una operacion.
+    </p>
+    <div id="locations-content">Loading...</div>
+  </div>
+</div>
+{% endif %}
 
 {% if profile|can_see_tab:'catalog' %}
 <div class="panel" id="panel-catalog">
@@ -821,7 +924,7 @@ function loadCatalog() {
 loadCatalog();
 
 function showTab(t) {
-  const tabs = ['form','database','catalog','customers','digital','reports','users','deletions','platform'];
+  const tabs = ['form','database','catalog','customers','locations','digital','reports','users','deletions','platform'];
   tabs.forEach(n=>{
     const p = document.getElementById('panel-'+n);
     const b = document.getElementById('tab-'+n);
@@ -831,6 +934,7 @@ function showTab(t) {
   const pb = document.getElementById('print-bar');
   if (pb) pb.style.display = 'none';
   if (t === 'users') htmx.ajax('GET','{% url "user_management" %}',{target:'#users-content',swap:'innerHTML'});
+  if (t === 'locations') htmx.ajax('GET','{% url "locations_panel" %}',{target:'#locations-content',swap:'innerHTML'});
   if (t === 'platform') htmx.ajax('GET','{% url "platform_tenant_list" %}',{target:'#platform-content',swap:'innerHTML'});
   if (t === 'reports') htmx.ajax('GET','{% url "report_generator" %}',{target:'#report-content',swap:'innerHTML'});
   if (t === 'deletions') htmx.ajax('GET','{% url "deletion_log" %}',{target:'#deletions-content',swap:'innerHTML'});
@@ -849,6 +953,13 @@ function verSinLeer() {
   showTab('database');
   limpiarFiltrosDeLaTabla();
   htmx.ajax('GET', '{% url "operations_unread" %}', {target:'#ops-table', swap:'innerHTML'});
+}
+
+// A donde lleva el contador de vencidas: la tabla con lo mas viejo primero.
+function verVencidas() {
+  showTab('database');
+  limpiarFiltrosDeLaTabla();
+  htmx.ajax('GET', '{% url "operations_aging" %}', {target:'#ops-table', swap:'innerHTML'});
 }
 
 // El camino de vuelta desde la tabla acotada.
@@ -937,14 +1048,55 @@ function cbKey(e,name){
   else if(e.key==='Escape'){document.getElementById('cb-'+name+'-list').classList.remove('open');}
 }
 
+// Deja en los desplegables de posicion solo las de la bodega elegida. Sin
+// bodega se ven todas: al capturar de prisa se elige a veces la posicion
+// primero, y esconderlas todas obligaria a volver atras.
+function filtrarUbicaciones() {
+  const bodega = document.getElementById('id_warehouse');
+  if (!bodega) return;
+  const elegida = bodega.value;
+  ['id_location','id_location_from'].forEach(function(id) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    Array.from(sel.options).forEach(function(op) {
+      if (!op.value) return;
+      op.hidden = elegida && op.dataset.bodega !== elegida;
+    });
+    // Una posicion que ya no pertenece a la bodega elegida no puede quedarse
+    // seleccionada y escondida: se mandaria al servidor sin que nadie la vea.
+    const puesta = sel.selectedOptions[0];
+    if (puesta && puesta.hidden) sel.value = '';
+  });
+}
+
+// El origen solo tiene sentido en un reacomodo.
+function mostrarUbicacionDeOrigen(tipo) {
+  const et = document.getElementById('fl-origen');
+  const campo = document.getElementById('fi-origen');
+  if (!et || !campo) return;
+  const visible = (tipo === 'RD');
+  et.style.display = visible ? '' : 'none';
+  campo.style.display = visible ? '' : 'none';
+  if (!visible) {
+    const sel = document.getElementById('id_location_from');
+    if (sel) sel.value = '';
+  }
+}
+
+// Los tipos que sacan mercancia de una entrada guardada. Un reacomodo no entra
+// aqui: la carga no se va, solo cambia de sitio, asi que no consume nada.
+const TIPOS_QUE_DESPACHAN = ['EXIT','TD'];
+
 function onCustomerSelected(id){
   currentCustomerId=String(id);
-  if(document.getElementById('id_op_type')&&document.getElementById('id_op_type').value==='EXIT'&&currentCustomerId)loadFreeEntries();
+  const t=document.getElementById('id_op_type');
+  if(t&&TIPOS_QUE_DESPACHAN.includes(t.value)&&currentCustomerId)loadFreeEntries();
 }
 function onTypeChange(val){
+  mostrarUbicacionDeOrigen(val);
   const ep=document.getElementById('ep');
   if(!ep)return;
-  if(val==='EXIT'){
+  if(TIPOS_QUE_DESPACHAN.includes(val)){
     ep.classList.add('on');
     if(currentCustomerId)loadFreeEntries();
     else document.getElementById('ep-list').innerHTML='<div style="color:var(--faint);font-size:11px;padding:4px 0">Please select a customer first.</div>';

@@ -45,6 +45,23 @@ SKIPPED = 'SKIPPED'
 
 # ── RESOLUCIÓN DE CLIENTE Y DESTINATARIOS ─────────────────────────────────────
 
+# Como se llama cada tipo de operacion en un correo o un WhatsApp, que es donde
+# lo lee el cliente. Antes era un `if` de dos ramas: cualquier tipo que no fuera
+# ENTRY se anunciaba como "Salida de Mercancias", de modo que un reacomodo --que
+# no sale de la bodega-- le habria dicho al cliente que su carga se fue.
+NOMBRE_DEL_TIPO = {
+    'ENTRY': ('Recepcion de Mercancias', 'Recep de Mercancias'),
+    'EXIT':  ('Salida de Mercancias',    'Salida de Mercancias'),
+    'TD':    ('Trasbordo',               'Trasbordo'),
+    'RD':    ('Reacomodo en Bodega',     'Reacomodo'),
+}
+
+
+def nombre_del_tipo(operation_type, corto=False):
+    largo, breve = NOMBRE_DEL_TIPO.get(operation_type, ('Operacion', 'Operacion'))
+    return breve if corto else largo
+
+
 def resolve_customer(operation):
     """
     Entrada de catálogo del cliente de la operación.
@@ -119,8 +136,7 @@ def build_subject(operation):
     if operation.po_order:
         parts.append(f"PO: {operation.po_order}")
     parts.append(operation.tenant.name if operation.tenant else 'WMS')
-    op_type = 'Recepcion de Mercancias' if operation.operation_type == 'ENTRY' else 'Salida de Mercancias'
-    parts.append(op_type)
+    parts.append(nombre_del_tipo(operation.operation_type))
     if operation.custom_id:
         parts.append(str(operation.custom_id))
     return ' | '.join(parts)
@@ -346,8 +362,7 @@ def _whatsapp_body(operation, event):
     elif event == EVENT_DOCUMENTS:
         titulo = 'Documentos nuevos'
     else:
-        titulo = ('Recep de Mercancias' if operation.operation_type == 'ENTRY'
-                  else 'Salida de Mercancias')
+        titulo = nombre_del_tipo(operation.operation_type, corto=True)
 
     return (f"*{tenant_name.upper()} — {titulo}*\n"
             f"ID: {operation.custom_id}\n"

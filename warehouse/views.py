@@ -22,6 +22,7 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
                      NotificationLog, PlatformUser, PLATFORM_ROLE_CHOICES,
                      CATALOG_SCOPES, catalog_scope_of, Invoice,
                      Conversation, ConversationRead, Message,
+                     Warehouse, Location,
                      LADO_TENANT, LADO_CLIENTE)
 from .utils import (generate_pdf_report, generate_label_pdf, generar_pdf_factura,
                     nombre_corto)
@@ -167,8 +168,9 @@ def dashboard(request):
     profile = get_profile(request.user)
 
     # Filtrar operaciones por tenant
-    ops = WarehouseOperation.objects.filter(tenant=tenant).select_related( #### 072526 12:40 Paso 3: Modificar las vistas de listado (filtro por tenant)
-        'customer', 'shipper', 'carrier', 'bundle_type', 'created_by'
+    ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
+        'customer', 'shipper', 'carrier', 'bundle_type', 'created_by',
+        'tenant', 'warehouse', 'location'
     ).order_by('-date')
 
 ###072526 12:40
@@ -214,11 +216,23 @@ def dashboard(request):
         # y lo mantiene al dia `refrescarAvisosDeChat`; sin esto, quien entra y
         # no toca nada durante treinta segundos no sabe que le escribieron.
         'sin_leer': resumen_sin_leer(request.user, tenant),
+        # El contador de mercancia pasada de tiempo. Se calcula en cada carga de
+        # la pantalla; en una empresa con miles de entradas abiertas conviene
+        # vigilar lo que cuesta y, si molesta, pasarlo a una peticion aparte
+        # como la de los avisos del chat.
+        'alertas': resumen_de_alertas(request.user, tenant),
         # Los clientes con ficha, para el desplegable que filtra la tabla de
         # Operaciones. Es el mismo catalogo que alimenta el alta, pero aqui
         # solo hacen falta el pk y el nombre.
         'filtro_customers': Catalog.objects.filter(
             category='CUSTOMER', active=True, tenant=tenant).order_by('name'),
+        # Los tipos de operacion salen del modelo. Escritos a mano en la
+        # plantilla, anadir el trasbordo y el reacomodo obligaba a acordarse de
+        # cuatro sitios distintos.
+        'tipos_de_operacion': WarehouseOperation.TYPE_CHOICES,
+        # Las bodegas y las posiciones que se pueden elegir al capturar.
+        'warehouses': Warehouse.objects.filter(tenant=tenant, active=True),
+        'locations':  Location.objects.filter(tenant=tenant, active=True).select_related('warehouse'),
         'profile': profile,
         'is_home': profile.is_home(),
         'users': users,
@@ -283,7 +297,9 @@ def operation_create(request):
     op_type  = p.get('operation_type', '').strip()
     date_str = p.get('date', '').strip()
 
-    if op_type not in ('ENTRY', 'EXIT'):
+    # Los tipos validos salen del modelo: la lista escrita a mano aqui se
+    # quedo corta en cuanto aparecieron el trasbordo y el reacomodo.
+    if op_type not in dict(WarehouseOperation.TYPE_CHOICES):
         return HttpResponse('<div class="msg-error">✗ Type of Operation is required.</div>', status=422)
     if not date_str:
         return HttpResponse('<div class="msg-error">✗ Date is required.</div>', status=422)
@@ -307,6 +323,26 @@ def operation_create(request):
     def to_int(val):
         try: return int(val) if val and str(val).strip() else None
         except: return None
+
+    # Bodega y posicion, acotadas al tenant por la misma razon que el catalogo:
+    # el pk viaja en el formulario, y sin filtrar se podria dejar la mercancia
+    # de una empresa apuntando a la estanteria de otra.
+    def get_bodega(pk_str):
+        try:
+            return Warehouse.objects.get(pk=int(pk_str), tenant=tenant, active=True)
+        except (ValueError, TypeError, Warehouse.DoesNotExist):
+            return None
+
+    def get_ubicacion(pk_str, bodega):
+        try:
+            ubi = Location.objects.get(pk=int(pk_str), tenant=tenant, active=True)
+        except (ValueError, TypeError, Location.DoesNotExist):
+            return None
+        # Una posicion de otra bodega no se guarda: diria que la carga esta en un
+        # pasillo que no existe en la nave que se acaba de elegir.
+        if bodega and ubi.warehouse_id != bodega.pk:
+            return None
+        return ubi
 
     def to_dec(val):
         try:
@@ -350,6 +386,14 @@ def operation_create(request):
     carrier_obj     = get_catalog(p.get('carrier_id'),     'CARRIER')
     bundle_type_obj = get_catalog(p.get('bundle_type_id'), 'BUNDLE_TYPE')
 
+    bodega_obj    = get_bodega(p.get('warehouse_id'))
+    ubicacion_obj = get_ubicacion(p.get('location_id'), bodega_obj)
+    origen_obj    = get_ubicacion(p.get('location_from_id'), bodega_obj)
+    # Si se eligio posicion pero no bodega, la bodega se deduce: son el mismo
+    # dato dicho dos veces, y pedirlo dos veces solo sirve para no cuadrar.
+    if ubicacion_obj and not bodega_obj:
+        bodega_obj = ubicacion_obj.warehouse
+
     op = WarehouseOperation(
         tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 072526 19:51 4.1. operation_create Al final, al crear la operación, asigna el tenant:
         date=op_date, operation_type=op_type,
@@ -368,6 +412,11 @@ def operation_create(request):
         description=p.get('description','').strip(), note=p.get('note','').strip(),
         damage=bool(p.get('damage')), damage_description=p.get('damage_description','').strip(),
         created_by=request.user,
+        warehouse=bodega_obj, location=ubicacion_obj,
+        # El origen solo se guarda en un reacomodo: en los demas tipos la
+        # pantalla ni lo pregunta, y aceptarlo por detras dejaria un dato que
+        # nadie puso.
+        location_from=(origen_obj if op_type == 'RD' else None),
         # NUEVOS CAMPOS
         ref_aa=p.get('ref_aa', '').strip(),
         ref_dys=p.get('ref_dys', '').strip(),
@@ -841,7 +890,8 @@ def operations_search(request):
     q = request.GET.get('q', '').strip()
 
     ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
-        'customer', 'shipper', 'carrier', 'bundle_type', 'created_by'
+        'customer', 'shipper', 'carrier', 'bundle_type', 'created_by',
+        'tenant', 'warehouse', 'location'
     )
     ops = customer_ops_filter(request.user, ops)
 
@@ -872,8 +922,12 @@ def operations_search(request):
         ops = ops.filter(customer_id=int(filtro_cliente), customer__tenant=tenant)
 
     filtro_tipo = request.GET.get('type', '').strip().upper()
-    if filtro_tipo in ('ENTRY', 'EXIT'):
+    if filtro_tipo in dict(WarehouseOperation.TYPE_CHOICES):
         ops = ops.filter(operation_type=filtro_tipo)
+
+    filtro_bodega = request.GET.get('warehouse', '').strip()
+    if filtro_bodega.isdigit():
+        ops = ops.filter(warehouse_id=int(filtro_bodega), warehouse__tenant=tenant)
 
     # El estado no es un campo: sale de leer `entry_dispatched`, asi que se
     # filtra en Python sobre lo que ya trajo el SQL. Solo lo tienen las
@@ -885,13 +939,98 @@ def operations_search(request):
         ops_list = [o for o in ops_list
                     if o.operation_type == 'ENTRY' and o.status == filtro_estado]
 
+    # Vencidas: el plazo lo pone cada cliente, asi que se decide fila por fila
+    # igual que el estado.
+    if request.GET.get('aging') == '1':
+        ops_list = [o for o in ops_list if o.alerta_permanencia]
+
     return render(request, 'warehouse/partials/operations_table.html',
                   {'operations': anotar_hilos(request.user, ops_list[:200]),
                    'search_query': q,
                    'is_home': is_home(request.user), 'profile': profile})
 
 
+# ── ALERTAS DE PERMANENCIA ────────────────────────────────────────────────────
+# La pregunta que la tabla no sabia contestar: que lleva demasiado tiempo
+# guardado. No hay cron en el plan de Render, asi que no se calcula de noche ni
+# se guarda un campo "dias": se mira cuando alguien abre la pantalla, que es
+# cuando sirve de algo.
+
+
+def plazo_minimo(tenant):
+    """
+    El plazo mas corto que se puede estar aplicando en esta empresa.
+
+    Sirve para acotar en SQL antes de mirar fila por fila: nada anterior a ese
+    plazo puede estar vencido, gane el plazo del cliente o el de la casa.
+    """
+    plazos = [p for p in Catalog.objects.filter(
+        category='CUSTOMER', tenant=tenant, active=True,
+        alert_days__isnull=False).values_list('alert_days', flat=True) if p]
+    if tenant.alert_days_default:
+        plazos.append(tenant.alert_days_default)
+    return min(plazos) if plazos else None
+
+
+def operaciones_vencidas(user, tenant):
+    """
+    Las entradas que llevan mas dias en bodega de los que su cliente admite.
+
+    Dos pasos a proposito. El SQL se queda con las entradas sin liberar mas
+    viejas que el plazo mas corto de la empresa --que descarta casi todo-- y el
+    plazo exacto de cada cliente se aplica ya en Python, porque cada cliente
+    puede tener el suyo y eso no cabe en un solo WHERE.
+    """
+    plazo = plazo_minimo(tenant)
+    if not plazo:
+        return []
+    corte = timezone.now().date() - timedelta(days=plazo)
+    candidatas = (WarehouseOperation.objects
+                  .filter(tenant=tenant, operation_type='ENTRY', date__lte=corte)
+                  .filter(Q(entry_dispatched__isnull=True) | Q(entry_dispatched=''))
+                  .select_related('customer', 'tenant', 'shipper', 'carrier',
+                                  'bundle_type', 'created_by', 'warehouse', 'location'))
+    candidatas = customer_ops_filter(user, candidatas)
+    return [op for op in candidatas.order_by('date')[:400] if op.alerta_permanencia]
+
+
+def resumen_de_alertas(user, tenant):
+    """
+    Cuantas hay y cuantas de esas ya se pasaron del doble del plazo.
+
+    Va al lado del contador de mensajes sin leer, y por el mismo motivo: un
+    aviso metido en una fila de la tabla solo lo ve quien llega hasta esa fila.
+    """
+    vencidas = operaciones_vencidas(user, tenant)
+    return {
+        'total':   len(vencidas),
+        'urgentes': sum(1 for op in vencidas if op.alerta_permanencia == 'urgente'),
+    }
+
+
+@login_required
+@require_GET
+def operations_aging(request):
+    """
+    La tabla acotada a la mercancia que lleva demasiado tiempo guardada.
+
+    Es a donde lleva el contador. Se ordena por fecha ascendente --lo mas viejo
+    primero-- porque el orden por defecto de la tabla, el de la fecha reciente,
+    dejaria justo abajo lo que mas corre prisa.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    vencidas = operaciones_vencidas(request.user, tenant)
+    return render(request, 'warehouse/partials/operations_table.html', {
+        'operations':  anotar_hilos(request.user, vencidas[:200]),
+        'is_home':     is_home(request.user),
+        'profile':     profile,
+        'solo_vencidas': True,
+    })
+
+
 # ── FREE ENTRIES ──────────────────────────────────────────────────────────────
+
 
 @login_required
 @require_GET
@@ -913,7 +1052,209 @@ def free_entries(request):
         safe=False)
 
 
+# ── BODEGAS Y UBICACIONES ─────────────────────────────────────────────────────
+
+def puede_configurar_bodegas(profile):
+    """
+    Quien define la estructura de la bodega.
+
+    No es el permiso del catalogo diario: dar de alta un carrier es trabajo de
+    quien captura, pero decidir como se numeran los pasillos es una decision de
+    la casa que luego lleva pegada cada operacion.
+    """
+    return profile.is_superadmin() or profile.is_home() or profile.is_manager()
+
+
+def expandir_rango(texto):
+    """
+    Convierte "A,B,C" o "1-10" o "A, 1-3, Z" en una lista de valores.
+
+    Es lo que hace practicable la funcion: una bodega con tres zonas, diez
+    pasillos y cuatro niveles son ciento veinte posiciones, y nadie las teclea
+    una por una. Los rangos solo se expanden entre numeros; con letras se
+    escribe la lista, que es lo que se hace de todas formas ("A,B,C").
+    """
+    valores = []
+    for trozo in (texto or '').replace(';', ',').split(','):
+        trozo = trozo.strip()
+        if not trozo:
+            continue
+        if '-' in trozo:
+            desde, _, hasta = trozo.partition('-')
+            desde, hasta = desde.strip(), hasta.strip()
+            if desde.isdigit() and hasta.isdigit() and int(desde) <= int(hasta):
+                # Se conserva el relleno de ceros: si escriben 01-12, las
+                # posiciones se llaman 01..12 y ordenan bien como texto.
+                ancho = len(desde) if desde.startswith('0') else 0
+                for n in range(int(desde), int(hasta) + 1):
+                    valores.append(str(n).zfill(ancho) if ancho else str(n))
+                continue
+        valores.append(trozo)
+    # Sin repetidos y en el orden en que se escribieron.
+    vistos, unicos = set(), []
+    for v in valores:
+        if v not in vistos:
+            vistos.add(v)
+            unicos.append(v)
+    return unicos
+
+
+# Cuantas posiciones puede crear una sola tanda. Un descuido al escribir los
+# rangos (1-1000 en cuatro campos) son mil millones de filas; el tope convierte
+# el accidente en un mensaje.
+TOPE_DE_UBICACIONES = 600
+
+
+def _contexto_de_bodegas(request, tenant, **extra):
+    profile = get_profile(request.user)
+    bodegas = (Warehouse.objects.filter(tenant=tenant)
+               .annotate(num_ubicaciones=Count('locations',
+                                               filter=Q(locations__active=True)))
+               .order_by('code'))
+    ubicaciones = Location.objects.filter(tenant=tenant).select_related('warehouse')
+    bodega_id = request.GET.get('warehouse', '').strip()
+    if bodega_id.isdigit():
+        ubicaciones = ubicaciones.filter(warehouse_id=int(bodega_id))
+    contexto = {
+        'bodegas': bodegas,
+        'ubicaciones': ubicaciones[:400],
+        'total_ubicaciones': ubicaciones.count(),
+        'bodega_filtrada': bodega_id,
+        'tipos_de_ubicacion': Location.TIPOS,
+        'puede_configurar': puede_configurar_bodegas(profile),
+        'profile': profile,
+    }
+    contexto.update(extra)
+    return contexto
+
+
+@login_required
+def locations_panel(request):
+    """La pantalla de bodegas y posiciones."""
+    tenant = get_tenant_or_404(request)
+    return render(request, 'warehouse/partials/locations_panel.html',
+                  _contexto_de_bodegas(request, tenant))
+
+
+@login_required
+@require_POST
+def warehouse_create(request):
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if not puede_configurar_bodegas(profile):
+        return HttpResponse('Permission denied.', status=403)
+
+    nombre = request.POST.get('name', '').strip()
+    codigo = request.POST.get('code', '').strip().upper()
+    error = None
+    if not nombre or not codigo:
+        error = 'Name and code are required.'
+    elif Warehouse.objects.filter(tenant=tenant, code=codigo).exists():
+        error = 'Code "%s" already exists.' % codigo
+    else:
+        Warehouse.objects.create(
+            tenant=tenant, name=nombre, code=codigo,
+            address=request.POST.get('address', '').strip())
+
+    exito = None if error else 'Warehouse %s created.' % codigo
+    return render(request, 'warehouse/partials/locations_panel.html',
+                  _contexto_de_bodegas(request, tenant, error=error, exito=exito))
+
+
+@login_required
+@require_POST
+def locations_generate(request):
+    """
+    Crea de una vez todas las posiciones que salen de cruzar los rangos.
+
+    Las que ya existen no se tocan ni cuentan como error: repetir la generacion
+    despues de anadir un pasillo es la forma natural de ampliar una bodega, y
+    fallar por lo que ya estaba obligaria a acertar a la primera.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if not puede_configurar_bodegas(profile):
+        return HttpResponse('Permission denied.', status=403)
+
+    try:
+        bodega = Warehouse.objects.get(pk=int(request.POST.get('warehouse', '')),
+                                       tenant=tenant)
+    except (ValueError, TypeError, Warehouse.DoesNotExist):
+        return render(request, 'warehouse/partials/locations_panel.html',
+                      _contexto_de_bodegas(request, tenant,
+                                           error='Select a warehouse first.'))
+
+    zonas      = expandir_rango(request.POST.get('zones'))     or ['']
+    pasillos   = expandir_rango(request.POST.get('aisles'))    or ['']
+    estantes   = expandir_rango(request.POST.get('racks'))     or ['']
+    niveles    = expandir_rango(request.POST.get('levels'))    or ['']
+    posiciones = expandir_rango(request.POST.get('positions')) or ['']
+    tipo = request.POST.get('kind', 'STORAGE')
+    if tipo not in dict(Location.TIPOS):
+        tipo = 'STORAGE'
+
+    cuantas = len(zonas) * len(pasillos) * len(estantes) * len(niveles) * len(posiciones)
+    if cuantas > TOPE_DE_UBICACIONES:
+        aviso = ('That would create %d locations, over the limit of %d. '
+                 'Split it into smaller runs.' % (cuantas, TOPE_DE_UBICACIONES))
+        return render(request, 'warehouse/partials/locations_panel.html',
+                      _contexto_de_bodegas(request, tenant, error=aviso))
+    if not any(zonas + pasillos + estantes + niveles + posiciones):
+        return render(request, 'warehouse/partials/locations_panel.html',
+                      _contexto_de_bodegas(
+                          request, tenant,
+                          error='Fill at least one level (zone, aisle, rack...).'))
+
+    existentes = set(Location.objects.filter(warehouse=bodega)
+                     .values_list('code', flat=True))
+    nuevas, codigos_nuevos = [], set()
+    for z in zonas:
+        for pa in pasillos:
+            for e in estantes:
+                for n in niveles:
+                    for po in posiciones:
+                        ubi = Location(tenant=tenant, warehouse=bodega,
+                                       zone=z or None, aisle=pa or None,
+                                       rack=e or None, level=n or None,
+                                       position=po or None, kind=tipo)
+                        ubi.code = ubi.componer_codigo()
+                        if ubi.code in existentes or ubi.code in codigos_nuevos:
+                            continue
+                        codigos_nuevos.add(ubi.code)
+                        nuevas.append(ubi)
+
+    Location.objects.bulk_create(nuevas)
+    repetidas = cuantas - len(nuevas)
+    mensaje = '%d location(s) created in %s.' % (len(nuevas), bodega.code)
+    if repetidas > 0:
+        mensaje += ' %d already existed.' % repetidas
+    return render(request, 'warehouse/partials/locations_panel.html',
+                  _contexto_de_bodegas(request, tenant, exito=mensaje))
+
+
+@login_required
+@require_POST
+def location_toggle(request, pk):
+    """
+    Enciende o apaga una posicion.
+
+    No se borran: una ubicacion desactivada deja de ofrecerse al capturar pero
+    las operaciones que ya apuntan a ella siguen sabiendo donde estuvo la
+    mercancia. Borrarla dejaria huecos en el historial.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if not puede_configurar_bodegas(profile):
+        return HttpResponse('Permission denied.', status=403)
+    ubi = get_object_or_404(Location, pk=pk, tenant=tenant)
+    ubi.active = not ubi.active
+    ubi.save(update_fields=['active'])
+    return render(request, 'warehouse/partials/locations_panel.html',
+                  _contexto_de_bodegas(request, tenant))
+
+
 # ── DIGITAL TAB ───────────────────────────────────────────────────────────────
+
 
 @login_required
 def _expedientes_con_archivos(request, tenant, limite=30):
@@ -1508,7 +1849,7 @@ def report_generator(request):
                 ops = ops.filter(date__gte=date_from); filters['date_from'] = date_from
             if date_to:
                 ops = ops.filter(date__lte=date_to);   filters['date_to']   = date_to
-            if op_type in ('ENTRY', 'EXIT'):
+            if op_type in dict(WarehouseOperation.TYPE_CHOICES):
                 ops = ops.filter(operation_type=op_type); filters['op_type'] = op_type
             if undispatched == '1':
                 ops = ops.filter(operation_type='ENTRY').filter(
@@ -1529,6 +1870,7 @@ def report_generator(request):
 
     return render(request, 'warehouse/partials/report_generator.html', {
         'customers': customers,
+        'tipos_de_operacion': WarehouseOperation.TYPE_CHOICES,
         'results': results,
         'filters': filters,
         'is_home': is_home(request.user),
@@ -1760,6 +2102,11 @@ def catalog_edit(request, pk):
             entry.notify_on_create    = p.get('notify_on_create') == 'on'
             entry.notify_on_release   = p.get('notify_on_release') == 'on'
             entry.notify_on_documents = p.get('notify_on_documents') == 'on'
+            # El plazo de permanencia. Vacio significa "el de la empresa", asi
+            # que se guarda NULL y no un cero: un cero avisaria de todo desde el
+            # primer dia.
+            dias = p.get('alert_days', '').strip()
+            entry.alert_days = int(dias) if dias.isdigit() and int(dias) > 0 else None
         entry.save()
         return render(request, 'warehouse/partials/catalog_table.html',
                       _catalog_table_context(request, tenant,
@@ -2268,6 +2615,7 @@ def operation_edit(request, pk):
     ]
     return render(request, 'warehouse/partials/operation_edit.html', {
         'operation': op, 'edit_fields': edit_fields,
+        'tipos_de_operacion': WarehouseOperation.TYPE_CHOICES,
         'profile': profile,
     })
 
@@ -2345,7 +2693,7 @@ def operations_layout(request):
     ws.title = 'Operations Import'
 
     headers = [
-        'date (YYYY-MM-DD)', 'operation_type (ENTRY/EXIT)', 'customer_name',
+        'date (YYYY-MM-DD)', 'operation_type (ENTRY/EXIT/TD/RD)', 'customer_name',
         'shipper_name', 'carrier_name', 'bundle_type_name',
         'invoice', 'po_order', 'seal', 'pro', 'trailer',
         'bundle_qty', 'weight_lbs', 'weight_kgs',
@@ -2424,7 +2772,7 @@ def operations_import(request):
                     op_date = datetime.strptime(str(date_val), '%Y-%m-%d').date()
 
                 op_type = str(op_type).strip().upper()
-                if op_type not in ('ENTRY', 'EXIT'):
+                if op_type not in dict(WarehouseOperation.TYPE_CHOICES):
                     errors.append(f'Row {row_idx}: invalid type "{op_type}"')
                     continue
 

@@ -30,6 +30,7 @@ urlpatterns = [
     # La tabla acotada a lo que espera respuesta, que es a donde lleva el
     # contador global de mensajes sin leer.
     path('operations/unread/', views.operations_unread, name='operations_unread'),
+    path('operations/aging/', views.operations_aging, name='operations_aging'),
     path('operations/<int:pk>/chat/', views.operation_chat, name='operation_chat'),
     path('operations/<int:pk>/chat/send/', views.operation_chat_send, name='operation_chat_send'),
     # Los archivos del expediente se sirven por aqui y no por el enlace
@@ -65,6 +66,12 @@ urlpatterns = [
     path('catalog/<int:pk>/access/', views.customer_access, name='customer_access'),
     path('catalog/autocomplete/', views.catalog_autocomplete, name='catalog_autocomplete'),
     # Users
+    # Bodegas y posiciones
+    path('locations/', views.locations_panel, name='locations_panel'),
+    path('locations/warehouse/create/', views.warehouse_create, name='warehouse_create'),
+    path('locations/generate/', views.locations_generate, name='locations_generate'),
+    path('locations/<int:pk>/toggle/', views.location_toggle, name='location_toggle'),
+
     path('users/', views.user_management, name='user_management'),
     path('platform/', views.platform_dashboard, name='platform_dashboard'),
     path('platform/tenants/', views.platform_tenant_list, name='platform_tenant_list'),

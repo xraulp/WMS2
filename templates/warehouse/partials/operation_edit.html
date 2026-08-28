@@ -25,8 +25,14 @@
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">{{ label }}</label>
       {% if fname == 'operation_type' %}
         <select name="{{ fname }}" style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
-          <option value="ENTRY" {% if value == 'ENTRY' %}selected{% endif %}>Entry</option>
-          <option value="EXIT"  {% if value == 'EXIT'  %}selected{% endif %}>Exit</option>
+          {% comment %}
+          Los cuatro tipos. Escritos a mano eran dos, asi que editar un
+          trasbordo lo habria convertido en una entrada al guardar: el
+          desplegable no tenia su valor y mandaba el primero.
+          {% endcomment %}
+          {% for valor, etiqueta in tipos_de_operacion %}
+          <option value="{{ valor }}" {% if value == valor %}selected{% endif %}>{{ etiqueta }}</option>
+          {% endfor %}
         </select>
       {% elif fname == 'description' or fname == 'note' or fname == 'damage_description' %}
         <textarea name="{{ fname }}" rows="2"

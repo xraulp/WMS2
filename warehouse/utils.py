@@ -138,6 +138,27 @@ ENTRY_COL = colors.HexColor('#03C04A')#ENTRY_COL
 EXIT_COL  = colors.HexColor('#ef4444')
 ENTRY_BG  = colors.HexColor('#d1fae5')
 EXIT_BG   = colors.HexColor('#fee2e2')
+TD_COL    = colors.HexColor('#d97706')   # trasbordo
+RD_COL    = colors.HexColor('#7c3aed')   # reacomodo
+
+# El color y el titulo de cada tipo en los documentos. Antes se decidian con un
+# `if` de dos ramas -- si no era ENTRY, se pintaba y se titulaba como una salida
+# -- asi que un reacomodo salia del PDF diciendo "Goods Dispatch".
+COLOR_DEL_TIPO = {'ENTRY': ENTRY_COL, 'EXIT': EXIT_COL, 'TD': TD_COL, 'RD': RD_COL}
+TITULO_DEL_TIPO = {
+    'ENTRY': 'Operation Report: Goods Receipt',
+    'EXIT':  'Operation Report: Goods Dispatch',
+    'TD':    'Operation Report: Transfer',
+    'RD':    'Operation Report: Relocation',
+}
+
+
+def color_del_tipo(operation_type):
+    return COLOR_DEL_TIPO.get(operation_type, EXIT_COL)
+
+
+def titulo_del_tipo(operation_type):
+    return TITULO_DEL_TIPO.get(operation_type, 'Operation Report')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -205,7 +226,7 @@ def generate_pdf_report(operation):
     }
 
     story = []
-    type_color = ENTRY_COL if operation.operation_type == 'ENTRY' else EXIT_COL
+    type_color = color_del_tipo(operation.operation_type)
     type_label = operation.get_operation_type_display().upper()
 
 
@@ -233,8 +254,7 @@ def generate_pdf_report(operation):
                       style('hd', fontName='Helvetica-Bold', fontSize=13, textColor=colors.HexColor("#5b5b5b"))),
         ],
         [
-            Paragraph('Operation Report: Goods Receipt' if operation.operation_type == 'ENTRY' else 'Operation Report: Goods Dispatch',
-                      S['subtitle']),
+            Paragraph(titulo_del_tipo(operation.operation_type), S['subtitle']),
         ],
     ], colWidths=4.2*inch)
 
@@ -473,7 +493,7 @@ def generate_label_pdf(operation):
 
     qty = operation.bundle_qty or 1
     tenant_name = (operation.tenant.name if operation.tenant else 'WMS').upper()
-    type_color = ENTRY_COL if operation.operation_type == 'ENTRY' else EXIT_COL
+    type_color = color_del_tipo(operation.operation_type)
     type_label = operation.get_operation_type_display().upper()
 
     # Anchos de columnas
@@ -705,6 +725,10 @@ BORDER = colors.HexColor('#cbd5e1')
 ACCENT = colors.HexColor('#3b82f6')   # azul para líneas
 ENTRY_COL = colors.HexColor('#008000')  # verde para ENTRY (si lo usas)
 EXIT_COL  = colors.HexColor('#FF0000')  # rojo para EXIT ef4444
+# Este archivo redefine la paleta a mitad de camino, asi que el mapa de colores
+# hay que rehacerlo con los valores de aqui o el informe saldria con los de
+# arriba.
+COLOR_DEL_TIPO = {'ENTRY': ENTRY_COL, 'EXIT': EXIT_COL, 'TD': TD_COL, 'RD': RD_COL}
 
 # aqui copeo el nuevo codigo def generate_operations_report_pdf
 def generate_operations_report_pdf(operations, title='Operations Report',
@@ -837,7 +861,7 @@ def generate_operations_report_pdf(operations, title='Operations Report',
         rows.append([
             Paragraph(op.date.strftime('%Y-%m-%d'), S('cell', fontSize=7, textColor=DARK)),
             Paragraph(op.custom_id, S('cell', fontSize=7, textColor=DARK, fontName='Helvetica-Bold')),
-            Paragraph(op.get_operation_type_display(), S('cell', fontSize=7, textColor=ENTRY_COL if op.operation_type == 'ENTRY' else EXIT_COL, fontName='Helvetica-Bold')),
+            Paragraph(op.get_operation_type_display(), S('cell', fontSize=7, textColor=color_del_tipo(op.operation_type), fontName='Helvetica-Bold')),
             Paragraph(status_abbr, S('cell', fontSize=7, textColor=DARK, alignment=1)),
             Paragraph(op.get_customer_display()[:44], S('cell', fontSize=7, textColor=DARK)),
             Paragraph(op.get_shipper_display()[:44], S('cell', fontSize=7, textColor=DARK)),
