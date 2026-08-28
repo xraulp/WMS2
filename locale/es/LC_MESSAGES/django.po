@@ -1,0 +1,584 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: WMS\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "AA reference..."
+msgstr "Referencia AA..."
+
+msgid "Abbreviation"
+msgstr "Abreviatura"
+
+msgid "Active"
+msgstr "Activa"
+
+msgid "Add"
+msgstr "Añadir"
+
+msgid "Additional notes..."
+msgstr "Notas adicionales..."
+
+msgid "Address"
+msgstr "Dirección"
+
+msgid "Address..."
+msgstr "Dirección..."
+
+msgid "Aisle"
+msgstr "Pasillo"
+
+msgid "Alert after … days"
+msgstr "Avisar a los … días"
+
+msgid "All customers"
+msgstr "Todos los clientes"
+
+msgid "All status"
+msgstr "Todos los estados"
+
+msgid "All types"
+msgstr "Todos los tipos"
+
+msgid "All users"
+msgstr "Todos los usuarios"
+
+msgid "All warehouses"
+msgstr "Todas las bodegas"
+
+msgid "Auto for EXIT..."
+msgstr "Automático en salidas..."
+
+msgid "Available Entries"
+msgstr "Entradas disponibles"
+
+msgid "Bundle Qty"
+msgstr "Cantidad de bultos"
+
+msgid "Bundle Type"
+msgstr "Tipo de bulto"
+
+msgid "CC Email"
+msgstr "Correo en copia"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Carrier"
+msgstr "Transportista"
+
+msgid "Catalog"
+msgstr "Catálogo"
+
+msgid "Category"
+msgstr "Categoría"
+
+msgid "Clear"
+msgstr "Limpiar"
+
+msgid "Clear all filters"
+msgstr "Quitar todos los filtros"
+
+msgid "Code"
+msgstr "Código"
+
+msgid "Company name..."
+msgstr "Nombre de la empresa..."
+
+msgid "Customer"
+msgstr "Cliente"
+
+msgid "Customer Notes"
+msgstr "Notas del cliente"
+
+msgid "Customer name"
+msgstr "Nombre del cliente"
+
+msgid "Customers"
+msgstr "Clientes"
+
+msgid "DYS reference..."
+msgstr "Referencia DYS..."
+
+msgid "Damage"
+msgstr "Daño"
+
+msgid "Damage Desc."
+msgstr "Desc. del daño"
+
+msgid "Date"
+msgstr "Fecha"
+
+msgid "Deletions"
+msgstr "Borrados"
+
+msgid "Describe damage..."
+msgstr "Describe el daño..."
+
+msgid "Description"
+msgstr "Descripción"
+
+msgid "Digital"
+msgstr "Digital"
+
+msgid "Documents"
+msgstr "Documentos"
+
+msgid "Edit Catalog Entry"
+msgstr "Editar ficha del catálogo"
+
+msgid "Email(s) — comma separated"
+msgstr "Correo(s) — separados por comas"
+
+msgid "Enter Custom ID (e.g. ED260405-0001)..."
+msgstr "Escribe el Custom ID (p. ej. ED260405-0001)..."
+
+msgid "Entries Disp."
+msgstr "Entradas desp."
+
+msgid "First column"
+msgstr "Primera columna"
+
+msgid "Generate"
+msgstr "Generar"
+
+msgid "Generate locations"
+msgstr "Generar posiciones"
+
+msgid "Goods past their agreed time in the warehouse"
+msgstr "Mercancía que pasó del tiempo acordado en bodega"
+
+msgid "ID, invoice, PO, description..."
+msgstr "ID, factura, OC, descripción..."
+
+msgid "In Warehouse"
+msgstr "En almacén"
+
+msgid "Invoice"
+msgstr "Factura"
+
+msgid "Invoice #..."
+msgstr "N.º de factura..."
+
+msgid "Kind"
+msgstr "Clase"
+
+msgid "Last column"
+msgstr "Última columna"
+
+msgid "Level"
+msgstr "Nivel"
+
+msgid "Loading and Unloading System"
+msgstr "Sistema de carga y descarga"
+
+msgid "Loading..."
+msgstr "Cargando..."
+
+msgid "Location"
+msgstr "Posición"
+
+msgid "Locations"
+msgstr "Ubicaciones"
+
+msgid "Merchandise description..."
+msgstr "Descripción de la mercancía..."
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "Name / Value"
+msgstr "Nombre / valor"
+
+msgid "Name or value..."
+msgstr "Nombre o valor..."
+
+msgid "New Operation"
+msgstr "Nueva operación"
+
+msgid "New warehouse"
+msgstr "Nueva bodega"
+
+msgid "No"
+msgstr "No"
+
+msgid "Note"
+msgstr "Nota"
+
+msgid "Notes"
+msgstr "Notas"
+
+msgid "Notes..."
+msgstr "Notas..."
+
+msgid "Occupied only"
+msgstr "Solo ocupadas"
+
+msgid "Off"
+msgstr "Apagada"
+
+msgid "Operational Catalog"
+msgstr "Catálogo operativo"
+
+msgid "Operations"
+msgstr "Operaciones"
+
+msgid "Operations with unread messages"
+msgstr "Operaciones con mensajes sin leer"
+
+msgid "PO / ORD..."
+msgstr "OC / pedido..."
+
+msgid "PO / Order"
+msgstr "OC / pedido"
+
+msgid "PRO #..."
+msgstr "N.º de PRO..."
+
+msgid "Pedimento number..."
+msgstr "Número de pedimento..."
+
+msgid "Phone"
+msgstr "Teléfono"
+
+msgid "Photos"
+msgstr "Fotos"
+
+msgid "Position"
+msgstr "Hueco"
+
+msgid "Rack"
+msgstr "Estante"
+
+msgid "Register Operation"
+msgstr "Registrar operación"
+
+msgid "Released Goods"
+msgstr "Mercancía liberada"
+
+msgid "Report Generator"
+msgstr "Generador de informes"
+
+msgid "Save Changes"
+msgstr "Guardar cambios"
+
+msgid "Save Customer"
+msgstr "Guardar cliente"
+
+msgid "Save Operation"
+msgstr "Guardar operación"
+
+msgid "Save Record"
+msgstr "Guardar registro"
+
+msgid "Seal"
+msgstr "Sello"
+
+msgid "Seal #..."
+msgstr "N.º de sello..."
+
+msgid "Search"
+msgstr "Buscar"
+
+msgid "Select customer + EXIT first..."
+msgstr "Elige primero cliente y salida..."
+
+msgid "Send WhatsApp notification"
+msgstr "Enviar aviso por WhatsApp"
+
+msgid "Shipper"
+msgstr "Remitente"
+
+msgid "Sign out"
+msgstr "Cerrar sesión"
+
+msgid "Status"
+msgstr "Estado"
+
+msgid "Stored"
+msgstr "Guardado"
+
+msgid "Trailer"
+msgstr "Caja"
+
+msgid "Trailer #..."
+msgstr "N.º de caja..."
+
+msgid "Turn off"
+msgstr "Apagar"
+
+msgid "Turn on"
+msgstr "Encender"
+
+msgid "Type"
+msgstr "Tipo"
+
+msgid "Type of Bundle"
+msgstr "Tipo de bulto"
+
+msgid "Type of Operation"
+msgstr "Tipo de operación"
+
+msgid "Type or select..."
+msgstr "Escribe o elige..."
+
+msgid "User"
+msgstr "Usuario"
+
+msgid "User Management"
+msgstr "Gestión de usuarios"
+
+msgid "Users"
+msgstr "Usuarios"
+
+msgid "Warehouse"
+msgstr "Bodega"
+
+msgid "Warehouses"
+msgstr "Bodegas"
+
+msgid "Weight KGS"
+msgstr "Peso KGS"
+
+msgid "Weight LBS"
+msgstr "Peso LBS"
+
+msgid "Welcome,"
+msgstr "Bienvenido,"
+
+msgid "Yes"
+msgstr "Sí"
+
+msgid "Zone"
+msgstr "Zona"
+
+msgid "e.g. LBO, ACME"
+msgstr "Ej.: LBO, ACME"
+
+msgid "empty"
+msgstr "vacía"
+
+msgid "unread"
+msgstr "sin leer"
+
+msgid "— None —"
+msgstr "— Ninguna —"
+
+msgid "— Select —"
+msgstr "— Elegir —"
+msgid "Dark theme"
+msgstr "Tema oscuro"
+
+msgid "Change the theme"
+msgstr "Cambiar el tema"
+
+msgid "Language"
+msgstr "Idioma"
+
+msgid "Entry (ED)"
+msgstr "Entrada (ED)"
+
+msgid "Exit (SD)"
+msgstr "Salida (SD)"
+
+msgid "Transfer (TD)"
+msgstr "Trasbordo (TD)"
+
+msgid "Revision (RD)"
+msgstr "Revisión (RD)"
+
+msgid "Storage"
+msgstr "Almacenaje"
+
+msgid "Receiving"
+msgstr "Recepción"
+
+msgid "Shipping"
+msgstr "Embarque"
+
+msgid "Dock / Staging"
+msgstr "Andén / preparación"
+
+msgid "Picking"
+msgstr "Picking"
+
+msgid "Quarantine"
+msgstr "Cuarentena"
+
+msgid "Damaged goods"
+msgstr "Mercancía dañada"
+
+msgid "Returns"
+msgstr "Devoluciones"
+
+msgid "System"
+msgstr "Sistema"
+
+msgid "Light"
+msgstr "Claro"
+
+msgid "Dark"
+msgstr "Oscuro"
+
+msgid "Automatic"
+msgstr "Automático"
+
+msgid "Platform"
+msgstr "Plataforma"
+
+msgid "Full Report PDF"
+msgstr "Informe completo en PDF"
+
+msgid "Print Labels"
+msgstr "Imprimir etiquetas"
+
+msgid "Close"
+msgstr "Cerrar"
+
+msgid "Import"
+msgstr "Importar"
+
+msgid "Download Layout"
+msgstr "Descargar plantilla"
+
+msgid "Download All"
+msgstr "Descargar todo"
+
+msgid "Import Excel:"
+msgstr "Importar Excel:"
+
+msgid "Actions"
+msgstr "Acciones"
+
+msgid "Edit"
+msgstr "Editar"
+
+msgid "Archive"
+msgstr "Archivar"
+
+msgid "No customers yet"
+msgstr "Todavía no hay clientes"
+
+msgid "Catalog is empty"
+msgstr "El catálogo está vacío"
+
+msgid "Email"
+msgstr "Correo"
+
+msgid "Email(s)"
+msgstr "Correo(s)"
+
+msgid "no access"
+msgstr "sin acceso"
+
+msgid "Select all"
+msgstr "Seleccionar todos"
+
+msgid "Send"
+msgstr "Enviar"
+
+msgid "When"
+msgstr "Cuándo"
+
+msgid "File"
+msgstr "Archivo"
+
+msgid "Operation"
+msgstr "Operación"
+
+msgid "Who"
+msgstr "Quién"
+
+msgid "Reason"
+msgstr "Motivo"
+
+msgid "Restore"
+msgstr "Restaurar"
+
+msgid "Destroy"
+msgstr "Destruir"
+
+msgid "Password"
+msgstr "Contraseña"
+
+msgid "Last sign-in"
+msgstr "Último acceso"
+
+msgid "Customer notifications"
+msgstr "Notificaciones al cliente"
+
+msgid "When to notify"
+msgstr "Cuándo avisarle"
+
+msgid "When the operation is registered"
+msgstr "Al registrar la operación"
+
+msgid "When the goods are released"
+msgstr "Al liberar la mercancía"
+
+msgid "When documents are added"
+msgstr "Al agregar documentos"
+
+msgid "Time-in-warehouse alert"
+msgstr "Alerta de permanencia"
+
+msgid "Alert when the goods have been here"
+msgstr "Avisar cuando la mercancía lleve"
+
+msgid "days in the warehouse"
+msgstr "días en bodega"
+
+msgid "No messages about this operation yet."
+msgstr "Todavía no hay mensajes sobre esta operación."
+
+msgid "Trash and deletion log"
+msgstr "Papelera y bitácora de borrados"
+
+msgid "Document trash"
+msgstr "Papelera del expediente"
+
+msgid "Deletion log"
+msgstr "Bitácora de borrados"
+
+msgid "The trash is empty."
+msgstr "La papelera está vacía."
+
+msgid "Nothing has been deleted yet."
+msgstr "Todavía no se ha borrado nada."
+
+msgid "Nobody from this customer can sign in yet."
+msgstr "Nadie de este cliente puede entrar al sistema todavía."
+
+msgid "+ Give access"
+msgstr "+ Dar acceso"
+
+msgid "Warehouses and locations"
+msgstr "Bodegas y posiciones"
+
+msgid "SaaS platform admin — all tenants"
+msgstr "Administración de la plataforma — todas las empresas"
+
+msgid "Please correct the following errors:"
+msgstr "Corrige los siguientes errores:"
+
+msgid "The company warehouses and the locations in each one. What you set up here is what can be picked when registering an operation."
+msgstr "Las bodegas de la empresa y las posiciones de cada una. Lo que se da de alta aquí es lo que se puede elegir al registrar una operación."
+
+msgid "Shippers, carriers, bundle types and the rest of what you pick while capturing an operation. Customers live in their own tab."
+msgstr "Remitentes, transportistas, tipos de bulto y todo lo demás que se elige al capturar una operación. Los clientes tienen su propia pestaña."
+
+msgid "The password is not stored anywhere: write it down now, or set a new one later from the Users tab."
+msgstr "La contraseña no se guarda en ningún sitio: apúntala ahora o asígnale otra después desde la pestaña Usuarios."
+
+msgid "Who can sign in on behalf of <strong>%(nombre)s</strong>. They will only see this customer's operations."
+msgstr "Quien puede entrar al sistema en nombre de <strong>%(nombre)s</strong>. Solo verá las operaciones de este cliente."
+
+msgid "Their sign-in name"
+msgstr "Su nombre de acceso"
+
+msgid "Write it down"
+msgstr "Apúntala"
+

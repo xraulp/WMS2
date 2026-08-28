@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 El token va en la partial: restaurar y destruir son POST, y el panel se carga
 por htmx sin ningun formulario propio del que tomarlo prestado.
@@ -8,7 +9,7 @@ por htmx sin ningun formulario propio del que tomarlo prestado.
 <div class="msg-success" style="margin-bottom:12px">{{ aviso }}</div>
 {% endif %}
 
-<p style="font-size:11px;color:#94a3b8;margin:-4px 0 14px">
+<p style="font-size:11px;color:var(--faint);margin:-4px 0 14px">
   Todo el mundo que opera puede borrar; nadie borra sin dejar constancia. Los
   archivos del expediente van a la papelera y se pueden devolver. Las
   operaciones no: de ellas queda el renglón de la bitácora. Se muestran los
@@ -16,29 +17,29 @@ por htmx sin ningun formulario propio del que tomarlo prestado.
 </p>
 
 <!-- ── PAPELERA ─────────────────────────────────────────────────────────── -->
-<h3 style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 8px">
+<h3 style="font-size:13px;font-weight:700;color:var(--ink);margin:0 0 8px">
   🗑 Papelera del expediente
 </h3>
 
-<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:22px">
+<div style="overflow-x:auto;border:1px solid var(--bdr);border-radius:10px;margin-bottom:22px">
 <table style="min-width:820px">
   <thead>
     <tr>
-      <th>Cuándo</th>
-      <th>Archivo</th>
-      <th>Operación</th>
-      <th>Quién</th>
-      <th>Motivo</th>
-      <th style="text-align:right">Acciones</th>
+      <th>{% trans "When" %}</th>
+      <th>{% trans "File" %}</th>
+      <th>{% trans "Operation" %}</th>
+      <th>{% trans "Who" %}</th>
+      <th>{% trans "Reason" %}</th>
+      <th style="text-align:right">{% trans "Actions" %}</th>
     </tr>
   </thead>
   <tbody>
     {% for doc in archivados %}
-    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
-      <td style="white-space:nowrap;font-size:11px;color:#64748b">{{ doc.deleted_at|date:"Y-m-d H:i" }}</td>
+    <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}">
+      <td style="white-space:nowrap;font-size:11px;color:var(--soft)">{{ doc.deleted_at|date:"Y-m-d H:i" }}</td>
       <td class="mono" style="font-size:11px">
         {{ doc.digital_name|default:doc.original_name }}
-        <div style="font-size:10px;color:#94a3b8">{{ doc.original_name }}</div>
+        <div style="font-size:10px;color:var(--faint)">{{ doc.original_name }}</div>
       </td>
       <td class="mono" style="font-size:11px">{{ doc.operation.custom_id }}</td>
       <td style="font-size:11px">{{ doc.deleted_by.username|default:"—" }}</td>
@@ -60,38 +61,38 @@ por htmx sin ningun formulario propio del que tomarlo prestado.
       </td>
     </tr>
     {% empty %}
-    <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">La papelera está vacía.</td></tr>
+    <tr><td colspan="6" style="text-align:center;color:var(--faint);padding:20px">{% trans "The trash is empty." %}</td></tr>
     {% endfor %}
   </tbody>
 </table>
 </div>
 
 <!-- ── BITÁCORA ─────────────────────────────────────────────────────────── -->
-<h3 style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 8px">
+<h3 style="font-size:13px;font-weight:700;color:var(--ink);margin:0 0 8px">
   📋 Bitácora de borrados
 </h3>
 
-<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px">
+<div style="overflow-x:auto;border:1px solid var(--bdr);border-radius:10px">
 <table style="min-width:820px">
   <thead>
     <tr>
-      <th>Cuándo</th>
+      <th>{% trans "When" %}</th>
       <th>Qué</th>
-      <th>Operación</th>
-      <th>Cliente</th>
-      <th>Quién</th>
-      <th>Motivo</th>
+      <th>{% trans "Operation" %}</th>
+      <th>{% trans "Customer" %}</th>
+      <th>{% trans "Who" %}</th>
+      <th>{% trans "Reason" %}</th>
     </tr>
   </thead>
   <tbody>
     {% for r in deletion_logs %}
-    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
-      <td style="white-space:nowrap;font-size:11px;color:#64748b">{{ r.deleted_at|date:"Y-m-d H:i" }}</td>
+    <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}">
+      <td style="white-space:nowrap;font-size:11px;color:var(--soft)">{{ r.deleted_at|date:"Y-m-d H:i" }}</td>
       <td style="font-size:11px">
         <span class="badge {% if r.kind == 'OPERATION' %}b-exit{% else %}b-sent{% endif %}">
           {{ r.get_kind_display }}
         </span>
-        {% if r.document_name %}<span class="mono" style="font-size:10px;color:#64748b">{{ r.document_name }}</span>{% endif %}
+        {% if r.document_name %}<span class="mono" style="font-size:10px;color:var(--soft)">{{ r.document_name }}</span>{% endif %}
       </td>
       <td class="mono" style="font-size:11px">{{ r.custom_id|default:"—" }}</td>
       <td style="font-size:11px">{{ r.customer_name|default:"—" }}</td>
@@ -99,7 +100,7 @@ por htmx sin ningun formulario propio del que tomarlo prestado.
       <td style="font-size:11px;max-width:280px">{{ r.reason|default:"—" }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">Todavía no se ha borrado nada.</td></tr>
+    <tr><td colspan="6" style="text-align:center;color:var(--faint);padding:20px">{% trans "Nothing has been deleted yet." %}</td></tr>
     {% endfor %}
   </tbody>
 </table>

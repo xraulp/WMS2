@@ -1,0 +1,177 @@
+{% comment %}
+Los colores del WMS, en un solo sitio.
+
+Estaban escritos a mano dentro de cada plantilla -- ciento tres `#64748b`,
+ciento dos `#e2e8f0` --, de modo que el tema oscuro habria sido reescribir
+treinta y siete ficheros y volver a hacerlo con cada pantalla nueva. Ahora cada
+color tiene nombre y el tema solo cambia lo que valen los nombres.
+
+Tres estados, como el resto del mundo: si el usuario eligio, manda su eleccion
+(`data-theme` en el <html>); si no eligio, manda el sistema operativo. Por eso
+la paleta clara vive en `:root` a secas y la oscura se repite dos veces: una
+para el sistema --protegida contra quien eligio claro a proposito-- y otra para
+la eleccion explicita, que tiene que ganar en los dos sentidos.
+
+Quien escriba una pantalla nueva: usa los nombres. Un color escrito a mano se
+queda claro cuando todo lo demas se pone oscuro.
+{% endcomment %}
+<style>
+:root{
+  /* Texto */
+  --ink:#0f172a; --ink-fuerte:#1e293b; --soft:#4e5a6b; --soft-fuerte:#475569;
+  --faint:#94a3b8;
+  /* Superficies */
+  --bg:#f1f5f9; --bg-sutil:#f8fafc; --surface:#ffffff;
+  --bdr:#e2e8f0; --bdr-fuerte:#cbd5e1;
+  /* El azul de la casa */
+  --accent:#0ea5e9; --adark:#0284c7; --asoft:#e0f2fe; --accent-ink:#0369a1;
+  /* Lo que va encima de un boton de color: no cambia con el tema */
+  --on-accent:#ffffff;
+  /* Verde: hecho, activo, entrada */
+  --green:#10b981; --green-dark:#059669; --gsoft:#d1fae5;
+  --ok-bg:#dcfce7; --ok-ink:#065f46; --ok-ink-fuerte:#166534;
+  /* Rojo: error, borrado, salida */
+  --red:#ef4444; --rsoft:#fee2e2; --err-bg:#fef2f2; --err-bdr:#fca5a5;
+  --err-ink:#991b1b; --err-ink-fuerte:#b91c1c;
+  /* Ambar: aviso, mercancia vencida */
+  --warn:#f59e0b; --warn-bg:#fef3c7; --warn-bg-suave:#fffbeb;
+  --warn-bdr:#fcd34d; --warn-ink:#92400e; --warn-ink-fuerte:#b45309;
+  /* Azul suave: informacion */
+  --info-bg:#dbeafe; --info-bdr:#bfdbfe; --info-bg-suave:#eff6ff;
+  --info-bdr-suave:#bae6fd;
+  /* Morado: la revision */
+  --violet:#6d28d9; --violet-soft:#ede9fe;
+  /* La barra de arriba y las cabeceras de tabla son oscuras tambien con el
+     tema claro, asi que no pueden salir de los tokens de texto: si `--ink` se
+     aclara en el tema oscuro, la barra se volveria blanca con letras blancas. */
+  --tb-bg:#0f172a; --tb-bdr:#576c8a; --tb-faint:#60718a;
+  --th-bg:#0f172a; --th-bg-fija:#1e293b; --th-bg-acento:#1e3a5f;
+  --th-ink-acento:#7dd3fc;
+  --info-ink:#1d4ed8; --red-dark:#dc2626;
+  /* Sombras, que en oscuro no se ven y hay que cambiar por borde */
+  --sombra:0 1px 2px rgba(15,23,42,.06);
+  --sombra-alta:0 10px 30px rgba(15,23,42,.12);
+  /* Compatibilidad: `--white` existia y no lo usaba nadie. Se queda apuntando
+     a la superficie para que un uso viejo no pinte un rectangulo blanco. */
+  --white:var(--surface);
+  --r:6px; --rL:10px;
+}
+
+/* Los tokens oscuros, escritos una sola vez y usados por los dos selectores
+   de abajo. Cambiar un color del tema oscuro se hace aqui y en ningun otro
+   sitio. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e6edf6; --ink-fuerte:#f1f5f9; --soft:#a7b4c4; --soft-fuerte:#c3cddb;
+    --faint:#7c8ba1;
+    --bg:#0b1220; --bg-sutil:#131c2c; --surface:#16202f;
+    --bdr:#2a3648; --bdr-fuerte:#3b4a61;
+    --accent:#0ea5e9; --adark:#38bdf8; --asoft:#0c3a52; --accent-ink:#7dd3fc;
+    --on-accent:#ffffff;
+    --green:#10b981; --green-dark:#34d399; --gsoft:#0d3f31;
+    --ok-bg:#0f3d2a; --ok-ink:#6ee7b7; --ok-ink-fuerte:#86efac;
+    --red:#f05252; --rsoft:#4a1717; --err-bg:#2a1414; --err-bdr:#7f1d1d;
+    --err-ink:#fca5a5; --err-ink-fuerte:#fecaca;
+    --warn:#f59e0b; --warn-bg:#3d2f10; --warn-bg-suave:#2b210c;
+    --warn-bdr:#78350f; --warn-ink:#fcd34d; --warn-ink-fuerte:#fbbf24;
+    --info-bg:#12304d; --info-bdr:#1e4a73; --info-bg-suave:#0f2a44;
+    --info-bdr-suave:#1e4a73;
+    --violet:#a78bfa; --violet-soft:#2e2350;
+  --tb-bg:#111c2e; --tb-bdr:#3b4a61; --tb-faint:#7c8ba1;
+  --th-bg:#16273d; --th-bg-fija:#1b2a41; --th-bg-acento:#1c3a5a;
+  --th-ink-acento:#7dd3fc;
+  --info-ink:#93c5fd; --red-dark:#f05252;
+    --tb-bg:#111c2e; --tb-bdr:#3b4a61; --tb-faint:#7c8ba1;
+    --th-bg:#16273d; --th-bg-fija:#1b2a41; --th-bg-acento:#1c3a5a;
+    --th-ink-acento:#7dd3fc;
+    --info-ink:#93c5fd; --red-dark:#f05252;
+    --sombra:0 0 0 1px rgba(148,163,184,.10);
+    --sombra-alta:0 10px 30px rgba(0,0,0,.45);
+    color-scheme:dark;
+  }
+}
+
+:root[data-theme="dark"]{
+  --ink:#e6edf6; --ink-fuerte:#f1f5f9; --soft:#a7b4c4; --soft-fuerte:#c3cddb;
+  --faint:#7c8ba1;
+  --bg:#0b1220; --bg-sutil:#131c2c; --surface:#16202f;
+  --bdr:#2a3648; --bdr-fuerte:#3b4a61;
+  --accent:#0ea5e9; --adark:#38bdf8; --asoft:#0c3a52; --accent-ink:#7dd3fc;
+  --on-accent:#ffffff;
+  --green:#10b981; --green-dark:#34d399; --gsoft:#0d3f31;
+  --ok-bg:#0f3d2a; --ok-ink:#6ee7b7; --ok-ink-fuerte:#86efac;
+  --red:#f05252; --rsoft:#4a1717; --err-bg:#2a1414; --err-bdr:#7f1d1d;
+  --err-ink:#fca5a5; --err-ink-fuerte:#fecaca;
+  --warn:#f59e0b; --warn-bg:#3d2f10; --warn-bg-suave:#2b210c;
+  --warn-bdr:#78350f; --warn-ink:#fcd34d; --warn-ink-fuerte:#fbbf24;
+  --info-bg:#12304d; --info-bdr:#1e4a73; --info-bg-suave:#0f2a44;
+  --info-bdr-suave:#1e4a73;
+  --violet:#a78bfa; --violet-soft:#2e2350;
+  --sombra:0 0 0 1px rgba(148,163,184,.10);
+  --sombra-alta:0 10px 30px rgba(0,0,0,.45);
+  color-scheme:dark;
+}
+
+/* Lo que el navegador pinta por su cuenta: barras de scroll, el calendario de
+   un <input type=date>, el desplegable de un <select>. Sin esto quedan blancos
+   en medio de una pantalla oscura. */
+:root[data-theme="light"]{ color-scheme:light; }
+</style>
+
+<script>
+// El tema se aplica antes de que se pinte nada. Si esto esperase a que cargue
+// la pagina, quien tiene el tema oscuro veria un fogonazo blanco en cada
+// navegacion.
+//
+// Se guarda en dos sitios a proposito: en el navegador, que responde al
+// instante y no necesita red, y en el perfil, que es lo que hace que el tema
+// siga puesto al entrar desde otra computadora.
+(function () {
+  // Si el servidor ya puso el tema del perfil, ese manda: es la eleccion
+  // guardada, y la copia del navegador puede ser vieja --el usuario cambio el
+  // tema desde otra computadora y aqui todavia esta lo de antes.
+  if (document.documentElement.getAttribute('data-theme')) return;
+  try {
+    var guardado = localStorage.getItem('wms-tema');
+    if (guardado === 'dark' || guardado === 'light') {
+      document.documentElement.setAttribute('data-theme', guardado);
+    }
+  } catch (e) { /* navegador sin almacenamiento: manda el sistema */ }
+})();
+
+// Cambia el tema, lo recuerda aqui y avisa al servidor. Si la peticion falla no
+// se deshace nada: el usuario ya ve el tema que pidio, y perder la preferencia
+// al cambiar de computadora es mejor que devolverle la pantalla al color de
+// antes sin explicacion.
+function cambiarTema() {
+  var actual = document.documentElement.getAttribute('data-theme');
+  if (!actual) {
+    var oscuroDelSistema = window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches;
+    actual = oscuroDelSistema ? 'dark' : 'light';
+  }
+  var nuevo = actual === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', nuevo);
+  try { localStorage.setItem('wms-tema', nuevo); } catch (e) {}
+  pintarBotonDelTema();
+  if (typeof htmx !== 'undefined') {
+    htmx.ajax('POST', '{% url "cambiar_tema" %}', {
+      values: {tema: nuevo, csrfmiddlewaretoken: '{{ csrf_token }}'},
+      target: '#tema-eco', swap: 'innerHTML'
+    });
+  }
+}
+
+// El boton ensena a donde se va, no donde se esta: con el tema claro puesto
+// ofrece la luna.
+function pintarBotonDelTema() {
+  var b = document.getElementById('btn-tema');
+  if (!b) return;
+  var oscuro = document.documentElement.getAttribute('data-theme') === 'dark' ||
+      (!document.documentElement.getAttribute('data-theme') &&
+       window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  b.textContent = oscuro ? '☀' : '☾';
+  b.title = oscuro ? 'Tema claro' : 'Tema oscuro';
+}
+document.addEventListener('DOMContentLoaded', pintarBotonDelTema);
+</script>

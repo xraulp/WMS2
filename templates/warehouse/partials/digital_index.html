@@ -7,17 +7,17 @@ para el indice de entrada como para las coincidencias de una busqueda parcial.
   {% for op in expedientes %}
   <button onclick="digitalOpen('{{ op.custom_id|escapejs }}')"
           style="display:flex;align-items:center;justify-content:space-between;gap:10px;
-                 width:100%;text-align:left;padding:9px 12px;background:#fff;cursor:pointer;
-                 border:1px solid #e2e8f0;border-radius:8px;font-family:inherit">
+                 width:100%;text-align:left;padding:9px 12px;background:var(--surface);cursor:pointer;
+                 border:1px solid var(--bdr);border-radius:8px;font-family:inherit">
     <span style="display:flex;flex-direction:column;gap:2px;min-width:0">
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:#0f172a">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--ink)">
         {{ op.custom_id }}
       </span>
-      <span style="font-size:11px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+      <span style="font-size:11px;color:var(--soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         {{ op.date|date:"Y-m-d" }} · {{ op.get_customer_display }}
       </span>
     </span>
-    <span style="flex-shrink:0;font-size:11px;color:#475569;background:#f1f5f9;
+    <span style="flex-shrink:0;font-size:11px;color:var(--soft-fuerte);background:var(--bg);
                  border-radius:999px;padding:3px 10px">
       {% if op.num_docs %}📎 {{ op.num_docs }}{% else %}sin archivos{% endif %}
     </span>

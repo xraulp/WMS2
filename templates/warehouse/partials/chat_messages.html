@@ -1,10 +1,11 @@
+{% load i18n %}
 {% comment %}
 Solo los mensajes. Es lo que devuelve el polling, y por eso va aparte del panel:
 si el refresco reemplazara tambien el formulario, borraria lo que el operador
 lleva escrito cada vez que se cumplen los diez segundos.
 {% endcomment %}
 {% if error %}
-<div style="background:#fee2e2;color:#991b1b;font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px">
+<div style="background:var(--rsoft);color:var(--err-ink);font-size:12px;padding:7px 10px;border-radius:6px;margin-bottom:8px">
   {{ error }}
 </div>
 {% endif %}
@@ -13,10 +14,10 @@ lleva escrito cada vez que se cumplen los diez segundos.
   {% for m in mensajes %}
   <div style="display:flex;margin-bottom:8px;{% if m.side == mi_lado %}justify-content:flex-end{% endif %}">
     <div style="max-width:78%;padding:8px 11px;border-radius:10px;
-                {% if m.side == mi_lado %}background:#0ea5e9;color:#fff;border-bottom-right-radius:3px
-                {% else %}background:#f1f5f9;color:#0f172a;border-bottom-left-radius:3px{% endif %}">
+                {% if m.side == mi_lado %}background:var(--accent);color:var(--on-accent);border-bottom-right-radius:3px
+                {% else %}background:var(--bg);color:var(--ink);border-bottom-left-radius:3px{% endif %}">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
-                  margin-bottom:3px;{% if m.side == mi_lado %}color:#e0f2fe{% else %}color:#64748b{% endif %}">
+                  margin-bottom:3px;{% if m.side == mi_lado %}color:var(--asoft){% else %}color:var(--soft){% endif %}">
         {% comment %}
         La empresa primero y la persona despues. Un mensaje firmado solo con el
         nombre de usuario no le dice nada a quien lo lee del otro lado: lo que
@@ -49,22 +50,22 @@ lleva escrito cada vez que se cumplen los diez segundos.
         <a href="{% url 'document_file' a.pk %}" target="_blank" title="{{ a.original_name }}"
            style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 9px;
                   border-radius:7px;text-decoration:none;
-                  {% if m.side == mi_lado %}background:rgba(255,255,255,.22);color:#fff
-                  {% else %}background:#e2e8f0;color:#0f172a{% endif %}">
+                  {% if m.side == mi_lado %}background:rgba(255,255,255,.22);color:var(--on-accent)
+                  {% else %}background:var(--bdr);color:var(--ink){% endif %}">
           {% if a.file_type == 'VIDEO' %}🎬{% elif a.file_type == 'DOCUMENT' %}📄{% else %}📎{% endif %}
           <span style="font-family:'IBM Plex Mono',monospace">{{ a.digital_name|default:a.original_name }}</span>
         </a>
         {% endif %}
       </div>
       {% endfor %}
-      <div style="font-size:10px;margin-top:4px;{% if m.side == mi_lado %}color:#bae6fd{% else %}color:#94a3b8{% endif %}">
+      <div style="font-size:10px;margin-top:4px;{% if m.side == mi_lado %}color:var(--info-bdr-suave){% else %}color:var(--faint){% endif %}">
         {{ m.created_at|date:"Y-m-d H:i" }}
       </div>
     </div>
   </div>
   {% endfor %}
 {% else %}
-  <div style="font-size:12px;color:#94a3b8;text-align:center;padding:14px 0">
-    Todavia no hay mensajes sobre esta operacion.
+  <div style="font-size:12px;color:var(--faint);text-align:center;padding:14px 0">
+    {% trans "No messages about this operation yet." %}
   </div>
 {% endif %}

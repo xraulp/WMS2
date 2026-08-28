@@ -1,9 +1,10 @@
+{% load i18n %}
 {% include 'warehouse/partials/platform_nav.html' with activa='tenants' %}
 
 {% if msg %}<div class="msg-success" style="margin-bottom:12px">✓ {{ msg }}</div>{% endif %}
 
 {% if not is_platform_admin %}
-<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#1e40af">
+<div style="background:var(--info-bg-suave);border:1px solid var(--info-bdr);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--info-ink)">
   Support access: you can review the companies on the platform, but creating one
   or changing its status is reserved to a platform administrator.
 </div>
@@ -11,8 +12,8 @@
 
 {% if is_platform_admin %}
 <!-- Create tenant form -->
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:10px">Create New Tenant</div>
+<div style="background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:16px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:10px">Create New Tenant</div>
   {% comment %}
     hx-encoding es lo que hace que HTMX mande el formulario como multipart. Sin
     esto el archivo del logo no llega: los demas campos si, y el alta parece
@@ -23,45 +24,45 @@
         style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
     {% csrf_token %}<input type="hidden" name="action" value="create">
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Company Name</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Company Name</label>
       <input type="text" name="name" required placeholder="Warehouse 123 Llc"
-             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:200px">
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:200px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Subdomain</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Subdomain</label>
       <input type="text" name="subdomain" placeholder="auto from name"
-             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:150px">
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Plan</label>
-      <select name="plan" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Plan</label>
+      <select name="plan" style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px">
         <option value="starter">Starter</option>
         <option value="pro">Pro</option>
         <option value="enterprise">Enterprise</option>
       </select>
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Billing Email</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Billing Email</label>
       <input type="email" name="billing_email" placeholder="billing@cliente.com"
-             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:180px">
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:180px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b"
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
              title="Sale en los reportes y etiquetas que esta empresa manda a sus clientes">Logo (optional)</label>
       <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif"
-             style="height:28px;padding:3px;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;width:200px">
+             style="height:28px;padding:3px;border:1px solid var(--bdr);border-radius:6px;font-size:11px;width:200px">
     </div>
-    <div style="width:100%;height:1px;background:#e2e8f0;margin:4px 0"></div>
-    <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:#94a3b8;width:100%">First Admin User (optional — leave blank to add later from the tenant's own Users tab)</div>
+    <div style="width:100%;height:1px;background:var(--bdr);margin:4px 0"></div>
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--faint);width:100%">First Admin User (optional — leave blank to add later from the tenant's own Users tab)</div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Admin Username</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Admin Username</label>
       <input type="text" name="admin_username" placeholder="admin_w123"
-             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:150px">
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Admin Password</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Admin Password</label>
       <input type="text" name="admin_password" placeholder="Visible for reference"
-             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:150px">
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
     </div>
     <button type="submit" class="btn btn-p" style="height:28px">+ Create Tenant</button>
   </form>
@@ -69,7 +70,7 @@
 {% endif %}
 
 <!-- Tenants table -->
-<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px">
+<div style="overflow-x:auto;border:1px solid var(--bdr);border-radius:10px">
 <table style="min-width:800px">
   <thead>
     <tr>
@@ -97,9 +98,9 @@
   </thead>
   <tbody>
     {% for t in tenants %}
-    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+    <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}">
       <td><strong>{{ t.name }}</strong></td>
-      <td class="mono" style="font-size:11px;color:#64748b">{{ t.subdomain }}</td>
+      <td class="mono" style="font-size:11px;color:var(--soft)">{{ t.subdomain }}</td>
       <td><span class="badge b-sent">{{ t.plan }}</span></td>
       <td style="font-size:12px">{{ t.billing_email|default:"—" }}</td>
       {% comment %}
@@ -108,14 +109,14 @@
         cargaria. Lo que interesa aqui es si lo tiene o no.
       {% endcomment %}
       <td style="font-size:11px;white-space:nowrap">
-        {% if t.logo %}<span style="color:#166534">✓ yes</span>
-        {% else %}<span style="color:#94a3b8">—</span>{% endif %}
+        {% if t.logo %}<span style="color:var(--ok-ink-fuerte)">✓ yes</span>
+        {% else %}<span style="color:var(--faint)">—</span>{% endif %}
       </td>
       <td style="text-align:center">{{ t.user_count }}</td>
       <td style="text-align:center">{{ t.customer_count }}</td>
       <td style="text-align:center">
         {% if t.customer_user_count %}{{ t.customer_user_count }}
-        {% else %}<span style="color:#94a3b8" title="Ningun cliente de esta empresa tiene acceso">—</span>{% endif %}
+        {% else %}<span style="color:var(--faint)" title="Ningun cliente de esta empresa tiene acceso">—</span>{% endif %}
       </td>
       <td style="text-align:center">{{ t.op_count }}</td>
       <td>
@@ -123,13 +124,13 @@
           {% if t.is_active %}Active{% else %}Inactive{% endif %}
         </span>
       </td>
-      <td style="color:#94a3b8;font-size:11px">{{ t.created_at|date:"Y-m-d" }}</td>
+      <td style="color:var(--faint);font-size:11px">{{ t.created_at|date:"Y-m-d" }}</td>
       {% if is_platform_admin %}
       <td>
         <button class="btn btn-g btn-sm" onclick="abrirEdicionDeEmpresa(this)"
                 data-t-id="{{ t.pk }}" data-t-name="{{ t.name }}"
                 data-t-sub="{{ t.subdomain }}" data-t-plan="{{ t.plan }}"
-                data-t-mail="{{ t.billing_email|default:'' }}">Edit</button>
+                data-t-mail="{{ t.billing_email|default:'' }}">{% trans "Edit" %}</button>
         <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML"
               hx-encoding="multipart/form-data" style="display:inline">
           {% csrf_token %}
@@ -164,7 +165,7 @@
       {% endif %}
     </tr>
     {% empty %}
-    <tr><td colspan="12" style="text-align:center;color:#94a3b8;padding:20px">No companies yet.</td></tr>
+    <tr><td colspan="12" style="text-align:center;color:var(--faint);padding:20px">No companies yet.</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -183,11 +184,11 @@ Uno por fila repetiria los mismos id tantas veces como empresas haya.
      style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:1000;
             align-items:center;justify-content:center"
      onclick="if(event.target===this)cerrarEdicionDeEmpresa()">
-  <div style="background:#fff;border-radius:12px;padding:22px;max-width:440px;width:92%;
+  <div style="background:var(--surface);border-radius:12px;padding:22px;max-width:440px;width:92%;
               box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;
-                margin-bottom:14px;color:#0f172a">
-      Edit <span id="tenant-edit-title"></span>
+                margin-bottom:14px;color:var(--ink)">
+      {% trans "Edit" %} <span id="tenant-edit-title"></span>
     </div>
     <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content"
           hx-swap="innerHTML" hx-on::after-request="cerrarEdicionDeEmpresa()">
@@ -196,26 +197,26 @@ Uno por fila repetiria los mismos id tantas veces como empresas haya.
       <input type="hidden" name="tenant_id" id="tenant-edit-id">
 
       <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
-                    letter-spacing:.05em;color:#64748b;margin-bottom:3px">Name</label>
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">Name</label>
       <input type="text" name="name" id="tenant-edit-name" required maxlength="200"
-             style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;
+             style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
                     font-size:13px;margin-bottom:12px">
 
       <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
-                    letter-spacing:.05em;color:#64748b;margin-bottom:3px">Subdomain</label>
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">Subdomain</label>
       <input type="text" name="subdomain" id="tenant-edit-sub" required maxlength="50"
-             style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;
+             style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
                     font-size:13px;font-family:'IBM Plex Mono',monospace">
-      <div style="font-size:11px;color:#b45309;background:#fffbeb;padding:6px 9px;
+      <div style="font-size:11px;color:var(--warn-ink-fuerte);background:var(--warn-bg-suave);padding:6px 9px;
                   border-radius:6px;margin:5px 0 12px">
         Es la direccion por la que entra su gente. Si la cambias, quien use la
         anterior deja de llegar a esta empresa.
       </div>
 
       <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
-                    letter-spacing:.05em;color:#64748b;margin-bottom:3px">Plan</label>
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">Plan</label>
       <select name="plan" id="tenant-edit-plan"
-              style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;
+              style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
                      font-size:13px;margin-bottom:12px">
         <option value="starter">Starter</option>
         <option value="pro">Pro</option>
@@ -223,9 +224,9 @@ Uno por fila repetiria los mismos id tantas veces como empresas haya.
       </select>
 
       <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
-                    letter-spacing:.05em;color:#64748b;margin-bottom:3px">Billing email</label>
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">Billing email</label>
       <input type="email" name="billing_email" id="tenant-edit-mail"
-             style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;
+             style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
                     font-size:13px;margin-bottom:16px">
 
       <div style="display:flex;gap:10px">

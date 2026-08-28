@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Tabla del catálogo, compartida por las dos pantallas en que quedó partido:
 la operativa (carriers, shippers, tipos de bulto) y la de clientes.
@@ -22,40 +23,40 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
         hx-encoding="multipart/form-data" style="display:flex;gap:6px;align-items:center">
     {% csrf_token %}
     <input type="hidden" name="scope" value="{{ scope }}">
-    <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Import Excel:</label>
+    <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Import Excel:" %}</label>
     <input type="file" name="import_file" accept=".xlsx,.xls" required
-           style="font-size:11px;height:26px;border:1px solid #e2e8f0;border-radius:6px;padding:2px 6px;background:#fff">
-    <button type="submit" class="btn btn-g btn-sm" style="color:#10b981;border-color:#10b981">⬆ Import</button>
+           style="font-size:11px;height:26px;border:1px solid var(--bdr);border-radius:6px;padding:2px 6px;background:var(--surface)">
+    <button type="submit" class="btn btn-g btn-sm" style="color:var(--green);border-color:var(--green)">⬆ Import</button>
   </form>
-  <a href="{% url 'catalog_layout' %}" class="btn btn-g btn-sm" style="color:#0ea5e9;border-color:#0ea5e9">⬇ Download Layout</a>
+  <a href="{% url 'catalog_layout' %}" class="btn btn-g btn-sm" style="color:var(--accent);border-color:var(--accent)">⬇ Download Layout</a>
 </div>
 {% endif %}
 
 {% if catalog_entries %}
-<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px">
+<div style="overflow-x:auto;border:1px solid var(--bdr);border-radius:8px">
 <table style="min-width:800px">
   <thead>
     <tr>
-      <th>Category</th>
-      <th>Name / Value</th>
+      <th>{% trans "Category" %}</th>
+      <th>{% trans "Name / Value" %}</th>
       {% comment %}
       Cuantas personas tiene dadas de alta ese cliente. Un cliente con cero
       usuarios no puede entrar al sistema, y hasta ahora eso solo se descubria
       cuando llamaba: la cuenta estaba en la pestana Users y habia que leerla
       entera para sacarla.
       {% endcomment %}
-      {% if scope == 'customers' %}<th title="Usuarios con acceso">Usuarios</th>{% endif %}
-      <th>Abreviatura</th>
-      <th>Email</th><th>Phone</th>
-      <th style="color:#7dd3fc">WhatsApp</th>
-      <th>Notes</th>
-      {% if can_edit %}<th>Actions</th>{% endif %}
+      {% if scope == 'customers' %}<th title="Usuarios con acceso">{% trans "Users" %}</th>{% endif %}
+      <th>{% trans "Abbreviation" %}</th>
+      <th>{% trans "Email" %}</th><th>{% trans "Phone" %}</th>
+      <th style="color:var(--th-ink-acento)">WhatsApp</th>
+      <th>{% trans "Notes" %}</th>
+      {% if can_edit %}<th>{% trans "Actions" %}</th>{% endif %}
     </tr>
   </thead>
   <tbody>
     {% for entry in catalog_entries %}
-    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
-      <td><span class="badge" style="background:#f1f5f9;color:#475569">{{ entry.get_category_display }}</span></td>
+    <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}">
+      <td><span class="badge" style="background:var(--bg);color:var(--soft-fuerte)">{{ entry.get_category_display }}</span></td>
       <td><strong>{{ entry.name }}</strong></td>
       {% if scope == 'customers' %}
       {% comment %}
@@ -67,15 +68,15 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
         {% if puede_dar_acceso %}
         <button class="btn btn-g btn-sm" onclick="abrirAccesoDeCliente({{ entry.pk }}, '{{ entry.name|escapejs }}')"
                 title="Ver quien entra por parte de este cliente, y dar acceso"
-                style="{% if not entry.usuarios %}border-color:#f59e0b;color:#92400e;background:#fffbeb{% endif %}">
+                style="{% if not entry.usuarios %}border-color:var(--warn);color:var(--warn-ink);background:var(--warn-bg-suave){% endif %}">
           {% if entry.usuarios %}👤 {{ entry.usuarios }}{% else %}sin acceso{% endif %}
         </button>
         {% else %}
           {% if entry.usuarios %}
-            <span class="badge" style="background:#e0f2fe;color:#0369a1">{{ entry.usuarios }}</span>
+            <span class="badge" style="background:var(--asoft);color:var(--accent-ink)">{{ entry.usuarios }}</span>
           {% else %}
-            <span class="badge" style="background:#fef3c7;color:#92400e"
-                  title="Nadie de este cliente puede entrar al sistema">sin acceso</span>
+            <span class="badge" style="background:var(--warn-bg);color:var(--warn-ink)"
+                  title="Nadie de este cliente puede entrar al sistema">{% trans "no access" %}</span>
           {% endif %}
         {% endif %}
       </td>
@@ -83,17 +84,17 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
       <td>{{ entry.abbreviation|default:"—" }}</td>
       <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis" title="{{ entry.contact_email }}">{{ entry.contact_email|default:"—" }}</td>
       <td>{{ entry.phone|default:"—" }}</td>
-      <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#0ea5e9">{{ entry.whatsapp|default:"—" }}</td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent)">{{ entry.whatsapp|default:"—" }}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ entry.notes }}">{{ entry.notes|default:"—" }}</td>
       {% if can_edit %}
       <td style="white-space:nowrap">
-        <button class="btn btn-g btn-sm" onclick="openCatalogEdit({{ entry.pk }})">Edit</button>
+        <button class="btn btn-g btn-sm" onclick="openCatalogEdit({{ entry.pk }})">{% trans "Edit" %}</button>
         <button class="btn btn-d btn-sm"
                 hx-post="{% url 'catalog_delete' entry.pk %}"
                 hx-target="#{{ table_id }}"
                 hx-swap="innerHTML"
                 hx-confirm="Archive '{{ entry.name }}'? Historical records will NOT be affected."
-                hx-include="[name=csrfmiddlewaretoken]">Archive</button>
+                hx-include="[name=csrfmiddlewaretoken]">{% trans "Archive" %}</button>
       </td>
       {% endif %}
     </tr>
@@ -102,12 +103,12 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
 </table>
 </div>
 {% else %}
-<div class="empty-state" style="text-align:center;padding:30px;color:#94a3b8">
+<div class="empty-state" style="text-align:center;padding:30px;color:var(--faint)">
   {% if scope == 'customers' %}
-  <h3 style="margin-bottom:4px;font-size:14px;color:#64748b">No customers yet</h3>
+  <h3 style="margin-bottom:4px;font-size:14px;color:var(--soft)">{% trans "No customers yet" %}</h3>
   <p style="font-size:12px">{% if can_edit %}Add your customers using the form above.{% else %}Only an administrator can add customers.{% endif %}</p>
   {% else %}
-  <h3 style="margin-bottom:4px;font-size:14px;color:#64748b">Catalog is empty</h3>
+  <h3 style="margin-bottom:4px;font-size:14px;color:var(--soft)">{% trans "Catalog is empty" %}</h3>
   <p style="font-size:12px">{% if can_edit %}Add shippers, carriers and bundle types using the form above.{% else %}Nothing to show yet.{% endif %}</p>
   {% endif %}
 </div>

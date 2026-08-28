@@ -17,5 +17,11 @@ echo "-----> Loading initial data (skipped - solo se usa manualmente para carga 
 echo "-----> Creating superuser..."
 python create_superuser.py
 
+echo "-----> Compiling translations..."
+# Compilador propio: `compilemessages` llama a msgfmt, un binario de GNU
+# gettext que no tiene por que estar en el contenedor. Los .mo estan ademas
+# versionados, asi que un fallo aqui no deja la interfaz sin traducir.
+python scripts/compilar_traducciones.py
+
 echo "-----> Collecting static files..."
 python manage.py collectstatic --noinput

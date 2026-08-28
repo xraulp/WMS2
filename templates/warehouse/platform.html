@@ -1,37 +1,38 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Platform — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <style>
     *{box-sizing:border-box}
-    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#0f172a}
-    .tb{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#0f172a;color:#fff}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    .tb{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--ink);color:var(--on-accent)}
     .tb-brand{display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600}
-    .tb-dot{width:9px;height:9px;border-radius:50%;background:#38bdf8}
-    .tb-right{display:flex;align-items:center;gap:10px;font-size:12px;color:#cbd5e1}
-    .btn{border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;color:#0f172a}
+    .tb-dot{width:9px;height:9px;border-radius:50%;background:var(--adark)}
+    .tb-right{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--bdr-fuerte)}
+    .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:6px;padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;color:var(--ink)}
     .btn-sm{padding:3px 9px;font-size:11px}
-    .btn-p{background:#0ea5e9;border-color:#0ea5e9;color:#fff}
-    .btn-g{background:#fff}
-    .btn-d{background:#fff;border-color:#ef4444;color:#ef4444}
-    .btn-lo{background:transparent;border-color:#475569;color:#e2e8f0;text-decoration:none;padding:5px 12px;border-radius:6px;border-width:1px;border-style:solid;font-size:12px}
+    .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+    .btn-g{background:var(--surface)}
+    .btn-d{background:var(--surface);border-color:var(--red);color:var(--red)}
+    .btn-lo{background:transparent;border-color:var(--soft-fuerte);color:var(--bdr);text-decoration:none;padding:5px 12px;border-radius:6px;border-width:1px;border-style:solid;font-size:12px}
     .wrap{max-width:1200px;margin:20px auto;padding:0 16px}
-    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px}
+    .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;padding:18px}
     .ct{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin-bottom:12px}
     table{width:100%;border-collapse:collapse}
-    th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;padding:8px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;white-space:nowrap}
-    td{padding:8px 10px;font-size:13px;border-bottom:1px solid #f1f5f9}
+    th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft);padding:8px 10px;border-bottom:1px solid var(--bdr);background:var(--bg-sutil);white-space:nowrap}
+    td{padding:8px 10px;font-size:13px;border-bottom:1px solid var(--bg)}
     .mono{font-family:'IBM Plex Mono',monospace}
     .badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600}
-    .b-entry{background:#dcfce7;color:#166534}
-    .b-exit{background:#fee2e2;color:#991b1b}
-    .b-sent{background:#e0f2fe;color:#075985}
-    .msg-success{background:#dcfce7;color:#166534;padding:8px 12px;border-radius:8px;font-size:13px}
-    .msg-error{background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:8px;font-size:13px}
+    .b-entry{background:var(--ok-bg);color:var(--ok-ink-fuerte)}
+    .b-exit{background:var(--rsoft);color:var(--err-ink)}
+    .b-sent{background:var(--asoft);color:var(--accent-ink)}
+    .msg-success{background:var(--ok-bg);color:var(--ok-ink-fuerte);padding:8px 12px;border-radius:8px;font-size:13px}
+    .msg-error{background:var(--rsoft);color:var(--err-ink);padding:8px 12px;border-radius:8px;font-size:13px}
   </style>
 </head>
 <body>
@@ -42,8 +43,9 @@
     <span>WMS — PLATFORM</span>
   </div>
   <div class="tb-right">
-    <strong style="color:#fff">{{ request.user.username }}</strong>
-    <span style="font-size:11px;color:#94a3b8">[PLATFORM {{ platform_role|upper }}]</span>
+    <strong style="color:var(--on-accent)">{{ request.user.username }}</strong>
+    <span style="font-size:11px;color:var(--faint)">[PLATFORM {{ platform_role|upper }}]</span>
+    {% include "warehouse/partials/preferencias.html" %}
     {% if tiene_empresa %}
     <a href="{% url 'dashboard' %}" class="btn-lo">← My company</a>
     {% endif %}
@@ -54,7 +56,7 @@
 <div class="wrap">
   <div class="card">
     <div class="ct">SaaS administration</div>
-    <p style="font-size:12px;color:#64748b;margin:-4px 0 14px">
+    <p style="font-size:12px;color:var(--soft);margin:-4px 0 14px">
       This level administers the product itself. It is not tied to any company:
       from here you cannot open a company's operations, documents or catalog.
     </p>
@@ -62,7 +64,7 @@
          hx-get="{% url 'platform_tenant_list' %}"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <p style="color:#94a3b8;font-size:12px">Loading…</p>
+      <p style="color:var(--faint);font-size:12px">Loading…</p>
     </div>
   </div>
 </div>

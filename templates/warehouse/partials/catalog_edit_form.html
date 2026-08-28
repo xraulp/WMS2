@@ -1,3 +1,4 @@
+{% load i18n %}
 <form hx-post="{% url 'catalog_edit' entry.pk %}"
       hx-target="#catalog-table"
       hx-swap="innerHTML"
@@ -11,66 +12,66 @@
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
     <!-- Category: read-only -->
     <div>
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Category</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Category" %}</label>
       <input type="text" value="{{ entry.get_category_display }}" readonly
-             style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;background:#f1f5f9;font-size:12px;color:#64748b">
+             style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--bg);font-size:12px;color:var(--soft)">
     </div>
     <!-- Name: read-only -->
     <div>
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Name</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Name" %}</label>
       <input type="text" value="{{ entry.name }}" readonly
-             style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;background:#f1f5f9;font-size:12px;color:#64748b">
+             style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--bg);font-size:12px;color:var(--soft)">
     </div>
     <div>
-      <label>Email(s)</label>
-      <input type="text" name="contact_email" value="{{ entry.contact_email|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px">
+      <label>{% trans "Email(s)" %}</label>
+      <input type="text" name="contact_email" value="{{ entry.contact_email|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px">
     </div>
     <div>
-      <label>Phone</label>
-      <input type="text" name="phone" value="{{ entry.phone|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px">
+      <label>{% trans "Phone" %}</label>
+      <input type="text" name="phone" value="{{ entry.phone|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px">
     </div>
     <div>
       <label>WhatsApp</label>
-      <input type="text" name="whatsapp" value="{{ entry.whatsapp|default:'' }}" placeholder="+521XXXXXXXXXX" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px">
+      <input type="text" name="whatsapp" value="{{ entry.whatsapp|default:'' }}" placeholder="+521XXXXXXXXXX" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px">
     </div>
     <div>
-      <label>Address</label>
-      <input type="text" name="address" value="{{ entry.address|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px">
+      <label>{% trans "Address" %}</label>
+      <input type="text" name="address" value="{{ entry.address|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px">
     </div>
     <div style="grid-column:span 2">
-      <label>Notes</label>
-      <textarea name="notes" rows="2" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px">{{ entry.notes|default:'' }}</textarea>
+      <label>{% trans "Notes" %}</label>
+      <textarea name="notes" rows="2" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px">{{ entry.notes|default:'' }}</textarea>
     </div>
     <div>
-      <label>Abreviatura</label>
-      <input type="text" name="abbreviation" value="{{ entry.abbreviation|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px" placeholder="Ej: LBO, ACME">
+      <label>{% trans "Abbreviation" %}</label>
+      <input type="text" name="abbreviation" value="{{ entry.abbreviation|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px" placeholder="{% trans "e.g. LBO, ACME" %}">
     </div>
 
     {% if entry.category == 'CUSTOMER' %}
-    <div style="grid-column:span 2;margin-top:6px;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;background:#f8fafc">
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b;margin-bottom:8px">
-        Notificaciones al cliente
+    <div style="grid-column:span 2;margin-top:6px;border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;background:var(--bg-sutil)">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft);margin-bottom:8px">
+        {% trans "Customer notifications" %}
       </div>
       <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;margin-bottom:8px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" name="notify_email" {% if entry.notify_email %}checked{% endif %}> Email
+          <input type="checkbox" name="notify_email" {% if entry.notify_email %}checked{% endif %}> {% trans "Email" %}
         </label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
           <input type="checkbox" name="notify_whatsapp" {% if entry.notify_whatsapp %}checked{% endif %}> WhatsApp
         </label>
       </div>
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b;margin-bottom:6px">
-        ¿Cuándo avisarle?
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft);margin-bottom:6px">
+        {% trans "When to notify" %}
       </div>
       <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" name="notify_on_create" {% if entry.notify_on_create %}checked{% endif %}> Al registrar la operación
+          <input type="checkbox" name="notify_on_create" {% if entry.notify_on_create %}checked{% endif %}> {% trans "When the operation is registered" %}
         </label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" name="notify_on_release" {% if entry.notify_on_release %}checked{% endif %}> Al liberar la mercancía
+          <input type="checkbox" name="notify_on_release" {% if entry.notify_on_release %}checked{% endif %}> {% trans "When the goods are released" %}
         </label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" name="notify_on_documents" {% if entry.notify_on_documents %}checked{% endif %}> Al agregar documentos
+          <input type="checkbox" name="notify_on_documents" {% if entry.notify_on_documents %}checked{% endif %}> {% trans "When documents are added" %}
         </label>
       </div>
 
@@ -79,19 +80,19 @@
       pantalla de configuracion aparte, porque es una condicion suya: una semana
       para uno es lo normal y para otro ya es una factura de almacenaje.
       {% endcomment %}
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b;margin:12px 0 6px">
-        Alerta de permanencia
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft);margin:12px 0 6px">
+        {% trans "Time-in-warehouse alert" %}
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px">
         <label style="display:flex;align-items:center;gap:6px">
-          Avisar cuando la mercancía lleve
+          {% trans "Alert when the goods have been here" %}
           <input type="number" name="alert_days" min="1" max="3650"
                  value="{{ entry.alert_days|default_if_none:'' }}"
                  placeholder="{{ entry.tenant.alert_days_default|default:7 }}"
-                 style="width:70px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
-          días en bodega
+                 style="width:70px;padding:4px 6px;border:1px solid var(--bdr);border-radius:6px;font-size:12px">
+          {% trans "days in the warehouse" %}
         </label>
-        <span style="font-size:10px;color:#94a3b8">
+        <span style="font-size:10px;color:var(--faint)">
           En blanco = usar el plazo general de la empresa
           ({{ entry.tenant.alert_days_default|default:7 }} días).
         </span>
@@ -100,7 +101,7 @@
     {% endif %}
   </div>
   <div style="display:flex;gap:8px;margin-top:12px">
-    <button type="submit" style="flex:1;padding:8px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;cursor:pointer">Save Changes</button>
+    <button type="submit" style="flex:1;padding:8px;background:var(--accent);color:var(--on-accent);border:none;border-radius:6px;cursor:pointer">{% trans "Save Changes" %}</button>
   <button type="button"
         onclick="
           var mm = document.getElementById('mobile-modal');
@@ -108,8 +109,8 @@
           var mp = document.getElementById('modal');
           if (mp) mp.classList.remove('on');
         "
-        style="flex:1;padding:8px;background:#cbd5e1;color:#1e293b;border:1px solid #94a3b8;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;pointer-events:auto;opacity:1;">
-  Cancel
+        style="flex:1;padding:8px;background:var(--bdr-fuerte);color:var(--ink-fuerte);border:1px solid var(--faint);border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;pointer-events:auto;opacity:1;">
+  {% trans "Cancel" %}
 </button>
   </div>
 </form>

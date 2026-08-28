@@ -1,4 +1,5 @@
 {% load wms_filters %}
+{% load i18n %}
 {% if msg %}
   {% if msg_is_error %}
     <div class="msg-error" style="margin-bottom:12px">✗ {{ msg }}</div>
@@ -8,8 +9,8 @@
 {% endif %}
 
 <!-- Create user form -->
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:2px">Create New User &mdash; personal de la empresa</div>
+<div style="background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:16px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:2px">Create New User &mdash; personal de la empresa</div>
   {% comment %}
   Aqui se da de alta a la gente de la casa. El rol 'customer' se saco del
   desplegable a proposito: ofrecerlo junto a los demas fue lo que permitio crear
@@ -18,23 +19,23 @@
   dos formularios de abajo, donde el cliente es obligatorio y el rol no se
   elige.
   {% endcomment %}
-  <div style="font-size:11px;color:#64748b;margin-bottom:10px">
+  <div style="font-size:11px;color:var(--soft);margin-bottom:10px">
     Para dar acceso a alguien de un cliente, usa los formularios azules de abajo.
   </div>
   <form hx-post="{% url 'user_management' %}" hx-target="#users-content" hx-swap="innerHTML"
         style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
     {% csrf_token %}<input type="hidden" name="action" value="create">
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Username</label>
-      <input type="text" name="username" required style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:130px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Username</label>
+      <input type="text" name="username" required style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:130px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Password</label>
-      <input type="text" name="password" required style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:130px" placeholder="Write it down">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Password</label>
+      <input type="text" name="password" required style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:130px" placeholder="Write it down">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Role</label>
-      <select name="role" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Role</label>
+      <select name="role" style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px">
         {% if profile|can_assign_role:'superadmin' %}<option value="superadmin">Super Admin</option>{% endif %}
         {% if profile|can_assign_role:'admin' %}<option value="admin">Admin</option>{% endif %}
         <option value="manager">Manager</option>
@@ -42,10 +43,10 @@
       </select>
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Delete Password</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Delete Password</label>
       <input type="password" name="delete_password" placeholder="Para poder borrar"
              autocomplete="new-password"
-             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:130px">
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:130px">
     </div>
     <button type="submit" class="btn btn-p" style="height:28px">+ Create User</button>
   </form>
@@ -58,16 +59,16 @@ el cliente y su acceso son la misma decision, y separarlos era lo que producia
 las dos formas de quedarse a medias -- un usuario sin cliente, que no ve nada, y
 un cliente sin nadie que pueda entrar.
 {% endcomment %}
-<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:12px;margin-bottom:16px;
-            font-size:12px;color:#0c4a6e">
+<div style="background:var(--info-bg-suave);border:1px solid var(--info-bdr-suave);border-radius:10px;padding:12px;margin-bottom:16px;
+            font-size:12px;color:var(--accent-ink)">
   <strong>¿Das de alta a alguien de un cliente?</strong>
-  Se hace desde la pestana <strong>Customers</strong>: en la columna de usuarios de
+  Se hace desde la pestana <strong>{% trans "Customers" %}</strong>: en la columna de usuarios de
   cada cliente esta el boton que reparte su acceso. Los clientes que todavia no
   tienen a nadie salen marcados alli.
 </div>
 
 <!-- Users table with horizontal scroll -->
-<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:20px">
+<div style="overflow-x:auto;border:1px solid var(--bdr);border-radius:10px;margin-bottom:20px">
 <table style="min-width:900px">
   <thead>
     <tr>
@@ -77,7 +78,7 @@ un cliente sin nadie que pueda entrar.
       <th>Customer Link</th>
       <th>Delete Password</th>
       <th>Last Login</th>
-      <th style="min-width:320px">Edit</th>
+      <th style="min-width:320px">{% trans "Edit" %}</th>
       <th>Remove</th>
     </tr>
   </thead>
@@ -91,18 +92,18 @@ un cliente sin nadie que pueda entrar.
     {% endcomment %}
     {% ifchanged p.customer_id %}
     <tr>
-      <td colspan="8" style="background:#f1f5f9;padding:5px 9px;font-size:10px;font-weight:700;
-                             text-transform:uppercase;letter-spacing:.07em;color:#475569;
-                             border-top:2px solid #cbd5e1">
+      <td colspan="8" style="background:var(--bg);padding:5px 9px;font-size:10px;font-weight:700;
+                             text-transform:uppercase;letter-spacing:.07em;color:var(--soft-fuerte);
+                             border-top:2px solid var(--bdr-fuerte)">
         {% if p.customer %}👤 {{ p.customer.name }}{% else %}🏢 De la empresa{% endif %}
       </td>
     </tr>
     {% endifchanged %}
-    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+    <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}">
       <!-- Username (not editable) -->
       <td>
         <strong>{{ u.username }}</strong>
-        {% if u.is_superuser %}<span class="badge" style="background:#fef3c7;color:#92400e;margin-left:4px">Super</span>{% endif %}
+        {% if u.is_superuser %}<span class="badge" style="background:var(--warn-bg);color:var(--warn-ink);margin-left:4px">Super</span>{% endif %}
       </td>
 
       <!-- Password: se asigna una nueva, nunca se muestra la que hay. Esta
@@ -116,7 +117,7 @@ un cliente sin nadie que pueda entrar.
           <input type="hidden" name="user_id" value="{{ u.pk }}">
           <input type="text" name="new_password" value=""
                  placeholder="New pwd" autocomplete="off"
-                 style="height:22px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;width:90px">
+                 style="height:22px;padding:2px 6px;border:1px solid var(--bdr);border-radius:4px;font-size:11px;width:90px">
           <button type="submit" class="btn btn-g btn-sm">Set</button>
         </form>
       </td>
@@ -148,20 +149,20 @@ un cliente sin nadie que pueda entrar.
           <input type="hidden" name="user_id" value="{{ u.pk }}">
           <input type="password" name="delete_password" value="" autocomplete="new-password"
                  placeholder="{% if p.delete_password %}cambiar{% else %}asignar{% endif %}"
-                 style="height:22px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;width:80px">
+                 style="height:22px;padding:2px 6px;border:1px solid var(--bdr);border-radius:4px;font-size:11px;width:80px">
           <button type="submit" class="btn btn-g btn-sm">Set</button>
         </form>
         <div style="margin-top:3px">
           {% if p.delete_password %}
-          <span style="color:#059669">✓ configurada</span>
+          <span style="color:var(--green-dark)">✓ configurada</span>
           {% else %}
-          <span style="color:#ef4444">sin configurar — no puede borrar</span>
+          <span style="color:var(--red)">sin configurar — no puede borrar</span>
           {% endif %}
         </div>
       </td>
 
       <!-- Last login -->
-      <td style="color:#94a3b8;font-size:11px">{{ u.last_login|date:"Y-m-d"|default:"Never" }}</td>
+      <td style="color:var(--faint);font-size:11px">{{ u.last_login|date:"Y-m-d"|default:"Never" }}</td>
 
       <!-- Edit: role + customer (username y contrasenas van aparte) -->
       <td style="min-width:320px">
@@ -172,8 +173,8 @@ un cliente sin nadie que pueda entrar.
           <input type="hidden" name="user_id" value="{{ u.pk }}">
 
           <div style="display:flex;flex-direction:column;gap:2px">
-            <label style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Role</label>
-            <select name="role" style="height:24px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px">
+            <label style="font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em">Role</label>
+            <select name="role" style="height:24px;padding:2px 6px;border:1px solid var(--bdr);border-radius:4px;font-size:11px">
               {% if profile|can_assign_role:'superadmin' or p.role == 'superadmin' %}<option value="superadmin" {% if p and p.role == 'superadmin' %}selected{% endif %}>SuperAdmin</option>{% endif %}
               {% if profile|can_assign_role:'admin' or p.role == 'admin' %}<option value="admin" {% if p and p.role == 'admin' %}selected{% endif %}>Admin</option>{% endif %}
               <option value="manager"    {% if not p or p.role == 'manager' %}selected{% endif %}>Manager</option>
@@ -184,19 +185,19 @@ un cliente sin nadie que pueda entrar.
               convertiria en personal de la empresa sin querer. Lo que no se
               ofrece es convertir en cliente a quien no lo es.
               {% endcomment %}
-              {% if p and p.role == 'customer' %}<option value="customer" selected>Customer</option>{% endif %}
+              {% if p and p.role == 'customer' %}<option value="customer" selected>{% trans "Customer" %}</option>{% endif %}
             </select>
           </div>
 
           <div style="display:flex;flex-direction:column;gap:2px;position:relative">
-            <label style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Customer</label>
+            <label style="font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em">{% trans "Customer" %}</label>
             <input type="text" id="edit-cust-input-{{ u.pk }}" autocomplete="off"
                    value="{{ p.customer.name|default:'' }}" placeholder="Customer..."
-                   style="height:24px;padding:2px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;width:120px"
+                   style="height:24px;padding:2px 6px;border:1px solid var(--bdr);border-radius:4px;font-size:11px;width:120px"
                    oninput="userCustFilter('edit-{{ u.pk }}')" onfocus="userCustOpen('edit-{{ u.pk }}')"
                    onblur="setTimeout(()=>{const d=document.getElementById('edit-cust-drop-{{ u.pk }}');if(d)d.style.display='none'},200)">
             <input type="hidden" name="customer_id" id="edit-cust-id-{{ u.pk }}" value="{{ p.customer_id|default:'' }}">
-            <div id="edit-cust-drop-{{ u.pk }}" style="display:none;position:absolute;top:100%;left:0;width:200px;background:#fff;border:1px solid #0ea5e9;border-top:none;border-radius:0 0 6px 6px;z-index:999;max-height:130px;overflow-y:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)"></div>
+            <div id="edit-cust-drop-{{ u.pk }}" style="display:none;position:absolute;top:100%;left:0;width:200px;background:var(--surface);border:1px solid var(--accent);border-top:none;border-radius:0 0 6px 6px;z-index:999;max-height:130px;overflow-y:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)"></div>
           </div>
 
           <div style="display:flex;flex-direction:column;gap:2px">
@@ -217,7 +218,7 @@ un cliente sin nadie que pueda entrar.
                   onclick="return confirm('Delete user {{ u.username }}? This cannot be undone.')">Del</button>
         </form>
         {% else %}
-        <span style="color:#94a3b8;font-size:11px">—</span>
+        <span style="color:var(--faint);font-size:11px">—</span>
         {% endif %}
       </td>
     </tr>
@@ -230,8 +231,8 @@ un cliente sin nadie que pueda entrar.
 <!-- La bitacora de borrados vive en su propia pestana, Deletions, junto a la
      papelera del expediente: alli se ve tambien que archivos se quitaron, con
      su motivo, y se pueden devolver. -->
-<div style="margin-top:20px;font-size:11px;color:#94a3b8;padding-left:8px;border-left:3px solid #ef4444">
-  El registro de lo que se ha borrado está en la pestaña <strong>Deletions</strong>.
+<div style="margin-top:20px;font-size:11px;color:var(--faint);padding-left:8px;border-left:3px solid var(--red)">
+  El registro de lo que se ha borrado está en la pestaña <strong>{% trans "Deletions" %}</strong>.
 </div>
 
 <script>
@@ -242,11 +243,11 @@ function userCustRender(prefix, items) {
   const drop   = document.getElementById(dropId);
   if (!drop) return;
   drop.innerHTML = items.length
-    ? items.map(i=>`<div style="padding:5px 9px;cursor:pointer;font-size:12px;color:#0f172a"
+    ? items.map(i=>`<div style="padding:5px 9px;cursor:pointer;font-size:12px;color:var(--ink)"
         onmousedown="userCustSelect('${prefix}',${i.id},'${i.name.replace(/'/g,"\\'")}')"
-        onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background=''">
+        onmouseover="this.style.background='var(--asoft)'" onmouseout="this.style.background=''">
         ${i.name}</div>`).join('')
-    : '<div style="padding:5px 9px;font-size:11px;color:#94a3b8;font-style:italic">No matches</div>';
+    : '<div style="padding:5px 9px;font-size:11px;color:var(--faint);font-style:italic">No matches</div>';
   drop.style.display = 'block';
 }
 function userCustOpen(prefix) {

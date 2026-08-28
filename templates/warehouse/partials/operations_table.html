@@ -1,5 +1,6 @@
 {% load wms_filters %}
-{% if delete_error %}<div class="msg-error" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">⚠ {{ delete_error }}<button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#991b1b">✕</button></div>{% endif %}
+{% load i18n %}
+{% if delete_error %}<div class="msg-error" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">⚠ {{ delete_error }}<button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--err-ink)">✕</button></div>{% endif %}
 {% if delete_success %}<div class="msg-success" style="margin-bottom:8px">✓ {{ delete_success }}</div>{% endif %}
 {% if import_success %}<div class="msg-success" style="margin-bottom:8px">✓ {{ import_success }}</div>{% endif %}
 {% if import_error %}<div class="msg-error" style="margin-bottom:8px">⚠ {{ import_error }}</div>{% endif %}
@@ -11,16 +12,16 @@ que se perdieron las demas -- y el camino de vuelta tiene que estar aqui, no en
 recordar que el buscador vacio las trae todas.
 {% endcomment %}
 {% if solo_vencidas %}
-<div style="margin-bottom:10px;padding:8px 12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-  <span style="font-size:12px;color:#b91c1c;font-weight:600">&#9200; Showing only goods past their agreed time in the warehouse, oldest first</span>
-  <button onclick="verTodasLasOperaciones()" class="btn btn-g btn-sm" style="color:#b91c1c;border-color:#fca5a5">Show all</button>
+<div style="margin-bottom:10px;padding:8px 12px;background:var(--err-bg);border:1px solid var(--err-bdr);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+  <span style="font-size:12px;color:var(--err-ink-fuerte);font-weight:600">&#9200; Showing only goods past their agreed time in the warehouse, oldest first</span>
+  <button onclick="verTodasLasOperaciones()" class="btn btn-g btn-sm" style="color:var(--err-ink-fuerte);border-color:var(--err-bdr)">Show all</button>
 </div>
 {% endif %}
 
 {% if solo_sin_leer %}
-<div style="margin-bottom:10px;padding:8px 12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-  <span style="font-size:12px;color:#92400e;font-weight:600">💬 Showing only operations with unread messages</span>
-  <button onclick="verTodasLasOperaciones()" class="btn btn-g btn-sm" style="color:#b45309;border-color:#f59e0b">Show all</button>
+<div style="margin-bottom:10px;padding:8px 12px;background:var(--warn-bg-suave);border:1px solid var(--warn-bdr);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+  <span style="font-size:12px;color:var(--warn-ink);font-weight:600">💬 Showing only operations with unread messages</span>
+  <button onclick="verTodasLasOperaciones()" class="btn btn-g btn-sm" style="color:var(--warn-ink-fuerte);border-color:var(--warn)">Show all</button>
 </div>
 {% endif %}
 
@@ -36,12 +37,12 @@ vista.
   <form hx-post="{% url 'operations_import' %}" hx-target="#ops-table" hx-swap="innerHTML"
         hx-encoding="multipart/form-data" style="display:flex;gap:6px;align-items:center">
     {% csrf_token %}
-    <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Import Excel:</label>
+    <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Import Excel:" %}</label>
     <input type="file" name="import_file" accept=".xlsx,.xls" required
-           style="font-size:11px;height:26px;border:1px solid #e2e8f0;border-radius:6px;padding:2px 6px;background:#fff">
-    <button type="submit" class="btn btn-g btn-sm" style="color:#10b981;border-color:#10b981">⬆ Import</button>
+           style="font-size:11px;height:26px;border:1px solid var(--bdr);border-radius:6px;padding:2px 6px;background:var(--surface)">
+    <button type="submit" class="btn btn-g btn-sm" style="color:var(--green);border-color:var(--green)">⬆ Import</button>
   </form>
-  <a href="{% url 'operations_layout' %}" class="btn btn-g btn-sm" style="color:#0ea5e9;border-color:#0ea5e9">⬇ Download Layout</a>
+  <a href="{% url 'operations_layout' %}" class="btn btn-g btn-sm" style="color:var(--accent);border-color:var(--accent)">⬇ Download Layout</a>
 </div>
 {% endif %}
 
@@ -57,50 +58,50 @@ vista.
     <table style="min-width:2200px; width:100%; border-collapse:collapse; table-layout:auto;">
       <thead>
         <tr>
-          <th style="color:#94a3b8; white-space:nowrap;">#</th>
+          <th style="color:var(--faint); white-space:nowrap;">#</th>
           {% comment %}
           El aviso del hilo va aqui, junto al numero, y no al final con las
           acciones: la tabla mide 2200 px y nadie cruza esa distancia para
           descubrir si un cliente escribio. Lo que avisa tiene que verse sin
           mover la barra horizontal.
           {% endcomment %}
-          <th style="color:#94a3b8; white-space:nowrap;" title="Mensajes">💬</th>
-          <th style="white-space:nowrap;">Date</th>
+          <th style="color:var(--faint); white-space:nowrap;" title="Mensajes">💬</th>
+          <th style="white-space:nowrap;">{% trans "Date" %}</th>
           <th style="white-space:nowrap;">Custom ID</th>
-          <th style="white-space:nowrap;">Entries Disp.</th>
-          <th style="white-space:nowrap;">Type</th>
-          <th style="background:#1e3a5f; color:#7dd3fc; white-space:nowrap;">Status</th>
-          <th style="white-space:nowrap;">Customer</th>
-          <th style="white-space:nowrap;">Warehouse</th>
-          <th style="white-space:nowrap;">Location</th>
-          <th style="white-space:nowrap;">Shipper</th>
-          <th style="white-space:nowrap;">Invoice</th>
+          <th style="white-space:nowrap;">{% trans "Entries Disp." %}</th>
+          <th style="white-space:nowrap;">{% trans "Type" %}</th>
+          <th style="background:var(--th-bg-acento); color:var(--th-ink-acento); white-space:nowrap;">{% trans "Status" %}</th>
+          <th style="white-space:nowrap;">{% trans "Customer" %}</th>
+          <th style="white-space:nowrap;">{% trans "Warehouse" %}</th>
+          <th style="white-space:nowrap;">{% trans "Location" %}</th>
+          <th style="white-space:nowrap;">{% trans "Shipper" %}</th>
+          <th style="white-space:nowrap;">{% trans "Invoice" %}</th>
           <th style="white-space:nowrap;">PO/Order</th>
-          <th style="white-space:nowrap;">Seal</th>
-          <th style="white-space:nowrap;">Carrier</th>
+          <th style="white-space:nowrap;">{% trans "Seal" %}</th>
+          <th style="white-space:nowrap;">{% trans "Carrier" %}</th>
           <th style="white-space:nowrap;">PRO</th>
-          <th style="white-space:nowrap;">Trailer</th>
-          <th style="white-space:nowrap;">Bundle Type</th>
+          <th style="white-space:nowrap;">{% trans "Trailer" %}</th>
+          <th style="white-space:nowrap;">{% trans "Bundle Type" %}</th>
           <th style="white-space:nowrap;">Qty</th>
           <th style="white-space:nowrap;">LBS</th>
           <th style="white-space:nowrap;">KGS</th>
-          <th style="white-space:nowrap;">Description</th>
-          <th style="white-space:nowrap;">Note</th>
-          <th style="white-space:nowrap;">Damage</th>
+          <th style="white-space:nowrap;">{% trans "Description" %}</th>
+          <th style="white-space:nowrap;">{% trans "Note" %}</th>
+          <th style="white-space:nowrap;">{% trans "Damage" %}</th>
           <th style="white-space:nowrap;">REF AA</th>
           <th style="white-space:nowrap;">DYS</th>
           <th style="white-space:nowrap;">PED</th>
-          <th style="white-space:nowrap;">Email</th>
+          <th style="white-space:nowrap;">{% trans "Email" %}</th>
           <th style="white-space:nowrap;">Created By</th>
-          <th style="background:#1e293b; color:#94a3b8; white-space:nowrap;">Actions</th>
-          <th style="background:#1e293b; color:#94a3b8; white-space:nowrap;">#</th>
+          <th style="background:var(--th-bg-fija); color:var(--faint); white-space:nowrap;">{% trans "Actions" %}</th>
+          <th style="background:var(--th-bg-fija); color:var(--faint); white-space:nowrap;">#</th>
 
         </tr>
       </thead>
       <tbody>
         {% for op in operations %}
-        <tr style="background:{% cycle '#ffffff' '#f8fafc' %};">
-          <td style="color:#94a3b8; font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">{{ op.pk }}</td>
+        <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %};">
+          <td style="color:var(--faint); font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">{{ op.pk }}</td>
           <td style="white-space:nowrap; text-align:center;">
             {% comment %}
             El boton existe en todas las filas, oculto mientras no haya hilo, y
@@ -131,12 +132,12 @@ vista.
           <td style="white-space:nowrap;">
             {% if op.operation_type == 'ENTRY' %}
               {% if op.status == 'Released Goods' %}
-                <span class="badge" style="background:#d1fae5;color:#065f46;font-size:9px;">✓ Released</span>
+                <span class="badge" style="background:var(--gsoft);color:var(--ok-ink);font-size:9px;">✓ Released</span>
               {% else %}
-                <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:9px;">⬛ In Warehouse</span>
+                <span class="badge" style="background:var(--asoft);color:var(--accent-ink);font-size:9px;">⬛ In Warehouse</span>
               {% endif %}
             {% else %}
-              <span style="color:#94a3b8;font-size:11px;">—</span>
+              <span style="color:var(--faint);font-size:11px;">—</span>
             {% endif %}
           </td>
           <td style="white-space:nowrap;" title="{{ op.get_customer_display }}">{{ op.get_customer_display|truncatechars:20 }}</td>
@@ -157,7 +158,7 @@ vista.
           <td style="white-space:nowrap;">{{ op.weight_kgs|default:"—" }}</td>
           <td style="white-space:nowrap;" title="{{ op.description }}">{{ op.description|default:"—"|truncatechars:25 }}</td>
           <td style="white-space:nowrap;" title="{{ op.note }}">{{ op.note|default:"—"|truncatechars:18 }}</td>
-          <td style="white-space:nowrap;">{% if op.damage %}<span class="badge" style="background:#fee2e2;color:#991b1b;">⚠ Yes</span>{% else %}—{% endif %}</td>
+          <td style="white-space:nowrap;">{% if op.damage %}<span class="badge" style="background:var(--rsoft);color:var(--err-ink);">⚠ Yes</span>{% else %}—{% endif %}</td>
           <td style="white-space:nowrap;">{{ op.ref_aa|default:"—" }}</td>
           <td style="white-space:nowrap;">{{ op.ref_dys|default:"—" }}</td>
           <td style="white-space:nowrap;">{{ op.pedimento|default:"—" }}</td>
@@ -166,7 +167,7 @@ vista.
           <td style="white-space:nowrap;">
             <div style="display:flex; gap:4px; align-items:center;">
               <button class="btn-action" onclick="openModal('{% url 'operation_detail' op.pk %}')">View</button>
-              <button class="btn-action" onclick="openEditModal({{ op.pk }})">Edit</button>
+              <button class="btn-action" onclick="openEditModal({{ op.pk }})">{% trans "Edit" %}</button>
               <a class="btn-action" href="{% url 'operation_pdf' op.pk %}" target="_blank">PDF</a>
               <button class="btn-action" onclick="openDigitalWithId('{{ op.custom_id }}')">📱 Digital</button> <!-- agregado 061026-->
               {% if profile and not profile.is_customer %}
@@ -174,7 +175,7 @@ vista.
               {% endif %}
             </div>
           </td>
-          <td style="color:#94a3b8; font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">{{ op.pk }}</td>
+          <td style="color:var(--faint); font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">{{ op.pk }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -196,9 +197,9 @@ vista.
   como se sabe sin probar que ya no hay mas tabla de ese lado.
   {% endcomment %}
   <div class="tabla-nav-barra">
-    <button type="button" class="nav-h" data-ir="inicio" title="Primera columna">&#9198; Start</button>
+    <button type="button" class="nav-h" data-ir="inicio" title="{% trans "First column" %}">&#9198; Start</button>
     <span class="tabla-nav-pista">Shift + scroll wheel to move across columns</span>
-    <button type="button" class="nav-h" data-ir="final" title="Ultima columna">End &#9197;</button>
+    <button type="button" class="nav-h" data-ir="final" title="{% trans "Last column" %}">End &#9197;</button>
   </div>
 </div>
 {% include 'warehouse/partials/tabla_navegable.html' %}
@@ -208,34 +209,34 @@ vista.
   display:inline-flex;
   align-items:center;
   padding:3px 10px;
-  border:1px solid #e2e8f0;
+  border:1px solid var(--bdr);
   border-radius:5px;
-  background:#fff;
+  background:var(--surface);
   font-size:11px;
   cursor:pointer;
   white-space:nowrap;
-  color:#475569;
+  color:var(--soft-fuerte);
   font-family:inherit;
   text-decoration:none;
 }
 .btn-action-danger {
-  border-color:#fca5a5;
-  color:#ef4444;
+  border-color:var(--err-bdr);
+  color:var(--red);
 }
 /* El aviso del hilo. Nace oculto y lo enciende refrescarAvisosDeChat. */
 .chat-aviso { display:none; }
 .chat-aviso.visible { display:inline-flex; }
 .chat-aviso.con-pendientes {
-  border-color:#f59e0b;
-  color:#b45309;
-  background:#fffbeb;
+  border-color:var(--warn);
+  color:var(--warn-ink-fuerte);
+  background:var(--warn-bg-suave);
   font-weight:700;
 }
 .btn-action:hover {
-  background:#f1f5f9;
+  background:var(--bg);
 }
 .btn-action-danger:hover {
-  background:#fef2f2;
+  background:var(--err-bg);
 }
 </style>
 
@@ -255,10 +256,10 @@ vista.
 <!-- Modal para eliminar con contraseña -->
 {% if profile and not profile.is_customer %}
 <div id="del-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:1000; align-items:center; justify-content:center;">
-  <div style="background:#fff; border-radius:12px; padding:24px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,.3);">
-    <div style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:700; margin-bottom:10px; color:#0f172a;">🗑 Confirm Delete</div>
-    <p style="font-size:14px; color:#64748b; margin-bottom:8px;">Operation: <strong id="del-id" style="color:#ef4444;"></strong></p>
-    <p style="font-size:12px; color:#94a3b8; margin-bottom:16px;">
+  <div style="background:var(--surface); border-radius:12px; padding:24px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:700; margin-bottom:10px; color:var(--ink);">🗑 Confirm Delete</div>
+    <p style="font-size:14px; color:var(--soft); margin-bottom:8px;">Operation: <strong id="del-id" style="color:var(--red);"></strong></p>
+    <p style="font-size:12px; color:var(--faint); margin-bottom:16px;">
       Escribe tu <strong>contraseña de borrado</strong> y el motivo. La operación no se
       puede recuperar; del borrado queda el renglón en la bitácora.
     </p>
@@ -266,17 +267,17 @@ vista.
       {% csrf_token %}
       <div style="position:relative; margin-bottom:16px;">
         <input type="password" name="confirm_password" id="del-pwd"
-               style="width:100%; padding:10px 40px 10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;"
+               style="width:100%; padding:10px 40px 10px 12px; border:1px solid var(--bdr-fuerte); border-radius:8px; font-size:14px;"
                placeholder="Your password" required autocomplete="off">
         <button type="button" onclick="toggleDelPw()"
                 style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:16px;">👁</button>
       </div>
       <input type="text" name="delete_reason" id="del-reason"
-             style="width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; margin-bottom:16px;"
+             style="width:100%; padding:10px 12px; border:1px solid var(--bdr-fuerte); border-radius:8px; font-size:14px; margin-bottom:16px;"
              placeholder="Motivo del borrado" required autocomplete="off" maxlength="200">
       <div style="display:flex; gap:10px;">
-        <button type="submit" style="flex:1; padding:10px; background:#ef4444; color:#fff; border:none; border-radius:8px; font-weight:600; cursor:pointer;">Yes, Delete</button>
-        <button type="button" onclick="closeDel()" style="flex:1; padding:10px; background:#e2e8f0; border:none; border-radius:8px; cursor:pointer;">Cancel</button>
+        <button type="submit" style="flex:1; padding:10px; background:var(--red); color:var(--on-accent); border:none; border-radius:8px; font-weight:600; cursor:pointer;">Yes, Delete</button>
+        <button type="button" onclick="closeDel()" style="flex:1; padding:10px; background:var(--bdr); border:none; border-radius:8px; cursor:pointer;">{% trans "Cancel" %}</button>
       </div>
     </form>
   </div>

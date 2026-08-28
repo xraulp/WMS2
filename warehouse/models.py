@@ -7,6 +7,9 @@ from django.db import connection, models, transaction
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.utils.text import slugify
+# `gettext_lazy` y no `gettext`: las etiquetas de un modelo se evaluan al
+# importar el modulo, cuando todavia no hay peticion ni idioma que aplicar.
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +154,21 @@ class UserProfile(models.Model):
                                          limit_choices_to={'category': 'CUSTOMER'})
     delete_password = models.CharField(max_length=128, blank=True, null=True,
                        help_text='Custom password required to delete records')
+    # Como quiere ver la pantalla esta persona. Las dos preferencias van en el
+    # perfil y no solo en el navegador porque quien las cambia espera
+    # encontrarlas puestas al entrar desde otra computadora.
+    #
+    # Vacio no es un valor por defecto disfrazado: en el tema significa "el que
+    # tenga el sistema operativo", y en el idioma, "el de la empresa". Guardar
+    # 'light' o 'es' de entrada seria decidir por alguien que no ha decidido.
+    THEME_CHOICES = [('', _('System')), ('light', _('Light')), ('dark', _('Dark'))]
+    theme           = models.CharField(max_length=10, blank=True, default='',
+                                       choices=THEME_CHOICES,
+                                       verbose_name='Tema')
+    LANGUAGE_CHOICES = [('', _('Automatic')), ('es', 'Espanol'), ('en', 'English')]
+    language        = models.CharField(max_length=5, blank=True, default='',
+                                       choices=LANGUAGE_CHOICES,
+                                       verbose_name='Idioma')
     created_at      = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     def is_superadmin(self):
@@ -388,14 +406,14 @@ class Location(models.Model):
     acabaria con ubicaciones llamadas "-" para poder guardar.
     """
     TIPOS = [
-        ('STORAGE',    'Almacenaje'),
-        ('RECEIVING',  'Recepcion'),
-        ('SHIPPING',   'Embarque'),
-        ('STAGING',    'Anden / Preparacion'),
-        ('PICKING',    'Picking'),
-        ('QUARANTINE', 'Cuarentena'),
-        ('DAMAGED',    'Mercancia danada'),
-        ('RETURNS',    'Devoluciones'),
+        ('STORAGE',    _('Storage')),
+        ('RECEIVING',  _('Receiving')),
+        ('SHIPPING',   _('Shipping')),
+        ('STAGING',    _('Dock / Staging')),
+        ('PICKING',    _('Picking')),
+        ('QUARANTINE', _('Quarantine')),
+        ('DAMAGED',    _('Damaged goods')),
+        ('RETURNS',    _('Returns')),
     ]
 
     tenant    = models.ForeignKey('Tenant', on_delete=models.CASCADE,
@@ -453,10 +471,10 @@ class WarehouseOperation(models.Model):
     # usa hablando, es el prefijo del Custom ID, y por eso va tambien en la
     # etiqueta: en pantalla se lee "Entry (ED)", como lo dictan por radio.
     TYPE_CHOICES = [
-        ('ENTRY', 'Entry (ED)'),
-        ('EXIT',  'Exit (SD)'),
-        ('TD',    'Transfer (TD)'),
-        ('RD',    'Revision (RD)'),
+        ('ENTRY', _('Entry (ED)')),
+        ('EXIT',  _('Exit (SD)')),
+        ('TD',    _('Transfer (TD)')),
+        ('RD',    _('Revision (RD)')),
     ]
 
     # El prefijo con el que nace el Custom ID de cada tipo. `SD` importa mas de

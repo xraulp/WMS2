@@ -115,3 +115,39 @@ class TenantContextMiddleware:
             response.context_data['current_tenant'] = request.tenant
         
         return response
+
+class IdiomaDelPerfilMiddleware:
+    """
+    Deja puesto el idioma que el usuario eligio en su perfil.
+
+    `LocaleMiddleware` ya atiende la cookie y el `Accept-Language`, pero corre
+    antes de la autenticacion y no puede mirar el perfil. Sin esto, quien
+    eligio espanol y entra desde otra computadora --donde la cookie no esta--
+    recibiria la pantalla en el idioma del navegador de esa computadora, que es
+    justo lo que el habia decidido no dejar al azar.
+
+    La cookie gana sobre el perfil a proposito: es lo ultimo que se toco en
+    este navegador, y cambiarla desde el selector tiene que verse aqui mismo.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.conf import settings
+        from django.utils import translation
+
+        usuario = getattr(request, 'user', None)
+        pedido_en_el_navegador = request.COOKIES.get(settings.LANGUAGE_COOKIE_NAME)
+        if usuario is not None and usuario.is_authenticated and not pedido_en_el_navegador:
+            perfil = getattr(usuario, 'profile', None)
+            idioma = getattr(perfil, 'language', '') or ''
+            if idioma:
+                translation.activate(idioma)
+                request.LANGUAGE_CODE = idioma
+
+        respuesta = self.get_response(request)
+        # El idioma se activo para esta peticion; dejarlo puesto contaminaria
+        # la siguiente, que puede ser de otra persona en el mismo proceso.
+        translation.deactivate()
+        return respuesta

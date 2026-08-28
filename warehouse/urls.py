@@ -67,6 +67,9 @@ urlpatterns = [
     path('catalog/autocomplete/', views.catalog_autocomplete, name='catalog_autocomplete'),
     # Users
     # Bodegas y posiciones
+    # Como quiere ver la pantalla cada quien.
+    path('preferencias/tema/', views.cambiar_tema, name='cambiar_tema'),
+    path('preferencias/idioma/', views.cambiar_idioma, name='cambiar_idioma'),
     path('locations/', views.locations_panel, name='locations_panel'),
     path('locations/warehouse/create/', views.warehouse_create, name='warehouse_create'),
     path('locations/generate/', views.locations_generate, name='locations_generate'),

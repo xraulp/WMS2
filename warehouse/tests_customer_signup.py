@@ -102,7 +102,7 @@ class AccesoDeUnClienteTests(TestCase):
         resp = self.client.get(f'/catalog/{self.cliente.pk}/access/')
 
         self.assertEqual(list(resp.context['usuarios']), [])
-        self.assertContains(resp, 'Nadie de este cliente puede entrar')
+        self.assertContains(resp, 'Nobody from this customer can sign in yet')
 
     def test_no_se_alcanza_el_cliente_de_otra_empresa(self):
         self.client.force_login(self.admin)

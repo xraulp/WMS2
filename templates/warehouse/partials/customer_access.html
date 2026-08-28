@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Quien entra al sistema por parte de un cliente.
 
@@ -5,14 +6,13 @@ Vive en la ficha del cliente y no en la pestana Users: dar de alta al cliente y
 darle acceso eran dos caminos separados, y de ahi salian las dos formas de
 quedarse a medias. Aqui la pregunta y su respuesta estan en el mismo sitio.
 {% endcomment %}
-<div style="font-size:12px;color:#64748b;margin-bottom:12px">
-  Quien puede entrar al sistema en nombre de <strong>{{ cliente.name }}</strong>.
-  Solo vera las operaciones de este cliente.
+<div style="font-size:12px;color:var(--soft);margin-bottom:12px">
+  {% blocktrans with nombre=cliente.name %}Who can sign in on behalf of <strong>{{ nombre }}</strong>. They will only see this customer's operations.{% endblocktrans %}
 </div>
 
 {% if msg %}
 <div style="margin-bottom:12px;padding:8px 11px;border-radius:6px;font-size:12px;
-            {% if msg_is_error %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">
+            {% if msg_is_error %}background:var(--rsoft);color:var(--err-ink){% else %}background:var(--ok-bg);color:var(--ok-ink-fuerte){% endif %}">
   {{ msg }}
 </div>
 {% endif %}
@@ -21,15 +21,15 @@ quedarse a medias. Aqui la pregunta y su respuesta estan en el mismo sitio.
 <table style="width:100%;margin-bottom:16px">
   <thead>
     <tr>
-      <th style="font-size:10px">Usuario</th>
-      <th style="font-size:10px">Ultimo acceso</th>
+      <th style="font-size:10px">{% trans "User" %}</th>
+      <th style="font-size:10px">{% trans "Last sign-in" %}</th>
     </tr>
   </thead>
   <tbody>
     {% for u in usuarios %}
-    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
+    <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}">
       <td style="font-size:12px"><strong>{{ u.username }}</strong></td>
-      <td style="font-size:11px;color:#94a3b8">
+      <td style="font-size:11px;color:var(--faint)">
         {{ u.last_login|date:"Y-m-d"|default:"nunca ha entrado" }}
       </td>
     </tr>
@@ -37,9 +37,9 @@ quedarse a medias. Aqui la pregunta y su respuesta estan en el mismo sitio.
   </tbody>
 </table>
 {% else %}
-<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:11px;
-            margin-bottom:16px;font-size:12px;color:#92400e">
-  Nadie de este cliente puede entrar al sistema todavia.
+<div style="background:var(--warn-bg-suave);border:1px solid var(--warn-bdr);border-radius:8px;padding:11px;
+            margin-bottom:16px;font-size:12px;color:var(--warn-ink)">
+  {% trans "Nobody from this customer can sign in yet." %}
 </div>
 {% endif %}
 
@@ -50,22 +50,21 @@ la que se abrio este panel. Elegirlos a mano fue lo que permitio crear usuarios
 {% endcomment %}
 <form hx-post="{% url 'customer_access' cliente.pk %}"
       hx-target="#cust-access-body" hx-swap="innerHTML"
-      style="border-top:1px solid #e2e8f0;padding-top:14px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+      style="border-top:1px solid var(--bdr);padding-top:14px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
   {% csrf_token %}
   <div style="display:flex;flex-direction:column;gap:3px">
-    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Usuario</label>
-    <input type="text" name="username" required placeholder="Su nombre de acceso"
-           style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:150px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "User" %}</label>
+    <input type="text" name="username" required placeholder="{% trans "Their sign-in name" %}"
+           style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
   </div>
   <div style="display:flex;flex-direction:column;gap:3px">
-    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Contrasena</label>
-    <input type="text" name="password" required placeholder="Apuntala"
-           style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:150px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Password" %}</label>
+    <input type="text" name="password" required placeholder="{% trans "Write it down" %}"
+           style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
   </div>
-  <button type="submit" class="btn btn-p" style="height:28px">+ Dar acceso</button>
+  <button type="submit" class="btn btn-p" style="height:28px">{% trans "+ Give access" %}</button>
 </form>
 
-<div style="font-size:11px;color:#94a3b8;margin-top:9px">
-  La contrasena no se guarda en ningun sitio: apuntala ahora o asignale otra
-  despues desde la pestana Users.
+<div style="font-size:11px;color:var(--faint);margin-top:9px">
+  {% trans "The password is not stored anywhere: write it down now, or set a new one later from the Users tab." %}
 </div>

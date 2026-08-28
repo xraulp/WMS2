@@ -11,25 +11,25 @@ comprobar el rol en cada POST.
 
 <!-- Resumen -->
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px">
-  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8">Por cobrar</div>
-    <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px">{{ resumen.pendiente_total }} <span style="font-size:11px;color:#94a3b8">USD</span></div>
-    <div style="font-size:11px;color:#64748b">{{ resumen.pendiente_cuenta }} factura(s) pendiente(s)</div>
+  <div style="background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:10px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint)">Por cobrar</div>
+    <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px">{{ resumen.pendiente_total }} <span style="font-size:11px;color:var(--faint)">USD</span></div>
+    <div style="font-size:11px;color:var(--soft)">{{ resumen.pendiente_cuenta }} factura(s) pendiente(s)</div>
   </div>
-  <div style="background:{% if resumen.vencido_cuenta %}#fef2f2{% else %}#f8fafc{% endif %};border:1px solid {% if resumen.vencido_cuenta %}#fecaca{% else %}#e2e8f0{% endif %};border-radius:10px;padding:12px 14px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:{% if resumen.vencido_cuenta %}#991b1b{% else %}#94a3b8{% endif %}">Vencido</div>
-    <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px;color:{% if resumen.vencido_cuenta %}#991b1b{% else %}#0f172a{% endif %}">{{ resumen.vencido_total }} <span style="font-size:11px;color:#94a3b8">USD</span></div>
-    <div style="font-size:11px;color:#64748b">{{ resumen.vencido_cuenta }} factura(s) pasada(s) de fecha</div>
+  <div style="background:{% if resumen.vencido_cuenta %}var(--err-bg){% else %}var(--bg-sutil){% endif %};border:1px solid {% if resumen.vencido_cuenta %}var(--err-bdr){% else %}var(--bdr){% endif %};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:{% if resumen.vencido_cuenta %}var(--err-ink){% else %}var(--faint){% endif %}">Vencido</div>
+    <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px;color:{% if resumen.vencido_cuenta %}var(--err-ink){% else %}var(--ink){% endif %}">{{ resumen.vencido_total }} <span style="font-size:11px;color:var(--faint)">USD</span></div>
+    <div style="font-size:11px;color:var(--soft)">{{ resumen.vencido_cuenta }} factura(s) pasada(s) de fecha</div>
   </div>
-  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8">Cobrado en {{ resumen.anio }}</div>
-    <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px">{{ resumen.cobrado_total }} <span style="font-size:11px;color:#94a3b8">USD</span></div>
-    <div style="font-size:11px;color:#64748b">{{ resumen.cobrado_cuenta }} factura(s) pagada(s)</div>
+  <div style="background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:10px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint)">Cobrado en {{ resumen.anio }}</div>
+    <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px">{{ resumen.cobrado_total }} <span style="font-size:11px;color:var(--faint)">USD</span></div>
+    <div style="font-size:11px;color:var(--soft)">{{ resumen.cobrado_cuenta }} factura(s) pagada(s)</div>
   </div>
 </div>
 
 {% if not is_platform_admin %}
-<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#1e40af">
+<div style="background:var(--info-bg-suave);border:1px solid var(--info-bdr);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--info-ink)">
   Support access: you can review every invoice and see which companies are up to
   date, but issuing, collecting and cancelling are reserved to a platform
   administrator.
@@ -38,39 +38,39 @@ comprobar el rol en cada POST.
 
 {% if is_platform_admin %}
 <!-- Emitir factura -->
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:10px">Issue Invoice</div>
+<div style="background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:16px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:10px">Issue Invoice</div>
   <form hx-post="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML"
         style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
     {% csrf_token %}<input type="hidden" name="action" value="emitir">
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Company</label>
-      <select name="tenant_id" required style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;width:190px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Company</label>
+      <select name="tenant_id" required style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;width:190px">
         <option value="">— select —</option>
         {% for t in tenants %}<option value="{{ t.pk }}">{{ t.name }}{% if not t.is_active %} (inactive){% endif %}</option>{% endfor %}
       </select>
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Period</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Period</label>
       <input type="month" name="periodo" required value="{{ mes_sugerido }}"
-             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;width:140px">
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;width:140px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Amount USD</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Amount USD</label>
       <input type="text" inputmode="decimal" name="monto" required placeholder="250.00"
-             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;width:110px;font-family:'IBM Plex Mono',monospace">
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:110px;font-family:'IBM Plex Mono',monospace">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Due date</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Due date</label>
       <input type="date" name="vence_el" required value="{{ vencimiento_sugerido|date:'Y-m-d' }}"
-             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;width:140px">
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;width:140px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:160px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Notes</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Notes</label>
       <input type="text" name="notas" placeholder="optional"
-             style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px">
     </div>
-    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#64748b;height:28px">
+    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--soft);height:28px">
       <input type="checkbox" name="confirmar_duplicado" value="1">
       Issue even if the period is already invoiced
     </label>
@@ -82,19 +82,19 @@ comprobar el rol en cada POST.
 <!-- Filtros -->
 <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap">
   <div style="display:flex;flex-direction:column;gap:3px">
-    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Company</label>
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Company</label>
     <select name="tenant" hx-get="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML"
             hx-include="[name='status']"
-            style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;width:180px">
+            style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;width:180px">
       <option value="">All companies</option>
       {% for t in tenants %}<option value="{{ t.pk }}" {% if tenant_id == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
     </select>
   </div>
   <div style="display:flex;flex-direction:column;gap:3px">
-    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Status</label>
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Status</label>
     <select name="status" hx-get="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML"
             hx-include="[name='tenant']"
-            style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;width:150px">
+            style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;width:150px">
       <option value="">All</option>
       <option value="vencida" {% if estado == 'vencida' %}selected{% endif %}>Overdue</option>
       {% for valor, etiqueta in estados %}<option value="{{ valor }}" {% if estado == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}
@@ -116,11 +116,11 @@ comprobar el rol en cada POST.
     <tr>
       <td class="mono" style="white-space:nowrap;font-size:12px">{{ f.numero }}</td>
       <td style="font-size:12px">{{ f.tenant.name }}
-        {% if f.plan %}<div style="font-size:10px;color:#94a3b8">{{ f.plan }}</div>{% endif %}
+        {% if f.plan %}<div style="font-size:10px;color:var(--faint)">{{ f.plan }}</div>{% endif %}
       </td>
-      <td style="font-size:11px;color:#64748b;white-space:nowrap">{{ f.periodo_inicio|date:"Y-m-d" }} → {{ f.periodo_fin|date:"Y-m-d" }}</td>
-      <td style="font-size:11px;color:#64748b;white-space:nowrap">{{ f.emitida_el|date:"Y-m-d" }}</td>
-      <td style="font-size:11px;white-space:nowrap;{% if f.esta_vencida %}color:#991b1b;font-weight:600{% else %}color:#64748b{% endif %}">
+      <td style="font-size:11px;color:var(--soft);white-space:nowrap">{{ f.periodo_inicio|date:"Y-m-d" }} → {{ f.periodo_fin|date:"Y-m-d" }}</td>
+      <td style="font-size:11px;color:var(--soft);white-space:nowrap">{{ f.emitida_el|date:"Y-m-d" }}</td>
+      <td style="font-size:11px;white-space:nowrap;{% if f.esta_vencida %}color:var(--err-ink);font-weight:600{% else %}color:var(--soft){% endif %}">
         {{ f.vence_el|date:"Y-m-d" }}
         {% if f.esta_vencida %}<div style="font-size:10px">{{ f.dias_de_atraso }} day(s) late</div>{% endif %}
       </td>
@@ -128,10 +128,10 @@ comprobar el rol en cada POST.
       <td style="white-space:nowrap">
         {% if f.estado == 'pagada' %}
           <span class="badge b-entry">Paid</span>
-          <div style="font-size:10px;color:#94a3b8">{{ f.pagada_el|date:"Y-m-d" }}{% if f.referencia_de_pago %} · {{ f.referencia_de_pago }}{% endif %}</div>
+          <div style="font-size:10px;color:var(--faint)">{{ f.pagada_el|date:"Y-m-d" }}{% if f.referencia_de_pago %} · {{ f.referencia_de_pago }}{% endif %}</div>
         {% elif f.estado == 'cancelada' %}
-          <span class="badge" style="background:#f1f5f9;color:#64748b">Cancelled</span>
-          <div style="font-size:10px;color:#94a3b8" title="{{ f.motivo_de_cancelacion }}">{{ f.motivo_de_cancelacion|truncatechars:40 }}</div>
+          <span class="badge" style="background:var(--bg);color:var(--soft)">Cancelled</span>
+          <div style="font-size:10px;color:var(--faint)" title="{{ f.motivo_de_cancelacion }}">{{ f.motivo_de_cancelacion|truncatechars:40 }}</div>
         {% elif f.esta_vencida %}
           <span class="badge b-exit">Overdue</span>
         {% else %}
@@ -143,7 +143,7 @@ comprobar el rol en cada POST.
           reclamar un pago.
         {% endcomment %}
         {% if f.estado != 'cancelada' and not f.enviada_el %}
-          <div style="font-size:10px;color:#b45309">not sent</div>
+          <div style="font-size:10px;color:var(--warn-ink-fuerte)">not sent</div>
         {% endif %}
       </td>
       <td style="white-space:nowrap;text-align:right">
@@ -162,7 +162,7 @@ comprobar el rol en cada POST.
       </td>
     </tr>
     {% empty %}
-    <tr><td colspan="8" style="text-align:center;color:#94a3b8;font-size:12px;padding:18px">No invoices yet.</td></tr>
+    <tr><td colspan="8" style="text-align:center;color:var(--faint);font-size:12px;padding:18px">No invoices yet.</td></tr>
     {% endfor %}
   </tbody>
 </table>

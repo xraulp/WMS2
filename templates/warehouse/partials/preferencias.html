@@ -1,0 +1,44 @@
+{% load i18n %}
+{% comment %}
+Los dos controles de "como quiero ver esto": el tema y el idioma.
+
+Van juntos en un parcial porque los llevan las tres pantallas --escritorio,
+movil y plataforma-- y porque el sitio natural de los dos es el mismo: la
+esquina donde ya estan el nombre de quien entro y la salida.
+
+El selector de idioma manda al servidor y recarga: la pagina esta traducida en
+el servidor, asi que cambiar el idioma sin volver a pedirla dejaria la pantalla
+en el idioma anterior hasta la siguiente navegacion.
+{% endcomment %}
+<button type="button" id="btn-tema" onclick="cambiarTema()"
+        title="{% trans "Dark theme" %}" aria-label="{% trans "Change the theme" %}"
+        style="background:none;border:1px solid var(--tb-bdr);color:inherit;
+               border-radius:6px;padding:3px 9px;font-size:13px;line-height:1;
+               cursor:pointer">&#9790;</button>
+
+<select id="sel-idioma" onchange="cambiarIdioma(this.value)"
+        aria-label="{% trans "Language" %}"
+        style="background:none;border:1px solid var(--tb-bdr);color:inherit;
+               border-radius:6px;padding:3px 6px;font-size:11px;
+               font-family:inherit;cursor:pointer">
+  {% get_current_language as idioma_actual %}
+  {% for codigo, nombre in idiomas %}
+  <option value="{{ codigo }}" {% if codigo == idioma_actual %}selected{% endif %}
+          style="color:var(--ink);background:var(--surface)">{{ nombre }}</option>
+  {% endfor %}
+</select>
+<span id="tema-eco" hidden></span>
+
+<script>
+// El idioma se guarda y la pagina se vuelve a pedir. La traduccion la hace el
+// servidor: sin recargar, la pantalla se quedaria en el idioma de antes.
+function cambiarIdioma(codigo) {
+  fetch('{% url "cambiar_idioma" %}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRFToken': '{{ csrf_token }}'},
+    body: 'idioma=' + encodeURIComponent(codigo)
+  }).then(function () { window.location.reload(); })
+    .catch(function () { window.location.reload(); });
+}
+</script>

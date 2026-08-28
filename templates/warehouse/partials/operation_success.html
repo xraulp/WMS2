@@ -6,11 +6,11 @@
 </div>
 {% elif email_error == 'no_email' %}
 <div class="msg-success" style="margin-bottom:8px">
-  ✓ Operation <strong>{{ operation.custom_id }}</strong> saved. <span style="color:#92400e">⚠ No customer email on file.</span>
+  ✓ Operation <strong>{{ operation.custom_id }}</strong> saved. <span style="color:var(--warn-ink)">⚠ No customer email on file.</span>
 </div>
 {% elif email_error == 'smtp_not_configured' %}
 <div class="msg-success" style="margin-bottom:8px">
-  ✓ Operation <strong>{{ operation.custom_id }}</strong> saved. <span style="color:#92400e">⚠ SMTP not configured — email not sent.</span>
+  ✓ Operation <strong>{{ operation.custom_id }}</strong> saved. <span style="color:var(--warn-ink)">⚠ SMTP not configured — email not sent.</span>
 </div>
 {% else %}
 <div class="msg-success" style="margin-bottom:8px">

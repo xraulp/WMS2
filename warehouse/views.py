@@ -9,6 +9,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.db.models import Q, Count, Sum, Max, F, OuterRef, Subquery
 from django.db import connection, transaction
+from django.conf import settings
 from io import BytesIO
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -4012,3 +4013,60 @@ def operations_unread(request):
         'profile':    profile,
         'solo_sin_leer': True,
     })
+
+
+# ── COMO QUIERE VER LA PANTALLA CADA QUIEN ────────────────────────────────────
+# El tema y el idioma se guardan en el perfil, no solo en el navegador: quien
+# los cambia espera encontrarlos puestos al entrar desde otra computadora. El
+# navegador guarda ademas su copia para que la pantalla no de un fogonazo
+# blanco antes de que llegue la respuesta.
+
+
+@login_required
+@require_POST
+def cambiar_tema(request):
+    """
+    Guarda el tema que acaba de elegir el usuario.
+
+    Responde vacio a proposito: el cambio ya lo hizo la pantalla al pulsar, y
+    esto solo lo apunta para la proxima vez. Si falla, el usuario sigue viendo
+    el tema que pidio; perder la preferencia al cambiar de computadora es mejor
+    que devolverle la pantalla al color de antes sin explicacion.
+    """
+    tema = request.POST.get('tema', '').strip()
+    if tema not in dict(UserProfile.THEME_CHOICES):
+        return HttpResponse(status=400)
+    perfil = get_profile(request.user)
+    if perfil:
+        perfil.theme = tema
+        perfil.save(update_fields=['theme'])
+    return HttpResponse('')
+
+
+@login_required
+@require_POST
+def cambiar_idioma(request):
+    """
+    Guarda el idioma y lo deja puesto en la sesion.
+
+    Las dos cosas hacen falta: la cookie es lo que lee `LocaleMiddleware` en la
+    peticion siguiente --Django ya no guarda el idioma en la sesion--, y el
+    perfil es lo que hace que el idioma siga puesto dentro de un mes en otro
+    navegador, que es donde la cookie ya no esta.
+    """
+    idioma = request.POST.get('idioma', '').strip()
+    if idioma not in dict(UserProfile.LANGUAGE_CHOICES):
+        return HttpResponse(status=400)
+    perfil = get_profile(request.user)
+    if perfil:
+        perfil.language = idioma
+        perfil.save(update_fields=['language'])
+    respuesta = HttpResponse('')
+    if idioma:
+        respuesta.set_cookie(settings.LANGUAGE_COOKIE_NAME, idioma,
+                             max_age=settings.LANGUAGE_COOKIE_AGE)
+    else:
+        # Sin idioma elegido manda el navegador: borrar la cookie es lo que
+        # devuelve esa decision al `Accept-Language`.
+        respuesta.delete_cookie(settings.LANGUAGE_COOKIE_NAME)
+    return respuesta

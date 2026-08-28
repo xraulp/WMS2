@@ -74,6 +74,9 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # Elige el idioma de la peticion. Va aqui por exigencia de Django: despues
+    # de la sesion y antes de CommonMiddleware.
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -82,6 +85,10 @@ MIDDLEWARE = [
     #'warehouse.middleware.TenantPermissionsMiddleware', # pendiente: 'role' es CharField, no FK a Role todavia
     #'warehouse.middleware.TenantContextMiddleware',      # pendiente: revisar si aplica con TemplateResponse
     'warehouse.middleware.TenantMiddleware',
+    # El idioma guardado en el perfil. Va detras de la autenticacion porque
+    # necesita saber quien entro, y `LocaleMiddleware` --que corre antes-- no
+    # puede: cuando le toca, `request.user` todavia no existe.
+    'warehouse.middleware.IdiomaDelPerfilMiddleware',
 ]
 
 ROOT_URLCONF = 'warehouse_system.urls'
@@ -97,6 +104,10 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # El tema y el idioma de quien mira. Los pinta la plantilla
+                # base de las tres pantallas, asi que no puede depender de que
+                # cada vista se acuerde de pasarlos.
+                'warehouse.context_processors.preferencias',
             ],
         },
     },
@@ -170,7 +181,20 @@ AUTH_PASSWORD_VALIDATORS = [
 # ====================================================
 # INTERNACIONALIZACIÓN
 # ====================================================
-LANGUAGE_CODE = 'es-mx'
+# El idioma con el que estan escritas las pantallas, que es el que ve quien no
+# ha elegido ninguno y su navegador tampoco pide otro. Es el ingles porque es el
+# idioma en el que ya estaba la interfaz; el espanol es una traduccion completa,
+# no un remiendo.
+LANGUAGE_CODE = 'en'
+
+# Los dos idiomas que se ofrecen. Anadir un tercero es anadirlo aqui y crear su
+# carpeta en `locale/`.
+LANGUAGES = [
+    ('en', 'English'),
+    ('es', 'Espanol'),
+]
+LOCALE_PATHS = [BASE_DIR / 'locale']
+
 TIME_ZONE = 'America/Chicago'
 USE_I18N = True
 USE_TZ = True

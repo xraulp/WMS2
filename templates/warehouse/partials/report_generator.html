@@ -1,4 +1,5 @@
 {% load wms_filters %}
+{% load i18n %}
 {% comment %}
 Los filtros del informe, con el mismo criterio que la pantalla de Operations:
 cada control con su titulo encima, todos en una sola barra, y un boton que los
@@ -14,20 +15,20 @@ exige ya.
 .rpt-g { display:flex; flex-direction:column; gap:3px; }
 .rpt-g > label {
   font-size:10px; font-weight:600; text-transform:uppercase;
-  letter-spacing:.05em; color:#64748b;
+  letter-spacing:.05em; color:var(--soft);
 }
 .rpt-i {
-  height:30px; padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px;
-  font-family:inherit; font-size:12px; background:#fff; color:#0f172a;
+  height:30px; padding:4px 8px; border:1px solid var(--bdr); border-radius:6px;
+  font-family:inherit; font-size:12px; background:var(--surface); color:var(--ink);
 }
 .rpt-lista {
-  border:1px solid #e2e8f0; border-radius:6px; background:#fff;
+  border:1px solid var(--bdr); border-radius:6px; background:var(--surface);
   padding:4px 6px; max-height:120px; overflow-y:auto; min-width:280px;
 }
 .rpt-lista label { display:flex; align-items:center; gap:6px; padding:2px 2px;
-                   cursor:pointer; font-size:12px; color:#334155; }
-.rpt-lista .rpt-todos { font-weight:600; color:#0f172a;
-                        border-bottom:1px solid #f1f5f9; margin-bottom:2px; padding:3px 2px; }
+                   cursor:pointer; font-size:12px; color:var(--soft-fuerte); }
+.rpt-lista .rpt-todos { font-weight:600; color:var(--ink);
+                        border-bottom:1px solid var(--bg); margin-bottom:2px; padding:3px 2px; }
 .rpt-acciones { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 </style>
 
@@ -42,7 +43,7 @@ exige ya.
   <div class="rpt-g" style="min-width:280px">
     <label>
       &#127970; Customer(s)
-      <span style="font-weight:400;text-transform:none;color:#94a3b8;font-size:9px">&mdash; select one, multiple, or All</span>
+      <span style="font-weight:400;text-transform:none;color:var(--faint);font-size:9px">&mdash; select one, multiple, or All</span>
     </label>
     <div class="rpt-lista">
       <label class="rpt-todos">
@@ -70,7 +71,7 @@ exige ya.
   <div class="rpt-g">
     <label>&#128100; Created by</label>
     <select name="created_by" class="rpt-i" style="min-width:150px">
-      <option value="">All users</option>
+      <option value="">{% trans "All users" %}</option>
       {% for u in users %}
       <option value="{{ u.pk }}" {% if filters.created_by_id|add:"0" == u.pk %}selected{% endif %}>
         {{ u.username }}{% if u.profile.role %} ({{ u.profile.role }}){% endif %}
@@ -93,7 +94,7 @@ exige ya.
   <div class="rpt-g">
     <label>&#8596; Type</label>
     <select name="op_type" class="rpt-i" style="min-width:120px">
-      <option value="">All types</option>
+      <option value="">{% trans "All types" %}</option>
       {% for valor, etiqueta in tipos_de_operacion %}
       <option value="{{ valor }}" {% if filters.op_type == valor %}selected{% endif %}>{{ etiqueta }} only</option>
       {% endfor %}
@@ -103,15 +104,15 @@ exige ya.
   <div class="rpt-g">
     <label>&#9724; Status</label>
     <select name="status_filter" class="rpt-i" style="min-width:140px">
-      <option value="">All status</option>
-      <option value="In Warehouse"   {% if filters.status_filter == 'In Warehouse'   %}selected{% endif %}>In Warehouse</option>
-      <option value="Released Goods" {% if filters.status_filter == 'Released Goods' %}selected{% endif %}>Released Goods</option>
+      <option value="">{% trans "All status" %}</option>
+      <option value="In Warehouse"   {% if filters.status_filter == 'In Warehouse'   %}selected{% endif %}>{% trans "In Warehouse" %}</option>
+      <option value="Released Goods" {% if filters.status_filter == 'Released Goods' %}selected{% endif %}>{% trans "Released Goods" %}</option>
     </select>
   </div>
 
   <div class="rpt-g">
     <label>&nbsp;</label>
-    <label style="display:flex;align-items:center;gap:6px;height:30px;font-size:12px;color:#334155;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400">
+    <label style="display:flex;align-items:center;gap:6px;height:30px;font-size:12px;color:var(--soft-fuerte);cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400">
       <input type="checkbox" name="undispatched" value="1" id="rpt-und" {% if filters.undispatched %}checked{% endif %}>
       Entries without dispatch
     </label>
@@ -120,7 +121,7 @@ exige ya.
   <div class="rpt-g">
     <label>&nbsp;</label>
     <div style="display:flex;gap:6px">
-      <button type="submit" class="btn btn-p" style="height:30px">Search</button>
+      <button type="submit" class="btn btn-p" style="height:30px">{% trans "Search" %}</button>
       <button type="button" class="btn btn-g btn-sm" style="height:30px"
               onclick="rptLimpiarFiltros()" title="Dejar los filtros en blanco">&#10005; Clear</button>
     </div>
@@ -130,16 +131,16 @@ exige ya.
 {% if error %}
 <div class="msg-error" style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
   <span>&#9888; {{ error }}</span>
-  <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;color:#991b1b">&#10005;</button>
+  <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--err-ink)">&#10005;</button>
 </div>
 {% endif %}
 
 {% if results is not None %}
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-  <div style="font-size:12px;color:#64748b">
+  <div style="font-size:12px;color:var(--soft)">
     <strong>{{ results|length }}</strong> operations found
-    {% if filters.customer_label %} &middot; <span style="color:#0ea5e9">{{ filters.customer_label }}</span>{% endif %}
-    {% if filters.created_by_name %} &middot; <span style="color:#10b981">User: {{ filters.created_by_name }}</span>{% endif %}
+    {% if filters.customer_label %} &middot; <span style="color:var(--accent)">{{ filters.customer_label }}</span>{% endif %}
+    {% if filters.created_by_name %} &middot; <span style="color:var(--green)">User: {{ filters.created_by_name }}</span>{% endif %}
   </div>
   {% comment %}
   Antes habia dos campos de correo, los dos con el mismo id: el segundo no hacia
@@ -153,9 +154,9 @@ exige ya.
     <input type="email" id="rpt-email-to"
            placeholder="Email address (required for multi-customer)"
            title="Enter email address(es) separated by commas"
-           style="height:28px;padding:4px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;min-width:240px">
+           style="height:28px;padding:4px 10px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;min-width:240px">
     <button onclick="sendReportEmail()" class="btn btn-g btn-sm">&#128231; Send Email</button>
-    <span id="email-hint" style="font-size:10px;color:#94a3b8;"></span>
+    <span id="email-hint" style="font-size:10px;color:var(--faint);"></span>
   </div>
   {% endif %}
 </div>
@@ -173,39 +174,39 @@ exige ya.
       <thead>
         <tr>
           <th>#</th>
-          <th>Date</th>
+          <th>{% trans "Date" %}</th>
           <th>Custom ID</th>
-          <th>Type</th>
-          <th>Status</th>
-          <th>Customer</th>
-          <th>Shipper</th>
-          <th>Invoice</th>
+          <th>{% trans "Type" %}</th>
+          <th>{% trans "Status" %}</th>
+          <th>{% trans "Customer" %}</th>
+          <th>{% trans "Shipper" %}</th>
+          <th>{% trans "Invoice" %}</th>
           <th>PO/Order</th>
           <th>PRO</th>
-          <th>Bundle Type</th>
-          <th>Bundle Qty</th>
-          <th>Weight LBS</th>
-          <th>Description</th>
+          <th>{% trans "Bundle Type" %}</th>
+          <th>{% trans "Bundle Qty" %}</th>
+          <th>{% trans "Weight LBS" %}</th>
+          <th>{% trans "Description" %}</th>
           <th>Dispatched</th>
           <th>Created By</th>
         </tr>
       </thead>
       <tbody>
         {% for op in results %}
-        <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
-          <td style="color:#94a3b8;font-size:10px">{{ op.pk }}</td>
+        <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}">
+          <td style="color:var(--faint);font-size:10px">{{ op.pk }}</td>
           <td>{{ op.date|date:"Y-m-d" }}</td>
           <td class="mono">{{ op.custom_id }}</td>
           <td><span class="badge {{ op.operation_type|clase_de_tipo }}">{{ op.get_operation_type_display }}</span></td>
           <td>
             {% if op.operation_type == 'ENTRY' %}
               {% if op.status == 'Released Goods' %}
-                <span class="badge" style="background:#d1fae5;color:#065f46;font-size:9px">&#10003; Released</span>
+                <span class="badge" style="background:var(--gsoft);color:var(--ok-ink);font-size:9px">&#10003; Released</span>
               {% else %}
-                <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:9px">&#11035; Warehouse</span>
+                <span class="badge" style="background:var(--asoft);color:var(--accent-ink);font-size:9px">&#11035; Warehouse</span>
               {% endif %}
             {% else %}
-              <span style="color:#94a3b8;font-size:11px">&mdash;</span>
+              <span style="color:var(--faint);font-size:11px">&mdash;</span>
             {% endif %}
           </td>
           <td title="{{ op.get_customer_display }}">{{ op.get_customer_display|truncatechars:18 }}</td>
@@ -217,17 +218,17 @@ exige ya.
           <td>{{ op.bundle_qty|default:"&mdash;" }}</td>
           <td>{{ op.weight_lbs|default:"&mdash;" }}</td>
           <td title="{{ op.description }}">{{ op.description|default:"&mdash;"|truncatechars:20 }}</td>
-          <td>{% if op.entry_dispatched %}<span style="color:#10b981;font-size:11px">&#10003;</span>{% else %}&mdash;{% endif %}</td>
-          <td style="font-size:11px;color:#64748b">{{ op.created_by.username|default:"&mdash;" }}</td>
+          <td>{% if op.entry_dispatched %}<span style="color:var(--green);font-size:11px">&#10003;</span>{% else %}&mdash;{% endif %}</td>
+          <td style="font-size:11px;color:var(--soft)">{{ op.created_by.username|default:"&mdash;" }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   <div class="tabla-nav-barra">
-    <button type="button" class="nav-h" data-ir="inicio" title="Primera columna">&#9198; Start</button>
+    <button type="button" class="nav-h" data-ir="inicio" title="{% trans "First column" %}">&#9198; Start</button>
     <span class="tabla-nav-pista">Shift + scroll wheel to move across columns</span>
-    <button type="button" class="nav-h" data-ir="final" title="Ultima columna">End &#9197;</button>
+    <button type="button" class="nav-h" data-ir="final" title="{% trans "Last column" %}">End &#9197;</button>
   </div>
 </div>
 {% include 'warehouse/partials/tabla_navegable.html' %}
@@ -336,11 +337,11 @@ function updateEmailHint() {
   if (hintSpan) {
     if (isMulti) {
       hintSpan.innerHTML = 'Email requerido (multiples clientes)';
-      hintSpan.style.color = '#ef4444';
+      hintSpan.style.color = 'var(--red)';
       if (emailInput) emailInput.required = true;
     } else {
       hintSpan.innerHTML = 'Opcional: deja en blanco para usar el email del cliente';
-      hintSpan.style.color = '#94a3b8';
+      hintSpan.style.color = 'var(--faint)';
       if (emailInput) emailInput.required = false;
     }
   }

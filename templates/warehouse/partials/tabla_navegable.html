@@ -36,17 +36,17 @@ tablas en la misma pantalla no se pisan.
 .tabla-nav-barra {
   position:sticky; bottom:0; left:0; right:0;
   display:flex; align-items:center; justify-content:space-between; gap:6px;
-  background:#f8fafc; border-top:1px solid #cbd5e1; padding:4px 6px;
+  background:var(--bg-sutil); border-top:1px solid var(--bdr-fuerte); padding:4px 6px;
   z-index:100; opacity:0; transition:opacity .2s;
 }
-.tabla-nav-pista { font-size:10px; color:#94a3b8; letter-spacing:.03em; }
+.tabla-nav-pista { font-size:10px; color:var(--faint); letter-spacing:.03em; }
 
 /* Los botones que cruzan la tabla de un salto. */
 .nav-h {
   flex:0 0 auto;
-  border:1px solid #cbd5e1;
-  background:#fff;
-  color:#475569;
+  border:1px solid var(--bdr-fuerte);
+  background:var(--surface);
+  color:var(--soft-fuerte);
   border-radius:5px;
   font-family:inherit;
   font-size:10px;
@@ -56,7 +56,7 @@ tablas en la misma pantalla no se pisan.
   cursor:pointer;
   white-space:nowrap;
 }
-.nav-h:hover:not(:disabled) { background:#e0f2fe; border-color:#0ea5e9; color:#0284c7; }
+.nav-h:hover:not(:disabled) { background:var(--asoft); border-color:var(--accent); color:var(--adark); }
 .nav-h:disabled { opacity:.35; cursor:default; }
 
 /*
@@ -64,7 +64,7 @@ tablas en la misma pantalla no se pisan.
   esto, a la fila veinte ya no se sabe que columna es cual y hay que subir a
   leer el encabezado y volver a bajar.
 */
-.tabla-navegable thead th { position:sticky; top:0; z-index:3; background:var(--ink,#0f172a); }
+.tabla-navegable thead th { position:sticky; top:0; z-index:3; background:var(--th-bg); }
 
 /*
   Y las columnas que identifican la fila se quedan quietas mientras el resto
@@ -79,7 +79,7 @@ tablas en la misma pantalla no se pisan.
   color en el `style` del `tr` y la celda fija lo copia.
 */
 .tabla-navegable .col-fija { position:sticky; z-index:2; background:inherit; }
-.tabla-navegable thead th.col-fija { background:#1e293b; z-index:4; }
+.tabla-navegable thead th.col-fija { background:var(--th-bg-fija); z-index:4; }
 .tabla-navegable .col-fija-borde { box-shadow:3px 0 4px -2px rgba(15,23,42,.25); }
 
 /*

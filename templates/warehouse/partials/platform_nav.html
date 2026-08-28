@@ -12,7 +12,7 @@ del administrador, y eso lo comprueba la vista en cada POST.
 más crítico que hay aquí, porque quien lo tiene puede dar de alta empresas y
 nombrar a sus administradores.
 {% endcomment %}
-<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e2e8f0">
+<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--bdr)">
   <button class="btn btn-sm {% if activa == 'tenants' %}btn-p{% else %}btn-g{% endif %}"
           hx-get="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML">
     Companies
@@ -31,7 +31,7 @@ nombrar a sus administradores.
     Platform Users
   </button>
   {% endif %}
-  <span style="margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">
+  <span style="margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)">
     Platform {{ platform_role|default:"—" }}
   </span>
 </div>

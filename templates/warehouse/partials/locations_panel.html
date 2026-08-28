@@ -1,4 +1,5 @@
 {% load wms_filters %}
+{% load i18n %}
 {% comment %}
 Bodegas y posiciones.
 
@@ -9,33 +10,33 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
 {% endcomment %}
 <style>
 .loc-cols { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; }
-.loc-caja { border:1px solid #e2e8f0; border-radius:10px; padding:12px; background:#fff; }
+.loc-caja { border:1px solid var(--bdr); border-radius:10px; padding:12px; background:var(--surface); }
 .loc-t { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600;
-         text-transform:uppercase; letter-spacing:.09em; color:#94a3b8;
-         margin-bottom:10px; padding-left:8px; border-left:3px solid #0ea5e9; }
+         text-transform:uppercase; letter-spacing:.09em; color:var(--faint);
+         margin-bottom:10px; padding-left:8px; border-left:3px solid var(--accent); }
 .loc-g { display:flex; flex-direction:column; gap:3px; }
 .loc-g > label { font-size:10px; font-weight:600; text-transform:uppercase;
-                 letter-spacing:.05em; color:#64748b; }
-.loc-i { height:30px; padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px;
-         font-family:inherit; font-size:12px; background:#fff; color:#0f172a; }
+                 letter-spacing:.05em; color:var(--soft); }
+.loc-i { height:30px; padding:4px 8px; border:1px solid var(--bdr); border-radius:6px;
+         font-family:inherit; font-size:12px; background:var(--surface); color:var(--ink); }
 .loc-fila { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
-.loc-pista { font-size:10px; color:#94a3b8; margin-top:6px; }
+.loc-pista { font-size:10px; color:var(--faint); margin-top:6px; }
 .loc-chip { display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10px;
-            background:#f1f5f9; border:1px solid #e2e8f0; border-radius:4px;
-            padding:1px 5px; color:#475569; }
+            background:var(--bg); border:1px solid var(--bdr); border-radius:4px;
+            padding:1px 5px; color:var(--soft-fuerte); }
 .loc-apagada { opacity:.5; }
 .loc-ocupada { display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10px;
-               background:#dbeafe; border:1px solid #bfdbfe; border-radius:4px;
-               padding:1px 6px; color:#1d4ed8; cursor:pointer; }
-.loc-ocupada:hover { background:#bfdbfe; }
-.loc-vacia { font-size:10px; color:#cbd5e1; }
+               background:var(--info-bg); border:1px solid var(--info-bdr); border-radius:4px;
+               padding:1px 6px; color:var(--info-ink); cursor:pointer; }
+.loc-ocupada:hover { background:var(--info-bdr); }
+.loc-vacia { font-size:10px; color:var(--bdr-fuerte); }
 </style>
 
 {% if error %}<div class="msg-error" style="margin-bottom:10px">&#9888; {{ error }}</div>{% endif %}
 {% if exito %}<div class="msg-success" style="margin-bottom:10px">&#10003; {{ exito }}</div>{% endif %}
 
 {% if not puede_configurar %}
-<p style="font-size:11px;color:#94a3b8;margin:-4px 0 10px">
+<p style="font-size:11px;color:var(--faint);margin:-4px 0 10px">
   Solo puedes consultar: dar de alta bodegas y posiciones es cosa de quien
   administra la empresa.
 </p>
@@ -46,20 +47,20 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
   {% comment %} ── Alta de bodega ── {% endcomment %}
   {% if puede_configurar %}
   <div class="loc-caja" style="flex:1; min-width:280px">
-    <div class="loc-t">New warehouse</div>
+    <div class="loc-t">{% trans "New warehouse" %}</div>
     <form hx-post="{% url 'warehouse_create' %}" hx-target="#locations-content" hx-swap="innerHTML"
           class="loc-fila">
       {% csrf_token %}
       <div class="loc-g" style="flex:1; min-width:140px">
-        <label>Name</label>
+        <label>{% trans "Name" %}</label>
         <input type="text" name="name" class="loc-i" placeholder="Bodega Laredo" required>
       </div>
       <div class="loc-g" style="width:90px">
-        <label>Code</label>
+        <label>{% trans "Code" %}</label>
         <input type="text" name="code" class="loc-i" placeholder="LRD" maxlength="10" required
                style="text-transform:uppercase">
       </div>
-      <button type="submit" class="btn btn-p" style="height:30px">Add</button>
+      <button type="submit" class="btn btn-p" style="height:30px">{% trans "Add" %}</button>
     </form>
     <div class="loc-pista">
       El codigo va delante de cada posicion de esa bodega: <span class="loc-chip">LRD-A-03-2</span>
@@ -75,12 +76,12 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
   {% endcomment %}
   {% if puede_configurar and bodegas %}
   <div class="loc-caja" style="flex:2; min-width:420px">
-    <div class="loc-t">Generate locations</div>
+    <div class="loc-t">{% trans "Generate locations" %}</div>
     <form hx-post="{% url 'locations_generate' %}" hx-target="#locations-content" hx-swap="innerHTML">
       {% csrf_token %}
       <div class="loc-fila">
         <div class="loc-g" style="min-width:150px">
-          <label>Warehouse</label>
+          <label>{% trans "Warehouse" %}</label>
           <select name="warehouse" class="loc-i" required>
             {% for b in bodegas %}
             <option value="{{ b.pk }}">{{ b.code }} &mdash; {{ b.name }}</option>
@@ -88,34 +89,34 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
           </select>
         </div>
         <div class="loc-g" style="width:110px">
-          <label>Zone</label>
+          <label>{% trans "Zone" %}</label>
           <input type="text" name="zones" class="loc-i" placeholder="A,B,C">
         </div>
         <div class="loc-g" style="width:110px">
-          <label>Aisle</label>
+          <label>{% trans "Aisle" %}</label>
           <input type="text" name="aisles" class="loc-i" placeholder="1-10">
         </div>
         <div class="loc-g" style="width:110px">
-          <label>Rack</label>
+          <label>{% trans "Rack" %}</label>
           <input type="text" name="racks" class="loc-i" placeholder="01-04">
         </div>
         <div class="loc-g" style="width:100px">
-          <label>Level</label>
+          <label>{% trans "Level" %}</label>
           <input type="text" name="levels" class="loc-i" placeholder="1-4">
         </div>
         <div class="loc-g" style="width:100px">
-          <label>Position</label>
+          <label>{% trans "Position" %}</label>
           <input type="text" name="positions" class="loc-i" placeholder="A,B">
         </div>
         <div class="loc-g" style="min-width:150px">
-          <label>Kind</label>
+          <label>{% trans "Kind" %}</label>
           <select name="kind" class="loc-i">
             {% for valor, etiqueta in tipos_de_ubicacion %}
             <option value="{{ valor }}">{{ etiqueta }}</option>
             {% endfor %}
           </select>
         </div>
-        <button type="submit" class="btn btn-p" style="height:30px">Generate</button>
+        <button type="submit" class="btn btn-p" style="height:30px">{% trans "Generate" %}</button>
       </div>
     </form>
     <div class="loc-pista">
@@ -131,13 +132,13 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
 {% comment %} ── Las bodegas ── {% endcomment %}
 {% if bodegas %}
 <div style="margin-top:14px">
-  <div class="loc-t">Warehouses</div>
+  <div class="loc-t">{% trans "Warehouses" %}</div>
   <div style="display:flex; gap:8px; flex-wrap:wrap">
     {% for b in bodegas %}
     <button type="button" class="btn btn-g btn-sm"
             hx-get="{% url 'locations_panel' %}?warehouse={{ b.pk }}"
             hx-target="#locations-content" hx-swap="innerHTML"
-            style="{% if bodega_filtrada == b.pk|stringformat:'s' %}border-color:#0ea5e9;color:#0284c7{% endif %}">
+            style="{% if bodega_filtrada == b.pk|stringformat:'s' %}border-color:var(--accent);color:var(--adark){% endif %}">
       {{ b.code }} &middot; {{ b.name }}
       <span class="loc-chip" style="margin-left:6px">{{ b.num_ubicaciones }}</span>
     </button>
@@ -162,8 +163,8 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
 {% if ubicaciones %}
 <div style="margin-top:14px">
   <div class="loc-t" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-    <span>Locations</span>
-    <span style="text-transform:none;letter-spacing:0;color:#64748b">
+    <span>{% trans "Locations" %}</span>
+    <span style="text-transform:none;letter-spacing:0;color:var(--soft)">
       &mdash; {{ total_ubicaciones }} en total{% if total_ubicaciones > 400 %}, se muestran las primeras 400{% endif %},
       {{ posiciones_ocupadas }} con mercancia
     </span>
@@ -183,22 +184,22 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
       <table style="min-width:900px; width:100%; border-collapse:collapse">
         <thead>
           <tr>
-            <th>Code</th>
-            <th>Warehouse</th>
-            <th>Zone</th>
-            <th>Aisle</th>
-            <th>Rack</th>
-            <th>Level</th>
-            <th>Position</th>
-            <th>Kind</th>
-            <th>Stored</th>
-            <th>Status</th>
+            <th>{% trans "Code" %}</th>
+            <th>{% trans "Warehouse" %}</th>
+            <th>{% trans "Zone" %}</th>
+            <th>{% trans "Aisle" %}</th>
+            <th>{% trans "Rack" %}</th>
+            <th>{% trans "Level" %}</th>
+            <th>{% trans "Position" %}</th>
+            <th>{% trans "Kind" %}</th>
+            <th>{% trans "Stored" %}</th>
+            <th>{% trans "Status" %}</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {% for u in ubicaciones %}
-          <tr style="background:{% cycle '#ffffff' '#f8fafc' %}" class="{% if not u.active %}loc-apagada{% endif %}">
+          <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}" class="{% if not u.active %}loc-apagada{% endif %}">
             <td class="mono">{{ u.code }}</td>
             <td>{{ u.warehouse.code }}</td>
             <td>{{ u.zone|default:"&mdash;" }}</td>
@@ -218,14 +219,14 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
                 {{ u.guardadas }}
               </span>
               {% else %}
-              <span class="loc-vacia">vacia</span>
+              <span class="loc-vacia">{% trans "empty" %}</span>
               {% endif %}
             </td>
             <td>
               {% if u.active %}
-              <span class="badge b-entry">Active</span>
+              <span class="badge b-entry">{% trans "Active" %}</span>
               {% else %}
-              <span class="badge b-exit">Off</span>
+              <span class="badge b-exit">{% trans "Off" %}</span>
               {% endif %}
             </td>
             <td>
@@ -244,9 +245,9 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
       </table>
     </div>
     <div class="tabla-nav-barra">
-      <button type="button" class="nav-h" data-ir="inicio" title="Primera columna">&#9198; Start</button>
+      <button type="button" class="nav-h" data-ir="inicio" title="{% trans "First column" %}">&#9198; Start</button>
       <span class="tabla-nav-pista">Shift + scroll wheel to move across columns</span>
-      <button type="button" class="nav-h" data-ir="final" title="Ultima columna">End &#9197;</button>
+      <button type="button" class="nav-h" data-ir="final" title="{% trans "Last column" %}">End &#9197;</button>
     </div>
   </div>
   {% include 'warehouse/partials/tabla_navegable.html' %}

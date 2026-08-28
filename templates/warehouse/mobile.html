@@ -1,13 +1,15 @@
 {% load wms_filters %}
+{% load i18n %}
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>WMS Mobile</title>
+{% include "warehouse/partials/tema.html" %}
 <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 <script>
   document.addEventListener('htmx:beforeSwap', function(evt) {
@@ -16,15 +18,16 @@
 </script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet">
 <style>
-:root{--ink:#0f172a;--soft:#64748b;--faint:#94a3b8;--bg:#f1f5f9;--bdr:#e2e8f0;--accent:#0ea5e9;--asoft:#e0f2fe;--adark:#0284c7;--green:#10b981;--gsoft:#d1fae5;--red:#ef4444;--rsoft:#fee2e2;--white:#fff;--r:10px;}
+/* Los colores salen de partials/tema.html; el movil solo cambia el radio. */
+:root{--r:10px;}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;min-height:100vh;padding-bottom:80px}
-.topbar{background:var(--ink);display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:52px;position:sticky;top:0;z-index:100}
-.brand{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;color:#fff;display:flex;align-items:center;gap:8px}
+.topbar{background:var(--tb-bg);display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:52px;position:sticky;top:0;z-index:100}
+.brand{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;color:var(--on-accent);display:flex;align-items:center;gap:8px}
 .brand-dot{width:8px;height:8px;background:var(--accent);border-radius:50%}
 .topbar-right{font-size:12px;color:var(--faint)}
-.topbar-right strong{color:#fff}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--bdr);display:flex;z-index:100;box-shadow:0 -2px 12px rgba(0,0,0,.08);overflow-x:auto}
+.topbar-right strong{color:var(--on-accent)}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--bdr);display:flex;z-index:100;box-shadow:0 -2px 12px rgba(0,0,0,.08);overflow-x:auto}
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;background:none;border:none;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:500;color:var(--faint);transition:color .15s;gap:2px;min-width:55px}
 .nav-btn.on{color:var(--accent)}
 .nav-btn .icon{font-size:20px;line-height:1}
@@ -32,28 +35,28 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink
 .nav-logout:hover{color:var(--red)}
 .pg{padding:14px}
 .panel{display:none}.panel.on{display:block}
-.card{background:#fff;border:1px solid #cbd5e1;border-radius:var(--r);padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.card{background:var(--surface);border:1px solid var(--bdr-fuerte);border-radius:var(--r);padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .card-title{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:14px;padding-left:8px;border-left:3px solid var(--accent)}
 .form-row{margin-bottom:14px}
-.form-row label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0f172a;margin-bottom:6px}
-.form-input{width:100%;padding:11px 14px;border:2px solid #cbd5e1;border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:#0f172a;background:#ffffff;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none;appearance:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.form-row label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink);margin-bottom:6px}
+.form-input{width:100%;padding:11px 14px;border:2px solid var(--bdr-fuerte);border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:var(--ink);background:var(--surface);outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none;appearance:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--asoft)}
-select.form-input{height:48px;color:#0f172a}
+select.form-input{height:48px;color:var(--ink)}
 textarea.form-input{resize:none;height:80px}
 /* #5: Mobile combobox — catalog-only, no free text */
 .cb{position:relative}
-.cb-input{width:100%;padding:11px 14px;border:2px solid #cbd5e1;border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:#0f172a;background:#ffffff;outline:none;-webkit-appearance:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.cb-input{width:100%;padding:11px 14px;border:2px solid var(--bdr-fuerte);border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:var(--ink);background:var(--surface);outline:none;-webkit-appearance:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .cb-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--asoft)}
-.cb-drop{display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--accent);border-top:none;border-radius:0 0 var(--r) var(--r);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.12)}
+.cb-drop{display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--accent);border-top:none;border-radius:0 0 var(--r) var(--r);z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.12)}
 .cb-drop.open{display:block}
 .cb-opt{padding:12px 14px;cursor:pointer;font-size:15px;color:var(--ink);border-bottom:1px solid var(--bdr)}
 .cb-opt:last-child{border-bottom:none}
 .cb-opt:active{background:var(--asoft);color:var(--adark)}
 .cb-empty{padding:12px 14px;font-size:13px;color:var(--faint);font-style:italic}
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;border:none;transition:all .15s;text-decoration:none;margin-bottom:10px}
-.btn-p{background:var(--accent);color:#fff}.btn-p:active{background:var(--adark)}
-.btn-g{background:#fff;color:var(--soft);border:1px solid var(--bdr)}.btn-g:active{background:var(--bg)}
-.btn-cam{background:var(--green);color:#fff}.btn-cam:active{background:#059669}
+.btn-p{background:var(--accent);color:var(--on-accent)}.btn-p:active{background:var(--adark)}
+.btn-g{background:var(--surface);color:var(--soft);border:1px solid var(--bdr)}.btn-g:active{background:var(--bg)}
+.btn-cam{background:var(--green);color:var(--on-accent)}.btn-cam:active{background:var(--green-dark)}
 .btn-row{display:flex;gap:10px}
 .btn-row .btn{margin-bottom:0}
 .photo-area{border:2px dashed var(--bdr);border-radius:var(--r);padding:20px;text-align:center;margin-bottom:14px;background:var(--bg)}
@@ -64,13 +67,13 @@ textarea.form-input{resize:none;height:80px}
 .toggle-sw{position:relative;width:48px;height:26px}
 .toggle-sw input{opacity:0;width:0;height:0}
 .toggle-slider{position:absolute;inset:0;background:var(--bdr);border-radius:99px;transition:.2s;cursor:pointer}
-.toggle-slider::before{content:'';position:absolute;width:20px;height:20px;background:#fff;border-radius:50%;bottom:3px;left:3px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle-slider::before{content:'';position:absolute;width:20px;height:20px;background:var(--surface);border-radius:50%;bottom:3px;left:3px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 input:checked + .toggle-slider{background:var(--green)}
 input:checked + .toggle-slider::before{transform:translateX(22px)}
-.msg-s{padding:12px 16px;border-radius:var(--r);background:var(--gsoft);color:#065f46;font-size:14px;margin-bottom:12px}
-.msg-e{padding:12px 16px;border-radius:var(--r);background:var(--rsoft);color:#991b1b;font-size:14px;margin-bottom:12px}
+.msg-s{padding:12px 16px;border-radius:var(--r);background:var(--gsoft);color:var(--ok-ink);font-size:14px;margin-bottom:12px}
+.msg-e{padding:12px 16px;border-radius:var(--r);background:var(--rsoft);color:var(--err-ink);font-size:14px;margin-bottom:12px}
 .file-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
-.file-card{border:1px solid var(--bdr);border-radius:8px;overflow:hidden;background:#fff;text-align:center}
+.file-card{border:1px solid var(--bdr);border-radius:8px;overflow:hidden;background:var(--surface);text-align:center}
 .file-thumb{height:70px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden}
 .file-thumb img{width:100%;height:70px;object-fit:cover}
 .file-name{font-size:9px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 4px 0}
@@ -80,18 +83,18 @@ input:checked + .toggle-slider::before{transform:translateX(22px)}
 .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .b-entry{background:var(--gsoft);color:var(--green)}
 .b-exit{background:var(--rsoft);color:var(--red)}
-.b-td{background:#fef3c7;color:#b45309}
-.b-rd{background:#ede9fe;color:#6d28d9}
+.b-td{background:var(--warn-bg);color:var(--warn-ink-fuerte)}
+.b-rd{background:var(--violet-soft);color:var(--violet)}
 /* El aviso de permanencia: la mercancia que lleva demasiado tiempo guardada. */
-.aging-vencida{background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap}
-.aging-urgente{background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap}
+.aging-vencida{background:var(--warn-bg);color:var(--warn-ink-fuerte);border:1px solid var(--warn-bdr);border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap}
+.aging-urgente{background:var(--rsoft);color:var(--err-ink-fuerte);border:1px solid var(--err-bdr);border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;white-space:nowrap}
 @keyframes spin{to{transform:rotate(360deg)}}
-.spin{width:18px;height:18px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+.spin{width:18px;height:18px;border:3px solid rgba(255,255,255,.3);border-top-color:var(--on-accent);border-radius:50%;animation:spin .6s linear infinite}
 .htmx-indicator{display:none}.htmx-request .htmx-indicator{display:flex}
 /* DB table mobile */
 .tw{overflow-x:auto;border-radius:8px;border:1px solid var(--bdr)}
 table{width:100%;border-collapse:collapse;font-size:12px}
-thead{background:var(--ink)}
+thead{background:var(--th-bg)}
 thead th{padding:7px 8px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);white-space:nowrap}
 tbody tr{border-bottom:1px solid var(--bdr)}
 tbody td{padding:6px 8px;font-size:11px;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
@@ -121,7 +124,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
   font-size: 16px !important;
   padding: 10px;
   border-radius: 8px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--bdr-fuerte);
   width: 100%;
   margin-bottom: 12px;
   font-family: 'IBM Plex Sans', sans-serif;
@@ -146,6 +149,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
   <div class="topbar-right">
     <strong>{{ request.user.username }}</strong>
     <span style="font-size:10px;opacity:.7"> [{{ profile.role|upper }}]</span>
+    {% include "warehouse/partials/preferencias.html" %}
   </div>
 </div>
 
@@ -155,7 +159,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
 <!-- ══════ NEW OPERATION ══════ -->
 <div class="panel on" id="panel-new">
   <div class="card">
-    <div class="card-title">New Operation</div>
+    <div class="card-title">{% trans "New Operation" %}</div>
     <div id="mob-form-msg"></div>
 
     <form id="mob-op-form"
@@ -167,13 +171,13 @@ tbody td:has(button), tbody td:has(.btn-action) {
       {% csrf_token %}
 
       <div class="form-row">
-        <label>Date</label>
+        <label>{% trans "Date" %}</label>
         <input type="date" name="date" id="mob-date" class="form-input">
       </div>
 
       <!-- #5: All dropdowns are catalog-only (cb-only — no free text allowed) -->
       <div class="form-row">
-        <label>Customer <span style="color:#ef4444">*</span></label>
+        <label>{% trans "Customer" %} <span style="color:var(--red)">*</span></label>
         <div class="cb" id="mob-cb-customer">
           <input type="text" class="cb-input" id="mob-cb-customer-input"
                  placeholder="Tap to select customer..." autocomplete="off" readonly
@@ -185,9 +189,9 @@ tbody td:has(button), tbody td:has(.btn-action) {
       </div>
 
       <div class="form-row">
-        <label>Type of Operation <span style="color:#ef4444">*</span></label>
+        <label>{% trans "Type of Operation" %} <span style="color:var(--red)">*</span></label>
         <select name="operation_type" id="mob-op-type" class="form-input" onchange="mobOnTypeChange(this.value)">
-          <option value="">— Select —</option>
+          <option value="">{% trans "— Select —" %}</option>
           <option value="ENTRY">Entry (Goods Receipt)</option>
           <option value="EXIT">Exit (Goods Dispatch)</option>
         </select>
@@ -201,7 +205,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
       </div>
 
       <div class="form-row">
-        <label>Shipper</label>
+        <label>{% trans "Shipper" %}</label>
         <div class="cb" id="mob-cb-shipper">
           <input type="text" class="cb-input" id="mob-cb-shipper-input"
                  placeholder="Tap to select shipper..." autocomplete="off" readonly
@@ -213,17 +217,17 @@ tbody td:has(button), tbody td:has(.btn-action) {
       </div>
 
       <div class="form-row">
-        <label>Invoice</label>
+        <label>{% trans "Invoice" %}</label>
         <input type="text" name="invoice" class="form-input" placeholder="Invoice number...">
       </div>
 
       <div class="form-row">
-        <label>PO / Order</label>
-        <input type="text" name="po_order" id="mob-po-order" class="form-input" placeholder="PO / ORD...">
+        <label>{% trans "PO / Order" %}</label>
+        <input type="text" name="po_order" id="mob-po-order" class="form-input" placeholder="{% trans "PO / ORD..." %}">
       </div>
 
       <div class="form-row">
-        <label>Carrier</label>
+        <label>{% trans "Carrier" %}</label>
         <div class="cb" id="mob-cb-carrier">
           <input type="text" class="cb-input" id="mob-cb-carrier-input"
                  placeholder="Tap to select carrier..." autocomplete="off" readonly
@@ -235,7 +239,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
       </div>
 
       <div class="form-row">
-        <label>Bundle Type</label>
+        <label>{% trans "Bundle Type" %}</label>
         <div class="cb" id="mob-cb-bundle_type">
           <input type="text" class="cb-input" id="mob-cb-bundle_type-input"
                  placeholder="Tap to select bundle type..." autocomplete="off" readonly
@@ -247,36 +251,36 @@ tbody td:has(button), tbody td:has(.btn-action) {
       </div>
 
       <div class="form-row">
-        <label>Bundle Qty <span style="color:#ef4444">*</span></label>
+        <label>{% trans "Bundle Qty" %} <span style="color:var(--red)">*</span></label>
         <input type="number" name="bundle_qty" class="form-input" placeholder="0" min="0" inputmode="numeric">
       </div>
 
       <div class="form-row">
-        <label>Weight LBS <span style="color:#ef4444">*</span></label>
+        <label>{% trans "Weight LBS" %} <span style="color:var(--red)">*</span></label>
         <input type="number" name="weight_lbs" id="mob-lbs" class="form-input"
                placeholder="0.00" step="0.01" inputmode="decimal"
                oninput="if(this.value)document.getElementById('mob-kgs').value=(parseFloat(this.value)*0.453592).toFixed(2)">
       </div>
 
       <div class="form-row">
-        <label>Weight KGS</label>
+        <label>{% trans "Weight KGS" %}</label>
         <input type="number" name="weight_kgs" id="mob-kgs" class="form-input"
                placeholder="0.00" step="0.01" inputmode="decimal"
                oninput="if(this.value)document.getElementById('mob-lbs').value=(parseFloat(this.value)/0.453592).toFixed(2)">
       </div>
 
       <div class="form-row">
-        <label>Description <span style="color:#ef4444">*</span></label>
-        <textarea name="description" class="form-input" placeholder="Merchandise description..."></textarea>
+        <label>{% trans "Description" %} <span style="color:var(--red)">*</span></label>
+        <textarea name="description" class="form-input" placeholder="{% trans "Merchandise description..." %}"></textarea>
       </div>
 
       <div class="form-row">
-        <label>Note</label>
-        <textarea name="note" class="form-input" placeholder="Additional notes..."></textarea>
+        <label>{% trans "Note" %}</label>
+        <textarea name="note" class="form-input" placeholder="{% trans "Additional notes..." %}"></textarea>
       </div>
 
       <div class="toggle-row" style="margin-bottom:14px">
-        <span class="toggle-label">Damage</span>
+        <span class="toggle-label">{% trans "Damage" %}</span>
         <label class="toggle-sw">
           <input type="checkbox" name="damage" id="mob-dmg"
                  onchange="document.getElementById('mob-dmg-desc').style.display=this.checked?'block':'none'">
@@ -291,7 +295,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
       <!-- NUEVOS CAMPOS: REF AA, DYS, PEDIMENTO -->
       <div class="form-row">
         <label>REF AA</label>
-        <input type="text" name="ref_aa" class="form-input" placeholder="Referencia AA...">
+        <input type="text" name="ref_aa" class="form-input" placeholder="{% trans "AA reference..." %}">
       </div>
       <div class="form-row">
         <label>DYS</label>
@@ -299,7 +303,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
       </div>
       <div class="form-row">
         <label>PEDIMENTO</label>
-        <input type="text" name="pedimento" class="form-input" placeholder="Número de pedimento...">
+        <input type="text" name="pedimento" class="form-input" placeholder="{% trans "Pedimento number..." %}">
       </div>
 
       <div class="form-row">
@@ -324,12 +328,12 @@ tbody td:has(button), tbody td:has(.btn-action) {
         <input type="file" id="mob-files" multiple
                style="display:none" onchange="mobAddFiles(this)">
         <div id="mob-previews" class="photo-preview"></div>
-        <div id="mob-file-count" style="font-size:11px;color:#64748b;margin-top:4px"></div>
+        <div id="mob-file-count" style="font-size:11px;color:var(--soft);margin-top:4px"></div>
       </div>
 
       <!-- #4: WhatsApp checked by default -->
       <div class="toggle-row" style="margin-bottom:16px">
-        <span class="toggle-label">Send WhatsApp notification</span>
+        <span class="toggle-label">{% trans "Send WhatsApp notification" %}</span>
         <label class="toggle-sw">
           <input type="checkbox" name="send_whatsapp" value="1" id="mob-wa" checked>
           <span class="toggle-slider" style="background:var(--green)"></span>
@@ -337,9 +341,9 @@ tbody td:has(button), tbody td:has(.btn-action) {
       </div>
 
       <button type="submit" class="btn btn-p">
-        <span class="htmx-indicator spin"></span>Save Operation
+        <span class="htmx-indicator spin"></span>{% trans "Save Operation" %}
       </button>
-      <button type="button" class="btn btn-g" onclick="resetMobForm()">Clear</button>
+      <button type="button" class="btn btn-g" onclick="resetMobForm()">{% trans "Clear" %}</button>
     </form>
   </div>
 </div>
@@ -348,7 +352,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
 <!-- ══════ DATABASE ══════ -->
 <div class="panel {% if not profile|can_see_tab:'form' %}on{% endif %}" id="panel-database">
   <div class="card">
-    <div class="card-title">Operations</div>
+    <div class="card-title">{% trans "Operations" %}</div>
     <input type="text" id="mob-db-q" class="form-input" placeholder="Search..."
            style="margin-bottom:10px"
            hx-get="{% url 'operations_search' %}" hx-target="#mob-ops-table"
@@ -362,7 +366,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
 <!-- ══════ CATALOG ══════ -->
 <div class="panel" id="panel-catalog">
   <div class="card">
-    <div class="card-title">Operational Catalog</div>
+    <div class="card-title">{% trans "Operational Catalog" %}</div>
     <div id="mob-cat-msg"></div>
 
     <!-- Formulario para agregar nuevo registro -->
@@ -376,46 +380,46 @@ tbody td:has(button), tbody td:has(.btn-action) {
       <input type="hidden" name="scope" value="operational">
       <div style="display:grid; gap:8px; margin-bottom:12px;">
         <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Category</label>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Category" %}</label>
           <select name="category" class="form-input" style="height:44px;">
-            <option value="">— Select —</option>
-            <option value="SHIPPER">Shipper</option>
-            <option value="CARRIER">Carrier</option>
-            <option value="BUNDLE_TYPE">Type of Bundle</option>
-            <option value="TYPE_OP">Type of Operation</option>
-            <option value="CC_EMAIL">CC Email</option>
+            <option value="">{% trans "— Select —" %}</option>
+            <option value="SHIPPER">{% trans "Shipper" %}</option>
+            <option value="CARRIER">{% trans "Carrier" %}</option>
+            <option value="BUNDLE_TYPE">{% trans "Type of Bundle" %}</option>
+            <option value="TYPE_OP">{% trans "Type of Operation" %}</option>
+            <option value="CC_EMAIL">{% trans "CC Email" %}</option>
           </select>
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Name / Value</label>
-          <input type="text" name="name" class="form-input" placeholder="Name or value..." required>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Name / Value" %}</label>
+          <input type="text" name="name" class="form-input" placeholder="{% trans "Name or value..." %}" required>
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Email(s) — comma separated</label>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Email(s) — comma separated" %}</label>
           <input type="text" name="contact_email" class="form-input" placeholder="a@x.com, b@x.com">
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Phone</label>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Phone" %}</label>
           <input type="text" name="phone" class="form-input" placeholder="+52 xxx...">
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Address</label>
-          <input type="text" name="address" class="form-input" placeholder="Address...">
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Address" %}</label>
+          <input type="text" name="address" class="form-input" placeholder="{% trans "Address..." %}">
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Notes</label>
-          <input type="text" name="notes" class="form-input" placeholder="Notes...">
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Notes" %}</label>
+          <input type="text" name="notes" class="form-input" placeholder="{% trans "Notes..." %}">
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">WhatsApp</label>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">WhatsApp</label>
           <input type="text" name="whatsapp" class="form-input" placeholder="+521XXXXXXXXXX">
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b">Abreviatura</label>
-          <input type="text" name="abbreviation" class="form-input" placeholder="Ej: LBO, ACME">
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Abbreviation" %}</label>
+          <input type="text" name="abbreviation" class="form-input" placeholder="{% trans "e.g. LBO, ACME" %}">
         </div>
       </div>
-      <button type="submit" class="btn btn-p" style="padding:12px">Save Record</button>
+      <button type="submit" class="btn btn-p" style="padding:12px">{% trans "Save Record" %}</button>
     </form>
 
     <!-- Tabla de catálogos -->
@@ -430,7 +434,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
        trabajo de escritorio. Aquí se consultan, que es lo que hace falta en el
        patio. -->
   <div class="card" style="margin-top:12px">
-    <div class="card-title">Customers</div>
+    <div class="card-title">{% trans "Customers" %}</div>
     <div class="tw" id="customer-table">
       {% include 'warehouse/partials/catalog_table.html' with catalog_entries=customer_entries scope='customers' table_id='customer-table' can_edit=False %}
     </div>
@@ -442,10 +446,10 @@ tbody td:has(button), tbody td:has(.btn-action) {
      al haber ahora dos tablas en la pagina se saco fuera, y esta pantalla lo
      necesita igual porque pinta el boton Edit. -->
 <div id="cat-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#fff;border-radius:10px;padding:18px;max-width:500px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+  <div style="background:var(--surface);border-radius:10px;padding:18px;max-width:500px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <span style="font-size:13px;font-weight:600">Edit Catalog Entry</span>
-      <button onclick="closeCatalogEdit()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#64748b">✕</button>
+      <span style="font-size:13px;font-weight:600">{% trans "Edit Catalog Entry" %}</span>
+      <button onclick="closeCatalogEdit()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--soft)">✕</button>
     </div>
     <div id="cat-edit-body"></div>
   </div>
@@ -467,10 +471,10 @@ function closeCatalogEdit() {
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <input type="text" id="mob-digi-q" class="form-input" placeholder="Enter Custom ID..."
              style="flex:1" onkeydown="if(event.key==='Enter')mobDigiSearch()">
-      <button onclick="mobDigiSearch()" class="btn btn-p" style="width:auto;padding:11px 18px;margin:0">Search</button>
+      <button onclick="mobDigiSearch()" class="btn btn-p" style="width:auto;padding:11px 18px;margin:0">{% trans "Search" %}</button>
     </div>
     <div id="mob-digital-content">
-      <div style="text-align:center;padding:32px;color:var(--faint);font-size:14px">Loading…</div>
+      <div style="text-align:center;padding:32px;color:var(--faint);font-size:14px">{% trans "Loading..." %}</div>
     </div>
   </div>
 </div>
@@ -478,12 +482,12 @@ function closeCatalogEdit() {
 <!-- ══════ REPORT GENERATOR ══════ -->
 <div class="panel" id="panel-reports">
   <div class="card">
-    <div class="card-title">Report Generator</div>
+    <div class="card-title">{% trans "Report Generator" %}</div>
     <div id="report-content"
          hx-get="{% url 'report_generator' %}"
          hx-trigger="intersect once"
          hx-swap="innerHTML">
-      <div style="color:var(--faint);font-size:13px;padding:20px">Loading…</div>
+      <div style="color:var(--faint);font-size:13px;padding:20px">{% trans "Loading..." %}</div>
     </div>
   </div>
 </div>
@@ -498,7 +502,7 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
   <div class="card">
     <div class="card-title">Papelera y bitácora</div>
     <div id="deletions-content">
-      <div style="color:var(--faint);font-size:13px;padding:20px">Loading…</div>
+      <div style="color:var(--faint);font-size:13px;padding:20px">{% trans "Loading..." %}</div>
     </div>
   </div>
 </div>
@@ -514,13 +518,13 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
   </button>
   {% endif %}
   <button class="nav-btn {% if not profile|can_see_tab:'form' %}on{% endif %}" id="nav-database" onclick="mobShowTab('database')">
-    <span class="icon">🗄️</span>Operations
+    <span class="icon">🗄️</span>{% trans "Operations" %}
   </button>
   <button class="nav-btn" id="nav-catalog" onclick="mobShowTab('catalog')">
-    <span class="icon">📚</span>Catalog
+    <span class="icon">📚</span>{% trans "Catalog" %}
   </button>
   <button class="nav-btn" id="nav-digital" onclick="mobShowTab('digital')">
-    <span class="icon">📁</span>Digital
+    <span class="icon">📁</span>{% trans "Digital" %}
   </button>
   <button class="nav-btn" id="nav-reports" onclick="mobShowTab('reports')">
     <span class="icon">📊</span>Reports
@@ -538,10 +542,10 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
 
 <!-- MODAL PARA MÓVIL -->
 <div id="mobile-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; padding:16px; overflow-y:auto;">
-  <div style="background:#fff; border-radius:12px; max-width:100%; width:100%; max-height:90vh; overflow-y:auto; font-family:'IBM Plex Sans',sans-serif; font-size:14px;">
-    <div style="position:sticky; top:0; background:#fff; padding:12px 16px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-      <span style="font-weight:600; font-family:'IBM Plex Mono',monospace; color:#0f172a;">Detalle</span>
-      <button onclick="closeMobileModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">✕</button>
+  <div style="background:var(--surface); border-radius:12px; max-width:100%; width:100%; max-height:90vh; overflow-y:auto; font-family:'IBM Plex Sans',sans-serif; font-size:14px;">
+    <div style="position:sticky; top:0; background:var(--surface); padding:12px 16px; border-bottom:1px solid var(--bdr); display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-weight:600; font-family:'IBM Plex Mono',monospace; color:var(--ink);">Detalle</span>
+      <button onclick="closeMobileModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--soft);">✕</button>
     </div>
     <div id="mobile-modal-body" style="padding:16px;"></div>
   </div>
@@ -704,9 +708,9 @@ function mobLoadEntries(){
       c.innerHTML=data.map(e=>`
         <div id="mei-${e.custom_id}" onclick="mobToggleEntry('${e.custom_id}')"
              style="display:flex;justify-content:space-between;align-items:center;
-                    padding:10px 12px;background:#fff;border:1px solid var(--bdr);
+                    padding:10px 12px;background:var(--surface);border:1px solid var(--bdr);
                     border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px;
-                    ${mobSelEntries.includes(e.custom_id)?'border-color:var(--green);background:var(--gsoft);color:#065f46':''}">
+                    ${mobSelEntries.includes(e.custom_id)?'border-color:var(--green);background:var(--gsoft);color:var(--ok-ink)':''}">
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12px">${e.custom_id}</div>
             <div style="font-size:11px;color:var(--faint)">${e.date}${e.po_order?' · PO:'+e.po_order:''}</div>

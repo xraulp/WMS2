@@ -1,6 +1,6 @@
 {% include 'warehouse/partials/platform_nav.html' with activa='notifications' %}
 
-<p style="font-size:11px;color:#94a3b8;margin:-4px 0 12px">
+<p style="font-size:11px;color:var(--faint);margin:-4px 0 12px">
   Every email and WhatsApp the system tried to send, across all companies. Read
   only — resending an alert is done by the company's own operator, from the
   operation. Showing the latest 200.
@@ -9,8 +9,8 @@
 <form hx-get="{% url 'platform_notifications' %}" hx-target="#platform-content" hx-swap="innerHTML"
       style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
   <div style="display:flex;flex-direction:column;gap:3px">
-    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Company</label>
-    <select name="tenant" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px;min-width:180px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Company</label>
+    <select name="tenant" style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;min-width:180px">
       <option value="">All companies</option>
       {% for t in tenants %}
       <option value="{{ t.pk }}" {% if tenant_id == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>
@@ -18,8 +18,8 @@
     </select>
   </div>
   <div style="display:flex;flex-direction:column;gap:3px">
-    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:#64748b">Status</label>
-    <select name="status" style="height:28px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;font-size:12px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Status</label>
+    <select name="status" style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px">
       <option value="">Any status</option>
       {% for valor, etiqueta in estados %}
       <option value="{{ valor }}" {% if estado == valor %}selected{% endif %}>{{ etiqueta }}</option>
@@ -29,7 +29,7 @@
   <button type="submit" class="btn btn-g btn-sm" style="height:28px">Filter</button>
 </form>
 
-<div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px">
+<div style="overflow-x:auto;border:1px solid var(--bdr);border-radius:10px">
 <table style="min-width:900px">
   <thead>
     <tr>
@@ -45,8 +45,8 @@
   </thead>
   <tbody>
     {% for r in registros %}
-    <tr style="background:{% cycle '#ffffff' '#f8fafc' %}">
-      <td style="white-space:nowrap;font-size:11px;color:#64748b">{{ r.created_at|date:"Y-m-d H:i" }}</td>
+    <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}">
+      <td style="white-space:nowrap;font-size:11px;color:var(--soft)">{{ r.created_at|date:"Y-m-d H:i" }}</td>
       <td style="font-size:12px">{{ r.tenant.name|default:"—" }}</td>
       <td class="mono" style="font-size:11px">{{ r.operation_custom_id|default:"—" }}</td>
       <td style="font-size:11px">{{ r.get_channel_display }}</td>
@@ -60,7 +60,7 @@
       <td style="font-size:11px;max-width:260px;overflow:hidden;text-overflow:ellipsis" title="{{ r.detail }}">{{ r.detail|default:"—" }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px">Nothing sent yet with these filters.</td></tr>
+    <tr><td colspan="8" style="text-align:center;color:var(--faint);padding:20px">Nothing sent yet with these filters.</td></tr>
     {% endfor %}
   </tbody>
 </table>
