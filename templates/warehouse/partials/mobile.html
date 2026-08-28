@@ -288,7 +288,7 @@ tbody td{padding:6px 8px;font-size:11px;white-space:nowrap;max-width:110px;overf
 <!-- ══════ DATABASE ══════ -->
 <div class="panel {% if not profile|can_see_tab:'form' %}on{% endif %}" id="panel-database">
   <div class="card">
-    <div class="card-title">Database</div>
+    <div class="card-title">Operations</div>
     <input type="text" id="mob-db-q" class="form-input" placeholder="Search..."
            style="margin-bottom:10px"
            hx-get="{% url 'operations_search' %}" hx-target="#mob-ops-table"
@@ -337,7 +337,7 @@ tbody td{padding:6px 8px;font-size:11px;white-space:nowrap;max-width:110px;overf
   </button>
   {% endif %}
   <button class="nav-btn {% if not profile|can_see_tab:'form' %}on{% endif %}" id="nav-database" onclick="mobShowTab('database')">
-    <span class="icon">🗄️</span>Database
+    <span class="icon">🗄️</span>Operations
   </button>
   <button class="nav-btn" id="nav-digital" onclick="mobShowTab('digital')">
     <span class="icon">📁</span>Digital

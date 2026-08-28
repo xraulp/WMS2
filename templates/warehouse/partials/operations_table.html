@@ -17,6 +17,13 @@ recordar que el buscador vacio las trae todas.
 </div>
 {% endif %}
 
+{% comment %}
+La barra de importar. `operations_import` ya rechaza a quien no puede crear
+operaciones, asi que a un cliente el boton solo le daba un 403: se pintaba una
+puerta que no abre. El permiso que se comprueba aqui es el mismo que el de la
+vista.
+{% endcomment %}
+{% if profile.can_create_operations %}
 <!-- Import / Download Layout bar -->
 <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
   <form hx-post="{% url 'operations_import' %}" hx-target="#ops-table" hx-swap="innerHTML"
@@ -29,23 +36,33 @@ recordar que el buscador vacio las trae todas.
   </form>
   <a href="{% url 'operations_layout' %}" class="btn btn-g btn-sm" style="color:#0ea5e9;border-color:#0ea5e9">⬇ Download Layout</a>
 </div>
+{% endif %}
 
 {% if operations %}
 <div style="position:relative;">
 
-  <!-- Contenedor SCROLLABLE de la tabla (scroll horizontal nativo) -->
-  <div id="table-scroll-wrap" style="overflow-x:auto; overflow-y:visible;">
+  {% comment %}
+  El marco por el que se asoma la tabla. Tiene altura tope y scroll propio en
+  los dos ejes, y no es un capricho: la cabecera solo puede quedarse quieta
+  (`position:sticky`) respecto al recuadro que hace el scroll. Mientras las
+  filas las desplazaba la ventana, la cabecera se pegaba a un contenedor que no
+  se movia y acababa flotando sobre las filas, en medio de la tabla.
+
+  El tope se calcula desde el alto de la ventana para que el recuadro llegue
+  siempre hasta cerca del borde inferior, en un portatil y en un monitor.
+  {% endcomment %}
+  <div id="table-scroll-wrap" style="max-height:calc(100vh - 230px); overflow:auto;">
     <table id="ops-table-inner" style="min-width:2200px; width:100%; border-collapse:collapse; table-layout:auto;">
       <thead>
         <tr>
-          <th style="background:#1e293b; color:#94a3b8; white-space:nowrap;">#</th>
+          <th style="color:#94a3b8; white-space:nowrap;">#</th>
           {% comment %}
           El aviso del hilo va aqui, junto al numero, y no al final con las
           acciones: la tabla mide 2200 px y nadie cruza esa distancia para
           descubrir si un cliente escribio. Lo que avisa tiene que verse sin
           mover la barra horizontal.
           {% endcomment %}
-          <th style="background:#1e293b; color:#94a3b8; white-space:nowrap;" title="Mensajes">💬</th>
+          <th style="color:#94a3b8; white-space:nowrap;" title="Mensajes">💬</th>
           <th style="white-space:nowrap;">Date</th>
           <th style="white-space:nowrap;">Custom ID</th>
           <th style="white-space:nowrap;">Entries Disp.</th>
@@ -152,10 +169,28 @@ recordar que el buscador vacio las trae todas.
     </table>
   </div>
 
-  <!-- BARRA DE SCROLL FIJA EN LA PARTE INFERIOR DE LA PANTALLA (sticky) -->
-  <div id="fixed-hscroll-bar"
-       style="position:sticky; bottom:0; left:0; right:0; height:16px; overflow-x:auto; overflow-y:hidden; background:#e2e8f0; border-top:1px solid #cbd5e1; z-index:100; opacity:0; transition:opacity 0.2s;">
-    <div id="fixed-hscroll-inner" style="height:1px;"></div>
+  {% comment %}
+  La barra de navegacion horizontal: la barra de scroll de siempre, ahora con
+  un boton en cada extremo que cruza la tabla de un salto.
+
+  La tabla mide 2200 px y en una pantalla normal se ven unos 1400: llegar a las
+  ultimas columnas costaba arrastrar la barra a pulso. Los botones van aqui, en
+  la barra pegada al borde inferior, y no flotando sobre la tabla, porque esta
+  es la unica franja que sigue a la vista mientras se recorren doscientas
+  filas -- un boton dentro de la tabla se queda arriba en cuanto bajas.
+
+  El de la izquierda vuelve al principio y el de la derecha lleva al final,
+  cada uno apuntando a donde te lleva. Se apagan al llegar a su extremo, que es
+  como se sabe sin probar que ya no hay mas tabla de ese lado.
+  {% endcomment %}
+  <div id="nav-horizontal"
+       style="position:sticky; bottom:0; left:0; right:0; display:flex; align-items:center;
+              justify-content:space-between; gap:6px; background:#f8fafc;
+              border-top:1px solid #cbd5e1; padding:4px 6px; z-index:100;
+              opacity:0; transition:opacity 0.2s;">
+    <button type="button" id="ir-al-inicio" class="nav-h" title="Primera columna">&#9198; Start</button>
+    <span style="font-size:10px; color:#94a3b8; letter-spacing:.03em">Shift + scroll wheel to move across columns</span>
+    <button type="button" id="ir-al-final" class="nav-h" title="Ultima columna">End &#9197;</button>
   </div>
 </div>
 
@@ -193,64 +228,120 @@ recordar que el buscador vacio las trae todas.
 .btn-action-danger:hover {
   background:#fef2f2;
 }
+
+/* Los botones que cruzan la tabla de un salto. */
+.nav-h {
+  flex:0 0 auto;
+  border:1px solid #cbd5e1;
+  background:#fff;
+  color:#475569;
+  border-radius:5px;
+  font-family:inherit;
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:.03em;
+  padding:2px 8px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.nav-h:hover:not(:disabled) { background:#e0f2fe; border-color:#0ea5e9; color:#0284c7; }
+.nav-h:disabled { opacity:.35; cursor:default; }
+
+/*
+  Las columnas que identifican la fila -- el numero, el aviso del hilo, la
+  fecha y el Custom ID -- se quedan quietas mientras el resto de la tabla pasa
+  por debajo. Sin esto, al llegar a las columnas del fondo (PED, Email, Created
+  By) la fila ya no dice de que operacion es, y habia que volver al principio
+  para comprobarlo.
+
+  El `left` de cada una lo calcula el script de abajo midiendo la cabecera: los
+  anchos dependen del contenido y escribirlos aqui a mano los dejaria
+  desalineados en cuanto un Custom ID fuera mas largo.
+
+  `background:inherit` es lo que impide que se transparenten: la fila lleva su
+  color en el `style` del `tr` y la celda fija lo copia.
+*/
+#ops-table-inner .col-fija { position:sticky; z-index:2; background:inherit; }
+#ops-table-inner thead th.col-fija { background:#1e293b; z-index:4; }
+#ops-table-inner .col-fija-borde { box-shadow:3px 0 4px -2px rgba(15,23,42,.25); }
+
+/*
+  Y la cabecera se queda arriba del marco mientras se recorren las filas. Sin
+  esto, a la fila veinte ya no se sabe que columna es cual y hay que subir a
+  leer el encabezado y volver a bajar.
+*/
+#ops-table-inner thead th { position:sticky; top:0; z-index:3; background:var(--ink); }
+
 </style>
 
 <script>
 (function() {
-  const wrap = document.getElementById('table-scroll-wrap');
-  const fakeScroll = document.getElementById('fixed-hscroll-bar');
-  const inner = document.getElementById('fixed-hscroll-inner');
-  const table = document.getElementById('ops-table-inner');
+  const wrap      = document.getElementById('table-scroll-wrap');
+  const table     = document.getElementById('ops-table-inner');
+  const barra     = document.getElementById('nav-horizontal');
+  const btnInicio = document.getElementById('ir-al-inicio');
+  const btnFinal  = document.getElementById('ir-al-final');
 
-  if (!wrap || !fakeScroll || !inner || !table) return;
+  if (!wrap || !table || !barra) return;
 
-  // Ajustar el ancho del scroll falso al ancho real de la tabla
-  function updateFakeScrollWidth() {
-    const tableWidth = table.scrollWidth;
-    inner.style.width = tableWidth + 'px';
-  }
-  updateFakeScrollWidth();
-  window.addEventListener('resize', updateFakeScrollWidth);
+  // Cuantas columnas de la izquierda no se mueven: #, el aviso del hilo, la
+  // fecha y el Custom ID. Son las que dicen de que operacion es la fila; a
+  // partir de ahi ya es contenido.
+  const COLUMNAS_FIJAS = 4;
 
-  let syncing = false;
-
-  // Cuando el usuario hace scroll en la tabla REAL -> mover la barra fija
-  wrap.addEventListener('scroll', function() {
-    if (syncing) return;
-    syncing = true;
-    fakeScroll.scrollLeft = wrap.scrollLeft;
-    syncing = false;
-  });
-
-  // Cuando el usuario mueve la barra fija -> mover la tabla REAL
-  fakeScroll.addEventListener('scroll', function() {
-    if (syncing) return;
-    syncing = true;
-    wrap.scrollLeft = fakeScroll.scrollLeft;
-    syncing = false;
-  });
-
-  // Mostrar la barra fija SOLO cuando el contenedor necesita scroll horizontal
-  function checkIfScrollNeeded() {
-    const needsScroll = wrap.scrollWidth > wrap.clientWidth;
-    if (needsScroll) {
-      fakeScroll.style.opacity = '1';
-      // Sincronizar posiciones iniciales
-      fakeScroll.scrollLeft = wrap.scrollLeft;
-    } else {
-      fakeScroll.style.opacity = '0';
+  // El `left` de cada columna fija es la suma de los anchos de las anteriores.
+  // Se mide sobre la cabecera y se copia a todas las celdas de esa columna.
+  function fijarColumnas() {
+    const cabecera = table.querySelectorAll('thead th');
+    if (cabecera.length < COLUMNAS_FIJAS) return;
+    const izquierdas = [];
+    let acumulado = 0;
+    for (let i = 0; i < COLUMNAS_FIJAS; i++) {
+      izquierdas.push(acumulado);
+      acumulado += cabecera[i].getBoundingClientRect().width;
     }
+    table.querySelectorAll('thead tr, tbody tr').forEach(function(fila) {
+      for (let i = 0; i < COLUMNAS_FIJAS && i < fila.children.length; i++) {
+        const celda = fila.children[i];
+        celda.classList.add('col-fija');
+        celda.style.left = izquierdas[i] + 'px';
+        celda.classList.toggle('col-fija-borde', i === COLUMNAS_FIJAS - 1);
+      }
+    });
   }
 
-  // Detectar cambios en la tabla (cuando se carga nueva data via HTMX)
-  const observer = new ResizeObserver(function() {
-    updateFakeScrollWidth();
-    checkIfScrollNeeded();
-  });
+  // Un boton encendido que no lleva a ninguna parte se pulsa una vez y no se
+  // vuelve a mirar; apagarlo en el extremo es lo que dice donde estas.
+  function actualizarBotones() {
+    if (!btnInicio || !btnFinal) return;
+    const restante = wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft;
+    btnInicio.disabled = wrap.scrollLeft <= 1;
+    btnFinal.disabled  = restante <= 1;
+  }
+
+  function irA(x) { wrap.scrollTo({ left: x, behavior: 'smooth' }); }
+  if (btnInicio) btnInicio.addEventListener('click', function() { irA(0); });
+  if (btnFinal)  btnFinal.addEventListener('click',  function() { irA(wrap.scrollWidth); });
+
+  wrap.addEventListener('scroll', actualizarBotones);
+
+  // La barra solo se pinta si la tabla no cabe de ancho: donde no hay a donde
+  // ir, dos botones y un consejo son ruido.
+  function recalcular() {
+    barra.style.opacity = (wrap.scrollWidth > wrap.clientWidth) ? '1' : '0';
+    fijarColumnas();
+    actualizarBotones();
+  }
+
+  window.addEventListener('resize', recalcular);
+
+  // La tabla la repinta HTMX al filtrar; el observer recalcula sin depender de
+  // que cada llamada se acuerde de avisar.
+  const observer = new ResizeObserver(recalcular);
   observer.observe(table);
   observer.observe(wrap);
 
-  checkIfScrollNeeded();
+  recalcular();
 })();
 </script>
 

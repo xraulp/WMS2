@@ -214,6 +214,11 @@ def dashboard(request):
         # y lo mantiene al dia `refrescarAvisosDeChat`; sin esto, quien entra y
         # no toca nada durante treinta segundos no sabe que le escribieron.
         'sin_leer': resumen_sin_leer(request.user, tenant),
+        # Los clientes con ficha, para el desplegable que filtra la tabla de
+        # Operaciones. Es el mismo catalogo que alimenta el alta, pero aqui
+        # solo hacen falta el pk y el nombre.
+        'filtro_customers': Catalog.objects.filter(
+            category='CUSTOMER', active=True, tenant=tenant).order_by('name'),
         'profile': profile,
         'is_home': profile.is_home(),
         'users': users,
@@ -821,14 +826,22 @@ def operation_send_whatsapp(request, pk):
 @login_required
 @require_GET
 def operations_search(request):
-    tenant = get_tenant_or_404(request) #### 072526 12:51 Modifica la consulta inicial:
-    q   = request.GET.get('q','').strip()
-    status_filter = request.GET.get('status','').strip()
-    #####ops = WarehouseOperation.objects.select_related(
-    #####    'customer','shipper','carrier','bundle_type').all()
-    #####ops = customer_ops_filter(request.user, ops)
+    """
+    La tabla de Operaciones con todos sus filtros aplicados a la vez.
+
+    Antes cada filtro iba por su cuenta -- el de usuario llamaba a
+    `operations_by_user`, el de estado volvia aqui sin la busqueda -- de modo
+    que elegir uno borraba en silencio los demas: quien buscaba "acme" y luego
+    marcaba "In Warehouse" recibia todas las operaciones en almacen, no las de
+    Acme, y el cuadro de busqueda seguia diciendo "acme". Todos entran ahora
+    por la misma puerta y se acumulan.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    q = request.GET.get('q', '').strip()
+
     ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
-        'customer', 'shipper', 'carrier', 'bundle_type' #### 072526 12:54 Modifica la consulta inicial:
+        'customer', 'shipper', 'carrier', 'bundle_type', 'created_by'
     )
     ops = customer_ops_filter(request.user, ops)
 
@@ -841,10 +854,37 @@ def operations_search(request):
             Q(pro__icontains=q) | Q(trailer__icontains=q) |
             Q(description__icontains=q) | Q(date__icontains=q)
         )
+
+    # El pk del usuario viaja en la peticion, asi que el permiso se comprueba
+    # aqui y no solo al pintar el desplegable. `profile__tenant` ademas evita
+    # que el pk de un usuario de otra empresa sirva de sonda.
+    filtro_usuario = request.GET.get('user', '').strip()
+    if filtro_usuario.isdigit() and (
+            profile.is_superadmin() or profile.is_home() or profile.is_manager()):
+        ops = ops.filter(created_by_id=int(filtro_usuario),
+                         created_by__profile__tenant=tenant)
+
+    # El cliente se filtra por la ficha del catalogo. Los nombres tecleados a
+    # mano (`customer_name_manual`) no estan en el desplegable porque no son
+    # una ficha; para esos esta el cuadro de busqueda.
+    filtro_cliente = request.GET.get('customer', '').strip()
+    if filtro_cliente.isdigit():
+        ops = ops.filter(customer_id=int(filtro_cliente), customer__tenant=tenant)
+
+    filtro_tipo = request.GET.get('type', '').strip().upper()
+    if filtro_tipo in ('ENTRY', 'EXIT'):
+        ops = ops.filter(operation_type=filtro_tipo)
+
+    # El estado no es un campo: sale de leer `entry_dispatched`, asi que se
+    # filtra en Python sobre lo que ya trajo el SQL. Solo lo tienen las
+    # entradas -- una salida no esta "en almacen" ni "liberada", y la columna
+    # de la tabla le pinta un guion.
+    filtro_estado = request.GET.get('status', '').strip()
     ops_list = list(ops[:500])
-    if status_filter in ('Released Goods', 'In Warehouse'):
-        ops_list = [o for o in ops_list if o.status == status_filter]
-    profile = get_profile(request.user)
+    if filtro_estado in ('Released Goods', 'In Warehouse'):
+        ops_list = [o for o in ops_list
+                    if o.operation_type == 'ENTRY' and o.status == filtro_estado]
+
     return render(request, 'warehouse/partials/operations_table.html',
                   {'operations': anotar_hilos(request.user, ops_list[:200]),
                    'search_query': q,

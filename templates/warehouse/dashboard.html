@@ -169,7 +169,7 @@ tbody td:has(.btn-action) {
   {% if profile|can_see_tab:'form' %}
   <button class="tab on" id="tab-form" onclick="showTab('form')">New Operation</button>
   {% endif %}
-  <button class="tab {% if not profile|can_see_tab:'form' %}on{% endif %}" id="tab-database" onclick="showTab('database')">Database</button>
+  <button class="tab {% if not profile|can_see_tab:'form' %}on{% endif %}" id="tab-database" onclick="showTab('database')">Operations</button>
   {% if profile|can_see_tab:'catalog' %}
   <button class="tab" id="tab-catalog" onclick="showTab('catalog')">Catalog</button>
   {% endif %}
@@ -398,21 +398,40 @@ tbody td:has(.btn-action) {
 
 <div class="panel {% if not profile|can_see_tab:'form' %}on{% endif %}" id="panel-database">
   <div class="card">
-    <div class="ct">Operations Database</div>
-    <div class="sb" style="flex-wrap:wrap;gap:6px">
-      <div class="sw">
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <input type="text" class="si" placeholder="Search ID, customer, invoice, date..."
-               hx-get="{% url 'operations_search' %}" hx-target="#ops-table"
-               hx-trigger="keyup changed delay:400ms" name="q" hx-indicator="#s-spin">
+    <div class="ct">Operations</div>
+    {% comment %}
+    Los filtros van todos dentro de #ops-filtros y cada uno pide la tabla con
+    `hx-include="#ops-filtros"`, es decir, mandando tambien lo que valen los
+    demas. Asi se combinan: buscar "acme", marcar Entry y elegir In Warehouse
+    deja las entradas de Acme que siguen en almacen.
+
+    Antes cada control llamaba a su propia vista con su solo parametro, de modo
+    que el ultimo que tocabas borraba los otros sin decirlo -- y los
+    desplegables se quedaban puestos, asegurando un filtro que ya no estaba
+    aplicado.
+
+    Cada control lleva su titulo encima. Un desplegable que dice "All Users" no
+    explica por si mismo por que columna filtra, y ya son cuatro.
+    {% endcomment %}
+    <div class="sb" id="ops-filtros" style="flex-wrap:wrap; gap:10px; align-items:flex-end">
+      <div class="cf-g" style="flex:1; min-width:210px; max-width:340px">
+        <label>Search</label>
+        <div class="sw" style="max-width:none">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" class="si" name="q" placeholder="ID, invoice, PO, description..."
+                 hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
+                 hx-trigger="keyup changed delay:400ms" hx-include="#ops-filtros"
+                 hx-indicator="#s-spin">
+        </div>
       </div>
 
       {% if profile.is_superadmin or profile.is_home or profile.is_manager %}
-      <div style="display:flex; align-items:center; gap:5px;">
-        <label style="font-size:11px; font-weight:600; color:#60718a;">👤 User:</label>
-        <select id="filter-user" onchange="filterByUser(this.value)"
-                style="height:32px; padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px; font-family:inherit; font-size:12px;">
-          <option value="">All Users</option>
+      <div class="cf-g">
+        <label>👤 User</label>
+        <select name="user" id="filter-user" class="cf-i" style="height:32px; min-width:150px"
+                hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
+                hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
+          <option value="">All users</option>
           {% for u in users %}
           <option value="{{ u.pk }}">{{ u.username }} ({{ u.profile.role|default:'home' }})</option>
           {% endfor %}
@@ -420,12 +439,47 @@ tbody td:has(.btn-action) {
       </div>
       {% endif %}
 
-      <select id="status-filter-sel" onchange="filterByStatus(this.value)"
-              style="height:32px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:inherit">
-        <option value="">All Status</option>
-        <option value="In Warehouse">In Warehouse</option>
-        <option value="Released Goods">Released Goods</option>
-      </select>
+      {% if not profile.is_customer %}
+      <div class="cf-g">
+        <label>🏢 Customer</label>
+        <select name="customer" id="filter-customer" class="cf-i" style="height:32px; min-width:160px"
+                hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
+                hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
+          <option value="">All customers</option>
+          {% for c in filtro_customers %}
+          <option value="{{ c.pk }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="cf-g">
+        <label>↔ Type</label>
+        <select name="type" id="filter-type" class="cf-i" style="height:32px; min-width:120px"
+                hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
+                hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
+          <option value="">All types</option>
+          <option value="ENTRY">Entry</option>
+          <option value="EXIT">Exit</option>
+        </select>
+      </div>
+
+      <div class="cf-g">
+        <label>◼ Status</label>
+        <select name="status" id="status-filter-sel" class="cf-i" style="height:32px; min-width:140px"
+                hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
+                hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
+          <option value="">All status</option>
+          <option value="In Warehouse">In Warehouse</option>
+          <option value="Released Goods">Released Goods</option>
+        </select>
+      </div>
+
+      <div class="cf-g">
+        <label>&nbsp;</label>
+        <button type="button" class="btn btn-g btn-sm" style="height:32px"
+                onclick="verTodasLasOperaciones()" title="Quitar todos los filtros">✕ Clear</button>
+      </div>
       <span class="htmx-indicator spin" id="s-spin"></span>
     </div>
     <div id="ops-table">
@@ -788,19 +842,6 @@ function showTab(t) {
   localStorage.setItem('activeTab', t);
 }
 
-function filterByStatus(val) {
-  const url = '{% url "operations_search" %}' + (val ? '?status='+encodeURIComponent(val) : '');
-  htmx.ajax('GET', url, {target:'#ops-table', swap:'innerHTML'});
-}
-
-function filterByUser(userId) {
-  if (!userId) {
-    htmx.ajax('GET', '{% url "operations_search" %}', {target:'#ops-table', swap:'innerHTML'});
-  } else {
-    htmx.ajax('GET', '/operations/by-user/' + userId + '/', {target:'#ops-table', swap:'innerHTML'});
-  }
-}
-
 // A donde lleva el contador global: la base de datos con la tabla acotada a las
 // operaciones que esperan respuesta. Los demas filtros se limpian porque la
 // tabla que llega ya no los obedece, y dejarlos puestos haria creer que si.
@@ -816,13 +857,13 @@ function verTodasLasOperaciones() {
   htmx.ajax('GET', '{% url "operations_search" %}', {target:'#ops-table', swap:'innerHTML'});
 }
 
+// Deja la barra de filtros en blanco. Los controles se enumeran por su
+// selector y no por id uno a uno para que anadir un filtro nuevo no obligue a
+// acordarse de este sitio: un filtro que se queda puesto mientras la tabla ya
+// no lo obedece es peor que no tenerlo.
 function limpiarFiltrosDeLaTabla() {
-  const busqueda = document.querySelector('#panel-database input[name="q"]');
-  if (busqueda) busqueda.value = '';
-  const porUsuario = document.getElementById('filter-user');
-  if (porUsuario) porUsuario.value = '';
-  const porEstado = document.getElementById('status-filter-sel');
-  if (porEstado) porEstado.value = '';
+  document.querySelectorAll('#ops-filtros input[name], #ops-filtros select[name]')
+          .forEach(c => { c.value = ''; });
 }
 
 // Todas las entradas al panel digital pasan por aqui: abrir la pestana, pulsar

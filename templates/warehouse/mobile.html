@@ -343,7 +343,7 @@ tbody td:has(button), tbody td:has(.btn-action) {
 <!-- ══════ DATABASE ══════ -->
 <div class="panel {% if not profile|can_see_tab:'form' %}on{% endif %}" id="panel-database">
   <div class="card">
-    <div class="card-title">Database</div>
+    <div class="card-title">Operations</div>
     <input type="text" id="mob-db-q" class="form-input" placeholder="Search..."
            style="margin-bottom:10px"
            hx-get="{% url 'operations_search' %}" hx-target="#mob-ops-table"
@@ -509,7 +509,7 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
   </button>
   {% endif %}
   <button class="nav-btn {% if not profile|can_see_tab:'form' %}on{% endif %}" id="nav-database" onclick="mobShowTab('database')">
-    <span class="icon">🗄️</span>Database
+    <span class="icon">🗄️</span>Operations
   </button>
   <button class="nav-btn" id="nav-catalog" onclick="mobShowTab('catalog')">
     <span class="icon">📚</span>Catalog
