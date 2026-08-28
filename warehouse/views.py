@@ -1436,16 +1436,22 @@ def report_generator(request):
     customers = Catalog.objects.filter(category='CUSTOMER', active=True, tenant=tenant).order_by('name')
     profile   = get_profile(request.user)
 
-    users = []
-    if profile.is_superadmin() or profile.is_home():
+    # Quien puede filtrar por autor es el mismo trio que en la pantalla de
+    # Operaciones. Antes el manager veia el desplegable -- la plantilla se lo
+    # pintaba -- pero la vista solo le metia dentro su propio nombre, asi que
+    # tenia un filtro de un solo valor que no filtraba nada.
+    puede_filtrar_por_autor = (profile.is_superadmin() or profile.is_home()
+                               or profile.is_manager())
+    if puede_filtrar_por_autor:
         users = User.objects.filter(is_active=True, profile__tenant=tenant).order_by('username')
-    elif profile.is_manager() or profile.is_staff_role():
-        users = User.objects.filter(pk=request.user.pk)
     else:
         users = User.objects.filter(pk=request.user.pk)
 
-    if profile.is_customer() and profile.customer:
-        customers = customers.filter(pk=profile.customer.pk)
+    # A un cliente no se le pregunta de que cliente quiere el informe: solo hay
+    # uno posible, el suyo, y `customer_ops_filter` ya acota lo que ve. La lista
+    # se vacia para que la pantalla no le pinte el bloque.
+    if profile.is_customer():
+        customers = customers.none()
 
     results  = None
     filters  = {}
@@ -1456,7 +1462,10 @@ def report_generator(request):
         customer_ids   = request.GET.getlist('customer_ids')
         created_by_id  = request.GET.get('created_by', '').strip()
 
-        if not customer_ids and not all_customers:
+        # Elegir cliente es obligatorio porque un informe de todo el almacen
+        # mandado por correo al cliente equivocado es un accidente caro. Al
+        # cliente no se le exige: no tiene entre que elegir.
+        if not customer_ids and not all_customers and not profile.is_customer():
             error = 'Please select at least one customer or choose All Customers.'
         else:
             ####ops = WarehouseOperation.objects.select_related(
@@ -1470,8 +1479,11 @@ def report_generator(request):
             undispatched = request.GET.get('undispatched', '')
             status_f     = request.GET.get('status_filter', '').strip()
 
-            if created_by_id and created_by_id.isdigit():
-                ops = ops.filter(created_by_id=int(created_by_id))
+            # El pk viaja en la peticion, asi que el permiso se comprueba aqui
+            # y no solo al pintar el desplegable.
+            if created_by_id.isdigit() and puede_filtrar_por_autor:
+                ops = ops.filter(created_by_id=int(created_by_id),
+                                 created_by__profile__tenant=tenant)
                 filters['created_by_id'] = created_by_id
                 try:
                     creator = User.objects.get(pk=int(created_by_id), profile__tenant=tenant)
@@ -1505,9 +1517,14 @@ def report_generator(request):
             if status_f:
                 filters['status_filter'] = status_f
 
+            # El estado no es un campo: sale de leer `entry_dispatched`. Y solo
+            # lo tienen las entradas -- a una salida la tabla le pinta un guion
+            # en esa columna, de modo que no puede colarse en ninguno de los dos
+            # estados. Es el mismo criterio que la pantalla de Operaciones.
             results_list = list(ops.order_by('-date')[:500])
             if status_f in ('Released Goods', 'In Warehouse'):
-                results_list = [o for o in results_list if o.status == status_f]
+                results_list = [o for o in results_list
+                                if o.operation_type == 'ENTRY' and o.status == status_f]
             results = results_list
 
     return render(request, 'warehouse/partials/report_generator.html', {

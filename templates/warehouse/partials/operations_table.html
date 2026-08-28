@@ -39,20 +39,15 @@ vista.
 {% endif %}
 
 {% if operations %}
-<div style="position:relative;">
+<div class="tabla-navegable" data-columnas-fijas="4">
 
   {% comment %}
-  El marco por el que se asoma la tabla. Tiene altura tope y scroll propio en
-  los dos ejes, y no es un capricho: la cabecera solo puede quedarse quieta
-  (`position:sticky`) respecto al recuadro que hace el scroll. Mientras las
-  filas las desplazaba la ventana, la cabecera se pegaba a un contenedor que no
-  se movia y acababa flotando sobre las filas, en medio de la tabla.
-
-  El tope se calcula desde el alto de la ventana para que el recuadro llegue
-  siempre hasta cerca del borde inferior, en un portatil y en un monitor.
+  El marco, la cabecera quieta y las cuatro primeras columnas fijas los pone
+  `tabla_navegable.html`, que se incluye al final. Aqui solo se dice cuantas
+  columnas son.
   {% endcomment %}
-  <div id="table-scroll-wrap" style="max-height:calc(100vh - 230px); overflow:auto;">
-    <table id="ops-table-inner" style="min-width:2200px; width:100%; border-collapse:collapse; table-layout:auto;">
+  <div class="tabla-nav-marco">
+    <table style="min-width:2200px; width:100%; border-collapse:collapse; table-layout:auto;">
       <thead>
         <tr>
           <th style="color:#94a3b8; white-space:nowrap;">#</th>
@@ -183,16 +178,13 @@ vista.
   cada uno apuntando a donde te lleva. Se apagan al llegar a su extremo, que es
   como se sabe sin probar que ya no hay mas tabla de ese lado.
   {% endcomment %}
-  <div id="nav-horizontal"
-       style="position:sticky; bottom:0; left:0; right:0; display:flex; align-items:center;
-              justify-content:space-between; gap:6px; background:#f8fafc;
-              border-top:1px solid #cbd5e1; padding:4px 6px; z-index:100;
-              opacity:0; transition:opacity 0.2s;">
-    <button type="button" id="ir-al-inicio" class="nav-h" title="Primera columna">&#9198; Start</button>
-    <span style="font-size:10px; color:#94a3b8; letter-spacing:.03em">Shift + scroll wheel to move across columns</span>
-    <button type="button" id="ir-al-final" class="nav-h" title="Ultima columna">End &#9197;</button>
+  <div class="tabla-nav-barra">
+    <button type="button" class="nav-h" data-ir="inicio" title="Primera columna">&#9198; Start</button>
+    <span class="tabla-nav-pista">Shift + scroll wheel to move across columns</span>
+    <button type="button" class="nav-h" data-ir="final" title="Ultima columna">End &#9197;</button>
   </div>
 </div>
+{% include 'warehouse/partials/tabla_navegable.html' %}
 
 <style>
 .btn-action {
@@ -228,122 +220,8 @@ vista.
 .btn-action-danger:hover {
   background:#fef2f2;
 }
-
-/* Los botones que cruzan la tabla de un salto. */
-.nav-h {
-  flex:0 0 auto;
-  border:1px solid #cbd5e1;
-  background:#fff;
-  color:#475569;
-  border-radius:5px;
-  font-family:inherit;
-  font-size:10px;
-  font-weight:600;
-  letter-spacing:.03em;
-  padding:2px 8px;
-  cursor:pointer;
-  white-space:nowrap;
-}
-.nav-h:hover:not(:disabled) { background:#e0f2fe; border-color:#0ea5e9; color:#0284c7; }
-.nav-h:disabled { opacity:.35; cursor:default; }
-
-/*
-  Las columnas que identifican la fila -- el numero, el aviso del hilo, la
-  fecha y el Custom ID -- se quedan quietas mientras el resto de la tabla pasa
-  por debajo. Sin esto, al llegar a las columnas del fondo (PED, Email, Created
-  By) la fila ya no dice de que operacion es, y habia que volver al principio
-  para comprobarlo.
-
-  El `left` de cada una lo calcula el script de abajo midiendo la cabecera: los
-  anchos dependen del contenido y escribirlos aqui a mano los dejaria
-  desalineados en cuanto un Custom ID fuera mas largo.
-
-  `background:inherit` es lo que impide que se transparenten: la fila lleva su
-  color en el `style` del `tr` y la celda fija lo copia.
-*/
-#ops-table-inner .col-fija { position:sticky; z-index:2; background:inherit; }
-#ops-table-inner thead th.col-fija { background:#1e293b; z-index:4; }
-#ops-table-inner .col-fija-borde { box-shadow:3px 0 4px -2px rgba(15,23,42,.25); }
-
-/*
-  Y la cabecera se queda arriba del marco mientras se recorren las filas. Sin
-  esto, a la fila veinte ya no se sabe que columna es cual y hay que subir a
-  leer el encabezado y volver a bajar.
-*/
-#ops-table-inner thead th { position:sticky; top:0; z-index:3; background:var(--ink); }
-
 </style>
 
-<script>
-(function() {
-  const wrap      = document.getElementById('table-scroll-wrap');
-  const table     = document.getElementById('ops-table-inner');
-  const barra     = document.getElementById('nav-horizontal');
-  const btnInicio = document.getElementById('ir-al-inicio');
-  const btnFinal  = document.getElementById('ir-al-final');
-
-  if (!wrap || !table || !barra) return;
-
-  // Cuantas columnas de la izquierda no se mueven: #, el aviso del hilo, la
-  // fecha y el Custom ID. Son las que dicen de que operacion es la fila; a
-  // partir de ahi ya es contenido.
-  const COLUMNAS_FIJAS = 4;
-
-  // El `left` de cada columna fija es la suma de los anchos de las anteriores.
-  // Se mide sobre la cabecera y se copia a todas las celdas de esa columna.
-  function fijarColumnas() {
-    const cabecera = table.querySelectorAll('thead th');
-    if (cabecera.length < COLUMNAS_FIJAS) return;
-    const izquierdas = [];
-    let acumulado = 0;
-    for (let i = 0; i < COLUMNAS_FIJAS; i++) {
-      izquierdas.push(acumulado);
-      acumulado += cabecera[i].getBoundingClientRect().width;
-    }
-    table.querySelectorAll('thead tr, tbody tr').forEach(function(fila) {
-      for (let i = 0; i < COLUMNAS_FIJAS && i < fila.children.length; i++) {
-        const celda = fila.children[i];
-        celda.classList.add('col-fija');
-        celda.style.left = izquierdas[i] + 'px';
-        celda.classList.toggle('col-fija-borde', i === COLUMNAS_FIJAS - 1);
-      }
-    });
-  }
-
-  // Un boton encendido que no lleva a ninguna parte se pulsa una vez y no se
-  // vuelve a mirar; apagarlo en el extremo es lo que dice donde estas.
-  function actualizarBotones() {
-    if (!btnInicio || !btnFinal) return;
-    const restante = wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft;
-    btnInicio.disabled = wrap.scrollLeft <= 1;
-    btnFinal.disabled  = restante <= 1;
-  }
-
-  function irA(x) { wrap.scrollTo({ left: x, behavior: 'smooth' }); }
-  if (btnInicio) btnInicio.addEventListener('click', function() { irA(0); });
-  if (btnFinal)  btnFinal.addEventListener('click',  function() { irA(wrap.scrollWidth); });
-
-  wrap.addEventListener('scroll', actualizarBotones);
-
-  // La barra solo se pinta si la tabla no cabe de ancho: donde no hay a donde
-  // ir, dos botones y un consejo son ruido.
-  function recalcular() {
-    barra.style.opacity = (wrap.scrollWidth > wrap.clientWidth) ? '1' : '0';
-    fijarColumnas();
-    actualizarBotones();
-  }
-
-  window.addEventListener('resize', recalcular);
-
-  // La tabla la repinta HTMX al filtrar; el observer recalcula sin depender de
-  // que cada llamada se acuerde de avisar.
-  const observer = new ResizeObserver(recalcular);
-  observer.observe(table);
-  observer.observe(wrap);
-
-  recalcular();
-})();
-</script>
 
 {% else %}
 <div class="es">

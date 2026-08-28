@@ -1,0 +1,175 @@
+{% comment %}
+Lo que hace falta para cruzar una tabla ancha: el estilo y el guion que le dan
+marco propio, congelan las primeras columnas y la cabecera, y ponen los dos
+botones que saltan de un extremo al otro.
+
+Vive aparte porque lo usan dos pantallas -- Operations y Report Generator -- y
+duplicarlo garantizaba que un arreglo se hiciera en una sola.
+
+Para usarlo, envolver la tabla asi e incluir este archivo debajo:
+
+    <div class="tabla-navegable" data-columnas-fijas="4">
+      <div class="tabla-nav-marco"><table> ... </table></div>
+      <div class="tabla-nav-barra">
+        <button class="nav-h" data-ir="inicio">&#9198; Start</button>
+        <span>...</span>
+        <button class="nav-h" data-ir="final">End &#9197;</button>
+      </div>
+    </div>
+    {% include 'warehouse/partials/tabla_navegable.html' %}
+
+No usa ids: los busca por clase dentro de cada `.tabla-navegable`, asi que dos
+tablas en la misma pantalla no se pisan.
+{% endcomment %}
+<style>
+.tabla-navegable { position:relative; }
+
+/*
+  El marco por el que se asoma la tabla. Tiene altura tope y scroll propio, y no
+  es un capricho: la cabecera solo puede quedarse quieta (`position:sticky`)
+  respecto al recuadro que hace el scroll. Mientras las filas las desplazaba la
+  ventana, la cabecera se pegaba a un contenedor que no se movia y acababa
+  flotando sobre las filas, en medio de la tabla.
+*/
+.tabla-nav-marco { max-height:calc(100vh - 230px); overflow:auto; }
+
+.tabla-nav-barra {
+  position:sticky; bottom:0; left:0; right:0;
+  display:flex; align-items:center; justify-content:space-between; gap:6px;
+  background:#f8fafc; border-top:1px solid #cbd5e1; padding:4px 6px;
+  z-index:100; opacity:0; transition:opacity .2s;
+}
+.tabla-nav-pista { font-size:10px; color:#94a3b8; letter-spacing:.03em; }
+
+/* Los botones que cruzan la tabla de un salto. */
+.nav-h {
+  flex:0 0 auto;
+  border:1px solid #cbd5e1;
+  background:#fff;
+  color:#475569;
+  border-radius:5px;
+  font-family:inherit;
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:.03em;
+  padding:2px 8px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.nav-h:hover:not(:disabled) { background:#e0f2fe; border-color:#0ea5e9; color:#0284c7; }
+.nav-h:disabled { opacity:.35; cursor:default; }
+
+/*
+  La cabecera se queda arriba del marco mientras se recorren las filas. Sin
+  esto, a la fila veinte ya no se sabe que columna es cual y hay que subir a
+  leer el encabezado y volver a bajar.
+*/
+.tabla-navegable thead th { position:sticky; top:0; z-index:3; background:var(--ink,#0f172a); }
+
+/*
+  Y las columnas que identifican la fila se quedan quietas mientras el resto
+  pasa por debajo: al llegar a las columnas del fondo la fila ya no decia de que
+  operacion es, y habia que volver al principio para comprobarlo.
+
+  El `left` de cada una lo calcula el guion midiendo la cabecera: los anchos
+  dependen del contenido y escribirlos aqui a mano los dejaria desalineados en
+  cuanto un Custom ID fuera mas largo.
+
+  `background:inherit` es lo que impide que se transparenten: la fila lleva su
+  color en el `style` del `tr` y la celda fija lo copia.
+*/
+.tabla-navegable .col-fija { position:sticky; z-index:2; background:inherit; }
+.tabla-navegable thead th.col-fija { background:#1e293b; z-index:4; }
+.tabla-navegable .col-fija-borde { box-shadow:3px 0 4px -2px rgba(15,23,42,.25); }
+
+/*
+  En un telefono no hay nada de esto: un recuadro con scroll propio dentro de
+  una pantalla que ya scrollea se convierte en una trampa para el dedo, y no
+  sobra ancho para regalar tres columnas fijas.
+*/
+@media (max-width: 700px) {
+  .tabla-nav-marco { max-height:none; }
+  .tabla-navegable thead th { position:static; }
+  .tabla-navegable .col-fija { position:static; }
+  .tabla-nav-barra { display:none; }
+}
+</style>
+
+<script>
+(function() {
+  // Las dos pantallas conviven en el mismo documento -- los paneles se ocultan,
+  // no se descargan -- asi que este archivo llega dos veces y cada copia veria
+  // tambien la tabla de la otra. Sin la marca, la primera tabla acabaria con
+  // dos juegos de listeners y dos observers haciendo el mismo trabajo.
+  document.querySelectorAll('.tabla-navegable:not([data-nav-lista])').forEach(function(caja) {
+    caja.dataset.navLista = '1';
+    preparar(caja);
+  });
+
+  function preparar(caja) {
+    const wrap  = caja.querySelector('.tabla-nav-marco');
+    const table = wrap && wrap.querySelector('table');
+    const barra = caja.querySelector('.tabla-nav-barra');
+    if (!wrap || !table || !barra) return;
+
+    // Cuantas columnas de la izquierda no se mueven. Son las que dicen de que
+    // fila se trata; a partir de ahi ya es contenido.
+    const COLUMNAS_FIJAS = parseInt(caja.dataset.columnasFijas || '0', 10);
+
+    const btnInicio = barra.querySelector('[data-ir="inicio"]');
+    const btnFinal  = barra.querySelector('[data-ir="final"]');
+
+    function fijarColumnas() {
+      const cabecera = table.querySelectorAll('thead th');
+      if (!COLUMNAS_FIJAS || cabecera.length < COLUMNAS_FIJAS) return;
+      const izquierdas = [];
+      let acumulado = 0;
+      for (let i = 0; i < COLUMNAS_FIJAS; i++) {
+        izquierdas.push(acumulado);
+        acumulado += cabecera[i].getBoundingClientRect().width;
+      }
+      table.querySelectorAll('thead tr, tbody tr').forEach(function(fila) {
+        for (let i = 0; i < COLUMNAS_FIJAS && i < fila.children.length; i++) {
+          const celda = fila.children[i];
+          celda.classList.add('col-fija');
+          celda.style.left = izquierdas[i] + 'px';
+          celda.classList.toggle('col-fija-borde', i === COLUMNAS_FIJAS - 1);
+        }
+      });
+    }
+
+    // Un boton encendido que no lleva a ninguna parte se pulsa una vez y no se
+    // vuelve a mirar; apagarlo en el extremo es lo que dice donde estas.
+    function actualizarBotones() {
+      if (!btnInicio || !btnFinal) return;
+      const restante = wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft;
+      btnInicio.disabled = wrap.scrollLeft <= 1;
+      btnFinal.disabled  = restante <= 1;
+    }
+
+    function irA(x) { wrap.scrollTo({ left: x, behavior: 'smooth' }); }
+    if (btnInicio) btnInicio.addEventListener('click', function() { irA(0); });
+    if (btnFinal)  btnFinal.addEventListener('click',  function() { irA(wrap.scrollWidth); });
+
+    wrap.addEventListener('scroll', actualizarBotones);
+
+    // La barra solo se pinta si la tabla no cabe de ancho: donde no hay a donde
+    // ir, dos botones y un consejo son ruido.
+    function recalcular() {
+      barra.style.opacity = (wrap.scrollWidth > wrap.clientWidth) ? '1' : '0';
+      fijarColumnas();
+      actualizarBotones();
+    }
+
+    window.addEventListener('resize', recalcular);
+
+    // La tabla la repinta HTMX al filtrar; el observer recalcula sin depender
+    // de que cada llamada se acuerde de avisar.
+    const observer = new ResizeObserver(recalcular);
+    observer.observe(table);
+    observer.observe(wrap);
+
+    recalcular();
+  }
+})();
+</script>
