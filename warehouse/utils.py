@@ -139,17 +139,17 @@ EXIT_COL  = colors.HexColor('#ef4444')
 ENTRY_BG  = colors.HexColor('#d1fae5')
 EXIT_BG   = colors.HexColor('#fee2e2')
 TD_COL    = colors.HexColor('#d97706')   # trasbordo
-RD_COL    = colors.HexColor('#7c3aed')   # reacomodo
+RD_COL    = colors.HexColor('#7c3aed')   # revision
 
 # El color y el titulo de cada tipo en los documentos. Antes se decidian con un
 # `if` de dos ramas -- si no era ENTRY, se pintaba y se titulaba como una salida
-# -- asi que un reacomodo salia del PDF diciendo "Goods Dispatch".
+# -- asi que una revision salia del PDF diciendo "Goods Dispatch".
 COLOR_DEL_TIPO = {'ENTRY': ENTRY_COL, 'EXIT': EXIT_COL, 'TD': TD_COL, 'RD': RD_COL}
 TITULO_DEL_TIPO = {
     'ENTRY': 'Operation Report: Goods Receipt',
     'EXIT':  'Operation Report: Goods Dispatch',
     'TD':    'Operation Report: Transfer',
-    'RD':    'Operation Report: Relocation',
+    'RD':    'Operation Report: Revision',
 }
 
 

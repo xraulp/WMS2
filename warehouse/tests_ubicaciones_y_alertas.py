@@ -1,9 +1,9 @@
 """
-Bodegas, posiciones, alertas de permanencia y los dos tipos nuevos.
+Bodegas, posiciones, alertas de permanencia y los cuatro tipos de operacion.
 
-Las cuatro cosas se prueban juntas porque llegaron juntas y se tocan: un
-reacomodo (RD) no significa nada sin ubicacion de origen, y la alerta de
-permanencia solo mira entradas, que es justo lo que los tipos nuevos no son.
+Las cuatro cosas se prueban juntas porque se tocan: la ubicacion solo la lleva
+la entrada (ED), y la alerta de permanencia solo mira entradas, que es justo lo
+que el trasbordo (TD) y la revision (RD) no son.
 """
 from datetime import timedelta
 
@@ -152,7 +152,12 @@ class GenerarUbicacionesTests(BaseDeBodegas):
         self.assertIsNotNone(respuesta.context['error'])
 
 
-class AltaConUbicacionTests(BaseDeBodegas):
+class BaseConPosiciones(BaseDeBodegas):
+    """Una bodega con dos posiciones, otra bodega, y una posicion ajena.
+
+    La comparten el alta y la edicion: las dos ponen el mismo dato, y probar la
+    correccion sin las mismas posiciones seria probar otra cosa.
+    """
 
     @classmethod
     def setUpTestData(cls):
@@ -180,6 +185,9 @@ class AltaConUbicacionTests(BaseDeBodegas):
         self.client.post('/operations/create/', datos)
         return WarehouseOperation.objects.order_by('-pk').first()
 
+
+class AltaConUbicacionTests(BaseConPosiciones):
+
     def test_se_guarda_donde_queda_la_mercancia(self):
         op = self.alta(warehouse_id=self.lrd.pk, location_id=self.a1.pk)
 
@@ -205,14 +213,21 @@ class AltaConUbicacionTests(BaseDeBodegas):
         self.assertIsNone(op.location)
         self.assertIsNone(op.warehouse)
 
-    def test_el_origen_solo_se_guarda_en_un_reacomodo(self):
-        reacomodo = self.alta(operation_type='RD', location_id=self.a1.pk,
-                              location_from_id=self.a2.pk)
-        self.assertEqual(reacomodo.location_from, self.a2)
+    def test_la_ubicacion_solo_se_guarda_en_una_entrada(self):
+        """
+        La pantalla esconde los dos desplegables en los demas tipos, pero el
+        POST llega igual: una salida guardada con posicion diria que la carga
+        sigue en el estante del que acaba de salir.
+        """
+        for tipo in ('EXIT', 'TD', 'RD'):
+            with self.subTest(tipo=tipo):
+                op = self.alta(operation_type=tipo, warehouse_id=self.lrd.pk,
+                               location_id=self.a1.pk)
+                self.assertIsNone(op.location)
+                self.assertIsNone(op.warehouse)
 
-        entrada = self.alta(operation_type='ENTRY', location_id=self.a1.pk,
-                            location_from_id=self.a2.pk)
-        self.assertIsNone(entrada.location_from)
+        entrada = self.alta(operation_type='ENTRY', location_id=self.a1.pk)
+        self.assertEqual(entrada.location, self.a1)
 
     def test_sin_ubicacion_se_guarda_igual(self):
         """Ochenta y seis operaciones viejas no tienen ninguna, y una empresa
@@ -221,6 +236,72 @@ class AltaConUbicacionTests(BaseDeBodegas):
 
         self.assertIsNone(op.warehouse)
         self.assertIsNone(op.location)
+
+
+class EdicionDeUbicacionTests(BaseConPosiciones):
+    """
+    Corregir donde quedo la mercancia. Hasta ahora la posicion solo se ponia al
+    capturar, asi que una mal elegida se quedaba puesta para siempre.
+    """
+
+    def campos(self, op, **extra):
+        datos = {
+            'date': str(op.date), 'description': op.description or 'x',
+            'bundle_qty': '1',
+        }
+        datos.update(extra)
+        return datos
+
+    def test_se_puede_corregir_la_posicion(self):
+        op = self.alta(location_id=self.a1.pk)
+        self.client.force_login(self.jefa)
+
+        self.client.post(f'/operations/{op.pk}/edit/',
+                         self.campos(op, warehouse_id=self.lrd.pk,
+                                     location_id=self.a2.pk))
+
+        op.refresh_from_db()
+        self.assertEqual(op.location, self.a2)
+
+    def test_se_puede_dejar_sin_posicion(self):
+        op = self.alta(location_id=self.a1.pk)
+        self.client.force_login(self.jefa)
+
+        self.client.post(f'/operations/{op.pk}/edit/', self.campos(op))
+
+        op.refresh_from_db()
+        self.assertIsNone(op.location)
+
+    def test_una_posicion_de_otra_empresa_no_entra_por_la_edicion(self):
+        op = self.alta(location_id=self.a1.pk)
+        self.client.force_login(self.jefa)
+
+        self.client.post(f'/operations/{op.pk}/edit/',
+                         self.campos(op, location_id=self.ajena.pk))
+
+        op.refresh_from_db()
+        self.assertIsNone(op.location)
+
+    def test_una_salida_no_recibe_posicion_al_editarla(self):
+        """El tipo no se toca al editar, asi que el que manda es el guardado."""
+        op = self.alta(operation_type='EXIT')
+        self.client.force_login(self.jefa)
+
+        self.client.post(f'/operations/{op.pk}/edit/',
+                         self.campos(op, location_id=self.a1.pk))
+
+        op.refresh_from_db()
+        self.assertIsNone(op.location)
+
+    def test_la_entrada_ofrece_los_desplegables_y_la_salida_no(self):
+        entrada = self.alta(operation_type='ENTRY')
+        salida  = self.alta(operation_type='EXIT')
+        self.client.force_login(self.jefa)
+
+        self.assertContains(self.client.get(f'/operations/{entrada.pk}/edit/'),
+                            'ed-location')
+        self.assertNotContains(self.client.get(f'/operations/{salida.pk}/edit/'),
+                               'ed-location')
 
 
 class TiposNuevosTests(BaseDeBodegas):
@@ -235,7 +316,7 @@ class TiposNuevosTests(BaseDeBodegas):
         })
         return WarehouseOperation.objects.order_by('-pk').first()
 
-    def test_el_trasbordo_y_el_reacomodo_se_aceptan(self):
+    def test_el_trasbordo_y_la_revision_se_aceptan(self):
         self.assertEqual(self.alta('TD').operation_type, 'TD')
         self.assertEqual(self.alta('RD').operation_type, 'RD')
 
@@ -261,7 +342,7 @@ class TiposNuevosTests(BaseDeBodegas):
         self.assertEqual([op.operation_type for op in respuesta.context['operations']],
                          ['TD'])
 
-    def test_ni_el_trasbordo_ni_el_reacomodo_tienen_estado(self):
+    def test_ni_el_trasbordo_ni_la_revision_tienen_estado(self):
         """
         Solo una entrada esta "en almacen" o "liberada". Colar un trasbordo en
         el filtro de estado seria decir que hay mercancia guardada que no esta.
@@ -269,6 +350,80 @@ class TiposNuevosTests(BaseDeBodegas):
         self.alta('TD')
         self.client.force_login(self.jefa)
         respuesta = self.client.get('/operations/search/', {'status': 'In Warehouse'})
+
+        self.assertEqual(list(respuesta.context['operations']), [])
+
+
+class OcupacionTests(BaseConPosiciones):
+    """
+    Que hay guardado en cada posicion. Cuenta lo mismo que la alerta de
+    permanencia -- entradas sin liberar -- porque una entrada ya liberada no
+    ocupa estante.
+    """
+
+    def guardar(self, ubicacion, liberada=False):
+        return WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='ENTRY',
+            date=timezone.now().date(), warehouse=ubicacion.warehouse,
+            location=ubicacion, customer=self.acme,
+            entry_dispatched='SD260101-0001' if liberada else '')
+
+    def panel(self, **params):
+        self.client.force_login(self.jefa)
+        return self.client.get('/locations/', params)
+
+    def ocupacion(self, respuesta):
+        return {u.code: u.guardadas for u in respuesta.context['ubicaciones']}
+
+    def test_cuenta_lo_que_hay_en_cada_posicion(self):
+        self.guardar(self.a1)
+        self.guardar(self.a1)
+        self.guardar(self.a2)
+
+        ocupacion = self.ocupacion(self.panel())
+
+        self.assertEqual(ocupacion[self.a1.code], 2)
+        self.assertEqual(ocupacion[self.a2.code], 1)
+
+    def test_lo_liberado_deja_de_ocupar(self):
+        self.guardar(self.a1, liberada=True)
+
+        self.assertEqual(self.ocupacion(self.panel())[self.a1.code], 0)
+
+    def test_una_salida_no_ocupa(self):
+        """Solo la entrada guarda mercancia; los demas tipos ni la llevan."""
+        WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='EXIT', date=timezone.now().date(),
+            warehouse=self.lrd, location=self.a1, customer=self.acme)
+
+        self.assertEqual(self.ocupacion(self.panel())[self.a1.code], 0)
+
+    def test_solo_ocupadas_esconde_las_vacias(self):
+        self.guardar(self.a1)
+
+        respuesta = self.panel(ocupadas='1')
+
+        self.assertEqual(list(self.ocupacion(respuesta)), [self.a1.code])
+
+    def test_el_contador_de_ocupadas_no_cuenta_las_vacias(self):
+        self.guardar(self.a1)
+
+        self.assertEqual(self.panel().context['posiciones_ocupadas'], 1)
+
+    def test_la_tabla_se_puede_acotar_a_una_posicion(self):
+        aqui = self.guardar(self.a1)
+        self.guardar(self.a2)
+        self.client.force_login(self.jefa)
+
+        respuesta = self.client.get('/operations/search/', {'location': self.a1.pk})
+
+        self.assertEqual([op.pk for op in respuesta.context['operations']], [aqui.pk])
+
+    def test_una_posicion_de_otra_empresa_no_acota_nada(self):
+        self.guardar(self.a1)
+        self.client.force_login(self.jefa)
+
+        respuesta = self.client.get('/operations/search/', {'location': self.ajena.pk})
 
         self.assertEqual(list(respuesta.context['operations']), [])
 

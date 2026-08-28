@@ -283,6 +283,62 @@ _build_subject  = notifications.build_subject
 _get_cc_emails  = notifications.get_cc_emails
 
 
+# ── DONDE QUEDA LA MERCANCIA ──────────────────────────────────────────────────
+# Lo usan el alta y la edicion. Estaba escrito dentro del alta, y la edicion
+# habria tenido que copiarlo entero -- incluido el filtro por tenant, que es lo
+# que impide dejar la mercancia de una empresa apuntando a la estanteria de otra.
+
+
+def bodega_del_tenant(pk_str, tenant):
+    try:
+        return Warehouse.objects.get(pk=int(pk_str), tenant=tenant, active=True)
+    except (ValueError, TypeError, Warehouse.DoesNotExist):
+        return None
+
+
+def ubicacion_del_tenant(pk_str, tenant, bodega):
+    try:
+        ubi = Location.objects.get(pk=int(pk_str), tenant=tenant, active=True)
+    except (ValueError, TypeError, Location.DoesNotExist):
+        return None
+    # Una posicion de otra bodega no se guarda: diria que la carga esta en un
+    # pasillo que no existe en la nave que se acaba de elegir.
+    if bodega and ubi.warehouse_id != bodega.pk:
+        return None
+    return ubi
+
+
+def ubicacion_del_post(p, tenant, op_type):
+    """
+    La bodega y la posicion que trae un formulario, ya validadas.
+
+    Devuelve `(None, None)` para todo tipo que no lleve ubicacion. La pantalla
+    ya esconde los dos desplegables en esos tipos, pero el POST llega igual: sin
+    esto, una salida podria guardarse diciendo que la mercancia sigue en el
+    estante del que acaba de salir.
+    """
+    if op_type not in WarehouseOperation.TIPOS_CON_UBICACION:
+        return None, None
+    bodega = bodega_del_tenant(p.get('warehouse_id'), tenant)
+    ubicacion = ubicacion_del_tenant(p.get('location_id'), tenant, bodega)
+    # Si se eligio posicion pero no bodega, la bodega se deduce: son el mismo
+    # dato dicho dos veces, y pedirlo dos veces solo sirve para no cuadrar.
+    if ubicacion and not bodega:
+        bodega = ubicacion.warehouse
+    return bodega, ubicacion
+
+
+def contexto_de_ubicacion(tenant, op_type):
+    """Lo que necesita una plantilla para pintar los dos desplegables."""
+    if op_type not in WarehouseOperation.TIPOS_CON_UBICACION:
+        return {'warehouses': [], 'locations': []}
+    return {
+        'warehouses': Warehouse.objects.filter(tenant=tenant, active=True),
+        'locations': Location.objects.filter(
+            tenant=tenant, active=True).select_related('warehouse'),
+    }
+
+
 # ── OPERATION CREATE ──────────────────────────────────────────────────────────
 
 @login_required
@@ -323,26 +379,6 @@ def operation_create(request):
     def to_int(val):
         try: return int(val) if val and str(val).strip() else None
         except: return None
-
-    # Bodega y posicion, acotadas al tenant por la misma razon que el catalogo:
-    # el pk viaja en el formulario, y sin filtrar se podria dejar la mercancia
-    # de una empresa apuntando a la estanteria de otra.
-    def get_bodega(pk_str):
-        try:
-            return Warehouse.objects.get(pk=int(pk_str), tenant=tenant, active=True)
-        except (ValueError, TypeError, Warehouse.DoesNotExist):
-            return None
-
-    def get_ubicacion(pk_str, bodega):
-        try:
-            ubi = Location.objects.get(pk=int(pk_str), tenant=tenant, active=True)
-        except (ValueError, TypeError, Location.DoesNotExist):
-            return None
-        # Una posicion de otra bodega no se guarda: diria que la carga esta en un
-        # pasillo que no existe en la nave que se acaba de elegir.
-        if bodega and ubi.warehouse_id != bodega.pk:
-            return None
-        return ubi
 
     def to_dec(val):
         try:
@@ -386,13 +422,7 @@ def operation_create(request):
     carrier_obj     = get_catalog(p.get('carrier_id'),     'CARRIER')
     bundle_type_obj = get_catalog(p.get('bundle_type_id'), 'BUNDLE_TYPE')
 
-    bodega_obj    = get_bodega(p.get('warehouse_id'))
-    ubicacion_obj = get_ubicacion(p.get('location_id'), bodega_obj)
-    origen_obj    = get_ubicacion(p.get('location_from_id'), bodega_obj)
-    # Si se eligio posicion pero no bodega, la bodega se deduce: son el mismo
-    # dato dicho dos veces, y pedirlo dos veces solo sirve para no cuadrar.
-    if ubicacion_obj and not bodega_obj:
-        bodega_obj = ubicacion_obj.warehouse
+    bodega_obj, ubicacion_obj = ubicacion_del_post(p, tenant, op_type)
 
     op = WarehouseOperation(
         tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 072526 19:51 4.1. operation_create Al final, al crear la operación, asigna el tenant:
@@ -413,10 +443,6 @@ def operation_create(request):
         damage=bool(p.get('damage')), damage_description=p.get('damage_description','').strip(),
         created_by=request.user,
         warehouse=bodega_obj, location=ubicacion_obj,
-        # El origen solo se guarda en un reacomodo: en los demas tipos la
-        # pantalla ni lo pregunta, y aceptarlo por detras dejaria un dato que
-        # nadie puso.
-        location_from=(origen_obj if op_type == 'RD' else None),
         # NUEVOS CAMPOS
         ref_aa=p.get('ref_aa', '').strip(),
         ref_dys=p.get('ref_dys', '').strip(),
@@ -929,6 +955,13 @@ def operations_search(request):
     if filtro_bodega.isdigit():
         ops = ops.filter(warehouse_id=int(filtro_bodega), warehouse__tenant=tenant)
 
+    # Por posicion: es a donde lleva el contador de ocupacion de la pantalla de
+    # bodegas. Sin esto, ver que hay en un estante obligaba a leer la columna
+    # Location de la tabla entera.
+    filtro_posicion = request.GET.get('location', '').strip()
+    if filtro_posicion.isdigit():
+        ops = ops.filter(location_id=int(filtro_posicion), location__tenant=tenant)
+
     # El estado no es un campo: sale de leer `entry_dispatched`, asi que se
     # filtra en Python sobre lo que ya trajo el SQL. Solo lo tienen las
     # entradas -- una salida no esta "en almacen" ni "liberada", y la columna
@@ -1111,15 +1144,34 @@ def _contexto_de_bodegas(request, tenant, **extra):
                .annotate(num_ubicaciones=Count('locations',
                                                filter=Q(locations__active=True)))
                .order_by('code'))
-    ubicaciones = Location.objects.filter(tenant=tenant).select_related('warehouse')
+    # Que hay guardado en cada posicion: las entradas que siguen sin liberar.
+    # Es el mismo criterio que usa la alerta de permanencia -- `entry_dispatched`
+    # vacio -- y por la misma razon: una entrada liberada ya no ocupa estante.
+    guardadas = Count('operations', filter=(
+        Q(operations__operation_type='ENTRY') &
+        (Q(operations__entry_dispatched__isnull=True) |
+         Q(operations__entry_dispatched=''))))
+    ubicaciones = (Location.objects.filter(tenant=tenant)
+                   .select_related('warehouse').annotate(guardadas=guardadas))
     bodega_id = request.GET.get('warehouse', '').strip()
     if bodega_id.isdigit():
         ubicaciones = ubicaciones.filter(warehouse_id=int(bodega_id))
+    # Solo lo ocupado. Una bodega con seiscientas posiciones y treinta usadas
+    # hace ilegible la tabla completa, que es justo cuando la pregunta "que hay
+    # guardado" importa.
+    solo_ocupadas = request.GET.get('ocupadas') == '1'
+    if solo_ocupadas:
+        ubicaciones = ubicaciones.filter(guardadas__gt=0)
     contexto = {
         'bodegas': bodegas,
-        'ubicaciones': ubicaciones[:400],
+        'ubicaciones': ubicaciones.order_by('-guardadas', 'code')[:400] if solo_ocupadas
+                       else ubicaciones[:400],
         'total_ubicaciones': ubicaciones.count(),
         'bodega_filtrada': bodega_id,
+        'solo_ocupadas': solo_ocupadas,
+        # Cuantas posiciones estan ocupadas ahora mismo, para que la pantalla
+        # pueda decirlo sin recorrer las cuatrocientas que pinta.
+        'posiciones_ocupadas': ubicaciones.filter(guardadas__gt=0).count(),
         'tipos_de_ubicacion': Location.TIPOS,
         'puede_configurar': puede_configurar_bodegas(profile),
         'profile': profile,
@@ -2046,9 +2098,17 @@ def catalog_create(request):
         return HttpResponse(
             '<div class="msg-error">✗ Only an administrator can create customers.</div>',
             status=403)
+    # El plazo de permanencia se pregunta ya en el alta: es una condicion del
+    # cliente, no un ajuste que se vaya a recordar despues. Vacio significa "el
+    # de la empresa", asi que se guarda NULL y no un cero, que avisaria de todo
+    # desde el primer dia. En las demas categorias el formulario ni lo pinta.
+    dias = p.get('alert_days', '').strip()
+    plazo = int(dias) if category == 'CUSTOMER' and dias.isdigit() and int(dias) > 0 else None
+
     entry = Catalog.objects.create(
         tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 4.3. catalog_create 072526 19:57
         category=category, name=name,
+        alert_days=plazo,
         # Los dos formularios que llegan aquí -el del escritorio y el del móvil-
         # pintan la abreviatura y el operador la escribe, pero el alta no la
         # guardaba: se perdía sin avisar y solo se podía poner volviendo a
@@ -2565,6 +2625,12 @@ def operation_edit(request, pk):
             op.ref_aa = p.get('ref_aa', op.ref_aa or '')
             op.ref_dys = p.get('ref_dys', op.ref_dys or '')
             op.pedimento = p.get('pedimento', op.pedimento or '')
+            # Donde queda la mercancia tambien se corrige: hasta ahora solo se
+            # podia poner al capturar, asi que una posicion mal elegida se
+            # quedaba puesta para siempre. El tipo no se toca al editar, de modo
+            # que el que manda es el que la operacion ya tiene: en una salida o
+            # una revision esto deja los dos campos en None, que es lo que valen.
+            op.warehouse, op.location = ubicacion_del_post(p, tenant, op.operation_type)
             op.save()
 
         if request.headers.get('HX-Request'):
@@ -2613,11 +2679,13 @@ def operation_edit(request, pk):
         ('DYS',              'ref_dys',          op.ref_dys or ''),
         ('PEDIMENTO',        'pedimento',        op.pedimento or ''),
     ]
-    return render(request, 'warehouse/partials/operation_edit.html', {
+    contexto = {
         'operation': op, 'edit_fields': edit_fields,
         'tipos_de_operacion': WarehouseOperation.TYPE_CHOICES,
         'profile': profile,
-    })
+    }
+    contexto.update(contexto_de_ubicacion(tenant, op.operation_type))
+    return render(request, 'warehouse/partials/operation_edit.html', contexto)
 
 
 @login_required

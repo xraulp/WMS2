@@ -278,7 +278,7 @@ tbody td:has(.btn-action) {
             <select name="operation_type" id="id_op_type" onchange="onTypeChange(this.value)">
               <option value="">— Select —</option>
               {% for valor, etiqueta in tipos_de_operacion %}
-              <option value="{{ valor }}">{{ etiqueta }}{% if valor == 'TD' or valor == 'RD' %} ({{ valor }}){% endif %}</option>
+              <option value="{{ valor }}">{{ etiqueta }}</option>
               {% endfor %}
             </select>
           </div>
@@ -291,14 +291,18 @@ tbody td:has(.btn-action) {
           ha dado de alta ninguna bodega: quien trabaja con una sola nave y sin
           posiciones no tiene por que ver dos desplegables vacios.
 
+          Los dos campos arrancan escondidos y solo salen al elegir Entry: la
+          ubicacion dice donde quedo guardada la carga, y solo la entrada la
+          guarda. `mostrarUbicacion` es quien los ensena.
+
           Las posiciones viajan todas en el HTML y se filtran aqui al elegir
           bodega. Va bien con las cientos que tiene una bodega normal; el dia que
           una empresa numere hasta el hueco y sean miles, esto tiene que pasar a
           pedirselas al servidor.
           {% endcomment %}
           {% if warehouses %}
-          <div class="fl">Warehouse</div>
-          <div class="fi">
+          <div class="fl" id="fl-warehouse" style="display:none">Warehouse</div>
+          <div class="fi" id="fi-warehouse" style="display:none">
             <select name="warehouse_id" id="id_warehouse" onchange="filtrarUbicaciones()">
               <option value="">— None —</option>
               {% for w in warehouses %}
@@ -307,24 +311,9 @@ tbody td:has(.btn-action) {
             </select>
           </div>
 
-          <div class="fl">Location</div>
-          <div class="fi">
+          <div class="fl" id="fl-location" style="display:none">Location</div>
+          <div class="fi" id="fi-location" style="display:none">
             <select name="location_id" id="id_location">
-              <option value="">— None —</option>
-              {% for l in locations %}
-              <option value="{{ l.pk }}" data-bodega="{{ l.warehouse_id }}">{{ l.code }}{% if l.descripcion %} · {{ l.descripcion }}{% endif %}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          {% comment %}
-          La ubicacion de la que sale la carga. Solo se pinta en un reacomodo:
-          en los demas tipos no significa nada, y un reacomodo que no dice de
-          donde venia no cuenta lo que paso.
-          {% endcomment %}
-          <div class="fl" id="fl-origen" style="display:none">From</div>
-          <div class="fi" id="fi-origen" style="display:none">
-            <select name="location_from_id" id="id_location_from">
               <option value="">— None —</option>
               {% for l in locations %}
               <option value="{{ l.pk }}" data-bodega="{{ l.warehouse_id }}">{{ l.code }}{% if l.descripcion %} · {{ l.descripcion }}{% endif %}</option>
@@ -714,6 +703,17 @@ tbody td:has(.btn-action) {
           <label>Notes</label>
           <input type="text" name="notes" class="cf-i" placeholder="Notes...">
         </div>
+        {% comment %}
+        El plazo de permanencia se pide ya aqui, en el alta, y no solo al
+        editar: cuanto aguanta en bodega la mercancia de este cliente es una
+        condicion suya, y depende del tipo de carga que maneje. En blanco vale
+        el plazo general de la empresa.
+        {% endcomment %}
+        <div class="cf-g" style="min-width:120px">
+          <label>Avisar a los … días</label>
+          <input type="number" name="alert_days" min="1" max="3650" class="cf-i"
+                 placeholder="{{ tenant.alert_days_default|default:7 }} (empresa)">
+        </div>
         <div class="cf-g">
           <label>&nbsp;</label>
           <button type="submit" class="btn btn-p" style="height:28px">Save Customer</button>
@@ -962,6 +962,16 @@ function verVencidas() {
   htmx.ajax('GET', '{% url "operations_aging" %}', {target:'#ops-table', swap:'innerHTML'});
 }
 
+// A donde lleva el contador de ocupacion de una posicion: la tabla acotada a
+// lo que hay guardado ahi. Los demas filtros se limpian por lo mismo que en los
+// otros saltos: la tabla que llega ya no los obedece.
+function verContenidoDeUbicacion(pk) {
+  showTab('database');
+  limpiarFiltrosDeLaTabla();
+  htmx.ajax('GET', '{% url "operations_search" %}?location=' + encodeURIComponent(pk),
+            {target:'#ops-table', swap:'innerHTML'});
+}
+
 // El camino de vuelta desde la tabla acotada.
 function verTodasLasOperaciones() {
   limpiarFiltrosDeLaTabla();
@@ -1055,36 +1065,38 @@ function filtrarUbicaciones() {
   const bodega = document.getElementById('id_warehouse');
   if (!bodega) return;
   const elegida = bodega.value;
-  ['id_location','id_location_from'].forEach(function(id) {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    Array.from(sel.options).forEach(function(op) {
-      if (!op.value) return;
-      op.hidden = elegida && op.dataset.bodega !== elegida;
-    });
-    // Una posicion que ya no pertenece a la bodega elegida no puede quedarse
-    // seleccionada y escondida: se mandaria al servidor sin que nadie la vea.
-    const puesta = sel.selectedOptions[0];
-    if (puesta && puesta.hidden) sel.value = '';
+  const sel = document.getElementById('id_location');
+  if (!sel) return;
+  Array.from(sel.options).forEach(function(op) {
+    if (!op.value) return;
+    op.hidden = elegida && op.dataset.bodega !== elegida;
   });
+  // Una posicion que ya no pertenece a la bodega elegida no puede quedarse
+  // seleccionada y escondida: se mandaria al servidor sin que nadie la vea.
+  const puesta = sel.selectedOptions[0];
+  if (puesta && puesta.hidden) sel.value = '';
 }
 
-// El origen solo tiene sentido en un reacomodo.
-function mostrarUbicacionDeOrigen(tipo) {
-  const et = document.getElementById('fl-origen');
-  const campo = document.getElementById('fi-origen');
-  if (!et || !campo) return;
-  const visible = (tipo === 'RD');
-  et.style.display = visible ? '' : 'none';
-  campo.style.display = visible ? '' : 'none';
+// La ubicacion solo se pregunta en una entrada: es la unica que guarda la
+// mercancia. Al esconderla se vacia, porque un valor escondido se manda igual.
+const TIPOS_CON_UBICACION = ['ENTRY'];
+
+function mostrarUbicacion(tipo) {
+  const visible = TIPOS_CON_UBICACION.includes(tipo);
+  ['fl-warehouse','fi-warehouse','fl-location','fi-location'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = visible ? '' : 'none';
+  });
   if (!visible) {
-    const sel = document.getElementById('id_location_from');
-    if (sel) sel.value = '';
+    ['id_warehouse','id_location'].forEach(function(id) {
+      const sel = document.getElementById(id);
+      if (sel) sel.value = '';
+    });
   }
 }
 
-// Los tipos que sacan mercancia de una entrada guardada. Un reacomodo no entra
-// aqui: la carga no se va, solo cambia de sitio, asi que no consume nada.
+// Los tipos que sacan mercancia de una entrada guardada. Una revision no entra
+// aqui: la carga no se va, solo se mira, asi que no consume nada.
 const TIPOS_QUE_DESPACHAN = ['EXIT','TD'];
 
 function onCustomerSelected(id){
@@ -1093,7 +1105,7 @@ function onCustomerSelected(id){
   if(t&&TIPOS_QUE_DESPACHAN.includes(t.value)&&currentCustomerId)loadFreeEntries();
 }
 function onTypeChange(val){
-  mostrarUbicacionDeOrigen(val);
+  mostrarUbicacion(val);
   const ep=document.getElementById('ep');
   if(!ep)return;
   if(TIPOS_QUE_DESPACHAN.includes(val)){

@@ -24,16 +24,14 @@
     <div>
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">{{ label }}</label>
       {% if fname == 'operation_type' %}
-        <select name="{{ fname }}" style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
-          {% comment %}
-          Los cuatro tipos. Escritos a mano eran dos, asi que editar un
-          trasbordo lo habria convertido en una entrada al guardar: el
-          desplegable no tenia su valor y mandaba el primero.
-          {% endcomment %}
-          {% for valor, etiqueta in tipos_de_operacion %}
-          <option value="{{ valor }}" {% if value == valor %}selected{% endif %}>{{ etiqueta }}</option>
-          {% endfor %}
-        </select>
+        {% comment %}
+        El tipo no se edita. El POST nunca lo ha guardado, asi que el
+        desplegable que habia aqui prometia un cambio que no ocurria; y el tipo
+        es el prefijo del Custom ID ya emitido, que no puede dejar de cuadrar.
+        {% endcomment %}
+        <div style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f8fafc;color:#64748b">
+          {{ operation.get_operation_type_display }}
+        </div>
       {% elif fname == 'description' or fname == 'note' or fname == 'damage_description' %}
         <textarea name="{{ fname }}" rows="2"
                   style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;resize:vertical">{{ value|default:'' }}</textarea>
@@ -45,6 +43,33 @@
       {% endif %}
     </div>
     {% endfor %}
+    {% comment %}
+    Donde queda la mercancia. Solo lo pinta la entrada, que es el unico tipo que
+    la guarda, y solo si la empresa tiene bodegas: hasta ahora la posicion se
+    ponia al capturar y ya no habia forma de corregirla.
+    {% endcomment %}
+    {% if warehouses %}
+    <div>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">Warehouse</label>
+      <select name="warehouse_id" id="ed-warehouse" onchange="edFiltrarUbicaciones()"
+              style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
+        <option value="">— None —</option>
+        {% for w in warehouses %}
+        <option value="{{ w.pk }}" {% if operation.warehouse_id == w.pk %}selected{% endif %}>{{ w.code }} — {{ w.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">Location</label>
+      <select name="location_id" id="ed-location"
+              style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
+        <option value="">— None —</option>
+        {% for l in locations %}
+        <option value="{{ l.pk }}" data-bodega="{{ l.warehouse_id }}" {% if operation.location_id == l.pk %}selected{% endif %}>{{ l.code }}{% if l.descripcion %} · {{ l.descripcion }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
     <div>
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748b;display:block;margin-bottom:3px">Damage</label>
       <select name="damage" style="width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px">
@@ -65,3 +90,25 @@
     <button type="button" onclick="closeModal()" style="flex:1;padding:8px;background:transparent;color:#64748b;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;cursor:pointer">Cancel</button>
   </div>
 </form>
+
+{% if warehouses %}
+<script>
+// Deja en el desplegable de posicion solo las de la bodega elegida, igual que
+// en el alta. Sin bodega se ven todas.
+function edFiltrarUbicaciones() {
+  const bodega = document.getElementById('ed-warehouse');
+  const sel    = document.getElementById('ed-location');
+  if (!bodega || !sel) return;
+  const elegida = bodega.value;
+  Array.from(sel.options).forEach(function(op) {
+    if (!op.value) return;
+    op.hidden = elegida && op.dataset.bodega !== elegida;
+  });
+  // Una posicion escondida no puede quedarse seleccionada: se mandaria al
+  // servidor sin que nadie la vea.
+  const puesta = sel.selectedOptions[0];
+  if (puesta && puesta.hidden) sel.value = '';
+}
+edFiltrarUbicaciones();
+</script>
+{% endif %}

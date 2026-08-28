@@ -143,7 +143,6 @@ vista.
           <td style="white-space:nowrap;">{{ op.warehouse.code|default:"—" }}</td>
           <td style="white-space:nowrap;" title="{{ op.location.descripcion }}">
             {% if op.location %}<span class="mono">{{ op.location.code }}</span>{% else %}—{% endif %}
-            {% if op.location_from %}<span style="color:#94a3b8;font-size:10px"> ← {{ op.location_from.code }}</span>{% endif %}
           </td>
           <td style="white-space:nowrap;" title="{{ op.get_shipper_display }}">{{ op.get_shipper_display|truncatechars:20 }}</td>
           <td style="white-space:nowrap;">{{ op.invoice|default:"—" }}</td>

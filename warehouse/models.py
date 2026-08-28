@@ -446,16 +446,17 @@ class Location(models.Model):
 
 
 class WarehouseOperation(models.Model):
-    # Los dos tipos de siempre mas los dos que pidio la operacion: el trasbordo
-    # (TD), cuando la mercancia sale hacia otro transporte sin llegar a
-    # almacenarse, y el reacomodo (RD), cuando solo cambia de sitio dentro de la
-    # bodega. El codigo corto es el que ya se usa hablando, y es tambien el
-    # prefijo del Custom ID.
+    # Los cuatro tipos, y no hay mas: la entrada (ED) y la salida (SD) de
+    # siempre, el trasbordo (TD), cuando la mercancia sale hacia otro
+    # transporte sin llegar a almacenarse, y la revision (RD), cuando se
+    # inspecciona carga ya guardada sin moverla. El codigo corto es el que se
+    # usa hablando, es el prefijo del Custom ID, y por eso va tambien en la
+    # etiqueta: en pantalla se lee "Entry (ED)", como lo dictan por radio.
     TYPE_CHOICES = [
-        ('ENTRY', 'Entry'),
-        ('EXIT',  'Exit'),
-        ('TD',    'Transfer'),
-        ('RD',    'Relocation'),
+        ('ENTRY', 'Entry (ED)'),
+        ('EXIT',  'Exit (SD)'),
+        ('TD',    'Transfer (TD)'),
+        ('RD',    'Revision (RD)'),
     ]
 
     # El prefijo con el que nace el Custom ID de cada tipo. `SD` importa mas de
@@ -463,18 +464,25 @@ class WarehouseOperation(models.Model):
     # empiece por SD para decidir si una entrada esta liberada.
     PREFIJO_DEL_TIPO = {'ENTRY': 'ED', 'EXIT': 'SD', 'TD': 'TD', 'RD': 'RD'}
 
-    # Los tipos que consumen entradas ya guardadas. Un reacomodo no: la
-    # mercancia no se va, solo cambia de sitio.
+    # Los tipos que consumen entradas ya guardadas. Una revision no: la
+    # mercancia no se va, solo se mira.
     TIPOS_QUE_DESPACHAN = ('EXIT', 'TD')
+
+    # Los tipos que llevan ubicacion, que son uno solo. La ubicacion dice donde
+    # quedo guardada la carga, y solo la entrada la guarda: la salida y el
+    # trasbordo la retiran, y la revision la deja donde ya estaba.
+    TIPOS_CON_UBICACION = ('ENTRY',)
     tenant               = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, 
                                              related_name='operations')
     date                 = models.DateField(default=timezone.now)
     operation_type       = models.CharField(max_length=5, choices=TYPE_CHOICES)
     custom_id            = models.CharField(max_length=20, unique=True, blank=True)
     entry_dispatched     = models.CharField(max_length=500, blank=True, null=True)
-    # Donde esta la mercancia. Los dos campos son opcionales porque hay ochenta
-    # y seis operaciones ya guardadas sin ubicacion, y porque una empresa que
-    # trabaja con una sola bodega sin posiciones no tiene por que rellenarlos.
+    # Donde quedo guardada la mercancia. Solo los tipos de
+    # `TIPOS_CON_UBICACION` -- hoy la entrada, y solo ella -- los rellenan. Son
+    # opcionales porque hay ochenta y seis operaciones ya guardadas sin
+    # ubicacion, y porque una empresa que trabaja con una sola nave sin
+    # posiciones no tiene por que rellenarlos.
     warehouse            = models.ForeignKey('Warehouse', on_delete=models.SET_NULL,
                                              null=True, blank=True,
                                              related_name='operations',
@@ -483,12 +491,6 @@ class WarehouseOperation(models.Model):
                                              null=True, blank=True,
                                              related_name='operations',
                                              verbose_name='Ubicacion')
-    # De donde salio, y solo tiene sentido en un reacomodo: un reacomodo que no
-    # dice de donde venia la mercancia no cuenta lo que paso.
-    location_from        = models.ForeignKey('Location', on_delete=models.SET_NULL,
-                                             null=True, blank=True,
-                                             related_name='operations_desde',
-                                             verbose_name='Ubicacion anterior')
     customer             = models.ForeignKey(Catalog, on_delete=models.SET_NULL, null=True, blank=True,
                                              related_name='operations_as_customer',
                                              limit_choices_to={'category': 'CUSTOMER'})

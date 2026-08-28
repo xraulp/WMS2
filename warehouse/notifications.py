@@ -47,13 +47,13 @@ SKIPPED = 'SKIPPED'
 
 # Como se llama cada tipo de operacion en un correo o un WhatsApp, que es donde
 # lo lee el cliente. Antes era un `if` de dos ramas: cualquier tipo que no fuera
-# ENTRY se anunciaba como "Salida de Mercancias", de modo que un reacomodo --que
-# no sale de la bodega-- le habria dicho al cliente que su carga se fue.
+# ENTRY se anunciaba como "Salida de Mercancias", de modo que una revision --que
+# no saca nada de la bodega-- le habria dicho al cliente que su carga se fue.
 NOMBRE_DEL_TIPO = {
     'ENTRY': ('Recepcion de Mercancias', 'Recep de Mercancias'),
     'EXIT':  ('Salida de Mercancias',    'Salida de Mercancias'),
     'TD':    ('Trasbordo',               'Trasbordo'),
-    'RD':    ('Reacomodo en Bodega',     'Reacomodo'),
+    'RD':    ('Revision de Mercancias',  'Revision'),
 }
 
 

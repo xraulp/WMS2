@@ -24,6 +24,11 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
             background:#f1f5f9; border:1px solid #e2e8f0; border-radius:4px;
             padding:1px 5px; color:#475569; }
 .loc-apagada { opacity:.5; }
+.loc-ocupada { display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10px;
+               background:#dbeafe; border:1px solid #bfdbfe; border-radius:4px;
+               padding:1px 6px; color:#1d4ed8; cursor:pointer; }
+.loc-ocupada:hover { background:#bfdbfe; }
+.loc-vacia { font-size:10px; color:#cbd5e1; }
 </style>
 
 {% if error %}<div class="msg-error" style="margin-bottom:10px">&#9888; {{ error }}</div>{% endif %}
@@ -156,11 +161,22 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
 {% comment %} ── Las posiciones ── {% endcomment %}
 {% if ubicaciones %}
 <div style="margin-top:14px">
-  <div class="loc-t">
-    Locations
+  <div class="loc-t" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span>Locations</span>
     <span style="text-transform:none;letter-spacing:0;color:#64748b">
-      &mdash; {{ total_ubicaciones }} en total{% if total_ubicaciones > 400 %}, se muestran las primeras 400{% endif %}
+      &mdash; {{ total_ubicaciones }} en total{% if total_ubicaciones > 400 %}, se muestran las primeras 400{% endif %},
+      {{ posiciones_ocupadas }} con mercancia
     </span>
+    {% comment %}
+    El paso a "solo ocupadas". Una bodega con seiscientas posiciones y treinta
+    usadas hace ilegible la lista completa, que es justo cuando la pregunta
+    "que hay guardado" es la que se esta haciendo.
+    {% endcomment %}
+    <button type="button" class="btn btn-g btn-sm" style="text-transform:none;letter-spacing:0"
+            hx-get="{% url 'locations_panel' %}?{% if bodega_filtrada %}warehouse={{ bodega_filtrada }}&amp;{% endif %}{% if not solo_ocupadas %}ocupadas=1{% endif %}"
+            hx-target="#locations-content" hx-swap="innerHTML">
+      {% if solo_ocupadas %}&#10005; Ver todas{% else %}Solo ocupadas{% endif %}
+    </button>
   </div>
   <div class="tabla-navegable" data-columnas-fijas="2">
     <div class="tabla-nav-marco">
@@ -175,6 +191,7 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
             <th>Level</th>
             <th>Position</th>
             <th>Kind</th>
+            <th>Stored</th>
             <th>Status</th>
             <th></th>
           </tr>
@@ -189,7 +206,21 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
             <td>{{ u.rack|default:"&mdash;" }}</td>
             <td>{{ u.level|default:"&mdash;" }}</td>
             <td>{{ u.position|default:"&mdash;" }}</td>
-            <td>{{ u.get_kind_display }}</td>
+            {% comment %}
+            Lo que hay guardado ahi: entradas que no se han liberado. El numero
+            lleva a la tabla de Operaciones acotada a esa posicion, que es la
+            pregunta siguiente en cuanto se ve que un estante tiene carga.
+            {% endcomment %}
+            <td>
+              {% if u.guardadas %}
+              <span class="loc-ocupada" onclick="verContenidoDeUbicacion('{{ u.pk }}')"
+                    title="Ver las {{ u.guardadas }} entrada{{ u.guardadas|pluralize }} guardadas aqui">
+                {{ u.guardadas }}
+              </span>
+              {% else %}
+              <span class="loc-vacia">vacia</span>
+              {% endif %}
+            </td>
             <td>
               {% if u.active %}
               <span class="badge b-entry">Active</span>
@@ -219,6 +250,12 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
     </div>
   </div>
   {% include 'warehouse/partials/tabla_navegable.html' %}
+</div>
+{% elif solo_ocupadas %}
+<div class="es" style="margin-top:14px">
+  <h3>Nothing stored yet</h3>
+  <p>Ninguna posicion tiene mercancia sin liberar.
+     <a href="#" onclick="htmx.ajax('GET','{% url 'locations_panel' %}',{target:'#locations-content',swap:'innerHTML'});return false">Ver todas las posiciones</a>.</p>
 </div>
 {% elif bodegas %}
 <div class="es" style="margin-top:14px">
