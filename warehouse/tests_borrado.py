@@ -120,7 +120,7 @@ class BorradoDeOperacionesTests(BaseBorrado):
         respuesta = self._borrar_operacion(password='x')
 
         self.assertTrue(WarehouseOperation.objects.filter(pk=self.op.pk).exists())
-        self.assertContains(respuesta, 'contrasena de borrado')
+        self.assertContains(respuesta, 'no delete password set')
 
     def test_el_cliente_no_borra(self):
         cliente_usuario = User.objects.create_user('cliente_final', password='x')

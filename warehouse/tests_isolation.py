@@ -238,7 +238,7 @@ class BorradoDeDocumentosTests(DosTenantsTestBase):
             OperationDocument.objects.filter(pk=self.doc_uno.pk).exists())
         # Y lo dice: el motivo del rechazo no se pintaba en ninguna parte, asi
         # que el panel volvia mudo y el aviso daba el borrado por hecho.
-        self.assertIn('incorrecta', respuesta.content.decode())
+        self.assertIn('Wrong delete password', respuesta.content.decode())
 
     def test_el_borrado_multiple_no_alcanza_documentos_de_otra_empresa(self):
         self.client.force_login(self.manager_uno)

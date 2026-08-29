@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 # warehouse/models.py (al inicio, después de los imports)
 ROLE_CHOICES = [
-    ('superadmin', 'Super Administrador'),
-    ('admin', 'Administrador'),
-    ('manager', 'Gerente'),
-    ('staff', 'Staff'),
-    ('customer', 'Cliente'),
+    ('superadmin', _('Super administrator')),
+    ('admin', _('Administrator')),
+    ('manager', _('Manager')),
+    ('staff', _('Staff')),
+    ('customer', _('Customer')),
 ]
 
 # Los mismos roles, ordenados. Hace falta un orden porque la gestion de usuarios
@@ -58,12 +58,12 @@ def catalog_scope_of(category):
 
 class Catalog(models.Model):
     CATEGORY_CHOICES = [
-        ('CUSTOMER',    'Customer'),
-        ('SHIPPER',     'Shipper'),
-        ('CARRIER',     'Carrier'),
-        ('BUNDLE_TYPE', 'Type of Bundle'),
-        ('TYPE_OP',     'Type of Operation'),
-        ('CC_EMAIL',    'CC Email'),
+        ('CUSTOMER',    _('Customer')),
+        ('SHIPPER',     _('Shipper')),
+        ('CARRIER',     _('Carrier')),
+        ('BUNDLE_TYPE', _('Type of Bundle')),
+        ('TYPE_OP',     _('Type of Operation')),
+        ('CC_EMAIL',    _('CC Email')),
     ]
     tenant        = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='catalog_entries')
     category      = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
@@ -1497,8 +1497,8 @@ class DocumentSequence(models.Model):
 
 
 PLATFORM_ROLE_CHOICES = [
-    ('admin', 'Administrador de plataforma'),
-    ('staff', 'Soporte de plataforma'),
+    ('admin', _('Platform administrator')),
+    ('staff', _('Platform support')),
 ]
 
 

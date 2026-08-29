@@ -711,3 +711,354 @@ msgstr "vencidas"
 msgid "urgent"
 msgstr "urgentes"
 
+msgid "Name and code are required."
+msgstr "Faltan el nombre y el código."
+
+msgid "%(cuantas)d location(s) created in %(bodega)s."
+msgstr "%(cuantas)d posición(es) creadas en %(bodega)s."
+
+msgid "A customer user needs the customer it belongs to; without it the account cannot see a single operation. Nothing was changed."
+msgstr "Un usuario de cliente necesita el cliente al que pertenece; sin él, la cuenta no alcanza ni una operación. No se cambió nada."
+
+msgid "Permission denied."
+msgstr "No tienes permiso para hacer eso."
+
+msgid "Weight (LBS or KGS)"
+msgstr "Peso (LBS o KGS)"
+
+msgid "Required fields missing:"
+msgstr "Faltan campos obligatorios:"
+
+msgid "You have no delete password set. Ask the company administrator for one."
+msgstr "No tienes contraseña de borrado configurada. Pídesela al administrador de la empresa."
+
+msgid "Write the reason for the deletion."
+msgstr "Escribe el motivo del borrado."
+
+msgid "Record deleted successfully."
+msgstr "Registro borrado."
+
+msgid "No files attached."
+msgstr "No hay archivos adjuntos."
+
+msgid "Warehouse %(codigo)s created."
+msgstr "Bodega %(codigo)s creada."
+
+msgid "That would create %(cuantas)d locations, over the limit of %(tope)d. Split it into smaller runs."
+msgstr "Eso crearía %(cuantas)d posiciones, más del tope de %(tope)d. Hazlo en tandas más chicas."
+
+msgid "Please select at least one customer, or choose All Customers."
+msgstr "Elige al menos un cliente, o marca todos los clientes."
+
+msgid "%(nombre)s (%(categoria)s) saved."
+msgstr "%(nombre)s (%(categoria)s) guardado."
+
+msgid "A user linked to a customer must have the role \"customer\". \"%(rol)s\" is a company role and would see every operation of every customer. Nothing was changed."
+msgstr "Un usuario ligado a un cliente tiene que llevar el rol \"customer\". \"%(rol)s\" es un rol de la casa y vería todas las operaciones de todos los clientes. No se cambió nada."
+
+msgid "No file uploaded."
+msgstr "No se subió ningún archivo."
+
+msgid "%(cuantas)s operation(s) imported successfully."
+msgstr "%(cuantas)s operación(es) importadas."
+
+msgid "No file."
+msgstr "No hay archivo."
+
+msgid "%(cuantas)s catalog entries imported."
+msgstr "%(cuantas)s fichas de catálogo importadas."
+
+msgid "Only a platform administrator can do this."
+msgstr "Esto solo lo puede hacer un administrador de la plataforma."
+
+msgid "The logo was not saved: it has to be %(formatos)s."
+msgstr "El logo no se guardó: tiene que ser %(formatos)s."
+
+msgid "The logo was not saved: it is over %(mb)s MB."
+msgstr "El logo no se guardó: pasa de %(mb)s MB."
+
+msgid "The logo was not saved: the storage did not respond."
+msgstr "El logo no se guardó: el almacén no respondió."
+
+msgid "Choose the company being invoiced."
+msgstr "Elige la empresa a la que se factura."
+
+msgid "That company does not exist."
+msgstr "Esa empresa no existe."
+
+msgid "The amount has to be a number greater than zero."
+msgstr "El monto tiene que ser un número mayor que cero."
+
+msgid "The period is not a valid month."
+msgstr "El periodo no es un mes válido."
+
+msgid "The due date is not valid."
+msgstr "La fecha de vencimiento no es válida."
+
+msgid "Invoice %(numero)s issued to %(empresa)s for %(monto)s USD."
+msgstr "Factura %(numero)s emitida a %(empresa)s por %(monto)s USD."
+
+msgid "Your message was sent, but the file could not be uploaded. Try again from the Digital panel."
+msgstr "Tu mensaje se envió, pero el archivo no se pudo subir. Vuelve a intentarlo desde el panel Digital."
+
+msgid "Invalid credentials."
+msgstr "Usuario o contraseña incorrectos."
+
+msgid "Type of Operation is required."
+msgstr "Falta el tipo de operación."
+
+msgid "Date is required."
+msgstr "Falta la fecha."
+
+msgid "Incorrect password. Record #%(pk)s was NOT deleted."
+msgstr "Contraseña incorrecta. El registro n.º %(pk)s NO se borró."
+
+msgid "Recipient email required."
+msgstr "Falta el correo del destinatario."
+
+msgid "Email failed: %(error)s"
+msgstr "El correo falló: %(error)s"
+
+msgid "No WhatsApp number for this customer."
+msgstr "Este cliente no tiene número de WhatsApp."
+
+msgid "WhatsApp is not configured on the server."
+msgstr "WhatsApp no está configurado en el servidor."
+
+msgid "WhatsApp failed: %(error)s"
+msgstr "El WhatsApp falló: %(error)s"
+
+msgid "Code \"%(codigo)s\" already exists."
+msgstr "El código \"%(codigo)s\" ya existe."
+
+msgid "%(cuantas)d already existed."
+msgstr "%(cuantas)d ya existían."
+
+msgid "No files were selected."
+msgstr "No se seleccionaron archivos."
+
+msgid "Invalid IDs."
+msgstr "Los identificadores no son válidos."
+
+msgid "None of the selected files exist."
+msgstr "Ninguno de los archivos seleccionados existe."
+
+msgid "No records selected."
+msgstr "No hay registros seleccionados."
+
+msgid "No records found."
+msgstr "No se encontró ningún registro."
+
+msgid "With several customers you must type at least one address in the \"Email address\" field."
+msgstr "Con varios clientes tienes que escribir al menos un correo en el campo \"Email address\"."
+
+msgid "There are no recipients. Type an address in the field above."
+msgstr "No hay destinatarios. Escribe un correo en el campo de arriba."
+
+msgid "Category and Name are required."
+msgstr "Faltan la categoría y el nombre."
+
+msgid "Only an administrator can create customers."
+msgstr "Solo un administrador puede dar de alta clientes."
+
+msgid "Username and password are both required."
+msgstr "Hacen falta el usuario y la contraseña."
+
+msgid "Tenant name is required."
+msgstr "Falta el nombre de la empresa."
+
+msgid "%(numero)s marked as paid."
+msgstr "%(numero)s marcada como pagada."
+
+msgid "A cancelled invoice is not sent to anyone."
+msgstr "Una factura cancelada no se le manda a nadie."
+
+msgid "%(numero)s sent to %(destinatario)s."
+msgstr "%(numero)s enviada a %(destinatario)s."
+
+msgid "Cancelling an invoice needs a reason."
+msgstr "Hace falta un motivo para cancelar una factura."
+
+msgid "%(numero)s cancelled."
+msgstr "%(numero)s cancelada."
+
+msgid "Write a message or attach a file."
+msgstr "Escribe un mensaje o adjunta un archivo."
+
+msgid "Invalid date format."
+msgstr "El formato de la fecha no es válido."
+
+msgid "Report sent to %(destinatario)s."
+msgstr "Informe enviado a %(destinatario)s."
+
+msgid "WhatsApp sent to %(numero)s."
+msgstr "WhatsApp enviado a %(numero)s."
+
+msgid "Fill at least one level (zone, aisle, rack...)."
+msgstr "Rellena al menos un nivel (zona, pasillo, estante...)."
+
+msgid "Report with %(n)s record(s) sent to %(destinatarios)s."
+msgstr "Informe con %(n)s registro(s) enviado a %(destinatarios)s."
+
+msgid "Username \"%(usuario)s\" is already taken. Nothing was created — pick a different username."
+msgstr "El usuario \"%(usuario)s\" ya está ocupado. No se creó nada: elige otro nombre."
+
+msgid "\"%(usuario)s\" can now sign in as %(cliente)s. The password is not stored anywhere — hand it over now."
+msgstr "\"%(usuario)s\" ya puede entrar en nombre de %(cliente)s. La contraseña no se guarda en ningún sitio: entrégasela ahora."
+
+msgid "You cannot create a user with the role \"%(rol)s\"."
+msgstr "No puedes crear un usuario con el rol \"%(rol)s\"."
+
+msgid "Could not derive a valid subdomain from the name provided."
+msgstr "No se pudo sacar un subdominio válido del nombre indicado."
+
+msgid "%(empresa)s already has invoice %(numero)s for that period. Tick the box if you want to issue another one anyway."
+msgstr "%(empresa)s ya tiene la factura %(numero)s para ese periodo. Marca la casilla si aun así quieres emitir otra."
+
+msgid "Username and password are required."
+msgstr "Hacen falta el usuario y la contraseña."
+
+msgid "A message cannot go over %(maximo)s characters."
+msgstr "El mensaje no puede pasar de %(maximo)s caracteres."
+
+msgid "No more than %(maximo)s files per message. For a complete file use the Digital panel."
+msgstr "No más de %(maximo)s archivos por mensaje. Para un expediente completo usa el panel Digital."
+
+msgid "\"%(archivo)s\" is over %(mb)s MB. Large files go through the Digital panel."
+msgstr "\"%(archivo)s\" pasa de %(mb)s MB. Los archivos grandes van por el panel Digital."
+
+msgid "Select a warehouse first."
+msgstr "Elige primero una bodega."
+
+msgid "Could not send: %(error)s"
+msgstr "No se pudo enviar: %(error)s"
+
+msgid "You cannot manage the account of \"%(usuario)s\"."
+msgstr "No puedes administrar la cuenta de \"%(usuario)s\"."
+
+msgid "User deleted."
+msgstr "Usuario borrado."
+
+msgid "The logo of \"%(nombre)s\" was removed."
+msgstr "Se quitó el logo de \"%(nombre)s\"."
+
+msgid "Tenant name is required. Nothing was changed."
+msgstr "Falta el nombre de la empresa. No se cambió nada."
+
+msgid "Subdomain \"%(subdominio)s\" is already in use."
+msgstr "El subdominio \"%(subdominio)s\" ya está en uso."
+
+msgid "Logo of \"%(nombre)s\" updated."
+msgstr "Logo de \"%(nombre)s\" actualizado."
+
+msgid "Could not derive a valid subdomain. Nothing was changed."
+msgstr "No se pudo sacar un subdominio válido. No se cambió nada."
+
+msgid "Unknown platform role \"%(rol)s\"."
+msgstr "El rol de plataforma \"%(rol)s\" no existe."
+
+msgid "Platform user \"%(usuario)s\" created as %(rol)s."
+msgstr "Usuario de plataforma \"%(usuario)s\" creado como %(rol)s."
+
+msgid "You cannot change your own platform role."
+msgstr "No puedes cambiar tu propio rol de plataforma."
+
+msgid "\"%(usuario)s\" is now %(rol)s."
+msgstr "\"%(usuario)s\" ahora es %(rol)s."
+
+msgid "You cannot revoke your own platform access."
+msgstr "No puedes quitarte tu propio acceso de plataforma."
+
+msgid "Platform access revoked for \"%(nombre)s\"."
+msgstr "Se retiró el acceso de plataforma a \"%(nombre)s\"."
+
+msgid "User \"%(usuario)s\" created with role \"%(rol)s\". The password is not stored anywhere — write it down or set a new one later."
+msgstr "Usuario \"%(usuario)s\" creado con el rol \"%(rol)s\". La contraseña no se guarda en ningún sitio: apúntala o asígnale otra después."
+
+msgid "Username \"%(usuario)s\" already exists."
+msgstr "El usuario \"%(usuario)s\" ya existe."
+
+msgid "You cannot change the password of \"%(usuario)s\"."
+msgstr "No puedes cambiar la contraseña de \"%(usuario)s\"."
+
+msgid "Password updated for \"%(usuario)s\". It is not stored anywhere — hand it over now."
+msgstr "Contraseña actualizada para \"%(usuario)s\". No se guarda en ningún sitio: entrégasela ahora."
+
+msgid "You cannot change the delete password of \"%(usuario)s\"."
+msgstr "No puedes cambiar la contraseña de borrado de \"%(usuario)s\"."
+
+msgid "Username \"%(usuario)s\" is already taken. The tenant was NOT created — pick a different admin username."
+msgstr "El usuario \"%(usuario)s\" ya está ocupado. La empresa NO se creó: elige otro nombre para su administrador."
+
+msgid "Tenant \"%(nombre)s\" created (subdomain: %(subdominio)s)."
+msgstr "Empresa \"%(nombre)s\" creada (subdominio: %(subdominio)s)."
+
+msgid "Tenant \"%(nombre)s\" is now active."
+msgstr "La empresa \"%(nombre)s\" queda activa."
+
+msgid "Tenant \"%(nombre)s\" is now inactive."
+msgstr "La empresa \"%(nombre)s\" queda inactiva."
+
+msgid "Username \"%(usuario)s\" is already taken."
+msgstr "El usuario \"%(usuario)s\" ya está ocupado."
+
+msgid "\"%(usuario)s\" has no profile in this company."
+msgstr "\"%(usuario)s\" no tiene perfil en esta empresa."
+
+msgid "You cannot assign the role \"%(rol)s\" to \"%(usuario)s\"."
+msgstr "No puedes asignarle el rol \"%(rol)s\" a \"%(usuario)s\"."
+
+msgid "Subdomain \"%(subdominio)s\" is already in use. Nothing was changed."
+msgstr "El subdominio \"%(subdominio)s\" ya está en uso. No se cambió nada."
+
+msgid "Tenant \"%(nombre)s\" updated."
+msgstr "Empresa \"%(nombre)s\" actualizada."
+
+msgid "Delete password set for \"%(usuario)s\"."
+msgstr "Contraseña de borrado puesta para \"%(usuario)s\"."
+
+msgid "Delete password removed for \"%(usuario)s\" — they can no longer delete anything."
+msgstr "Se quitó la contraseña de borrado de \"%(usuario)s\": ya no puede borrar nada."
+
+msgid "User \"%(usuario)s\" updated."
+msgstr "Usuario \"%(usuario)s\" actualizado."
+
+msgid "Admin user \"%(usuario)s\" created for this tenant. Its password is not stored anywhere — hand it over now."
+msgstr "Se creó el administrador \"%(usuario)s\" para esta empresa. Su contraseña no se guarda en ningún sitio: entrégasela ahora."
+
+msgid "You have no delete password set. Ask an administrator for one: it is assigned in the Users tab."
+msgstr "No tienes contraseña de borrado configurada. Pídesela a un administrador: se asigna en la pestaña Usuarios."
+
+msgid "Wrong delete password. The file was not deleted."
+msgstr "Contraseña de borrado incorrecta. El archivo no se borró."
+
+msgid "File sent to the trash."
+msgstr "Archivo enviado a la papelera."
+
+msgid "Wrong delete password."
+msgstr "Contraseña de borrado incorrecta."
+
+msgid "%(cuantos)s file(s) uploaded."
+msgstr "%(cuantos)s archivo(s) subidos."
+
+msgid "%(cuantos)d file(s) sent to the trash."
+msgstr "%(cuantos)d archivo(s) enviados a la papelera."
+
+msgid "Super administrator"
+msgstr "Superadministrador"
+
+msgid "Administrator"
+msgstr "Administrador"
+
+msgid "Manager"
+msgstr "Gerente"
+
+msgid "Staff"
+msgstr "Operador"
+
+msgid "Platform administrator"
+msgstr "Administrador de plataforma"
+
+msgid "Platform support"
+msgstr "Soporte de plataforma"
+

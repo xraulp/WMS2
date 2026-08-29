@@ -332,7 +332,7 @@ class ElBorradoRechazadoLoDiceTests(BasePapelera):
 
         self.assertEqual(respuesta.status_code, 400)
         cuerpo = respuesta.content.decode()
-        self.assertIn('No tienes contrasena de borrado configurada', cuerpo)
+        self.assertIn('You have no delete password set', cuerpo)
         # Y dice donde se arregla, que es lo que costo averiguar.
         self.assertIn('Users', cuerpo)
         doc.refresh_from_db()
@@ -345,7 +345,7 @@ class ElBorradoRechazadoLoDiceTests(BasePapelera):
         respuesta = self._borrar(doc, password='la-que-no-es')
 
         self.assertEqual(respuesta.status_code, 400)
-        self.assertIn('incorrecta', respuesta.content.decode())
+        self.assertIn('Wrong delete password', respuesta.content.decode())
         doc.refresh_from_db()
         self.assertFalse(doc.en_papelera)
 
@@ -380,6 +380,6 @@ class ElBorradoRechazadoLoDiceTests(BasePapelera):
                                       'delete_reason': 'Subida equivocada'})
 
         self.assertEqual(respuesta.status_code, 400)
-        self.assertIn('incorrecta', respuesta.content.decode())
+        self.assertIn('Wrong delete password', respuesta.content.decode())
         doc.refresh_from_db()
         self.assertFalse(doc.en_papelera)

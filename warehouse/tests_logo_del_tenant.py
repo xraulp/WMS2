@@ -191,7 +191,7 @@ class SubirElLogoDesdeLaPlataforma(BaseLogo):
 
         self.sur.refresh_from_db()
         self.assertFalse(self.sur.logo)
-        self.assertContains(respuesta, 'tiene que ser')
+        self.assertContains(respuesta, 'has to be')
 
     def test_un_logo_invalido_no_deja_la_empresa_a_medias(self):
         """El alta no puede fallar entera por el logo: la empresa queda creada."""
@@ -203,7 +203,7 @@ class SubirElLogoDesdeLaPlataforma(BaseLogo):
 
         otra = Tenant.objects.get(subdomain='otra')
         self.assertFalse(otra.logo)
-        self.assertContains(respuesta, 'El logo no se guardo')
+        self.assertContains(respuesta, 'The logo was not saved')
 
     def test_cambiar_el_logo_retira_el_anterior(self):
         """Si se queda, el bucket acumula un logo por cada cambio."""

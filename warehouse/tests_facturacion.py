@@ -296,13 +296,13 @@ class EmitirDesdeLaPantalla(BaseFacturacion):
         respuesta = self._emitir(monto='0')
 
         self.assertEqual(Invoice.objects.count(), 0)
-        self.assertContains(respuesta, 'mayor que cero')
+        self.assertContains(respuesta, 'greater than zero')
 
     def test_un_monto_que_no_es_numero_se_rechaza(self):
         respuesta = self._emitir(monto='doscientos')
 
         self.assertEqual(Invoice.objects.count(), 0)
-        self.assertContains(respuesta, 'mayor que cero')
+        self.assertContains(respuesta, 'greater than zero')
 
     def test_un_monto_rechazado_no_gasta_numero(self):
         """El número se aparta al final, ya validado todo lo demás."""
@@ -314,7 +314,7 @@ class EmitirDesdeLaPantalla(BaseFacturacion):
         respuesta = self._emitir(tenant_id='')
 
         self.assertEqual(Invoice.objects.count(), 0)
-        self.assertContains(respuesta, 'Elige la empresa')
+        self.assertContains(respuesta, 'Choose the company')
 
     def test_avisa_si_el_periodo_ya_estaba_facturado(self):
         """Duplicar el mes es el error caro: el cliente recibe dos cobros."""
@@ -323,7 +323,7 @@ class EmitirDesdeLaPantalla(BaseFacturacion):
         respuesta = self._emitir()
 
         self.assertEqual(Invoice.objects.count(), 1)
-        self.assertContains(respuesta, 'ya tiene la factura')
+        self.assertContains(respuesta, 'already has invoice')
 
     def test_se_puede_emitir_otra_del_mismo_mes_confirmando(self):
         self._emitir()

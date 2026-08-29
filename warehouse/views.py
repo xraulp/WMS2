@@ -10,6 +10,8 @@ from django.utils import timezone
 from django.db.models import Q, Count, Sum, Max, F, OuterRef, Subquery
 from django.db import connection, transaction
 from django.conf import settings
+from django.utils.translation import gettext as _
+from django.utils.html import format_html
 from io import BytesIO
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -146,7 +148,7 @@ def login_view(request):
             return redirect(destino)
         if request.headers.get('HX-Request'):
             return render(request, 'warehouse/partials/login_error.html')
-        return render(request, 'warehouse/login.html', {'error': 'Invalid credentials.'})
+        return render(request, 'warehouse/login.html', {'error': _('Invalid credentials.')})
     return render(request, 'warehouse/login.html')
 
 
@@ -256,7 +258,7 @@ def operations_by_user(request, user_id):
     """Filtrar operaciones creadas por un usuario específico"""
     profile = get_profile(request.user)
     if not profile.is_superadmin() and not profile.is_home() and not profile.is_manager():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     # `profile__tenant=tenant` para no confirmar la existencia de usuarios de
     # otras empresas: el pk venia sin acotar y la vista devolvia su username.
@@ -282,6 +284,22 @@ def operations_by_user(request, user_id):
 
 _build_subject  = notifications.build_subject
 _get_cc_emails  = notifications.get_cc_emails
+
+
+# ── LOS AVISOS DE LA PANTALLA ─────────────────────────────────────────────────
+# El HTML del aviso estaba escrito entero en cada `return`, con el aspa o la
+# palomita pegadas al texto. Eso obligaba a traducir tambien el simbolo y hacia
+# facil que un mensaje nuevo saliera con otra clase o sin icono.
+
+
+def msg_error(texto):
+    """El recuadro rojo de la pantalla. El aspa la pone esto, no el mensaje."""
+    return format_html('<div class="msg-error">&#10007; {}</div>', texto)
+
+
+def msg_exito(texto):
+    """El recuadro verde. La palomita la pone esto, no el mensaje."""
+    return format_html('<div class="msg-success">&#10003; {}</div>', texto)
 
 
 # ── DONDE QUEDA LA MERCANCIA ──────────────────────────────────────────────────
@@ -348,7 +366,7 @@ def operation_create(request):
     tenant = get_tenant_or_404(request) ############ Usa tenant=tenant al crear la operación 072526 20:49
     profile = get_profile(request.user)
     if not profile.can_create_operations():
-        return HttpResponse('<div class="msg-error">✗ Permission denied.</div>', status=422)
+        return HttpResponse(msg_error(_('Permission denied.')), status=422)
 
     p = request.POST
     op_type  = p.get('operation_type', '').strip()
@@ -357,15 +375,15 @@ def operation_create(request):
     # Los tipos validos salen del modelo: la lista escrita a mano aqui se
     # quedo corta en cuanto aparecieron el trasbordo y el reacomodo.
     if op_type not in dict(WarehouseOperation.TYPE_CHOICES):
-        return HttpResponse('<div class="msg-error">✗ Type of Operation is required.</div>', status=422)
+        return HttpResponse(msg_error(_('Type of Operation is required.')), status=422)
     if not date_str:
-        return HttpResponse('<div class="msg-error">✗ Date is required.</div>', status=422)
+        return HttpResponse(msg_error(_('Date is required.')), status=422)
 
     from datetime import datetime
     try:
         op_date = datetime.strptime(date_str, '%Y-%m-%d').date()
     except ValueError:
-        return HttpResponse('<div class="msg-error">✗ Invalid date format.</div>', status=422)
+        return HttpResponse(msg_error(_('Invalid date format.')), status=422)
 
     def get_catalog(pk_str, category):
         # Filtra por tenant: sin eso, un pk de otra empresa se aceptaba y la
@@ -392,31 +410,31 @@ def operation_create(request):
 
     required_errors = []
     if not customer_obj and not customer_manual:
-        required_errors.append('Customer')
+        required_errors.append(_('Customer'))
     if not p.get('shipper_id') and not p.get('shipper_text','').strip():
-        required_errors.append('Shipper')
+        required_errors.append(_('Shipper'))
     if not p.get('carrier_id') and not p.get('carrier_text','').strip():
-        required_errors.append('Carrier')
+        required_errors.append(_('Carrier'))
     if not p.get('bundle_type_id') and not p.get('bundle_type_text','').strip():
-        required_errors.append('Bundle Type')
+        required_errors.append(_('Bundle Type'))
     if not p.get('bundle_qty','').strip():
-        required_errors.append('Bundle Qty')
+        required_errors.append(_('Bundle Qty'))
     if not p.get('weight_lbs','').strip() and not p.get('weight_kgs','').strip():
-        required_errors.append('Weight (LBS or KGS)')
+        required_errors.append(_('Weight (LBS or KGS)'))
     if not p.get('description','').strip():
-        required_errors.append('Description')
+        required_errors.append(_('Description'))
 
     if required_errors:
         fields = ', '.join(required_errors)
-        err_html = (
+        err_html = format_html(
             '<div class="msg-error" id="op-err" '
             'style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">'
-            '<span>&#10007; Required fields missing: <strong>' + fields + '</strong></span>'
-            '<button type="button" onclick="this.parentElement.style.display=\'none\'" '
-            'style="background:none;border:none;cursor:pointer;font-size:18px;color:#991b1b;'
-            'padding:0 4px;flex-shrink:0;line-height:1">&#x2715;</button>'
-            '</div>'
-        )
+            '<span>&#10007; {} <strong>{}</strong></span>'
+            '<button type="button" onclick="this.parentElement.style.display=&#39;none&#39;" '
+            'style="background:none;border:none;cursor:pointer;font-size:18px;'
+            'color:var(--err-ink);padding:0 4px;flex-shrink:0;line-height:1">&#x2715;</button>'
+            '</div>',
+            _('Required fields missing:'), fields)
         return HttpResponse(err_html, status=422)
 
     shipper_obj     = get_catalog(p.get('shipper_id'),     'SHIPPER')
@@ -517,7 +535,7 @@ def operation_detail(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 20:57
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### 5.1. operation_detail 072526 20:03
     if not customer_can_access_op(request.user, op):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     fields = [
         ('Date',             op.date.strftime('%Y-%m-%d')),
@@ -608,7 +626,7 @@ def operation_delete_confirm(request, pk):
     tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_delete_operations():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     if request.method != 'POST':
         return HttpResponse(status=405)
 
@@ -630,17 +648,18 @@ def operation_delete_confirm(request, pk):
     # configurada pasaba con su contrasena de sesion -la que ya esta escrita en
     # el navegador- y un superadmin podia usar la de cualquier manager.
     if not profile.delete_password:
-        return negar('No tienes contrasena de borrado configurada. '
-                     'Pidesela al administrador de la empresa.')
+        return negar(_('You have no delete password set. Ask the company '
+                       'administrator for one.'))
     if not profile.check_delete_password(password):
-        return negar(f'Incorrect password. Record #{pk} was NOT deleted.')
+        return negar(_('Incorrect password. Record #%(pk)s was NOT deleted.')
+                     % {'pk': pk})
     if not motivo:
-        return negar('Escribe el motivo del borrado.')
+        return negar(_('Write the reason for the deletion.'))
 
     _log_deletion(op, request.user, motivo)
     op.delete()
     return render(request, 'warehouse/partials/operations_table.html', {
-        'operations': ops_qs, 'delete_success': 'Record deleted successfully.',
+        'operations': ops_qs, 'delete_success': _('Record deleted successfully.'),
         'is_home': is_home(request.user), 'profile': profile,
     })
 
@@ -650,7 +669,7 @@ def operation_pdf(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:00
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### 5.3. operation_pd  072526 20:09
     if not customer_can_access_op(request.user, op):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     pdf = generate_pdf_report(op)
     resp = HttpResponse(pdf, content_type='application/pdf')
     resp['Content-Disposition'] = f'inline; filename="{op.custom_id}.pdf"'
@@ -662,7 +681,7 @@ def operation_label(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:00
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ####operation_label 072526 20:10
     if not customer_can_access_op(request.user, op):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     pdf = generate_label_pdf(op)
     resp = HttpResponse(pdf, content_type='application/pdf')
     resp['Content-Disposition'] = f'inline; filename="{op.custom_id}_label.pdf"'
@@ -692,7 +711,7 @@ def operation_download_all(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 21:00
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### operation_download_all 072526 20:11
     if not customer_can_access_op(request.user, op):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     # El orden va explicito ademas del `ordering` del modelo: es el que decide
     # la numeracion de los archivos dentro del ZIP, y eso no debe depender de
     # que nadie toque el Meta mas adelante.
@@ -704,7 +723,7 @@ def operation_download_all(request, pk):
     docs = op.documents.order_by('orden', 'uploaded_at', 'pk')
 
     if not docs.exists():
-        return HttpResponse('No files attached.', status=404)
+        return HttpResponse(_('No files attached.'), status=404)
 
     # Obtener abreviatura del customer
     customer_abbr = get_customer_abbreviation(op)
@@ -797,7 +816,7 @@ def document_file(request, doc_pk):
         pk=doc_pk, operation__tenant=tenant)
 
     if not customer_can_access_op(request.user, doc.operation):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     profile = get_profile(request.user)
     if doc.en_papelera and not profile.can_see_deletion_log():
@@ -863,17 +882,17 @@ def operation_send_email(request, pk):
     tenant = get_tenant_or_404(request) ######### Usa tenant=tenant en get_object_or_404 0072526 21:03
     op        = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)##### operation_send_email  072526 20:13
     if not customer_can_access_op(request.user, op):
-        return HttpResponse('<div class="msg-error">✗ Permission denied.</div>', status=403)
+        return HttpResponse(msg_error(_('Permission denied.')), status=403)
     recipient = request.POST.get('recipient_email','').strip()
     subject   = request.POST.get('subject', _build_subject(op))
     message   = request.POST.get('message','')
     if not recipient:
-        return HttpResponse('<div class="msg-error">✗ Recipient email required.</div>')
+        return HttpResponse(msg_error(_('Recipient email required.')))
     sent, error = notifications.send_manual_email(
         op, recipient, subject, message_body=message, triggered_by=request.user)
     if sent:
-        return HttpResponse(f'<div class="msg-success">✓ Report sent to {recipient}.</div>')
-    return HttpResponse(f'<div class="msg-error">✗ Email failed: {error}</div>')
+        return HttpResponse(msg_exito(_('Report sent to %(destinatario)s.') % {'destinatario': recipient}))
+    return HttpResponse(msg_error(_('Email failed: %(error)s') % {'error': error}))
 
 
 @login_required
@@ -883,18 +902,18 @@ def operation_send_whatsapp(request, pk):
     """Send WhatsApp message for a specific operation."""
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### operation_send_whatsapp 072526 20:13
     if not customer_can_access_op(request.user, op):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     sent, error = notifications.send_manual_whatsapp(op, triggered_by=request.user)
     wa = notifications.whatsapp_number(notifications.resolve_customer(op))
     if sent:
-        return HttpResponse(f'<div class="msg-success">✓ WhatsApp sent to {wa}.</div>')
+        return HttpResponse(msg_exito(_('WhatsApp sent to %(numero)s.') % {'numero': wa}))
     # Antes esta vista decía "sent" siempre que el cliente tuviera número, aunque
     # el envío hubiera reventado: el error se perdía dentro de _send_whatsapp.
     if error == 'no_number':
-        return HttpResponse('<div class="msg-error">✗ No WhatsApp number for this customer.</div>')
+        return HttpResponse(msg_error(_('No WhatsApp number for this customer.')))
     if error == 'twilio_not_configured':
-        return HttpResponse('<div class="msg-error">✗ WhatsApp no está configurado en el servidor.</div>')
-    return HttpResponse(f'<div class="msg-error">✗ WhatsApp failed: {error}</div>')
+        return HttpResponse(msg_error(_('WhatsApp is not configured on the server.')))
+    return HttpResponse(msg_error(_('WhatsApp failed: %(error)s') % {'error': error}))
 
 
 # ── SEARCH ────────────────────────────────────────────────────────────────────
@@ -1114,7 +1133,7 @@ def expandir_rango(texto):
         if not trozo:
             continue
         if '-' in trozo:
-            desde, _, hasta = trozo.partition('-')
+            desde, _guion, hasta = trozo.partition('-')
             desde, hasta = desde.strip(), hasta.strip()
             if desde.isdigit() and hasta.isdigit() and int(desde) <= int(hasta):
                 # Se conserva el relleno de ceros: si escriben 01-12, las
@@ -1195,21 +1214,21 @@ def warehouse_create(request):
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not puede_configurar_bodegas(profile):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     nombre = request.POST.get('name', '').strip()
     codigo = request.POST.get('code', '').strip().upper()
     error = None
     if not nombre or not codigo:
-        error = 'Name and code are required.'
+        error = _('Name and code are required.')
     elif Warehouse.objects.filter(tenant=tenant, code=codigo).exists():
-        error = 'Code "%s" already exists.' % codigo
+        error = _('Code "%(codigo)s" already exists.') % {'codigo': codigo}
     else:
         Warehouse.objects.create(
             tenant=tenant, name=nombre, code=codigo,
             address=request.POST.get('address', '').strip())
 
-    exito = None if error else 'Warehouse %s created.' % codigo
+    exito = None if error else _('Warehouse %(codigo)s created.') % {'codigo': codigo}
     return render(request, 'warehouse/partials/locations_panel.html',
                   _contexto_de_bodegas(request, tenant, error=error, exito=exito))
 
@@ -1227,7 +1246,7 @@ def locations_generate(request):
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not puede_configurar_bodegas(profile):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     try:
         bodega = Warehouse.objects.get(pk=int(request.POST.get('warehouse', '')),
@@ -1235,7 +1254,7 @@ def locations_generate(request):
     except (ValueError, TypeError, Warehouse.DoesNotExist):
         return render(request, 'warehouse/partials/locations_panel.html',
                       _contexto_de_bodegas(request, tenant,
-                                           error='Select a warehouse first.'))
+                                           error=_('Select a warehouse first.')))
 
     zonas      = expandir_rango(request.POST.get('zones'))     or ['']
     pasillos   = expandir_rango(request.POST.get('aisles'))    or ['']
@@ -1248,15 +1267,17 @@ def locations_generate(request):
 
     cuantas = len(zonas) * len(pasillos) * len(estantes) * len(niveles) * len(posiciones)
     if cuantas > TOPE_DE_UBICACIONES:
-        aviso = ('That would create %d locations, over the limit of %d. '
-                 'Split it into smaller runs.' % (cuantas, TOPE_DE_UBICACIONES))
+        aviso = _('That would create %(cuantas)d locations, over the limit '
+                  'of %(tope)d. Split it into smaller runs.') % {
+                      'cuantas': cuantas, 'tope': TOPE_DE_UBICACIONES}
         return render(request, 'warehouse/partials/locations_panel.html',
                       _contexto_de_bodegas(request, tenant, error=aviso))
     if not any(zonas + pasillos + estantes + niveles + posiciones):
         return render(request, 'warehouse/partials/locations_panel.html',
                       _contexto_de_bodegas(
                           request, tenant,
-                          error='Fill at least one level (zone, aisle, rack...).'))
+                          error=_('Fill at least one level '
+                                  '(zone, aisle, rack...).')))
 
     existentes = set(Location.objects.filter(warehouse=bodega)
                      .values_list('code', flat=True))
@@ -1278,9 +1299,10 @@ def locations_generate(request):
 
     Location.objects.bulk_create(nuevas)
     repetidas = cuantas - len(nuevas)
-    mensaje = '%d location(s) created in %s.' % (len(nuevas), bodega.code)
+    mensaje = _('%(cuantas)d location(s) created in %(bodega)s.') % {
+        'cuantas': len(nuevas), 'bodega': bodega.code}
     if repetidas > 0:
-        mensaje += ' %d already existed.' % repetidas
+        mensaje += ' ' + _('%(cuantas)d already existed.') % {'cuantas': repetidas}
     return render(request, 'warehouse/partials/locations_panel.html',
                   _contexto_de_bodegas(request, tenant, exito=mensaje))
 
@@ -1298,7 +1320,7 @@ def location_toggle(request, pk):
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not puede_configurar_bodegas(profile):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     ubi = get_object_or_404(Location, pk=pk, tenant=tenant)
     ubi.active = not ubi.active
     ubi.save(update_fields=['active'])
@@ -1435,7 +1457,7 @@ def digital_upload(request, pk):
     tenant = get_tenant_or_404(request) ######### Usa tenant=tenant al crear el documento 072526 20:51
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
     if not customer_can_access_op(request.user, op):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     uploaded = guardar_en_expediente(op, request.FILES.getlist('files'),
                                      request.user)
@@ -1448,7 +1470,7 @@ def digital_upload(request, pk):
         'operation': op, 'query': op.custom_id,
         'is_home': is_home(request.user),
         'profile': profile,
-        'upload_success': f'{len(uploaded)} file(s) uploaded.',
+        'upload_success': _('%(cuantos)s file(s) uploaded.') % {'cuantos': len(uploaded)},
     })
 
 def tipo_de_archivo(nombre):
@@ -1565,7 +1587,7 @@ def digital_reorder(request, doc_pk):
                             pk=doc_pk, operation__tenant=tenant)
     op = doc.operation
     if not customer_can_access_op(request.user, op):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     direccion = request.POST.get('direccion')
     documentos = list(op.documents.all())
@@ -1653,7 +1675,7 @@ def digital_delete_file(request, doc_pk):
     tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_delete_documents():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     doc = get_object_or_404(OperationDocument.todos, pk=doc_pk, tenant=tenant)
     op = doc.operation
@@ -1663,22 +1685,22 @@ def digital_delete_file(request, doc_pk):
     if not profile.delete_password:
         return _rechazo_de_borrado(
             request, op, profile,
-            '❌ No tienes contrasena de borrado configurada. Pidesela a un '
-            'administrador: se asigna en la pestana Users.')
+            _('You have no delete password set. Ask an administrator for one: '
+              'it is assigned in the Users tab.'))
     if not profile.check_delete_password(password):
         return _rechazo_de_borrado(
             request, op, profile,
-            '❌ Contrasena de eliminacion incorrecta. No se pudo eliminar el archivo.')
+            _('Wrong delete password. The file was not deleted.'))
     if not motivo:
         return _rechazo_de_borrado(
-            request, op, profile, '❌ Escribe el motivo del borrado.')
+            request, op, profile, _('Write the reason for the deletion.'))
 
     if not doc.en_papelera:
         doc.archivar(request.user, motivo)
         _log_document_deletion(doc, request.user, motivo)
 
     return _panel_digital(request, op, profile,
-                          upload_success='✓ Archivo enviado a la papelera.')
+                          upload_success=_('File sent to the trash.'))
 
 
 @login_required
@@ -1690,19 +1712,19 @@ def digital_delete_multiple(request):
     tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_delete_documents():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     ids_str = request.POST.get('ids', '').strip()
     if not ids_str:
-        return HttpResponse('<div class="msg-error">✗ No se seleccionaron archivos.</div>')
+        return HttpResponse(msg_error(_('No files were selected.')))
 
     doc_ids = [int(x.strip()) for x in ids_str.split(',') if x.strip().isdigit()]
     if not doc_ids:
-        return HttpResponse('<div class="msg-error">✗ IDs inválidos.</div>')
+        return HttpResponse(msg_error(_('Invalid IDs.')))
 
     docs = list(OperationDocument.todos.filter(pk__in=doc_ids, tenant=tenant))
     if not docs:
-        return HttpResponse('<div class="msg-error">✗ Ninguno de los archivos seleccionados existe.</div>')
+        return HttpResponse(msg_error(_('None of the selected files exist.')))
 
     op = docs[0].operation
     password = request.POST.get('confirm_password', '')
@@ -1711,15 +1733,15 @@ def digital_delete_multiple(request):
     if not profile.delete_password:
         return _rechazo_de_borrado(
             request, op, profile,
-            '❌ No tienes contrasena de borrado configurada. Pidesela a un '
-            'administrador: se asigna en la pestana Users.')
+            _('You have no delete password set. Ask an administrator for one: '
+              'it is assigned in the Users tab.'))
     if not profile.check_delete_password(password):
         return _rechazo_de_borrado(
             request, op, profile,
-            '❌ Contrasena de eliminacion incorrecta.')
+            _('Wrong delete password.'))
     if not motivo:
         return _rechazo_de_borrado(
-            request, op, profile, '❌ Escribe el motivo del borrado.')
+            request, op, profile, _('Write the reason for the deletion.'))
 
     archivados = 0
     for doc in docs:
@@ -1731,7 +1753,8 @@ def digital_delete_multiple(request):
 
     return _panel_digital(
         request, op, profile,
-        upload_success='✓ %d archivo(s) enviado(s) a la papelera.' % archivados)
+        upload_success=_('%(cuantos)d file(s) sent to the trash.')
+                       % {'cuantos': archivados})
 
 
 # ── PAPELERA Y BITACORA DE BORRADOS ───────────────────────────────────────────
@@ -1768,7 +1791,7 @@ def deletion_log(request):
     tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_see_deletion_log():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     return render(request, 'warehouse/partials/deletion_log.html',
                   _contexto_papelera(request, tenant, profile))
 
@@ -1779,7 +1802,7 @@ def document_restore(request, doc_pk):
     tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_see_deletion_log():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     doc = get_object_or_404(OperationDocument.todos, pk=doc_pk, tenant=tenant)
     doc.restaurar()
@@ -1801,7 +1824,7 @@ def document_purge(request, doc_pk):
     tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_purge_documents():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     doc = get_object_or_404(OperationDocument.todos, pk=doc_pk, tenant=tenant)
     if not doc.en_papelera:
@@ -1860,7 +1883,7 @@ def report_generator(request):
         # mandado por correo al cliente equivocado es un accidente caro. Al
         # cliente no se le exige: no tiene entre que elegir.
         if not customer_ids and not all_customers and not profile.is_customer():
-            error = 'Please select at least one customer or choose All Customers.'
+            error = _('Please select at least one customer, or choose All Customers.')
         else:
             ####ops = WarehouseOperation.objects.select_related(
             ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(   ######072526 13:13  En report_generator, la consulta base debe ser:
@@ -1966,7 +1989,7 @@ def report_generator_email(request):
             pk_list.append(int(i))
 
     if not pk_list:
-        return HttpResponse('<div class="msg-error">✗ No records selected.</div>')
+        return HttpResponse(msg_error(_('No records selected.')))
 
     ops = WarehouseOperation.objects.filter(pk__in=pk_list, tenant=tenant).select_related(
         'customer', 'shipper', 'carrier', 'bundle_type', 'created_by').order_by('-date')
@@ -1974,7 +1997,7 @@ def report_generator_email(request):
     ops_list = list(ops)
 
     if not ops_list:
-        return HttpResponse('<div class="msg-error">✗ No records found.</div>')
+        return HttpResponse(msg_error(_('No records found.')))
 
     recipients = []
 
@@ -1996,10 +2019,10 @@ def report_generator_email(request):
                 recipients.append(em)
 
     if (all_customers or (customer_id and ',' in customer_id)) and not recipients:
-        return HttpResponse('<div class="msg-error">✗ Para múltiples clientes, debes ingresar al menos un email en el campo "Email address".</div>')
+        return HttpResponse(msg_error(_('With several customers you must type at least one address in the "Email address" field.')))
 
     if not recipients:
-        return HttpResponse('<div class="msg-error">✗ No hay destinatarios. Ingresa un email en el campo correspondiente.</div>')
+        return HttpResponse(msg_error(_('There are no recipients. Type an address in the field above.')))
 
     try:
         pdf = generate_operations_report_pdf(ops_list, title)
@@ -2016,10 +2039,11 @@ def report_generator_email(request):
         email.attach('report.pdf', pdf, 'application/pdf')
         email.send()
         return HttpResponse(
-            f'<div class="msg-success">✓ Reporte con {len(ops_list)} registro(s) enviado a {", ".join(recipients)}.</div>'
+            msg_exito(_('Report with %(n)s record(s) sent to %(destinatarios)s.')
+                      % {'n': len(ops_list), 'destinatarios': ', '.join(recipients)})
         )
     except Exception as e:
-        return HttpResponse(f'<div class="msg-error">✗ Error al enviar: {e}</div>')
+        return HttpResponse(msg_error(_('Could not send: %(error)s') % {'error': e}))
 
 
 # ── CATALOG ───────────────────────────────────────────────────────────────────
@@ -2086,18 +2110,18 @@ def catalog_create(request):
     tenant = get_tenant_or_404(request) ###### Usa tenant=tenant al crear el catálogo 072526 20:52
     profile = get_profile(request.user)
     if profile.is_customer():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     p = request.POST
     category = p.get('category','').strip()
     name     = p.get('name','').strip()
     if not category or not name:
-        return HttpResponse('<div class="msg-error">✗ Category and Name are required.</div>')
+        return HttpResponse(msg_error(_('Category and Name are required.')))
     # La categoría llega de un desplegable del formulario, así que quitarle la
     # opción a quien no debe verla no basta: el POST se manda igual. Dar de alta
     # un cliente queda reservado al administrador de la empresa.
     if not profile.can_edit_catalog(category):
         return HttpResponse(
-            '<div class="msg-error">✗ Only an administrator can create customers.</div>',
+            msg_error(_('Only an administrator can create customers.')),
             status=403)
     # El plazo de permanencia se pregunta ya en el alta: es una condicion del
     # cliente, no un ajuste que se vaya a recordar despues. Vacio significa "el
@@ -2128,8 +2152,11 @@ def catalog_create(request):
     table_html = render_to_string(
         'warehouse/partials/catalog_table.html',
         _catalog_table_context(request, tenant, scope), request=request)
+    aviso = msg_exito(_('%(nombre)s (%(categoria)s) saved.')
+                      % {'nombre': entry.name,
+                         'categoria': entry.get_category_display()})
     return HttpResponse(
-        f'<div class="msg-success">✓ {entry.name} ({entry.get_category_display()}) saved.</div>'
+        f'{aviso}'
         f'<div id="{_catalog_table_id(scope)}" hx-swap-oob="innerHTML">{table_html}</div>'
     )
 
@@ -2139,12 +2166,12 @@ def catalog_edit(request, pk):
     tenant = get_tenant_or_404(request) #### Usa tenant=tenant en get_object_or_404 072526 20:55
     profile = get_profile(request.user)
     if profile.is_customer():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     entry = get_object_or_404(Catalog, pk=pk, tenant=tenant) #### 4.4. catalog_edit Verificar que el catálogo pertenece al tenant:
     # La categoría no se puede cambiar desde aquí, así que la que manda es la
     # que ya tiene la entrada.
     if not profile.can_edit_catalog(entry.category):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     if request.method == 'POST':
         p = request.POST
         entry.name          = p.get('name', entry.name).strip()
@@ -2181,10 +2208,10 @@ def catalog_delete(request, pk):
     tenant = get_tenant_or_404(request) ###### Usa tenant=tenant en get_object_or_404 072526 20:56
     profile = get_profile(request.user)
     if profile.is_customer():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     entry = get_object_or_404(Catalog, pk=pk, tenant=tenant) #####4.5. catalog_delete 072526 20:00
     if not profile.can_edit_catalog(entry.category):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     if request.method == 'POST':
         entry.active = False
         entry.save()
@@ -2221,7 +2248,7 @@ def customer_access(request, pk):
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_manage_users():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     cliente = get_object_or_404(Catalog, pk=pk, tenant=tenant, category='CUSTOMER')
 
@@ -2230,20 +2257,21 @@ def customer_access(request, pk):
         uname = request.POST.get('username', '').strip()
         pwd   = request.POST.get('password', '').strip()
         if not (uname and pwd):
-            msg, msg_is_error = 'Username and password are both required.', True
+            msg, msg_is_error = _('Username and password are both required.'), True
         elif User.objects.filter(username=uname).exists():
             # El nombre de usuario es unico en toda la plataforma, no por
             # empresa: sin esta comprobacion el alta reventaria a mitad.
-            msg = (f'Username "{uname}" is already taken. Nothing was created '
-                   f'— pick a different username.')
+            msg = _('Username "%(usuario)s" is already taken. Nothing was '
+                    'created — pick a different username.') % {'usuario': uname}
             msg_is_error = True
         else:
             with transaction.atomic():
                 u = User.objects.create_user(username=uname, password=pwd)
                 UserProfile.objects.create(
                     user=u, tenant=tenant, role='customer', customer=cliente)
-            msg = (f'"{uname}" can now sign in as {cliente.name}. The password '
-                   f'is not stored anywhere — hand it over now.')
+            msg = _('"%(usuario)s" can now sign in as %(cliente)s. The password '
+                    'is not stored anywhere — hand it over now.') % {
+                        'usuario': uname, 'cliente': cliente.name}
 
     usuarios = (User.objects
                 .filter(profile__tenant=tenant, profile__customer=cliente,
@@ -2318,14 +2346,15 @@ def _incoherencia_rol_cliente(role, cid):
     Devuelve el texto del rechazo, o cadena vacia si la combinacion es buena.
     """
     if cid and role != 'customer':
-        return (f'A user linked to a customer must have the role "customer". '
-                f'"{role}" is a company role and would see every operation of '
-                f'every customer. Nothing was changed.')
+        return _('A user linked to a customer must have the role "customer". '
+                 '"%(rol)s" is a company role and would see every operation of '
+                 'every customer. Nothing was changed.') % {'rol': role}
     # El desplegable del alta de personal ya no ofrece 'customer', pero eso es
     # solo el HTML: el rechazo tiene que estar aqui, que es donde se decide.
     if role == 'customer' and not cid:
-        return ('A customer user needs the customer it belongs to; without it '
-                'the account cannot see a single operation. Nothing was changed.')
+        return _('A customer user needs the customer it belongs to; without '
+                 'it the account cannot see a single operation. Nothing was '
+                 'changed.')
     return ''
 
 
@@ -2334,7 +2363,7 @@ def user_management(request):
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_manage_users():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     users    = _usuarios_agrupados(tenant)
     profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
     customers = Catalog.objects.filter(category='CUSTOMER', active=True, tenant=tenant).order_by('name')
@@ -2357,7 +2386,7 @@ def user_management(request):
                 # El rol llegaba del formulario y se guardaba tal cual, asi que
                 # un administrador podia nombrar un 'superadmin' y quedar por
                 # debajo de alguien a quien acababa de crear.
-                msg = f'You cannot create a user with the role "{role}".'
+                msg = _('You cannot create a user with the role "%(rol)s".') % {'rol': role}
                 msg_is_error = True
             elif uname and pwd and _incoherencia_rol_cliente(role, cid):
                 msg = _incoherencia_rol_cliente(role, cid)
@@ -2373,11 +2402,12 @@ def user_management(request):
                         nuevo_perfil.save(update_fields=['delete_password'])
                     # La contrasena ya no queda guardada en claro, asi que esta
                     # pantalla no va a poder recordarla: se dice aqui, una vez.
-                    msg = (f'User "{uname}" created with role "{role}". '
-                           f'The password is not stored anywhere — write it down '
-                           f'or set a new one later.')
+                    msg = _('User "%(usuario)s" created with role "%(rol)s". '
+                            'The password is not stored anywhere — write it '
+                            'down or set a new one later.') % {
+                                'usuario': uname, 'rol': role}
                 else:
-                    msg = f'Username "{uname}" already exists.'
+                    msg = _('Username "%(usuario)s" already exists.') % {'usuario': uname}
                     msg_is_error = True
         # Aqui vivian 'create_customer' -- el cliente y su primer usuario a la
         # vez -- y 'create_customer_user'. Las dos se mudaron a la ficha del
@@ -2390,11 +2420,11 @@ def user_management(request):
             uid = request.POST.get('user_id')
             u   = get_object_or_404(User, pk=uid, profile__tenant=tenant)
             if not profile.can_manage_user(_perfil_de(u)):
-                msg = f'You cannot manage the account of "{u.username}".'
+                msg = _('You cannot manage the account of "%(usuario)s".') % {'usuario': u.username}
                 msg_is_error = True
             elif u != request.user:
                 u.delete()
-                msg = 'User deleted.'
+                msg = _('User deleted.')
         elif action == 'change_password':
             uid = request.POST.get('user_id')
             new_pwd = request.POST.get('new_password','').strip()
@@ -2404,7 +2434,7 @@ def user_management(request):
                 # administrador no podia nombrar un superadmin, pero si cambiarle
                 # la contrasena al que ya hubiera y entrar como el.
                 if not profile.can_manage_user(_perfil_de(u)):
-                    msg = f'You cannot change the password of "{u.username}".'
+                    msg = _('You cannot change the password of "%(usuario)s".') % {'usuario': u.username}
                     msg_is_error = True
                 else:
                     # Solo la de Django, cifrada. Antes se guardaba ademas una
@@ -2413,8 +2443,9 @@ def user_management(request):
                     # empresa legibles en la base.
                     u.set_password(new_pwd)
                     u.save()
-                    msg = (f'Password updated for "{u.username}". It is not stored '
-                           f'anywhere — hand it over now.')
+                    msg = _('Password updated for "%(usuario)s". It is not '
+                            'stored anywhere — hand it over now.') % {
+                                'usuario': u.username}
         elif action == 'set_delete_password':
             # Tiene accion propia, y no el formulario de edicion, porque la fila
             # ofrecia dos campos de contrasena muy distintos: el ancho de la
@@ -2427,17 +2458,18 @@ def user_management(request):
             u = get_object_or_404(User, pk=uid, profile__tenant=tenant)
             objetivo = _perfil_de(u)
             if not profile.can_manage_user(objetivo):
-                msg = f'You cannot change the delete password of "{u.username}".'
+                msg = _('You cannot change the delete password of "%(usuario)s".') % {'usuario': u.username}
                 msg_is_error = True
             elif objetivo is None:
-                msg = f'"{u.username}" has no profile in this company.'
+                msg = _('"%(usuario)s" has no profile in this company.') % {'usuario': u.username}
                 msg_is_error = True
             else:
                 objetivo.set_delete_password(nueva)
                 objetivo.save(update_fields=['delete_password'])
-                msg = (f'Delete password set for "{u.username}".' if nueva
-                       else f'Delete password removed for "{u.username}" — '
-                            f'they can no longer delete anything.')
+                msg = (_('Delete password set for "%(usuario)s".') % {'usuario': u.username}
+                       if nueva else
+                       _('Delete password removed for "%(usuario)s" — they can '
+                         'no longer delete anything.') % {'usuario': u.username})
         elif action == 'update_role':
             uid  = request.POST.get('user_id')
             role = request.POST.get('role','staff')
@@ -2445,13 +2477,15 @@ def user_management(request):
             del_pwd = request.POST.get('delete_password','').strip()
             u    = get_object_or_404(User, pk=uid, profile__tenant=tenant)
             if not profile.can_manage_user(_perfil_de(u)) or not profile.can_assign_role(role):
-                msg = f'You cannot assign the role "{role}" to "{u.username}".'
+                msg = _('You cannot assign the role "%(rol)s" to "%(usuario)s".') % {
+                    'rol': role, 'usuario': u.username}
                 msg_is_error = True
             elif _incoherencia_rol_cliente(role, cid):
                 msg = _incoherencia_rol_cliente(role, cid)
                 msg_is_error = True
             else:
-                p, _ = UserProfile.objects.get_or_create(user=u, defaults={'tenant': tenant})
+                p, _creado = UserProfile.objects.get_or_create(
+                    user=u, defaults={'tenant': tenant})
                 p.role     = role
                 p.customer = Catalog.objects.filter(pk=int(cid), tenant=tenant).first() if cid else None
                 if del_pwd:
@@ -2459,7 +2493,7 @@ def user_management(request):
                     # guardada en claro y a la vista en esta misma pantalla.
                     p.set_delete_password(del_pwd)
                 p.save()
-                msg = f'User "{u.username}" updated.'
+                msg = _('User "%(usuario)s" updated.') % {'usuario': u.username}
         users    = _usuarios_agrupados(tenant)
         profiles = {p.user_id: p for p in UserProfile.objects.select_related('customer').filter(tenant=tenant)}
 
@@ -2584,9 +2618,9 @@ def operation_edit(request, pk):
     # captura sin forma de arreglar un peso mal tecleado, y ademas el boton
     # Edit le aparecia en la tabla y respondia 403.
     if not profile.can_edit_operations() and not profile.is_customer():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     if not customer_can_access_op(request.user, op):
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
 
     if request.method == 'POST':
         p = request.POST
@@ -2802,7 +2836,7 @@ def operations_import(request):
     tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if not profile.can_create_operations():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     try:
         import openpyxl
     except ImportError:
@@ -2810,7 +2844,7 @@ def operations_import(request):
 
     f = request.FILES.get('import_file')
     if not f:
-        return HttpResponse('No file uploaded.', status=400)
+        return HttpResponse(_('No file uploaded.'), status=400)
 
     try:
         wb = openpyxl.load_workbook(f, data_only=True)
@@ -2898,7 +2932,7 @@ def operations_import(request):
             'customer', 'shipper', 'carrier', 'bundle_type')
         ops = customer_ops_filter(request.user, ops)[:200]
         profile = get_profile(request.user)
-        msg = f'{created} operation(s) imported successfully.'
+        msg = _('%(cuantas)s operation(s) imported successfully.') % {'cuantas': created}
         if errors:
             msg += f' Errors: {"; ".join(errors[:3])}'
         return render(request, 'warehouse/partials/operations_table.html', {
@@ -2958,7 +2992,7 @@ def catalog_import(request):
     tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if profile.is_customer():
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     try:
         import openpyxl
     except ImportError:
@@ -2967,7 +3001,7 @@ def catalog_import(request):
     scope = _catalog_scope(request)
     f = request.FILES.get('import_file')
     if not f:
-        return HttpResponse('No file.', status=400)
+        return HttpResponse(_('No file.'), status=400)
 
     try:
         wb = openpyxl.load_workbook(f, data_only=True)
@@ -3006,7 +3040,7 @@ def catalog_import(request):
             except Exception as e:
                 errors.append(f'Row {row_idx}: {e}')
 
-        msg = f'{created} catalog entries imported.'
+        msg = _('%(cuantas)s catalog entries imported.') % {'cuantas': created}
         if errors: msg += f' Errors: {"; ".join(errors[:3])}'
         key = 'import_success' if not errors else 'import_error'
         return render(request, 'warehouse/partials/catalog_table.html',
@@ -3058,9 +3092,9 @@ def _sin_permiso_de_plataforma(user, solo_admin=False):
     """
     nivel = platform_role(user)
     if nivel is None:
-        return HttpResponse('Permission denied.', status=403)
+        return HttpResponse(_('Permission denied.'), status=403)
     if solo_admin and nivel != 'admin':
-        return HttpResponse('Only a platform administrator can do this.', status=403)
+        return HttpResponse(_('Only a platform administrator can do this.'), status=403)
     return None
 
 
@@ -3090,10 +3124,10 @@ def _guardar_logo(tenant, archivo):
 
     nombre = (archivo.name or '').lower()
     if not nombre.endswith(FORMATOS_DE_LOGO):
-        return (f'El logo no se guardo: tiene que ser '
-                f'{", ".join(FORMATOS_DE_LOGO)}.')
+        return _('The logo was not saved: it has to be %(formatos)s.') % {
+            'formatos': ', '.join(FORMATOS_DE_LOGO)}
     if archivo.size > MAX_LOGO_MB * 1024 * 1024:
-        return f'El logo no se guardo: pasa de {MAX_LOGO_MB} MB.'
+        return _('The logo was not saved: it is over %(mb)s MB.') % {'mb': MAX_LOGO_MB}
 
     anterior = tenant.logo.name if tenant.logo else ''
     try:
@@ -3101,7 +3135,7 @@ def _guardar_logo(tenant, archivo):
         tenant.save(update_fields=['logo'])
     except Exception as e:
         logger.warning('No se pudo guardar el logo de %s: %s', tenant.name, e)
-        return 'El logo no se guardo: el almacen no respondio.'
+        return _('The logo was not saved: the storage did not respond.')
 
     # El anterior deja de estar referenciado por nadie: si se queda, el bucket
     # acumula un logo por cada cambio y ninguno se puede distinguir del vivo.
@@ -3126,7 +3160,7 @@ def platform_tenant_list(request):
         # desactivarla es cortarle el servicio: las dos son del administrador de
         # plataforma, no del soporte.
         if not es_admin:
-            return HttpResponse('Only a platform administrator can do this.', status=403)
+            return HttpResponse(_('Only a platform administrator can do this.'), status=403)
         action = request.POST.get('action')
 
         if action == 'create':
@@ -3139,13 +3173,15 @@ def platform_tenant_list(request):
 
             subdomain = re.sub(r'[^a-z0-9-]', '', slugify(subdomain_in or name))
             if not name:
-                msg = 'Tenant name is required.'
+                msg = _('Tenant name is required.')
             elif not subdomain:
-                msg = 'Could not derive a valid subdomain from the name provided.'
+                msg = _('Could not derive a valid subdomain from the name provided.')
             elif Tenant.objects.filter(subdomain=subdomain).exists():
-                msg = f'Subdomain "{subdomain}" is already in use.'
+                msg = _('Subdomain "%(subdominio)s" is already in use.') % {'subdominio': subdomain}
             elif admin_username and User.objects.filter(username=admin_username).exists():
-                msg = f'Username "{admin_username}" is already taken. Tenant was NOT created — pick a different admin username.'
+                msg = _('Username "%(usuario)s" is already taken. The tenant was '
+                        'NOT created — pick a different admin username.') % {
+                            'usuario': admin_username}
             else:
                 tenant = Tenant.objects.create(
                     name=name, type='organization', subdomain=subdomain,
@@ -3156,7 +3192,8 @@ def platform_tenant_list(request):
                 # nombre en texto.
                 error_logo = _guardar_logo(tenant, request.FILES.get('logo'))
                 Subscription.objects.create(tenant=tenant, plan=plan)
-                msg = f'Tenant "{name}" created (subdomain: {subdomain}).'
+                msg = _('Tenant "%(nombre)s" created (subdomain: %(subdominio)s).') % {
+                    'nombre': name, 'subdominio': subdomain}
                 # El aviso del logo va detras del de creacion y no delante: la
                 # empresa quedo creada, que es lo primero que hay que leer.
                 if error_logo:
@@ -3167,8 +3204,10 @@ def platform_tenant_list(request):
                     UserProfile.objects.create(
                         user=admin_user, tenant=tenant, role='admin',
                     )
-                    msg += (f' Admin user "{admin_username}" created for this tenant. '
-                            f'Its password is not stored anywhere — hand it over now.')
+                    msg += ' ' + _('Admin user "%(usuario)s" created for this '
+                                   'tenant. Its password is not stored '
+                                   'anywhere — hand it over now.') % {
+                                       'usuario': admin_username}
 
         elif action == 'set_logo':
             t = get_object_or_404(Tenant, pk=request.POST.get('tenant_id'))
@@ -3178,10 +3217,11 @@ def platform_tenant_list(request):
                     t.logo.delete(save=False)
                 t.logo = None
                 t.save(update_fields=['logo'])
-                msg = f'Se quito el logo de "{t.name}".'
+                msg = _('The logo of "%(nombre)s" was removed.') % {'nombre': t.name}
             else:
                 error_logo = _guardar_logo(t, archivo)
-                msg = error_logo or f'Logo de "{t.name}" actualizado.'
+                msg = error_logo or (_('Logo of "%(nombre)s" updated.')
+                                     % {'nombre': t.name})
 
         elif action == 'update':
             # Corregir un alta. Faltaba por completo: una empresa se creaba y
@@ -3195,11 +3235,12 @@ def platform_tenant_list(request):
             subdominio = re.sub(r'[^a-z0-9-]', '', slugify(subdom_in)) if subdom_in else t.subdomain
 
             if not nombre:
-                msg = 'Tenant name is required. Nothing was changed.'
+                msg = _('Tenant name is required. Nothing was changed.')
             elif not subdominio:
-                msg = 'Could not derive a valid subdomain. Nothing was changed.'
+                msg = _('Could not derive a valid subdomain. Nothing was changed.')
             elif Tenant.objects.filter(subdomain=subdominio).exclude(pk=t.pk).exists():
-                msg = f'Subdomain "{subdominio}" is already in use. Nothing was changed.'
+                msg = _('Subdomain "%(subdominio)s" is already in use. '
+                        'Nothing was changed.') % {'subdominio': subdominio}
             else:
                 cambio_subdominio = subdominio != t.subdomain
                 anterior = t.subdomain
@@ -3215,7 +3256,7 @@ def platform_tenant_list(request):
                 # lee el de la suscripcion.
                 Subscription.objects.filter(tenant=t).update(plan=plan)
 
-                msg = f'Tenant "{t.name}" updated.'
+                msg = _('Tenant "%(nombre)s" updated.') % {'nombre': t.name}
                 if cambio_subdominio:
                     # Es la direccion por la que entra su gente: cambiarla no es
                     # un detalle de captura.
@@ -3228,7 +3269,8 @@ def platform_tenant_list(request):
             t = get_object_or_404(Tenant, pk=tid)
             t.is_active = not t.is_active
             t.save(update_fields=['is_active'])
-            msg = f'Tenant "{t.name}" is now {"active" if t.is_active else "inactive"}.'
+            msg = (_('Tenant "%(nombre)s" is now active.') if t.is_active
+                   else _('Tenant "%(nombre)s" is now inactive.')) % {'nombre': t.name}
 
     # Las cantidades que hacen falta para saber como va cada empresa sin abrir
     # sus datos. Contar no es ver: el nivel de plataforma sigue sin alcanzar ni
@@ -3366,29 +3408,30 @@ def _accion_de_facturacion(request):
             factura.marcar_pagada(referencia=request.POST.get('referencia', ''))
         except ValueError as e:
             return '', str(e)
-        return f'{factura.numero} marcada como pagada.', ''
+        return _('%(numero)s marked as paid.') % {'numero': factura.numero}, ''
 
     if accion == 'enviar':
         factura = get_object_or_404(Invoice, pk=request.POST.get('invoice_id'))
         if factura.estado == Invoice.CANCELADA:
-            return '', 'Una factura cancelada no se le manda a nadie.'
+            return '', _('A cancelled invoice is not sent to anyone.')
         enviado, detalle = notifications.enviar_factura(
             factura, triggered_by=request.user)
         if not enviado:
             return '', detalle
-        return f'{factura.numero} enviada a {detalle}.', ''
+        return _('%(numero)s sent to %(destinatario)s.') % {
+            'numero': factura.numero, 'destinatario': detalle}, ''
 
     if accion == 'cancelar':
         factura = get_object_or_404(Invoice, pk=request.POST.get('invoice_id'))
         motivo = (request.POST.get('motivo') or '').strip()
         if not motivo:
             # Cancelar deja el numero ocupado para siempre; que conste por que.
-            return '', 'Hace falta un motivo para cancelar una factura.'
+            return '', _('Cancelling an invoice needs a reason.')
         try:
             factura.cancelar(motivo)
         except ValueError as e:
             return '', str(e)
-        return f'{factura.numero} cancelada.', ''
+        return _('%(numero)s cancelled.') % {'numero': factura.numero}, ''
 
     return '', ''
 
@@ -3403,23 +3446,23 @@ def _emitir_factura(request):
     """
     tenant_id = (request.POST.get('tenant_id') or '').strip()
     if not tenant_id.isdigit():
-        return '', 'Elige la empresa a la que se factura.'
+        return '', _('Choose the company being invoiced.')
     empresa = Tenant.objects.filter(pk=int(tenant_id), type='organization').first()
     if empresa is None:
-        return '', 'Esa empresa no existe.'
+        return '', _('That company does not exist.')
 
     monto = _monto_valido(request.POST.get('monto'))
     if monto is None:
-        return '', 'El monto tiene que ser un número mayor que cero.'
+        return '', _('The amount has to be a number greater than zero.')
 
     periodo = _periodo_del_mes(request.POST.get('periodo'))
     if periodo is None:
-        return '', 'El periodo no es un mes válido.'
+        return '', _('The period is not a valid month.')
     periodo_inicio, periodo_fin = periodo
 
     vence = _fecha_valida(request.POST.get('vence_el'))
     if vence is None:
-        return '', 'La fecha de vencimiento no es válida.'
+        return '', _('The due date is not valid.')
 
     ya_existe = Invoice.objects.filter(
         tenant=empresa, periodo_inicio=periodo_inicio,
@@ -3428,9 +3471,10 @@ def _emitir_factura(request):
         # Duplicar el mes es el error caro: el cliente recibe dos cobros por lo
         # mismo. Se avisa y se deja pasar solo si lo confirma a proposito.
         if request.POST.get('confirmar_duplicado') != '1':
-            return '', (f'{empresa.name} ya tiene la factura {ya_existe.numero} '
-                        f'para ese periodo. Marca la casilla si aun así quieres '
-                        f'emitir otra.')
+            return '', _('%(empresa)s already has invoice %(numero)s for that '
+                         'period. Tick the box if you want to issue another '
+                         'one anyway.') % {'empresa': empresa.name,
+                                           'numero': ya_existe.numero}
 
     hoy = timezone.localdate()
     with transaction.atomic():
@@ -3444,7 +3488,8 @@ def _emitir_factura(request):
             notas=(request.POST.get('notas') or '').strip(),
             emitida_por=request.user,
         )
-    return f'Factura {factura.numero} emitida a {empresa.name} por {monto} USD.', ''
+    return _('Invoice %(numero)s issued to %(empresa)s for %(monto)s USD.') % {
+        'numero': factura.numero, 'empresa': empresa.name, 'monto': monto}, ''
 
 
 def _monto_valido(texto):
@@ -3550,11 +3595,11 @@ def platform_users(request):
             rol   = request.POST.get('role', 'staff')
             roles_validos = [r for r, _ in PLATFORM_ROLE_CHOICES]
             if not uname or not pwd:
-                msg, msg_is_error = 'Username and password are required.', True
+                msg, msg_is_error = _('Username and password are required.'), True
             elif rol not in roles_validos:
-                msg, msg_is_error = f'Unknown platform role "{rol}".', True
+                msg, msg_is_error = _('Unknown platform role "%(rol)s".') % {'rol': rol}, True
             elif User.objects.filter(username=uname).exists():
-                msg, msg_is_error = f'Username "{uname}" is already taken.', True
+                msg, msg_is_error = _('Username "%(usuario)s" is already taken.') % {'usuario': uname}, True
             else:
                 # Sin tenant y sin UserProfile a propósito: un usuario de
                 # plataforma no pertenece a ninguna empresa, y es esa ausencia la
@@ -3564,7 +3609,8 @@ def platform_users(request):
                 with transaction.atomic():
                     u = User.objects.create_user(username=uname, password=pwd)
                     PlatformUser.objects.create(user=u, role=rol)
-                msg = f'Platform user "{uname}" created as {rol}.'
+                msg = _('Platform user "%(usuario)s" created as %(rol)s.') % {
+                    'usuario': uname, 'rol': rol}
 
         elif action == 'update_role':
             pk  = request.POST.get('platform_user_id')
@@ -3572,27 +3618,28 @@ def platform_users(request):
             acceso = get_object_or_404(PlatformUser, pk=pk)
             roles_validos = [r for r, _ in PLATFORM_ROLE_CHOICES]
             if rol not in roles_validos:
-                msg, msg_is_error = f'Unknown platform role "{rol}".', True
+                msg, msg_is_error = _('Unknown platform role "%(rol)s".') % {'rol': rol}, True
             elif acceso.user == request.user:
                 # Quitarse a uno mismo el nivel de administrador deja el panel
                 # sin quien lo administre si es el único que queda.
-                msg, msg_is_error = 'You cannot change your own platform role.', True
+                msg, msg_is_error = _('You cannot change your own platform role.'), True
             else:
                 acceso.role = rol
                 acceso.save(update_fields=['role'])
-                msg = f'"{acceso.user.username}" is now {rol}.'
+                msg = _('"%(usuario)s" is now %(rol)s.') % {
+                    'usuario': acceso.user.username, 'rol': rol}
 
         elif action == 'revoke':
             pk = request.POST.get('platform_user_id')
             acceso = get_object_or_404(PlatformUser, pk=pk)
             if acceso.user == request.user:
-                msg, msg_is_error = 'You cannot revoke your own platform access.', True
+                msg, msg_is_error = _('You cannot revoke your own platform access.'), True
             else:
                 nombre = acceso.user.username
                 # Se retira el acceso, no se borra la persona: el usuario sigue
                 # existiendo y puede tener historial asociado.
                 acceso.delete()
-                msg = f'Platform access revoked for "{nombre}".'
+                msg = _('Platform access revoked for "%(nombre)s".') % {'nombre': nombre}
 
     return render(request, 'warehouse/partials/platform_users.html', {
         'accesos': PlatformUser.objects.select_related('user').all(),
@@ -3785,9 +3832,9 @@ def _operacion_del_hilo(request, pk):
     tenant = get_tenant_or_404(request)
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
     if not customer_can_access_op(request.user, op):
-        return None, HttpResponse('Permission denied.', status=403)
+        return None, HttpResponse(_('Permission denied.'), status=403)
     if lado_en_el_hilo(request.user) is None:
-        return None, HttpResponse('Permission denied.', status=403)
+        return None, HttpResponse(_('Permission denied.'), status=403)
     return op, None
 
 
@@ -3851,22 +3898,25 @@ def operation_chat_send(request, pk):
     # escribir nada es una respuesta completa. Lo que no puede es estar vacio
     # del todo.
     if not cuerpo and not archivos:
-        return _pintar_hilo(request, op, error='Escribe un mensaje o adjunta un archivo.')
+        return _pintar_hilo(request, op,
+                            error=_('Write a message or attach a file.'))
     if len(cuerpo) > MENSAJE_MAX:
         return _pintar_hilo(request, op,
-                            error=f'El mensaje no puede pasar de {MENSAJE_MAX} caracteres.')
+                            error=_('A message cannot go over %(maximo)s '
+                                    'characters.') % {'maximo': MENSAJE_MAX})
     if len(archivos) > ADJUNTOS_MAX:
         return _pintar_hilo(request, op, error=(
-            f'No mas de {ADJUNTOS_MAX} archivos por mensaje. '
-            'Para un expediente completo usa el panel Digital.'))
+            _('No more than %(maximo)s files per message. For a complete '
+              'file use the Digital panel.') % {'maximo': ADJUNTOS_MAX}))
     grande = next((f for f in archivos if f.size > ADJUNTO_MAX_MB * 1024 * 1024), None)
     if grande:
         return _pintar_hilo(request, op, error=(
-            f'"{grande.name}" pasa de {ADJUNTO_MAX_MB} MB. '
-            'Los archivos grandes van por el panel Digital.'))
+            _('"%(archivo)s" is over %(mb)s MB. Large files go through the '
+              'Digital panel.') % {'archivo': grande.name,
+                                   'mb': ADJUNTO_MAX_MB}))
 
     lado = lado_en_el_hilo(request.user)
-    hilo, _ = Conversation.objects.get_or_create(
+    hilo, _creado = Conversation.objects.get_or_create(
         operation=op, defaults={'tenant': op.tenant})
 
     ahora = timezone.now()
@@ -3892,8 +3942,8 @@ def operation_chat_send(request, pk):
         guardar_en_expediente(op, archivos, request.user, mensaje=mensaje)
     except Exception:
         logger.exception('No se pudo guardar un adjunto del hilo de %s', op.custom_id)
-        fallo_al_subir = ('Tu mensaje se envio, pero el archivo no se pudo subir. '
-                          'Vuelve a intentarlo desde el panel Digital.')
+        fallo_al_subir = _('Your message was sent, but the file could not be '
+                           'uploaded. Try again from the Digital panel.')
     hilo.last_message_at = ahora
     hilo.save(update_fields=['last_message_at'])
 

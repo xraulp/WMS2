@@ -143,13 +143,13 @@ class EscribirYLeerTests(HiloBase):
         resp = self._escribir(self.staff, self.op, '   ')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(Message.objects.count(), 0)
-        self.assertContains(resp, 'Escribe un mensaje')
+        self.assertContains(resp, 'Write a message')
 
     def test_un_mensaje_demasiado_largo_se_rechaza(self):
         from .views import MENSAJE_MAX
         resp = self._escribir(self.staff, self.op, 'x' * (MENSAJE_MAX + 1))
         self.assertEqual(Message.objects.count(), 0)
-        self.assertContains(resp, 'caracteres')
+        self.assertContains(resp, 'characters')
 
     def test_los_mensajes_salen_en_orden(self):
         for texto in ('uno', 'dos', 'tres'):
@@ -963,7 +963,7 @@ class AdjuntosEnElHiloTests(HiloBase):
         resp = self._mandar(self.staff, self.op, '   ')
 
         self.assertEqual(Message.objects.count(), 0)
-        self.assertContains(resp, 'Escribe un mensaje o adjunta un archivo.')
+        self.assertContains(resp, 'Write a message or attach a file.')
 
     def test_el_cliente_tambien_puede_adjuntar(self):
         """
@@ -999,7 +999,7 @@ class AdjuntosEnElHiloTests(HiloBase):
 
         self.assertEqual(Message.objects.count(), 0)
         self.assertEqual(OperationDocument.objects.count(), 0)
-        self.assertContains(resp, 'No mas de 5 archivos por mensaje.')
+        self.assertContains(resp, 'No more than 5 files per message.')
 
     def test_no_se_acepta_un_archivo_enorme(self):
         from .views import ADJUNTO_MAX_MB
@@ -1011,7 +1011,7 @@ class AdjuntosEnElHiloTests(HiloBase):
 
         self.assertEqual(Message.objects.count(), 0)
         self.assertEqual(OperationDocument.objects.count(), 0)
-        self.assertContains(resp, 'pasa de %s MB' % ADJUNTO_MAX_MB)
+        self.assertContains(resp, 'is over %s MB' % ADJUNTO_MAX_MB)
 
     def test_lo_rechazado_no_deja_el_mensaje_escrito(self):
         """
@@ -1078,7 +1078,7 @@ class AdjuntosEnElHiloTests(HiloBase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(Message.objects.get().body, 'Ahi va la etiqueta.')
-        self.assertContains(resp, 'el archivo no se pudo subir')
+        self.assertContains(resp, 'the file could not be uploaded')
         self.assertEqual(OperationDocument.objects.count(), 0)
 
     def test_si_falla_la_subida_el_aviso_sale_igual(self):
