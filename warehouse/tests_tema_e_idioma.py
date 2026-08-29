@@ -305,3 +305,50 @@ class PlataformaYDigitalTests(TestCase):
         self.assertContains(respuesta, '{archivo}')
         self.assertContains(respuesta, 'a la papelera')
         self.assertNotContains(respuesta, 'to the trash')
+
+
+class GestionYClientesTests(TestCase):
+    """
+    Las dos pantallas que quedaban a medias: la gestion de usuarios de la
+    empresa y la tabla del catalogo de clientes.
+
+    La de usuarios mezclaba los dos idiomas dentro de la misma linea -- el
+    titulo decia "Create New User - personal de la empresa" --, y era la unica
+    pantalla donde eso se leia de un vistazo.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from .models import Catalog
+
+        cls.tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        cls.usuario = User.objects.create_user('jefa', password='x')
+        UserProfile.objects.create(user=cls.usuario, tenant=cls.tenant, role='admin')
+        cls.cliente = Catalog.objects.create(
+            tenant=cls.tenant, category='CUSTOMER', name='Cliente del Norte')
+
+    def setUp(self):
+        self.client.force_login(self.usuario)
+        self.client.post('/preferencias/idioma/', {'idioma': 'es'})
+
+    def test_la_gestion_de_usuarios_no_mezcla_los_dos_idiomas(self):
+        respuesta = self.client.get('/users/')
+
+        self.assertContains(respuesta, 'personal de la empresa')
+        self.assertNotContains(respuesta, 'Create New User')
+        # Las columnas de la tabla, que seguian en ingles.
+        self.assertContains(respuesta, 'Contraseña de acceso')
+        self.assertContains(respuesta, 'Última entrada')
+
+    def test_el_estado_de_la_contrasena_de_borrado_se_traduce(self):
+        respuesta = self.client.get('/users/')
+
+        self.assertContains(respuesta, 'sin configurar')
+        self.assertNotContains(respuesta, 'cannot delete')
+
+    def test_la_tabla_de_clientes_se_lee_en_espanol(self):
+        respuesta = self.client.get('/catalog/list/', {'scope': 'customers'})
+
+        self.assertContains(respuesta, 'sin acceso')
+        self.assertNotContains(respuesta, '>no access<')

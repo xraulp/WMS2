@@ -30,7 +30,7 @@ quedarse a medias. Aqui la pregunta y su respuesta estan en el mismo sitio.
     <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}">
       <td style="font-size:12px"><strong>{{ u.username }}</strong></td>
       <td style="font-size:11px;color:var(--faint)">
-        {{ u.last_login|date:"Y-m-d"|default:"nunca ha entrado" }}
+        {% trans "has never signed in" as t_nunca %}{{ u.last_login|date:"Y-m-d"|default:t_nunca }}
       </td>
     </tr>
     {% endfor %}

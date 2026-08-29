@@ -1924,3 +1924,108 @@ msgstr "¿Enviar {numero} al correo de facturación de la empresa?"
 
 msgid "Why is {numero} being cancelled? The number stays used."
 msgstr "¿Por qué se cancela {numero}? El número se queda ocupado."
+
+# La gestion de usuarios de la empresa, la tabla del catalogo y de clientes,
+# y el panel que reparte el acceso de un cliente.
+
+msgid "Create New User &mdash; staff of the company"
+msgstr "Dar de alta un usuario &mdash; personal de la empresa"
+
+msgid "To give access to someone from a customer, use the blue forms below."
+msgstr "Para dar acceso a alguien de un cliente, usa los formularios azules de abajo."
+
+msgid "Role"
+msgstr "Rol"
+
+msgid "Super Admin"
+msgstr "Superadministrador"
+
+msgid "Admin"
+msgstr "Administrador"
+
+msgid "Delete Password"
+msgstr "Contraseña de borrado"
+
+msgid "To be able to delete"
+msgstr "Para poder borrar"
+
+msgid "Create User"
+msgstr "Dar de alta"
+
+msgid "<strong>Giving access to someone from a customer?</strong> It is done from the <strong>Customers</strong> tab: the button that shares their access is in each customer's users column. Customers with nobody yet are marked there."
+msgstr "<strong>¿Das de alta a alguien de un cliente?</strong> Se hace desde la pestaña <strong>Clientes</strong>: en la columna de usuarios de cada cliente está el botón que reparte su acceso. Los clientes que todavía no tienen a nadie salen marcados allí."
+
+msgid "Login Password"
+msgstr "Contraseña de acceso"
+
+msgid "Customer Link"
+msgstr "Cliente asociado"
+
+msgid "Last Login"
+msgstr "Última entrada"
+
+msgid "Remove"
+msgstr "Quitar"
+
+msgid "Of the company"
+msgstr "De la empresa"
+
+msgid "Super"
+msgstr "Super"
+
+msgid "New pwd"
+msgstr "Nueva contr."
+
+msgid "change"
+msgstr "cambiar"
+
+msgid "set"
+msgstr "asignar"
+
+msgid "set up"
+msgstr "configurada"
+
+msgid "not set up — cannot delete"
+msgstr "sin configurar: no puede borrar"
+
+msgid "Never"
+msgstr "Nunca"
+
+msgid "Customer..."
+msgstr "Cliente..."
+
+msgid "Del"
+msgstr "Borrar"
+
+msgid "Delete user %(quien)s? This cannot be undone."
+msgstr "¿Borrar al usuario %(quien)s? Esto no se puede deshacer."
+
+msgid "The record of what has been deleted is in the <strong>Deletions</strong> tab."
+msgstr "El registro de lo que se ha borrado está en la pestaña <strong>Borrados</strong>."
+
+msgid "No matches"
+msgstr "Sin coincidencias"
+
+msgid "Archive '%(nombre)s'? Historical records will NOT be affected."
+msgstr "¿Archivar «%(nombre)s»? Los registros históricos NO se ven afectados."
+
+msgid "Add your customers using the form above."
+msgstr "Da de alta a tus clientes con el formulario de arriba."
+
+msgid "Only an administrator can add customers."
+msgstr "Solo un administrador puede dar de alta clientes."
+
+msgid "Add shippers, carriers and bundle types using the form above."
+msgstr "Da de alta remitentes, transportistas y tipos de bulto con el formulario de arriba."
+
+msgid "Nothing to show yet."
+msgstr "Todavía no hay nada que enseñar."
+
+msgid "WhatsApp"
+msgstr "WhatsApp"
+
+msgid "has never signed in"
+msgstr "nunca ha entrado"
+
+msgid "Set"
+msgstr "Asignar"

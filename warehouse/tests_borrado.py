@@ -367,7 +367,7 @@ class ContrasenaDeBorradoTests(TestCase):
         respuesta = self.client.get('/users/')
 
         self.assertNotContains(respuesta, self.perfil_admin.delete_password)
-        self.assertContains(respuesta, 'configurada')
+        self.assertContains(respuesta, 'set up')
 
 
 class AsignarLaContrasenaDeBorradoTests(TestCase):

@@ -67,7 +67,7 @@ class UsuariosPorClienteTests(BaseGestion):
         cuenta = {e.name: e.usuarios for e in resp.context['catalog_entries']}
 
         self.assertEqual(cuenta['Nadie Entra SA'], 0)
-        self.assertContains(resp, 'sin acceso')
+        self.assertContains(resp, 'no access')
 
     def test_el_personal_de_la_casa_no_cuenta_como_usuario_de_un_cliente(self):
         """La jefa y el operador no cuelgan de ningun cliente."""
@@ -92,7 +92,7 @@ class UsuariosAgrupadosTests(BaseGestion):
     def test_la_lista_lleva_el_nombre_del_cliente_como_separador(self):
         resp = self.client.get('/users/')
         self.assertContains(resp, 'Aceros del Bajio')
-        self.assertContains(resp, 'De la empresa')
+        self.assertContains(resp, 'Of the company')
 
 
 class CuentasDeLaPlataformaTests(BaseGestion):

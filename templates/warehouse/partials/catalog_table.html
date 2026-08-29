@@ -69,7 +69,7 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
         <button class="btn btn-g btn-sm" onclick="abrirAccesoDeCliente({{ entry.pk }}, '{{ entry.name|escapejs }}')"
                 title="{% trans "See who signs in for this customer, and give access" %}"
                 style="{% if not entry.usuarios %}border-color:var(--warn);color:var(--warn-ink);background:var(--warn-bg-suave){% endif %}">
-          {% if entry.usuarios %}👤 {{ entry.usuarios }}{% else %}sin acceso{% endif %}
+          {% if entry.usuarios %}👤 {{ entry.usuarios }}{% else %}{% trans "no access" %}{% endif %}
         </button>
         {% else %}
           {% if entry.usuarios %}
@@ -93,7 +93,7 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
                 hx-post="{% url 'catalog_delete' entry.pk %}"
                 hx-target="#{{ table_id }}"
                 hx-swap="innerHTML"
-                hx-confirm="Archive '{{ entry.name }}'? Historical records will NOT be affected."
+                hx-confirm="{% blocktrans with nombre=entry.name %}Archive '{{ nombre }}'? Historical records will NOT be affected.{% endblocktrans %}"
                 hx-include="[name=csrfmiddlewaretoken]">{% trans "Archive" %}</button>
       </td>
       {% endif %}
@@ -106,10 +106,10 @@ dos tablas, un modal dentro del partial se duplicaría con los mismos id.
 <div class="empty-state" style="text-align:center;padding:30px;color:var(--faint)">
   {% if scope == 'customers' %}
   <h3 style="margin-bottom:4px;font-size:14px;color:var(--soft)">{% trans "No customers yet" %}</h3>
-  <p style="font-size:12px">{% if can_edit %}Add your customers using the form above.{% else %}Only an administrator can add customers.{% endif %}</p>
+  <p style="font-size:12px">{% if can_edit %}{% trans "Add your customers using the form above." %}{% else %}{% trans "Only an administrator can add customers." %}{% endif %}</p>
   {% else %}
   <h3 style="margin-bottom:4px;font-size:14px;color:var(--soft)">{% trans "Catalog is empty" %}</h3>
-  <p style="font-size:12px">{% if can_edit %}Add shippers, carriers and bundle types using the form above.{% else %}Nothing to show yet.{% endif %}</p>
+  <p style="font-size:12px">{% if can_edit %}{% trans "Add shippers, carriers and bundle types using the form above." %}{% else %}{% trans "Nothing to show yet." %}{% endif %}</p>
   {% endif %}
 </div>
 {% endif %}
