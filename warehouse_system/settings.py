@@ -191,7 +191,7 @@ LANGUAGE_CODE = 'en'
 # carpeta en `locale/`.
 LANGUAGES = [
     ('en', 'English'),
-    ('es', 'Espanol'),
+    ('es', 'Español'),
 ]
 LOCALE_PATHS = [BASE_DIR / 'locale']
 

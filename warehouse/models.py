@@ -105,7 +105,7 @@ class Catalog(models.Model):
     # correo: un documento se lee en el idioma de quien lo recibe, y el operador
     # que captura una entrada a las tres de la manana no tiene por que acordarse
     # de en que idioma habla cada cliente. Vacio = el idioma de la casa.
-    LANGUAGE_CHOICES = [('', _('Default')), ('es', 'Espanol'), ('en', 'English')]
+    LANGUAGE_CHOICES = [('', _('Default')), ('es', 'Español'), ('en', 'English')]
     language            = models.CharField(max_length=5, blank=True, default='',
                             choices=LANGUAGE_CHOICES,
                             verbose_name='Idioma de los correos y documentos')
@@ -174,7 +174,7 @@ class UserProfile(models.Model):
     theme           = models.CharField(max_length=10, blank=True, default='',
                                        choices=THEME_CHOICES,
                                        verbose_name='Tema')
-    LANGUAGE_CHOICES = [('', _('Automatic')), ('es', 'Espanol'), ('en', 'English')]
+    LANGUAGE_CHOICES = [('', _('Automatic')), ('es', 'Español'), ('en', 'English')]
     language        = models.CharField(max_length=5, blank=True, default='',
                                        choices=LANGUAGE_CHOICES,
                                        verbose_name='Idioma')
