@@ -20,8 +20,8 @@ anunciaba que el archivo se habia enviado a la papelera.
     <span style="margin-left:10px;font-size:12px;color:var(--soft)">{{ operation.date|date:"Y-m-d" }} · {{ operation.get_customer_display }}</span>
   </div>
   <div style="display:flex;gap:8px">
-    <a href="{% url 'operation_download_all' operation.pk %}" class="btn btn-g btn-sm">⬇ Download All</a>
-    <button onclick="clearDigital()" class="btn btn-d btn-sm">✕ Clear</button>
+    <a href="{% url 'operation_download_all' operation.pk %}" class="btn btn-g btn-sm">⬇ {% trans "Download All" %}</a>
+    <button onclick="clearDigital()" class="btn btn-d btn-sm">✕ {% trans "Clear" %}</button>
   </div>
 </div>
 
@@ -37,12 +37,12 @@ que comprueba la vista. El staff sube archivos pero no los borra.
       <input type="checkbox" id="select-all-files" onchange="toggleAllFiles(this.checked)" style="width:15px; height:15px;">
       {% trans "Select all" %}
     </label>
-    <span style="font-size:11px; color:var(--faint);" id="selected-count">0 seleccionados</span>
+    <span style="font-size:11px; color:var(--faint);" id="selected-count">{% blocktrans with n=0 %}{{ n }} selected{% endblocktrans %}</span>
   </div>
   <button onclick="deleteSelectedFiles()"
           id="btn-delete-selected"
           style="padding:4px 14px; background:var(--red); color:var(--on-accent); border:none; border-radius:6px; font-size:12px; cursor:pointer; display:none; transition:background 0.2s; font-weight:500;">
-    🗑 Eliminar seleccionados
+    🗑 {% trans "Delete selected" %}
   </button>
 </div>
 {% endif %}
@@ -61,8 +61,8 @@ que comprueba la vista. El staff sube archivos pero no los borra.
        ondrop="handleDrop(event)"
        onclick="document.getElementById('digi-file-input').click()">
     <div style="font-size:28px;margin-bottom:6px">📁</div>
-    <div style="font-size:13px;font-weight:500;color:var(--soft-fuerte);margin-bottom:4px">Click to select files or drag &amp; drop here</div>
-    <div style="font-size:11px;color:var(--faint)">Any file type accepted · Names auto-generated: DDMMYY-1, DDMMYY-2…</div>
+    <div style="font-size:13px;font-weight:500;color:var(--soft-fuerte);margin-bottom:4px">{% trans "Click to select files or drag &amp; drop here" %}</div>
+    <div style="font-size:11px;color:var(--faint)">{% trans "Any file type accepted · Names auto-generated: DDMMYY-1, DDMMYY-2..." %}</div>
   </div>
 
   <!-- Camera button for mobile (#15) -->
@@ -70,12 +70,12 @@ que comprueba la vista. El staff sube archivos pero no los borra.
     <button type="button"
             onclick="document.getElementById('digi-file-input').click()"
             style="padding:8px 16px;background:var(--accent);color:var(--on-accent);border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px">
-      📂 Select Files
+      📂 {% trans "Select Files" %}
     </button>
     <button type="button"
             onclick="document.getElementById('digi-camera-input').click()"
             style="padding:8px 16px;background:var(--green);color:var(--on-accent);border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px">
-      📷 Take Photo
+      📷 {% trans "Take Photo" %}
     </button>
   </div>
 
@@ -88,7 +88,7 @@ que comprueba la vista. El staff sube archivos pero no los borra.
 
   <div id="digi-status" style="display:none;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--soft);justify-content:center">
     <div style="width:12px;height:12px;border:2px solid var(--bdr);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite"></div>
-    Uploading files…
+    {% trans "Uploading files..." %}
   </div>
 </form>
 
@@ -135,12 +135,12 @@ que comprueba la vista. El staff sube archivos pero no los borra.
       <button hx-post="{% url 'digital_reorder' doc.pk %}" hx-vals='{"direccion":"arriba"}'
               hx-target="#digital-content" hx-swap="innerHTML"
               hx-include="[name=csrfmiddlewaretoken]"
-              title="Move earlier" {% if forloop.first %}disabled{% endif %}
+              title="{% trans "Move earlier" %}" {% if forloop.first %}disabled{% endif %}
               style="flex:1;padding:3px;font-size:11px;background:none;border:none;cursor:pointer;color:{% if forloop.first %}var(--bdr-fuerte){% else %}var(--soft){% endif %}">◀</button>
       <button hx-post="{% url 'digital_reorder' doc.pk %}" hx-vals='{"direccion":"abajo"}'
               hx-target="#digital-content" hx-swap="innerHTML"
               hx-include="[name=csrfmiddlewaretoken]"
-              title="Move later" {% if forloop.last %}disabled{% endif %}
+              title="{% trans "Move later" %}" {% if forloop.last %}disabled{% endif %}
               style="flex:1;padding:3px;font-size:11px;background:none;border:none;border-left:1px solid var(--bdr);cursor:pointer;color:{% if forloop.last %}var(--bdr-fuerte){% else %}var(--soft){% endif %}">▶</button>
     </div>
     <div style="display:flex;border-top:1px solid var(--bdr)">
@@ -164,10 +164,32 @@ que comprueba la vista. El staff sube archivos pero no los borra.
   {% endfor %}
 </div>
 {% else %}
-<div style="text-align:center;padding:30px;color:var(--faint);font-size:13px">No files attached yet. Upload above.</div>
+<div style="text-align:center;padding:30px;color:var(--faint);font-size:13px">{% trans "No files attached yet. Upload above." %}</div>
 {% endif %}
 
 <script>
+{% comment %}
+Los textos de los avisos se sacan aqui y se escapan. Van por `escapejs` porque
+una traduccion puede llevar apostrofes, y dentro de una cadena de JavaScript
+eso cierra la comilla y deja la pantalla sin funcionar.
+{% endcomment %}
+{% trans "Send {archivo} to the trash?" as t_a_papelera %}
+{% trans "It stops appearing in the file; the administrator can bring it back." as t_devolver %}
+{% trans "Deletion password:" as t_password %}
+{% trans "Reason for the deletion:" as t_motivo %}
+{% trans "Without a reason nothing is deleted." as t_sin_motivo %}
+{% trans "File sent to the trash." as t_enviado %}
+{% trans "The file could not be sent to the trash." as t_no_enviado %}
+{% trans "No files selected." as t_sin_seleccion %}
+{% trans "Send {n} file(s) to the trash?" as t_varios %}
+{% trans "They stop appearing in the file; the administrator can bring them back." as t_devolverlos %}
+{% trans "Send to the trash" as t_boton_papelera %}
+{% trans "Deleting..." as t_borrando %}
+{% trans "Delete selected" as t_borrar_seleccion %}
+{% trans "{n} file(s) sent to the trash." as t_varios_enviados %}
+{% trans "The files could not be deleted." as t_no_borrados %}
+{% trans "Unknown error." as t_error_desconocido %}
+{% trans "selected" as t_seleccionados %}
 function handleDrop(e) {
   e.preventDefault(); e.stopPropagation();
   const dz = document.getElementById('drop-zone');
@@ -269,11 +291,13 @@ function mensajeDeError(html) {
 
 // Eliminar archivo en Digital con confirmación de contraseña
 function confirmDeleteFile(docId, fileName) {
-    if (confirm('¿Enviar "' + fileName + '" a la papelera?\nDeja de aparecer en el expediente; el administrador puede devolverlo.')) {
-        const password = prompt('Contraseña de eliminación:');
+    const aviso = '{{ t_a_papelera|escapejs }}'.replace('{archivo}', '"' + fileName + '"')
+                + '\n' + '{{ t_devolver|escapejs }}';
+    if (confirm(aviso)) {
+        const password = prompt('{{ t_password|escapejs }}');
         if (password) {
-            const motivo = prompt('Motivo del borrado:');
-            if (!motivo || !motivo.trim()) { alert('Sin motivo no se borra.'); return; }
+            const motivo = prompt('{{ t_motivo|escapejs }}');
+            if (!motivo || !motivo.trim()) { alert('{{ t_sin_motivo|escapejs }}'); return; }
             const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
             const formData = new FormData();
             formData.append('confirm_password', password);
@@ -298,12 +322,12 @@ function confirmDeleteFile(docId, fileName) {
                 // un rechazo llegaba con el mismo 200 que un exito, y quien no
                 // tenia contrasena de borrado configurada se quedaba con la
                 // buena noticia y el archivo intacto.
-                alert(acepto ? 'Archivo enviado a la papelera.'
-                             : (mensajeDeError(html) || 'No se pudo enviar el archivo a la papelera.'));
+                alert(acepto ? '{{ t_enviado|escapejs }}'
+                             : (mensajeDeError(html) || '{{ t_no_enviado|escapejs }}'));
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('No se pudo enviar el archivo a la papelera: ' + error.message);
+                alert('{{ t_no_enviado|escapejs }} ' + error.message);
             });
         }
     }
@@ -321,7 +345,7 @@ function updateDeleteButton() {
   const btn = document.getElementById('btn-delete-selected');
   if (btn) {
     btn.style.display = checked > 0 ? 'inline-block' : 'none';
-    btn.textContent = '🗑 Enviar a la papelera (' + checked + ')';
+    btn.textContent = '🗑 {{ t_boton_papelera|escapejs }} (' + checked + ')';
   }
 }
 
@@ -330,19 +354,20 @@ function updateDeleteButton() {
 function deleteSelectedFiles() {
   const selected = document.querySelectorAll('.file-checkbox:checked');
   if (selected.length === 0) {
-    alert('No hay archivos seleccionados.');
+    alert('{{ t_sin_seleccion|escapejs }}');
     return;
   }
 
   const ids = Array.from(selected).map(cb => cb.value);
-  const confirmMsg = '¿Enviar ' + ids.length + ' archivo(s) a la papelera?\nDejan de aparecer en el expediente; el administrador puede devolverlos.';
+  const confirmMsg = '{{ t_varios|escapejs }}'.replace('{n}', ids.length)
+                   + '\n' + '{{ t_devolverlos|escapejs }}';
   if (!confirm(confirmMsg)) return;
 
-  const password = prompt('Contraseña de eliminación:');
+  const password = prompt('{{ t_password|escapejs }}');
   if (!password) return;
 
-  const motivo = prompt('Motivo del borrado:');
-  if (!motivo || !motivo.trim()) { alert('Sin motivo no se borra.'); return; }
+  const motivo = prompt('{{ t_motivo|escapejs }}');
+  if (!motivo || !motivo.trim()) { alert('{{ t_sin_motivo|escapejs }}'); return; }
 
   const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
   const formData = new FormData();
@@ -355,7 +380,7 @@ function deleteSelectedFiles() {
   const btn = document.getElementById('btn-delete-selected');
   if (btn) {
     btn.disabled = true;
-    btn.textContent = '⏳ Eliminando...';
+    btn.textContent = '⏳ {{ t_borrando|escapejs }}';
   }
 
   // Un rechazo -contrasena mala, o sin configurar- llega con 400 y con el panel
@@ -372,7 +397,7 @@ function deleteSelectedFiles() {
     // Restaurar botón
     if (btn) {
       btn.disabled = false;
-      btn.textContent = '🗑 Eliminar seleccionados';
+      btn.textContent = '🗑 {{ t_borrar_seleccion|escapejs }}';
     }
 
     const content = document.getElementById('digital-content')
@@ -385,25 +410,25 @@ function deleteSelectedFiles() {
     const exito = html.match(/msg-success[^>]*>([^<]*)</);
     if (acepto) {
       alert('✅ ' + (exito ? exito[1].trim()
-                           : ids.length + ' archivo(s) enviado(s) a la papelera.'));
+                           : '{{ t_varios_enviados|escapejs }}'.replace('{n}', ids.length)));
     } else {
-      alert('❌ ' + (mensajeDeError(html) || 'No se pudieron eliminar los archivos.'));
+      alert('❌ ' + (mensajeDeError(html) || '{{ t_no_borrados|escapejs }}'));
     }
   })
   .catch(error => {
     console.error('Error:', error);
     if (btn) {
       btn.disabled = false;
-      btn.textContent = '🗑 Eliminar seleccionados';
+      btn.textContent = '🗑 {{ t_borrar_seleccion|escapejs }}';
     }
-    alert('❌ Error al eliminar los archivos: ' + error.message);
+    alert('❌ {{ t_no_borrados|escapejs }} ' + error.message);
   });
 }
 
 // Función auxiliar para extraer mensaje de error del HTML
 function extractError(html) {
   const match = html.match(/msg-error[^>]*>([^<]*)</);
-  return match ? match[1].trim() : 'Error desconocido.';
+  return match ? match[1].trim() : '{{ t_error_desconocido|escapejs }}';
 }
 </script>
 
@@ -413,13 +438,13 @@ La busqueda era exacta o nada. Cuando el texto encaja con varios expedientes se
 ofrecen todos, en vez de responder que no hay ninguno.
 {% endcomment %}
 <div style="font-size:12px;color:var(--soft);margin-bottom:10px">
-  {{ candidatos|length }} expediente{{ candidatos|pluralize:"s" }} coincide{{ candidatos|pluralize:"n" }} con
+  {% blocktrans with n=candidatos|length %}{{ n }} file(s) match{% endblocktrans %}
   <span style="font-family:'IBM Plex Mono',monospace">{{ query }}</span>:
 </div>
 {% include 'warehouse/partials/digital_index.html' with expedientes=candidatos %}
 
 {% elif query %}
-<div class="msg-error">No operation found for "{{ query }}".</div>
+<div class="msg-error">{% blocktrans with q=query %}No operation found for "{{ q }}".{% endblocktrans %}</div>
 
 {% elif con_archivos %}
 {% comment %}
@@ -428,14 +453,12 @@ tecleaban el Custom ID completo, y no habia forma de saber cuales tienen algo
 guardado.
 {% endcomment %}
 <div style="font-size:12px;color:var(--soft);margin-bottom:10px">
-  Expedientes con archivos, del mas reciente al mas antiguo. Para uno que no
-  este aqui, busca su Custom ID arriba.
+  {% blocktrans %}Files with attachments, newest first. For one that is not here, search its Custom ID above.{% endblocktrans %}
 </div>
 {% include 'warehouse/partials/digital_index.html' with expedientes=con_archivos %}
 
 {% else %}
 <div style="text-align:center;padding:40px;color:var(--faint);font-size:13px">
-  Todavia no hay ningun expediente con archivos. Busca un Custom ID arriba para
-  empezar a subirlos.
+  {% blocktrans %}No file has attachments yet. Search a Custom ID above to start uploading them.{% endblocktrans %}
 </div>
 {% endif %}

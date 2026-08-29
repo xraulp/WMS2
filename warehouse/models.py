@@ -841,7 +841,8 @@ class DocumentosVivosManager(models.Manager):
 
 
 class OperationDocument(models.Model):
-    FILE_TYPE_CHOICES = [('PHOTO', 'Photo'), ('DOCUMENT', 'Document'), ('VIDEO', 'Video'), ('OTHER', 'Other')]
+    FILE_TYPE_CHOICES = [('PHOTO', _('Photo')), ('DOCUMENT', _('Document')),
+                         ('VIDEO', _('Video')), ('OTHER', _('Other'))]
     tenant        = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='documents')
     operation     = models.ForeignKey(WarehouseOperation, on_delete=models.CASCADE, related_name='documents')
     file_type     = models.CharField(max_length=10, choices=FILE_TYPE_CHOICES, default='OTHER')
@@ -1012,7 +1013,7 @@ class DeletionLog(models.Model):
     de bitacora las muestra juntas -para el administrador lo que importa es la
     linea de tiempo, no el tipo de objeto-.
     """
-    KIND_CHOICES = [('OPERATION', 'Operacion'), ('DOCUMENT', 'Documento')]
+    KIND_CHOICES = [('OPERATION', _('Operation')), ('DOCUMENT', _('Document'))]
 
     deleted_by     = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     deleted_at     = models.DateTimeField(auto_now_add=True)
@@ -1425,22 +1426,25 @@ class NotificationLog(models.Model):
         ('EMAIL',    'Email'),
         ('WHATSAPP', 'WhatsApp'),
     ]
+    # Las etiquetas se escriben en ingles y el espanol es su traduccion, como el
+    # resto: esta bitacora se lee en la pantalla de plataforma, que tiene su
+    # propio selector de idioma. El valor guardado no cambia.
     EVENT_CHOICES = [
-        ('OPERATION_CREATED', 'Operación registrada'),
-        ('GOODS_RELEASED',    'Mercancía liberada'),
-        ('DOCUMENTS_ADDED',   'Documentos agregados'),
-        ('MANUAL',            'Envío manual'),
+        ('OPERATION_CREATED', _('Operation registered')),
+        ('GOODS_RELEASED',    _('Goods released')),
+        ('DOCUMENTS_ADDED',   _('Documents added')),
+        ('MANUAL',            _('Manual send')),
         # Este no sale de una operacion sino de la plataforma: es la factura
         # que se le manda a la empresa. Va en la misma bitacora porque la
         # pregunta que se responde es la misma -- "¿le llego o no?".
-        ('INVOICE_SENT',      'Factura enviada'),
+        ('INVOICE_SENT',      _('Invoice sent')),
         # El aviso de que hay un mensaje nuevo en el hilo de una operacion.
-        ('CHAT_MESSAGE',      'Mensaje en el hilo'),
+        ('CHAT_MESSAGE',      _('Message in the thread')),
     ]
     STATUS_CHOICES = [
-        ('SENT',    'Enviada'),
-        ('FAILED',  'Fallida'),
-        ('SKIPPED', 'Omitida'),
+        ('SENT',    _('Sent')),
+        ('FAILED',  _('Failed')),
+        ('SKIPPED', _('Skipped')),
     ]
 
     tenant     = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True,

@@ -10,43 +10,40 @@
 {% endif %}
 
 <p style="font-size:11px;color:var(--faint);margin:-4px 0 12px">
-  Who administers the SaaS itself. These accounts belong to no company: they
-  cannot open any company's operations, documents or catalog. An
-  <strong>admin</strong> creates companies and names their administrators; a
-  <strong>staff</strong> reviews companies and the delivery log to answer support.
+  {% blocktrans %}Who administers the SaaS itself. These accounts belong to no company: they cannot open any company's operations, documents or catalog. An <strong>admin</strong> creates companies and names their administrators; a <strong>staff</strong> reviews companies and the delivery log to answer support.{% endblocktrans %}
 </p>
 
 <div style="background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:16px">
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:10px">Add Platform User</div>
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:10px">{% trans "Add Platform User" %}</div>
   <form hx-post="{% url 'platform_users' %}" hx-target="#platform-content" hx-swap="innerHTML"
         style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
     {% csrf_token %}<input type="hidden" name="action" value="create">
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Username</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Username" %}</label>
       <input type="text" name="username" required placeholder="soporte_ana"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:170px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Password</label>
-      <input type="text" name="password" required placeholder="Visible for reference"
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Password" %}</label>
+      <input type="text" name="password" required placeholder="{% trans "Visible for reference" %}"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:170px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Level</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Level" %}</label>
       <select name="role" style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px">
         {% for valor, etiqueta in roles %}
         <option value="{{ valor }}" {% if valor == 'staff' %}selected{% endif %}>{{ etiqueta }}</option>
         {% endfor %}
       </select>
     </div>
-    <button type="submit" class="btn btn-p" style="height:28px">+ Add</button>
+    <button type="submit" class="btn btn-p" style="height:28px">+ {% trans "Add" %}</button>
   </form>
 </div>
 
 <div style="overflow-x:auto;border:1px solid var(--bdr);border-radius:10px">
 <table style="min-width:700px">
   <thead>
-    <tr><th>Username</th><th>Level</th><th>Since</th><th>{% trans "Actions" %}</th></tr>
+    <tr><th>{% trans "Username" %}</th><th>{% trans "Level" %}</th><th>{% trans "Since" %}</th><th>{% trans "Actions" %}</th></tr>
   </thead>
   <tbody>
     {% for a in accesos %}
@@ -66,21 +63,21 @@
             <option value="{{ valor }}" {% if a.role == valor %}selected{% endif %}>{{ etiqueta }}</option>
             {% endfor %}
           </select>
-          <button type="submit" class="btn btn-g btn-sm">Save</button>
+          <button type="submit" class="btn btn-g btn-sm">{% trans "Save" %}</button>
         </form>
         <form hx-post="{% url 'platform_users' %}" hx-target="#platform-content" hx-swap="innerHTML" style="display:inline">
           {% csrf_token %}
           <input type="hidden" name="action" value="revoke">
           <input type="hidden" name="platform_user_id" value="{{ a.pk }}">
           <button type="submit" class="btn btn-d btn-sm"
-                  onclick="return confirm('Revoke platform access for {{ a.user.username }}? The user account itself is kept.')">
-            Revoke
+                  onclick="return confirm('{% blocktrans with quien=a.user.username %}Revoke platform access for {{ quien }}? The user account itself is kept.{% endblocktrans %}')">
+            {% trans "Revoke" %}
           </button>
         </form>
       </td>
     </tr>
     {% empty %}
-    <tr><td colspan="4" style="text-align:center;color:var(--faint);padding:20px">No platform users yet — access comes only from Django superusers.</td></tr>
+    <tr><td colspan="4" style="text-align:center;color:var(--faint);padding:20px">{% trans "No platform users yet — access comes only from Django superusers." %}</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -89,18 +86,14 @@
 {% if superusuarios %}
 <div style="background:var(--warn-bg-suave);border:1px solid var(--warn-bdr);border-radius:8px;padding:10px 12px;margin-top:14px;font-size:12px;color:var(--warn-ink)">
   {% if llave_maestra_activa %}
-  <strong>Django superusers</strong> still reach this panel, because there is no
-  platform administrator yet — that master key is how the first one gets created.
-  Grant the role above and the shortcut retires itself.
+  {% blocktrans %}<strong>Django superusers</strong> still reach this panel, because there is no platform administrator yet — that master key is how the first one gets created. Grant the role above and the shortcut retires itself.{% endblocktrans %}
   {% else %}
-  <strong>Django superusers</strong> no longer reach this panel: a platform
-  administrator exists, so the master key stepped aside. They do still hold the
-  Django admin and every company's data.
+  {% blocktrans %}<strong>Django superusers</strong> no longer reach this panel: a platform administrator exists, so the master key stepped aside. They do still hold the Django admin and every company's data.{% endblocktrans %}
   {% endif %}
-  Superusers today:
+  {% trans "Superusers today:" %}
   {% for u in superusuarios %}<span class="mono">{{ u.username }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}.
   {% if not llave_maestra_activa %}
-  To drop the flag: <span class="mono">python manage.py retirar_superusuario &lt;user&gt;</span>.
+  {% trans "To drop the flag:" %} <span class="mono">python manage.py retirar_superusuario &lt;user&gt;</span>.
   {% endif %}
 </div>
 {% endif %}

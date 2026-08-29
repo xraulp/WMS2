@@ -1,3 +1,4 @@
+{% load i18n %}
 {% include 'warehouse/partials/platform_nav.html' with activa='invoices' %}
 
 {% if msg %}<div class="msg-success" style="margin-bottom:12px">✓ {{ msg }}</div>{% endif %}
@@ -12,69 +13,67 @@ comprobar el rol en cada POST.
 <!-- Resumen -->
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px">
   <div style="background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:10px;padding:12px 14px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint)">Por cobrar</div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint)">{% trans "Receivable" %}</div>
     <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px">{{ resumen.pendiente_total }} <span style="font-size:11px;color:var(--faint)">USD</span></div>
-    <div style="font-size:11px;color:var(--soft)">{{ resumen.pendiente_cuenta }} factura(s) pendiente(s)</div>
+    <div style="font-size:11px;color:var(--soft)">{% blocktrans with n=resumen.pendiente_cuenta %}{{ n }} pending invoice(s){% endblocktrans %}</div>
   </div>
   <div style="background:{% if resumen.vencido_cuenta %}var(--err-bg){% else %}var(--bg-sutil){% endif %};border:1px solid {% if resumen.vencido_cuenta %}var(--err-bdr){% else %}var(--bdr){% endif %};border-radius:10px;padding:12px 14px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:{% if resumen.vencido_cuenta %}var(--err-ink){% else %}var(--faint){% endif %}">Vencido</div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:{% if resumen.vencido_cuenta %}var(--err-ink){% else %}var(--faint){% endif %}">{% trans "Overdue" %}</div>
     <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px;color:{% if resumen.vencido_cuenta %}var(--err-ink){% else %}var(--ink){% endif %}">{{ resumen.vencido_total }} <span style="font-size:11px;color:var(--faint)">USD</span></div>
-    <div style="font-size:11px;color:var(--soft)">{{ resumen.vencido_cuenta }} factura(s) pasada(s) de fecha</div>
+    <div style="font-size:11px;color:var(--soft)">{% blocktrans with n=resumen.vencido_cuenta %}{{ n }} invoice(s) past due{% endblocktrans %}</div>
   </div>
   <div style="background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:10px;padding:12px 14px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint)">Cobrado en {{ resumen.anio }}</div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint)">{% blocktrans with anio=resumen.anio %}Collected in {{ anio }}{% endblocktrans %}</div>
     <div class="mono" style="font-size:20px;font-weight:600;margin-top:4px">{{ resumen.cobrado_total }} <span style="font-size:11px;color:var(--faint)">USD</span></div>
-    <div style="font-size:11px;color:var(--soft)">{{ resumen.cobrado_cuenta }} factura(s) pagada(s)</div>
+    <div style="font-size:11px;color:var(--soft)">{% blocktrans with n=resumen.cobrado_cuenta %}{{ n }} paid invoice(s){% endblocktrans %}</div>
   </div>
 </div>
 
 {% if not is_platform_admin %}
 <div style="background:var(--info-bg-suave);border:1px solid var(--info-bdr);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--info-ink)">
-  Support access: you can review every invoice and see which companies are up to
-  date, but issuing, collecting and cancelling are reserved to a platform
-  administrator.
+  {% blocktrans %}Support access: you can review every invoice and see which companies are up to date, but issuing, collecting and cancelling are reserved to a platform administrator.{% endblocktrans %}
 </div>
 {% endif %}
 
 {% if is_platform_admin %}
 <!-- Emitir factura -->
 <div style="background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:16px">
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:10px">Issue Invoice</div>
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:10px">{% trans "Issue Invoice" %}</div>
   <form hx-post="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML"
         style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
     {% csrf_token %}<input type="hidden" name="action" value="emitir">
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Company</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Company" %}</label>
       <select name="tenant_id" required style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;width:190px">
-        <option value="">— select —</option>
-        {% for t in tenants %}<option value="{{ t.pk }}">{{ t.name }}{% if not t.is_active %} (inactive){% endif %}</option>{% endfor %}
+        <option value="">— {% trans "select" %} —</option>
+        {% for t in tenants %}<option value="{{ t.pk }}">{{ t.name }}{% if not t.is_active %} ({% trans "inactive" %}){% endif %}</option>{% endfor %}
       </select>
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Period</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Period" %}</label>
       <input type="month" name="periodo" required value="{{ mes_sugerido }}"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;width:140px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Amount USD</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Amount USD" %}</label>
       <input type="text" inputmode="decimal" name="monto" required placeholder="250.00"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:110px;font-family:'IBM Plex Mono',monospace">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Due date</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Due date" %}</label>
       <input type="date" name="vence_el" required value="{{ vencimiento_sugerido|date:'Y-m-d' }}"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;width:140px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:160px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Notes</label>
-      <input type="text" name="notas" placeholder="optional"
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Notes" %}</label>
+      <input type="text" name="notas" placeholder="{% trans "optional" %}"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px">
     </div>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--soft);height:28px">
       <input type="checkbox" name="confirmar_duplicado" value="1">
-      Issue even if the period is already invoiced
+      {% trans "Issue even if the period is already invoiced" %}
     </label>
-    <button type="submit" class="btn btn-p btn-sm" style="height:28px">Issue</button>
+    <button type="submit" class="btn btn-p btn-sm" style="height:28px">{% trans "Issue" %}</button>
   </form>
 </div>
 {% endif %}
@@ -82,21 +81,21 @@ comprobar el rol en cada POST.
 <!-- Filtros -->
 <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap">
   <div style="display:flex;flex-direction:column;gap:3px">
-    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Company</label>
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Company" %}</label>
     <select name="tenant" hx-get="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML"
             hx-include="[name='status']"
             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;width:180px">
-      <option value="">All companies</option>
+      <option value="">{% trans "All companies" %}</option>
       {% for t in tenants %}<option value="{{ t.pk }}" {% if tenant_id == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
     </select>
   </div>
   <div style="display:flex;flex-direction:column;gap:3px">
-    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Status</label>
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Status" %}</label>
     <select name="status" hx-get="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML"
             hx-include="[name='tenant']"
             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px;width:150px">
-      <option value="">All</option>
-      <option value="vencida" {% if estado == 'vencida' %}selected{% endif %}>Overdue</option>
+      <option value="">{% trans "All" %}</option>
+      <option value="vencida" {% if estado == 'vencida' %}selected{% endif %}>{% trans "Overdue" %}</option>
       {% for valor, etiqueta in estados %}<option value="{{ valor }}" {% if estado == valor %}selected{% endif %}>{{ etiqueta }}</option>{% endfor %}
     </select>
   </div>
@@ -107,8 +106,8 @@ comprobar el rol en cada POST.
 <table>
   <thead>
     <tr>
-      <th>Number</th><th>Company</th><th>Period</th><th>Issued</th><th>Due</th>
-      <th style="text-align:right">Amount</th><th>Status</th><th></th>
+      <th>{% trans "Number" %}</th><th>{% trans "Company" %}</th><th>{% trans "Period" %}</th><th>{% trans "Issued" %}</th><th>{% trans "Due" %}</th>
+      <th style="text-align:right">{% trans "Amount" %}</th><th>{% trans "Status" %}</th><th></th>
     </tr>
   </thead>
   <tbody>
@@ -122,20 +121,20 @@ comprobar el rol en cada POST.
       <td style="font-size:11px;color:var(--soft);white-space:nowrap">{{ f.emitida_el|date:"Y-m-d" }}</td>
       <td style="font-size:11px;white-space:nowrap;{% if f.esta_vencida %}color:var(--err-ink);font-weight:600{% else %}color:var(--soft){% endif %}">
         {{ f.vence_el|date:"Y-m-d" }}
-        {% if f.esta_vencida %}<div style="font-size:10px">{{ f.dias_de_atraso }} day(s) late</div>{% endif %}
+        {% if f.esta_vencida %}<div style="font-size:10px">{% blocktrans with n=f.dias_de_atraso %}{{ n }} day(s) late{% endblocktrans %}</div>{% endif %}
       </td>
       <td class="mono" style="text-align:right;white-space:nowrap">{{ f.monto_usd }}</td>
       <td style="white-space:nowrap">
         {% if f.estado == 'pagada' %}
-          <span class="badge b-entry">Paid</span>
+          <span class="badge b-entry">{% trans "Paid" %}</span>
           <div style="font-size:10px;color:var(--faint)">{{ f.pagada_el|date:"Y-m-d" }}{% if f.referencia_de_pago %} · {{ f.referencia_de_pago }}{% endif %}</div>
         {% elif f.estado == 'cancelada' %}
-          <span class="badge" style="background:var(--bg);color:var(--soft)">Cancelled</span>
+          <span class="badge" style="background:var(--bg);color:var(--soft)">{% trans "Cancelled" %}</span>
           <div style="font-size:10px;color:var(--faint)" title="{{ f.motivo_de_cancelacion }}">{{ f.motivo_de_cancelacion|truncatechars:40 }}</div>
         {% elif f.esta_vencida %}
-          <span class="badge b-exit">Overdue</span>
+          <span class="badge b-exit">{% trans "Overdue" %}</span>
         {% else %}
-          <span class="badge b-sent">Pending</span>
+          <span class="badge b-sent">{% trans "Pending" %}</span>
         {% endif %}
         {% comment %}
           Emitida y enviada no son lo mismo: una factura puede llevar semanas en
@@ -143,7 +142,7 @@ comprobar el rol en cada POST.
           reclamar un pago.
         {% endcomment %}
         {% if f.estado != 'cancelada' and not f.enviada_el %}
-          <div style="font-size:10px;color:var(--warn-ink-fuerte)">not sent</div>
+          <div style="font-size:10px;color:var(--warn-ink-fuerte)">{% trans "not sent" %}</div>
         {% endif %}
       </td>
       <td style="white-space:nowrap;text-align:right">
@@ -151,18 +150,18 @@ comprobar el rol en cada POST.
            style="text-decoration:none">PDF</a>
         {% if is_platform_admin and f.estado != 'cancelada' %}
         <button class="btn btn-sm btn-g" onclick="enviarFactura({{ f.pk }}, '{{ f.numero|escapejs }}')"
-                title="{% if f.enviada_el %}Sent {{ f.enviada_el|date:'Y-m-d H:i' }}{% else %}Not sent yet{% endif %}">
-          {% if f.enviada_el %}Resend{% else %}Send{% endif %}
+                title="{% if f.enviada_el %}{% blocktrans with cuando=f.enviada_el|date:'Y-m-d H:i' %}Sent {{ cuando }}{% endblocktrans %}{% else %}{% trans "Not sent yet" %}{% endif %}">
+          {% if f.enviada_el %}{% trans "Resend" %}{% else %}{% trans "Send" %}{% endif %}
         </button>
         {% endif %}
         {% if is_platform_admin and f.estado == 'pendiente' %}
-        <button class="btn btn-sm btn-g" onclick="cobrarFactura({{ f.pk }}, '{{ f.numero|escapejs }}')">Mark paid</button>
-        <button class="btn btn-sm btn-d" onclick="cancelarFactura({{ f.pk }}, '{{ f.numero|escapejs }}')">Cancel</button>
+        <button class="btn btn-sm btn-g" onclick="cobrarFactura({{ f.pk }}, '{{ f.numero|escapejs }}')">{% trans "Mark paid" %}</button>
+        <button class="btn btn-sm btn-d" onclick="cancelarFactura({{ f.pk }}, '{{ f.numero|escapejs }}')">{% trans "Cancel" %}</button>
         {% endif %}
       </td>
     </tr>
     {% empty %}
-    <tr><td colspan="8" style="text-align:center;color:var(--faint);font-size:12px;padding:18px">No invoices yet.</td></tr>
+    <tr><td colspan="8" style="text-align:center;color:var(--faint);font-size:12px;padding:18px">{% trans "No invoices yet." %}</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -191,21 +190,31 @@ function _enviarAccionFactura(accion, id, referencia, motivo) {
   htmx.trigger('#factura-accion', 'submit');
 }
 
+{% comment %}
+Los textos se sacan a variables y se escapan: una traduccion puede llevar
+apostrofes -- "l'facture", o un "que se envie" mal puesto -- y dentro de una
+cadena de JavaScript eso cierra la comilla y rompe la pantalla entera.
+{% endcomment %}
+{% trans "Payment reference for {numero} (optional):" as t_referencia %}
+{% trans "Email {numero} to the company billing address?" as t_a_facturacion %}
+{% trans "Why is {numero} being cancelled? The number stays used." as t_cancelando %}
+{% trans "A reason is required to cancel an invoice." as t_motivo_obligatorio %}
+
 function cobrarFactura(id, numero) {
-  const ref = prompt('Payment reference for ' + numero + ' (optional):', '');
+  const ref = prompt('{{ t_referencia|escapejs }}'.replace('{numero}', numero), '');
   if (ref === null) return;
   _enviarAccionFactura('pagar', id, ref, '');
 }
 
 function enviarFactura(id, numero) {
-  if (!confirm('Email ' + numero + ' to the company billing address?')) return;
+  if (!confirm('{{ t_a_facturacion|escapejs }}'.replace('{numero}', numero))) return;
   _enviarAccionFactura('enviar', id, '', '');
 }
 
 function cancelarFactura(id, numero) {
-  const motivo = prompt('Why is ' + numero + ' being cancelled? The number stays used.');
+  const motivo = prompt('{{ t_cancelando|escapejs }}'.replace('{numero}', numero));
   if (motivo === null) return;
-  if (!motivo.trim()) { alert('A reason is required to cancel an invoice.'); return; }
+  if (!motivo.trim()) { alert('{{ t_motivo_obligatorio|escapejs }}'); return; }
   _enviarAccionFactura('cancelar', id, '', motivo);
 }
 </script>

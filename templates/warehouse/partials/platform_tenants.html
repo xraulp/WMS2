@@ -5,15 +5,14 @@
 
 {% if not is_platform_admin %}
 <div style="background:var(--info-bg-suave);border:1px solid var(--info-bdr);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--info-ink)">
-  Support access: you can review the companies on the platform, but creating one
-  or changing its status is reserved to a platform administrator.
+  {% blocktrans %}Support access: you can review the companies on the platform, but creating one or changing its status is reserved to a platform administrator.{% endblocktrans %}
 </div>
 {% endif %}
 
 {% if is_platform_admin %}
 <!-- Create tenant form -->
 <div style="background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:16px">
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:10px">Create New Tenant</div>
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:10px">{% trans "Create New Tenant" %}</div>
   {% comment %}
     hx-encoding es lo que hace que HTMX mande el formulario como multipart. Sin
     esto el archivo del logo no llega: los demas campos si, y el alta parece
@@ -24,17 +23,17 @@
         style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
     {% csrf_token %}<input type="hidden" name="action" value="create">
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Company Name</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Company Name" %}</label>
       <input type="text" name="name" required placeholder="Warehouse 123 Llc"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:200px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Subdomain</label>
-      <input type="text" name="subdomain" placeholder="auto from name"
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Subdomain" %}</label>
+      <input type="text" name="subdomain" placeholder="{% trans "auto from name" %}"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Plan</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Plan" %}</label>
       <select name="plan" style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px">
         <option value="starter">Starter</option>
         <option value="pro">Pro</option>
@@ -42,29 +41,29 @@
       </select>
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Billing Email</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Billing Email" %}</label>
       <input type="email" name="billing_email" placeholder="billing@cliente.com"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:180px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
-             title="Sale en los reportes y etiquetas que esta empresa manda a sus clientes">Logo (optional)</label>
+             title="{% trans "It appears on the reports and labels this company sends to its customers" %}">{% trans "Logo (optional)" %}</label>
       <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif"
              style="height:28px;padding:3px;border:1px solid var(--bdr);border-radius:6px;font-size:11px;width:200px">
     </div>
     <div style="width:100%;height:1px;background:var(--bdr);margin:4px 0"></div>
-    <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--faint);width:100%">First Admin User (optional — leave blank to add later from the tenant's own Users tab)</div>
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--faint);width:100%">{% blocktrans %}First Admin User (optional — leave blank to add later from the tenant's own Users tab){% endblocktrans %}</div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Admin Username</label>
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Admin Username" %}</label>
       <input type="text" name="admin_username" placeholder="admin_w123"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">Admin Password</label>
-      <input type="text" name="admin_password" placeholder="Visible for reference"
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Admin Password" %}</label>
+      <input type="text" name="admin_password" placeholder="{% trans "Visible for reference" %}"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
     </div>
-    <button type="submit" class="btn btn-p" style="height:28px">+ Create Tenant</button>
+    <button type="submit" class="btn btn-p" style="height:28px">+ {% trans "Create Tenant" %}</button>
   </form>
 </div>
 {% endif %}
@@ -74,11 +73,11 @@
 <table style="min-width:800px">
   <thead>
     <tr>
-      <th>Name</th>
-      <th>Subdomain</th>
-      <th>Plan</th>
-      <th>Billing Email</th>
-      <th>Logo</th>
+      <th>{% trans "Name" %}</th>
+      <th>{% trans "Subdomain" %}</th>
+      <th>{% trans "Plan" %}</th>
+      <th>{% trans "Billing Email" %}</th>
+      <th>{% trans "Logo" %}</th>
       {% comment %}
       Las cantidades de cada empresa. Contar no es ver: el nivel de plataforma
       sigue sin alcanzar una operacion, un documento ni el nombre de un cliente.
@@ -87,12 +86,12 @@
       clientes juntos, asi que una empresa con cuatro operarios y treinta
       clientes salia con treinta y cuatro y ese numero no respondia a nada.
       {% endcomment %}
-      <th title="Personal de la empresa">Users</th>
-      <th title="Clientes dados de alta en su catalogo">Customers</th>
-      <th title="Usuarios que pertenecen a esos clientes">Cust. users</th>
-      <th>Operations</th>
-      <th>Status</th>
-      <th>Created</th>
+      <th title="{% trans "Staff of the company" %}">{% trans "Users" %}</th>
+      <th title="{% trans "Customers in its catalog" %}">{% trans "Customers" %}</th>
+      <th title="{% trans "Users belonging to those customers" %}">{% trans "Cust. users" %}</th>
+      <th>{% trans "Operations" %}</th>
+      <th>{% trans "Status" %}</th>
+      <th>{% trans "Created" %}</th>
       {% if is_platform_admin %}<th></th>{% endif %}
     </tr>
   </thead>
@@ -109,19 +108,19 @@
         cargaria. Lo que interesa aqui es si lo tiene o no.
       {% endcomment %}
       <td style="font-size:11px;white-space:nowrap">
-        {% if t.logo %}<span style="color:var(--ok-ink-fuerte)">✓ yes</span>
+        {% if t.logo %}<span style="color:var(--ok-ink-fuerte)">✓ {% trans "yes" %}</span>
         {% else %}<span style="color:var(--faint)">—</span>{% endif %}
       </td>
       <td style="text-align:center">{{ t.user_count }}</td>
       <td style="text-align:center">{{ t.customer_count }}</td>
       <td style="text-align:center">
         {% if t.customer_user_count %}{{ t.customer_user_count }}
-        {% else %}<span style="color:var(--faint)" title="Ningun cliente de esta empresa tiene acceso">—</span>{% endif %}
+        {% else %}<span style="color:var(--faint)" title="{% trans "No customer of this company has access" %}">—</span>{% endif %}
       </td>
       <td style="text-align:center">{{ t.op_count }}</td>
       <td>
         <span class="badge {% if t.is_active %}b-entry{% else %}b-exit{% endif %}">
-          {% if t.is_active %}Active{% else %}Inactive{% endif %}
+          {% if t.is_active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
         </span>
       </td>
       <td style="color:var(--faint);font-size:11px">{{ t.created_at|date:"Y-m-d" }}</td>
@@ -137,7 +136,7 @@
           <input type="hidden" name="action" value="set_logo">
           <input type="hidden" name="tenant_id" value="{{ t.pk }}">
           <label class="btn btn-g btn-sm" style="cursor:pointer">
-            {% if t.logo %}Change logo{% else %}Add logo{% endif %}
+            {% if t.logo %}{% trans "Change logo" %}{% else %}{% trans "Add logo" %}{% endif %}
             <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif" hidden
                    onchange="this.form.requestSubmit ? this.form.requestSubmit() : htmx.trigger(this.form,'submit')">
           </label>
@@ -149,7 +148,7 @@
           <input type="hidden" name="quitar" value="1">
           <input type="hidden" name="tenant_id" value="{{ t.pk }}">
           <button type="submit" class="btn btn-g btn-sm"
-                  onclick="return confirm('Remove the logo of {{ t.name|escapejs }}? Its documents will show the company name instead.')">✕</button>
+                  onclick="return confirm('{% blocktrans with empresa=t.name|escapejs %}Remove the logo of {{ empresa }}? Its documents will show the company name instead.{% endblocktrans %}')">✕</button>
         </form>
         {% endif %}
         <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML" style="display:inline">
@@ -157,15 +156,15 @@
           <input type="hidden" name="action" value="toggle_active">
           <input type="hidden" name="tenant_id" value="{{ t.pk }}">
           <button type="submit" class="btn {% if t.is_active %}btn-d{% else %}btn-g{% endif %} btn-sm"
-                  onclick="return confirm('{% if t.is_active %}Deactivate{% else %}Activate{% endif %} {{ t.name }}?')">
-            {% if t.is_active %}Deactivate{% else %}Activate{% endif %}
+                  onclick="return confirm('{% if t.is_active %}{% blocktrans with empresa=t.name %}Deactivate {{ empresa }}?{% endblocktrans %}{% else %}{% blocktrans with empresa=t.name %}Activate {{ empresa }}?{% endblocktrans %}{% endif %}')">
+            {% if t.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
           </button>
         </form>
       </td>
       {% endif %}
     </tr>
     {% empty %}
-    <tr><td colspan="12" style="text-align:center;color:var(--faint);padding:20px">No companies yet.</td></tr>
+    <tr><td colspan="12" style="text-align:center;color:var(--faint);padding:20px">{% trans "No companies yet." %}</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -197,24 +196,23 @@ Uno por fila repetiria los mismos id tantas veces como empresas haya.
       <input type="hidden" name="tenant_id" id="tenant-edit-id">
 
       <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
-                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">Name</label>
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">{% trans "Name" %}</label>
       <input type="text" name="name" id="tenant-edit-name" required maxlength="200"
              style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
                     font-size:13px;margin-bottom:12px">
 
       <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
-                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">Subdomain</label>
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">{% trans "Subdomain" %}</label>
       <input type="text" name="subdomain" id="tenant-edit-sub" required maxlength="50"
              style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
                     font-size:13px;font-family:'IBM Plex Mono',monospace">
       <div style="font-size:11px;color:var(--warn-ink-fuerte);background:var(--warn-bg-suave);padding:6px 9px;
                   border-radius:6px;margin:5px 0 12px">
-        Es la direccion por la que entra su gente. Si la cambias, quien use la
-        anterior deja de llegar a esta empresa.
+        {% blocktrans %}It is the address its people come in by. If you change it, whoever uses the old one stops reaching this company.{% endblocktrans %}
       </div>
 
       <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
-                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">Plan</label>
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">{% trans "Plan" %}</label>
       <select name="plan" id="tenant-edit-plan"
               style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
                      font-size:13px;margin-bottom:12px">
@@ -224,15 +222,15 @@ Uno por fila repetiria los mismos id tantas veces como empresas haya.
       </select>
 
       <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
-                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">Billing email</label>
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">{% trans "Billing Email" %}</label>
       <input type="email" name="billing_email" id="tenant-edit-mail"
              style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
                     font-size:13px;margin-bottom:16px">
 
       <div style="display:flex;gap:10px">
-        <button type="submit" class="btn btn-p" style="flex:1">Save</button>
+        <button type="submit" class="btn btn-p" style="flex:1">{% trans "Save" %}</button>
         <button type="button" class="btn btn-g" style="flex:1"
-                onclick="cerrarEdicionDeEmpresa()">Cancel</button>
+                onclick="cerrarEdicionDeEmpresa()">{% trans "Cancel" %}</button>
       </div>
     </form>
   </div>

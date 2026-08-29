@@ -224,3 +224,84 @@ class PantallasDeAccionesTests(TestCase):
         # El texto de un PDF va comprimido; lo que se comprueba es que se
         # genero con el idioma puesto y no revento al traducir.
         self.assertGreater(len(respuesta.content), 500)
+
+
+class PlataformaYDigitalTests(TestCase):
+    """
+    Las dos pantallas que quedaban fuera del selector: la de plataforma --con
+    sus cuatro pestanas-- y el panel del expediente digital.
+
+    Estaban escritas a mano, y ademas mezclando los dos idiomas dentro de la
+    misma pantalla: los recuadros de facturacion en espanol y sus filtros en
+    ingles, los avisos del panel digital en espanol y sus botones en ingles.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import date
+        from .models import Catalog, NotificationLog, PlatformUser, WarehouseOperation
+
+        cls.tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        cls.usuario = User.objects.create_user('platadmin', password='x')
+        UserProfile.objects.create(user=cls.usuario, tenant=cls.tenant, role='admin')
+        PlatformUser.objects.create(user=cls.usuario, role='admin')
+        cls.cliente = Catalog.objects.create(
+            tenant=cls.tenant, category='CUSTOMER', name='Cliente del Norte')
+        cls.op = WarehouseOperation.objects.create(
+            tenant=cls.tenant, operation_type='ENTRY', date=date.today(),
+            custom_id='ED260819-0001', customer=cls.cliente,
+            description='Mercancia de prueba', created_by=cls.usuario)
+        NotificationLog.objects.create(
+            tenant=cls.tenant, operation=cls.op, operation_custom_id=cls.op.custom_id,
+            channel='EMAIL', event='OPERATION_CREATED', status='SENT',
+            recipient='cliente@ejemplo.local')
+
+    def setUp(self):
+        self.client.force_login(self.usuario)
+        self.client.post('/preferencias/idioma/', {'idioma': 'es'})
+
+    def test_la_pantalla_de_plataforma_se_lee_en_espanol(self):
+        respuesta = self.client.get('/platform/')
+
+        self.assertContains(respuesta, 'Administración del SaaS')
+        self.assertContains(respuesta, 'Cerrar sesión')
+
+    def test_las_cuatro_pestanas_se_traducen(self):
+        respuesta = self.client.get('/platform/tenants/')
+
+        for pestana in ('Empresas', 'Bitácora de envíos', 'Facturación',
+                        'Usuarios de plataforma'):
+            self.assertContains(respuesta, pestana)
+
+    def test_el_evento_y_el_estado_de_la_bitacora_salen_traducidos(self):
+        """Las etiquetas viven en los choices del modelo, que estaban escritos
+        en espanol a mano: en la pantalla en ingles salian en espanol."""
+        respuesta = self.client.get('/platform/notifications/')
+
+        self.assertContains(respuesta, 'Operación registrada')
+        self.assertContains(respuesta, 'Enviada')
+
+    def test_la_facturacion_no_mezcla_los_dos_idiomas(self):
+        respuesta = self.client.get('/platform/invoices/')
+
+        self.assertContains(respuesta, 'Por cobrar')
+        # El filtro de al lado seguia en ingles con el resumen ya en espanol.
+        self.assertContains(respuesta, 'Todas las empresas')
+        self.assertNotContains(respuesta, '>Company</label>')
+
+    def test_el_panel_digital_se_lee_en_espanol(self):
+        respuesta = self.client.get('/digital/search/', {'q': self.op.custom_id})
+
+        self.assertContains(respuesta, 'Elegir archivos')
+        self.assertContains(respuesta, 'Tomar una foto')
+
+    def test_los_avisos_del_panel_digital_llevan_su_marcador(self):
+        """`{% trans %}` no traduce un literal con %(...)s -- Django lo toma por
+        una cadena con formato y devuelve el original --, asi que el marcador
+        que interpola el guion va entre llaves."""
+        respuesta = self.client.get('/digital/search/', {'q': self.op.custom_id})
+
+        self.assertContains(respuesta, '{archivo}')
+        self.assertContains(respuesta, 'a la papelera')
+        self.assertNotContains(respuesta, 'to the trash')

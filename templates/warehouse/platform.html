@@ -5,7 +5,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Platform — WMS</title>
+  <title>{% trans "Platform" %} — WMS</title>
   {% include "warehouse/partials/tema.html" %}
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <style>
@@ -45,27 +45,26 @@
   </div>
   <div class="tb-right">
     <strong style="color:var(--on-accent)">{{ request.user.username }}</strong>
-    <span style="font-size:11px;color:var(--faint)">[PLATFORM {{ platform_role|upper }}]</span>
+    <span style="font-size:11px;color:var(--faint)">[{% trans "PLATFORM" %} {{ platform_role|upper }}]</span>
     {% include "warehouse/partials/preferencias.html" %}
     {% if tiene_empresa %}
-    <a href="{% url 'dashboard' %}" class="btn-lo">← My company</a>
+    <a href="{% url 'dashboard' %}" class="btn-lo">← {% trans "My company" %}</a>
     {% endif %}
-    <a href="{% url 'logout' %}" class="btn-lo">Sign out</a>
+    <a href="{% url 'logout' %}" class="btn-lo">{% trans "Sign out" %}</a>
   </div>
 </div>
 
 <div class="wrap">
   <div class="card">
-    <div class="ct">SaaS administration</div>
+    <div class="ct">{% trans "SaaS administration" %}</div>
     <p style="font-size:12px;color:var(--soft);margin:-4px 0 14px">
-      This level administers the product itself. It is not tied to any company:
-      from here you cannot open a company's operations, documents or catalog.
+      {% blocktrans %}This level administers the product itself. It is not tied to any company: from here you cannot open a company's operations, documents or catalog.{% endblocktrans %}
     </p>
     <div id="platform-content"
          hx-get="{% url 'platform_tenant_list' %}"
          hx-trigger="load"
          hx-swap="innerHTML">
-      <p style="color:var(--faint);font-size:12px">Loading…</p>
+      <p style="color:var(--faint);font-size:12px">{% trans "Loading..." %}</p>
     </div>
   </div>
 </div>

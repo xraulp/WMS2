@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Navegación entre las pantallas del nivel de plataforma.
 
@@ -15,23 +16,23 @@ nombrar a sus administradores.
 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--bdr)">
   <button class="btn btn-sm {% if activa == 'tenants' %}btn-p{% else %}btn-g{% endif %}"
           hx-get="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML">
-    Companies
+    {% trans "Companies" %}
   </button>
   <button class="btn btn-sm {% if activa == 'notifications' %}btn-p{% else %}btn-g{% endif %}"
           hx-get="{% url 'platform_notifications' %}" hx-target="#platform-content" hx-swap="innerHTML">
-    Delivery Log
+    {% trans "Delivery Log" %}
   </button>
   <button class="btn btn-sm {% if activa == 'invoices' %}btn-p{% else %}btn-g{% endif %}"
           hx-get="{% url 'platform_invoices' %}" hx-target="#platform-content" hx-swap="innerHTML">
-    Billing
+    {% trans "Billing" %}
   </button>
   {% if platform_role == 'admin' %}
   <button class="btn btn-sm {% if activa == 'users' %}btn-p{% else %}btn-g{% endif %}"
           hx-get="{% url 'platform_users' %}" hx-target="#platform-content" hx-swap="innerHTML">
-    Platform Users
+    {% trans "Platform Users" %}
   </button>
   {% endif %}
   <span style="margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)">
-    Platform {{ platform_role|default:"—" }}
+    {% trans "Platform" %} {{ platform_role|default:"—" }}
   </span>
 </div>

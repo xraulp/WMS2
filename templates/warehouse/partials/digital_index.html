@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 Una fila por expediente, con lo justo para reconocerlo y saber si vale la pena
 abrirlo: el numero, la fecha, el cliente y cuantos archivos tiene. Se usa tanto
@@ -19,7 +20,7 @@ para el indice de entrada como para las coincidencias de una busqueda parcial.
     </span>
     <span style="flex-shrink:0;font-size:11px;color:var(--soft-fuerte);background:var(--bg);
                  border-radius:999px;padding:3px 10px">
-      {% if op.num_docs %}📎 {{ op.num_docs }}{% else %}sin archivos{% endif %}
+      {% if op.num_docs %}📎 {{ op.num_docs }}{% else %}{% trans "no files" %}{% endif %}
     </span>
   </button>
   {% endfor %}

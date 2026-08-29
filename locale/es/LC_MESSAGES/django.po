@@ -1508,3 +1508,419 @@ msgstr "Saludos cordiales,"
 
 msgid "Shift + scroll wheel to move across columns"
 msgstr "Mayúsculas + rueda del ratón para recorrer las columnas"
+
+# La pantalla de plataforma -- empresas, usuarios, bitacora de envios y
+# facturacion -- y el panel del expediente digital.
+
+msgid "My company"
+msgstr "Mi empresa"
+
+msgid "SaaS administration"
+msgstr "Administración del SaaS"
+
+msgid "This level administers the product itself. It is not tied to any company: from here you cannot open a company's operations, documents or catalog."
+msgstr "Este nivel administra el producto en sí. No pertenece a ninguna empresa: desde aquí no se pueden abrir las operaciones, los documentos ni el catálogo de ninguna."
+
+msgid "Companies"
+msgstr "Empresas"
+
+msgid "Delivery Log"
+msgstr "Bitácora de envíos"
+
+msgid "Billing"
+msgstr "Facturación"
+
+msgid "Platform Users"
+msgstr "Usuarios de plataforma"
+
+msgid "Support access: you can review the companies on the platform, but creating one or changing its status is reserved to a platform administrator."
+msgstr "Acceso de soporte: puedes consultar las empresas de la plataforma, pero darlas de alta o cambiar su estado está reservado al administrador de plataforma."
+
+msgid "Create New Tenant"
+msgstr "Dar de alta una empresa"
+
+msgid "Company Name"
+msgstr "Nombre de la empresa"
+
+msgid "Subdomain"
+msgstr "Subdominio"
+
+msgid "auto from name"
+msgstr "automático desde el nombre"
+
+msgid "Plan"
+msgstr "Plan"
+
+msgid "Billing Email"
+msgstr "Correo de facturación"
+
+msgid "It appears on the reports and labels this company sends to its customers"
+msgstr "Sale en los informes y las etiquetas que esta empresa manda a sus clientes"
+
+msgid "Logo (optional)"
+msgstr "Logo (opcional)"
+
+msgid "First Admin User (optional — leave blank to add later from the tenant's own Users tab)"
+msgstr "Primer administrador (opcional: déjalo en blanco para darlo de alta después desde la pestaña de usuarios de la empresa)"
+
+msgid "Admin Username"
+msgstr "Usuario del administrador"
+
+msgid "Admin Password"
+msgstr "Contraseña del administrador"
+
+msgid "Visible for reference"
+msgstr "Visible como referencia"
+
+msgid "Create Tenant"
+msgstr "Dar de alta"
+
+msgid "Logo"
+msgstr "Logo"
+
+msgid "Staff of the company"
+msgstr "Personal de la empresa"
+
+msgid "Customers in its catalog"
+msgstr "Clientes dados de alta en su catálogo"
+
+msgid "Cust. users"
+msgstr "Usuarios cli."
+
+msgid "Users belonging to those customers"
+msgstr "Usuarios que pertenecen a esos clientes"
+
+msgid "Created"
+msgstr "Alta"
+
+msgid "yes"
+msgstr "sí"
+
+msgid "No customer of this company has access"
+msgstr "Ningún cliente de esta empresa tiene acceso"
+
+msgid "Inactive"
+msgstr "Inactiva"
+
+msgid "Change logo"
+msgstr "Cambiar el logo"
+
+msgid "Add logo"
+msgstr "Poner logo"
+
+msgid "Remove the logo of %(empresa)s? Its documents will show the company name instead."
+msgstr "¿Quitar el logo de %(empresa)s? Sus documentos pasarán a mostrar el nombre de la empresa."
+
+msgid "Deactivate"
+msgstr "Desactivar"
+
+msgid "Activate"
+msgstr "Activar"
+
+msgid "Deactivate %(empresa)s?"
+msgstr "¿Desactivar %(empresa)s?"
+
+msgid "Activate %(empresa)s?"
+msgstr "¿Activar %(empresa)s?"
+
+msgid "No companies yet."
+msgstr "Todavía no hay empresas."
+
+msgid "It is the address its people come in by. If you change it, whoever uses the old one stops reaching this company."
+msgstr "Es la dirección por la que entra su gente. Si la cambias, quien use la anterior deja de llegar a esta empresa."
+
+msgid "Who administers the SaaS itself. These accounts belong to no company: they cannot open any company's operations, documents or catalog. An <strong>admin</strong> creates companies and names their administrators; a <strong>staff</strong> reviews companies and the delivery log to answer support."
+msgstr "Quién administra el SaaS en sí. Estas cuentas no pertenecen a ninguna empresa: no pueden abrir las operaciones, los documentos ni el catálogo de ninguna. Un <strong>admin</strong> da de alta empresas y nombra a sus administradores; un <strong>staff</strong> consulta las empresas y la bitácora de envíos para atender soporte."
+
+msgid "Add Platform User"
+msgstr "Dar de alta un usuario de plataforma"
+
+msgid "Since"
+msgstr "Desde"
+
+msgid "Revoke"
+msgstr "Retirar"
+
+msgid "Revoke platform access for %(quien)s? The user account itself is kept."
+msgstr "¿Retirar el acceso de plataforma a %(quien)s? La cuenta de usuario se conserva."
+
+msgid "No platform users yet — access comes only from Django superusers."
+msgstr "Todavía no hay usuarios de plataforma: el acceso sale solo de los superusuarios de Django."
+
+msgid "<strong>Django superusers</strong> still reach this panel, because there is no platform administrator yet — that master key is how the first one gets created. Grant the role above and the shortcut retires itself."
+msgstr "Los <strong>superusuarios de Django</strong> todavía llegan a este panel porque aún no hay administrador de plataforma: esa llave maestra es como se crea el primero. Concede el rol aquí arriba y el atajo se retira solo."
+
+msgid "<strong>Django superusers</strong> no longer reach this panel: a platform administrator exists, so the master key stepped aside. They do still hold the Django admin and every company's data."
+msgstr "Los <strong>superusuarios de Django</strong> ya no llegan a este panel: existe un administrador de plataforma, así que la llave maestra se apartó. Siguen teniendo el admin de Django y los datos de todas las empresas."
+
+msgid "Superusers today:"
+msgstr "Superusuarios hoy:"
+
+msgid "To drop the flag:"
+msgstr "Para quitar la marca:"
+
+msgid "Every email and WhatsApp the system tried to send, across all companies. Read only — resending an alert is done by the company's own operator, from the operation. Showing the latest 200."
+msgstr "Cada correo y cada WhatsApp que el sistema intentó mandar, de todas las empresas. Solo de lectura: reenviar un aviso lo hace el operador de la propia empresa, desde la operación. Se enseñan los últimos 200."
+
+msgid "Company"
+msgstr "Empresa"
+
+msgid "All companies"
+msgstr "Todas las empresas"
+
+msgid "Any status"
+msgstr "Cualquier estado"
+
+msgid "Filter"
+msgstr "Filtrar"
+
+msgid "Channel"
+msgstr "Canal"
+
+msgid "Event"
+msgstr "Evento"
+
+msgid "Recipient"
+msgstr "Destinatario"
+
+msgid "Nothing sent yet with these filters."
+msgstr "Todavía no se ha enviado nada con estos filtros."
+
+msgid "Operation registered"
+msgstr "Operación registrada"
+
+msgid "Documents added"
+msgstr "Documentos agregados"
+
+msgid "Manual send"
+msgstr "Envío manual"
+
+msgid "Invoice sent"
+msgstr "Factura enviada"
+
+msgid "Message in the thread"
+msgstr "Mensaje en el hilo"
+
+msgid "Sent"
+msgstr "Enviada"
+
+msgid "Failed"
+msgstr "Fallida"
+
+msgid "Skipped"
+msgstr "Omitida"
+
+msgid "Photo"
+msgstr "Foto"
+
+msgid "Video"
+msgstr "Vídeo"
+
+msgid "Other"
+msgstr "Otro"
+
+msgid "Receivable"
+msgstr "Por cobrar"
+
+msgid "%(n)s pending invoice(s)"
+msgstr "%(n)s factura(s) pendiente(s)"
+
+msgid "%(n)s invoice(s) past due"
+msgstr "%(n)s factura(s) pasada(s) de fecha"
+
+msgid "Collected in %(anio)s"
+msgstr "Cobrado en %(anio)s"
+
+msgid "%(n)s paid invoice(s)"
+msgstr "%(n)s factura(s) pagada(s)"
+
+msgid "Support access: you can review every invoice and see which companies are up to date, but issuing, collecting and cancelling are reserved to a platform administrator."
+msgstr "Acceso de soporte: puedes consultar todas las facturas y ver qué empresas están al corriente, pero emitir, cobrar y cancelar está reservado al administrador de plataforma."
+
+msgid "Issue Invoice"
+msgstr "Emitir factura"
+
+msgid "select"
+msgstr "elegir"
+
+msgid "inactive"
+msgstr "inactiva"
+
+msgid "Period"
+msgstr "Periodo"
+
+msgid "Amount USD"
+msgstr "Importe USD"
+
+msgid "optional"
+msgstr "opcional"
+
+msgid "Issue even if the period is already invoiced"
+msgstr "Emitir aunque el periodo ya esté facturado"
+
+msgid "Issue"
+msgstr "Emitir"
+
+msgid "All"
+msgstr "Todas"
+
+msgid "Overdue"
+msgstr "Vencida"
+
+msgid "Number"
+msgstr "Número"
+
+msgid "Issued"
+msgstr "Emitida"
+
+msgid "Due"
+msgstr "Vence"
+
+msgid "Amount"
+msgstr "Importe"
+
+msgid "%(n)s day(s) late"
+msgstr "%(n)s día(s) de atraso"
+
+msgid "Paid"
+msgstr "Pagada"
+
+msgid "Cancelled"
+msgstr "Cancelada"
+
+msgid "Pending"
+msgstr "Pendiente"
+
+msgid "not sent"
+msgstr "sin enviar"
+
+msgid "Sent %(cuando)s"
+msgstr "Enviada el %(cuando)s"
+
+msgid "Not sent yet"
+msgstr "Todavía sin enviar"
+
+msgid "Resend"
+msgstr "Reenviar"
+
+msgid "Mark paid"
+msgstr "Marcar pagada"
+
+msgid "No invoices yet."
+msgstr "Todavía no hay facturas."
+
+
+
+
+
+
+msgid "A reason is required to cancel an invoice."
+msgstr "Cancelar una factura exige un motivo."
+
+msgid "%(n)s selected"
+msgstr "%(n)s seleccionado(s)"
+
+msgid "Delete selected"
+msgstr "Borrar los seleccionados"
+
+msgid "Click to select files or drag &amp; drop here"
+msgstr "Pulsa para elegir archivos o arrástralos aquí"
+
+msgid "Any file type accepted · Names auto-generated: DDMMYY-1, DDMMYY-2..."
+msgstr "Se acepta cualquier tipo de archivo · El nombre se pone solo: DDMMAA-1, DDMMAA-2..."
+
+msgid "Select Files"
+msgstr "Elegir archivos"
+
+msgid "Take Photo"
+msgstr "Tomar una foto"
+
+msgid "Uploading files..."
+msgstr "Subiendo los archivos..."
+
+msgid "Move earlier"
+msgstr "Mover antes"
+
+msgid "Move later"
+msgstr "Mover después"
+
+msgid "No files attached yet. Upload above."
+msgstr "Todavía no hay archivos. Súbelos aquí arriba."
+
+msgid "Send {archivo} to the trash?"
+msgstr "¿Enviar {archivo} a la papelera?"
+
+msgid "It stops appearing in the file; the administrator can bring it back."
+msgstr "Deja de aparecer en el expediente; el administrador puede devolverlo."
+
+msgid "Deletion password:"
+msgstr "Contraseña de borrado:"
+
+msgid "Reason for the deletion:"
+msgstr "Motivo del borrado:"
+
+msgid "Without a reason nothing is deleted."
+msgstr "Sin motivo no se borra."
+
+msgid "The file could not be sent to the trash."
+msgstr "No se pudo enviar el archivo a la papelera."
+
+msgid "No files selected."
+msgstr "No hay archivos seleccionados."
+
+msgid "Send {n} file(s) to the trash?"
+msgstr "¿Enviar {n} archivo(s) a la papelera?"
+
+msgid "They stop appearing in the file; the administrator can bring them back."
+msgstr "Dejan de aparecer en el expediente; el administrador puede devolverlos."
+
+msgid "Send to the trash"
+msgstr "Enviar a la papelera"
+
+msgid "Deleting..."
+msgstr "Borrando..."
+
+msgid "{n} file(s) sent to the trash."
+msgstr "{n} archivo(s) enviado(s) a la papelera."
+
+msgid "The files could not be deleted."
+msgstr "No se pudieron borrar los archivos."
+
+msgid "Unknown error."
+msgstr "Error desconocido."
+
+msgid "selected"
+msgstr "seleccionados"
+
+msgid "no files"
+msgstr "sin archivos"
+
+msgid "Document"
+msgstr "Documento"
+
+msgid "Save"
+msgstr "Guardar"
+
+msgid "PLATFORM"
+msgstr "PLATAFORMA"
+
+msgid "%(n)s file(s) match"
+msgstr "%(n)s expediente(s) coinciden con"
+
+msgid "No operation found for \"%(q)s\"."
+msgstr "No se encontró ninguna operación para «%(q)s»."
+
+msgid "Files with attachments, newest first. For one that is not here, search its Custom ID above."
+msgstr "Expedientes con archivos, del más reciente al más antiguo. Para uno que no esté aquí, busca su identificador arriba."
+
+msgid "No file has attachments yet. Search a Custom ID above to start uploading them."
+msgstr "Todavía no hay ningún expediente con archivos. Busca un identificador arriba para empezar a subirlos."
+
+msgid "Payment reference for {numero} (optional):"
+msgstr "Referencia del cobro de {numero} (opcional):"
+
+msgid "Email {numero} to the company billing address?"
+msgstr "¿Enviar {numero} al correo de facturación de la empresa?"
+
+msgid "Why is {numero} being cancelled? The number stays used."
+msgstr "¿Por qué se cancela {numero}? El número se queda ocupado."
