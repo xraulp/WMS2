@@ -2,7 +2,8 @@
 {% load i18n %}
 {% load static %}
 <!DOCTYPE html>
-<html lang="en"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+{% get_current_language as idioma_actual %}
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>

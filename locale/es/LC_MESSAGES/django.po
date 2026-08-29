@@ -1281,3 +1281,29 @@ msgstr "Mensaje automático del Sistema de Gestión de Almacenes"
 msgid "of %(empresa)s"
 msgstr "de %(empresa)s"
 
+
+# La pantalla de login. Es anterior a saber quien entra, asi que el idioma en
+# el que se lee sale de la cookie o del navegador.
+msgid "WMS — Login"
+msgstr "WMS — Iniciar sesión"
+
+msgid "Warehouse Management System"
+msgstr "Sistema de Gestión de Almacenes"
+
+msgid "Username"
+msgstr "Usuario"
+
+msgid "your username"
+msgstr "su usuario"
+
+msgid "Show/hide password"
+msgstr "Mostrar u ocultar la contraseña"
+
+msgid "Sign In"
+msgstr "Entrar"
+
+msgid "Invalid username or password."
+msgstr "Usuario o contraseña incorrectos."
+
+msgid "New Op"
+msgstr "Nueva op."

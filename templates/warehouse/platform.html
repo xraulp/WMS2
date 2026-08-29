@@ -1,6 +1,7 @@
-{% load static %}
+{% load static i18n %}
+{% get_current_language as idioma_actual %}
 <!DOCTYPE html>
-<html lang="en"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

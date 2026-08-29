@@ -2,7 +2,8 @@
 {% load i18n %}
 {% load static %}
 <!DOCTYPE html>
-<html lang="en"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+{% get_current_language as idioma_actual %}
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
@@ -514,7 +515,7 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
 <div class="bottom-nav">
   {% if profile|can_see_tab:'form' %}
   <button class="nav-btn on" id="nav-new" onclick="mobShowTab('new')">
-    <span class="icon">📦</span>New Op
+    <span class="icon">📦</span>{% trans "New Op" %}
   </button>
   {% endif %}
   <button class="nav-btn {% if not profile|can_see_tab:'form' %}on{% endif %}" id="nav-database" onclick="mobShowTab('database')">

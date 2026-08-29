@@ -98,3 +98,61 @@ class IdiomaTests(BaseDePreferencias):
         self.perfil.refresh_from_db()
         self.assertEqual(self.perfil.language, '')
         self.assertEqual(respuesta.cookies[settings.LANGUAGE_COOKIE_NAME].value, '')
+
+
+class IdiomaEnElLoginTests(BaseDePreferencias):
+    """
+    El login es anterior a saber quien eres: ahi el idioma no puede salir del
+    perfil, y sin selector quien no habla ingles se encuentra la primera
+    pantalla del sistema en un idioma que no eligio.
+    """
+
+    def setUp(self):
+        # A diferencia del resto de la clase base, aqui nadie ha entrado.
+        self.client.logout()
+
+    def test_la_pantalla_ofrece_los_dos_idiomas(self):
+        respuesta = self.client.get('/')
+
+        self.assertContains(respuesta, 'id="sel-idioma"')
+        for codigo, _nombre in settings.LANGUAGES:
+            self.assertContains(respuesta, 'value="%s"' % codigo)
+
+    def test_quien_no_ha_entrado_puede_cambiarlo(self):
+        respuesta = self.client.post('/preferencias/idioma/', {'idioma': 'es'})
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.cookies[settings.LANGUAGE_COOKIE_NAME].value, 'es')
+
+    def test_un_idioma_que_no_se_habla_se_rechaza_tambien_sin_entrar(self):
+        respuesta = self.client.post('/preferencias/idioma/', {'idioma': 'fr'})
+
+        self.assertEqual(respuesta.status_code, 400)
+
+    def test_la_pantalla_se_lee_en_el_idioma_elegido(self):
+        self.client.post('/preferencias/idioma/', {'idioma': 'es'})
+
+        respuesta = self.client.get('/')
+
+        self.assertContains(respuesta, 'Usuario')
+        self.assertContains(respuesta, 'Entrar')
+        self.assertContains(respuesta, '<html lang="es">')
+
+    def test_el_error_de_credenciales_tambien_se_traduce(self):
+        self.client.post('/preferencias/idioma/', {'idioma': 'es'})
+
+        respuesta = self.client.post('/', {'username': 'operador',
+                                           'password': 'la-que-no-es'},
+                                     headers={'hx-request': 'true'})
+
+        self.assertContains(respuesta, 'Usuario o contraseña incorrectos.')
+
+    def test_el_idioma_del_login_sigue_puesto_al_entrar(self):
+        """El que se elige para leer el login manda tambien en la pantalla de
+        despues: quien lo cambio ahi no queria leer solo esa pantalla."""
+        self.client.post('/preferencias/idioma/', {'idioma': 'es'})
+
+        self.client.force_login(self.usuario)
+        respuesta = self.client.get('/dashboard/')
+
+        self.assertContains(respuesta, '<html lang="es"')

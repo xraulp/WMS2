@@ -4109,7 +4109,6 @@ def cambiar_tema(request):
     return HttpResponse('')
 
 
-@login_required
 @require_POST
 def cambiar_idioma(request):
     """
@@ -4119,14 +4118,21 @@ def cambiar_idioma(request):
     peticion siguiente --Django ya no guarda el idioma en la sesion--, y el
     perfil es lo que hace que el idioma siga puesto dentro de un mes en otro
     navegador, que es donde la cookie ya no esta.
+
+    A diferencia del tema, esto no exige haber entrado: el mismo selector esta
+    en la pantalla de login, que es anterior a saber quien eres. Quien todavia
+    no ha entrado se lleva la cookie y nada mas; el perfil se apunta cuando hay
+    a quien apuntarselo. Es tambien lo que hace que el idioma elegido para leer
+    el login siga puesto en la pantalla de despues.
     """
     idioma = request.POST.get('idioma', '').strip()
     if idioma not in dict(UserProfile.LANGUAGE_CHOICES):
         return HttpResponse(status=400)
-    perfil = get_profile(request.user)
-    if perfil:
-        perfil.language = idioma
-        perfil.save(update_fields=['language'])
+    if request.user.is_authenticated:
+        perfil = get_profile(request.user)
+        if perfil:
+            perfil.language = idioma
+            perfil.save(update_fields=['language'])
     respuesta = HttpResponse('')
     if idioma:
         respuesta.set_cookie(settings.LANGUAGE_COOKIE_NAME, idioma,

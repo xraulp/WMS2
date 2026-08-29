@@ -1,10 +1,11 @@
-{% load static %}
+{% load static i18n %}
+{% get_current_language as idioma_actual %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ idioma_actual }}">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WMS — Login</title>
+  <title>{% trans "WMS — Login" %}</title>
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
@@ -28,13 +29,19 @@
     .btn-login:hover{background:#0284c7}
     .error-msg{background:#450a0a;border:1px solid #7f1d1d;color:#fca5a5;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
     #login-error{min-height:0}
+    /* El idioma se elige antes de entrar, asi que su sitio esta fuera de la
+       tarjeta: no es una credencial mas, es como se lee lo demas. */
+    .login-idioma{text-align:center;margin-top:20px}
+    .login-idioma select{background:#1e293b;border:1px solid #334155;border-radius:6px;color:#94a3b8;font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:5px 8px;cursor:pointer;outline:none}
+    .login-idioma select:hover{border-color:#475569;color:#cbd5e1}
+    .login-idioma select:focus{border-color:#0ea5e9;box-shadow:0 0 0 3px rgba(14,165,233,.15)}
   </style>
 </head>
 <body>
   <div class="login-wrap">
     <div class="login-logo">
       <h1>W<span>M</span>S</h1>
-      <p>Warehouse Management System</p>
+      <p>{% trans "Warehouse Management System" %}</p>
       {% comment %}
         El nombre de la empresa estaba escrito a mano, y desde que existe el
         nivel de plataforma eso es incorrecto: el administrador del SaaS entra
@@ -52,26 +59,54 @@
       <form hx-post="{% url 'login' %}" hx-target="#login-error" hx-swap="innerHTML">
         {% csrf_token %}
         <div class="form-group">
-          <label for="username">Username</label>
+          <label for="username">{% trans "Username" %}</label>
           <input id="username" name="username" type="text" class="form-input"
-                 placeholder="your username" autocomplete="username" required>
+                 placeholder="{% trans "your username" %}" autocomplete="username" required>
         </div>
         <div class="form-group">
-          <label for="password">Password</label>
+          <label for="password">{% trans "Password" %}</label>
           <div class="pw-wrap">
             <input id="password" name="password" type="password" class="form-input"
                    placeholder="••••••••" autocomplete="current-password" required style="padding-right:40px">
-            <button type="button" class="pw-toggle" onclick="togglePw()" title="Show/hide password">👁</button>
+            <button type="button" class="pw-toggle" onclick="togglePw()"
+                    title="{% trans "Show/hide password" %}">👁</button>
           </div>
         </div>
-        <button type="submit" class="btn-login">Sign In</button>
+        <button type="submit" class="btn-login">{% trans "Sign In" %}</button>
       </form>
+    </div>
+    {% comment %}
+      El selector de idioma de las demas pantallas vive en la barra de arriba,
+      junto al nombre de quien entro; aqui no hay barra ni hay nombre todavia.
+      Guarda solo la cookie --no hay perfil que apuntar-- y esa misma cookie
+      manda en la pantalla de despues, asi que quien elige espanol para leer
+      esto entra en espanol.
+    {% endcomment %}
+    <div class="login-idioma">
+      <select id="sel-idioma" onchange="cambiarIdioma(this.value)"
+              aria-label="{% trans "Language" %}">
+        {% for codigo, nombre in idiomas %}
+        <option value="{{ codigo }}" {% if codigo == idioma_actual %}selected{% endif %}>{{ nombre }}</option>
+        {% endfor %}
+      </select>
     </div>
   </div>
   <script>
   function togglePw() {
     const f = document.getElementById('password');
     f.type = f.type === 'password' ? 'text' : 'password';
+  }
+
+  // La pantalla se traduce en el servidor, asi que cambiar el idioma obliga a
+  // volver a pedirla: sin recargar se quedaria en el idioma de antes.
+  function cambiarIdioma(codigo) {
+    fetch('{% url "cambiar_idioma" %}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': '{{ csrf_token }}'},
+      body: 'idioma=' + encodeURIComponent(codigo)
+    }).then(function () { window.location.reload(); })
+      .catch(function () { window.location.reload(); });
   }
   </script>
 </body>

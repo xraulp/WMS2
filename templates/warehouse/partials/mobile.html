@@ -2,7 +2,8 @@
 {% load i18n %}
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+{% get_current_language as idioma_actual %}
+<html lang="{{ idioma_actual }}">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
@@ -342,7 +343,7 @@ tbody td{padding:6px 8px;font-size:11px;white-space:nowrap;max-width:110px;overf
 <div class="bottom-nav">
   {% if profile|can_see_tab:'form' %}
   <button class="nav-btn on" id="nav-new" onclick="mobShowTab('new')">
-    <span class="icon">📦</span>New Op
+    <span class="icon">📦</span>{% trans "New Op" %}
   </button>
   {% endif %}
   <button class="nav-btn {% if not profile|can_see_tab:'form' %}on{% endif %}" id="nav-database" onclick="mobShowTab('database')">
