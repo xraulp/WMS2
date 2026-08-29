@@ -1,4 +1,6 @@
 from django.utils import timezone
+from django.utils.translation import gettext as _
+from django.utils.formats import date_format
 from reportlab.lib.pagesizes import letter, A5
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, cm
@@ -149,7 +151,7 @@ TITULO_DEL_TIPO = {
     'ENTRY': 'Operation Report: Goods Receipt',
     'EXIT':  'Operation Report: Goods Dispatch',
     'TD':    'Operation Report: Transfer',
-    'RD':    'Operation Report: Revision',
+    'RD':    'Operation Report: Inspection',
 }
 
 
@@ -158,7 +160,9 @@ def color_del_tipo(operation_type):
 
 
 def titulo_del_tipo(operation_type):
-    return TITULO_DEL_TIPO.get(operation_type, 'Operation Report')
+    # Se traduce al pedirlo, no al definir el diccionario: el idioma que manda
+    # es el del cliente que recibe el documento, y ese no se sabe al importar.
+    return _(TITULO_DEL_TIPO.get(operation_type, 'Operation Report'))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -317,25 +321,29 @@ def generate_pdf_report(operation):
         ]
 
     rows_data = [
-        field('Date:',             operation.date.strftime('%B %d, %Y')),
-        field('Type:',             operation.get_operation_type_display()),
-        field('Custom ID:',        operation.custom_id),
-        field('Entries Dispatched:', operation.entry_dispatched or '—'),
-        field('Customer:',         operation.get_customer_display()),
-        field('Shipper:',          operation.get_shipper_display()),
-        field('Invoice:',          operation.invoice or '—'),
-        field('PO / Order:',       operation.po_order or '—'),
-        field('Seal:',             operation.seal or '—'),
-        field('Carrier:',          operation.get_carrier_display()),
-        field('PRO:',              operation.pro or '—'),
-        field('Trailer:',          operation.trailer or '—'),
-        field('Bundle Type:',      operation.get_bundle_type_display_name()),
-        field('Bundle Qty:',       operation.bundle_qty or '—'),
-        field('Weight:',
+        field(_('Date:'),
+              # `DATE_FORMAT` es el formato largo del idioma activo: "July 8,
+              # 2026" en ingles y "8 de julio de 2026" en espanol. Escribir el
+              # formato a mano daba "julio 08, 2026", que no lo escribe nadie.
+              date_format(operation.date, 'DATE_FORMAT')),
+        field(_('Type:'),             operation.get_operation_type_display()),
+        field(_('Custom ID:'),        operation.custom_id),
+        field(_('Entries Dispatched:'), operation.entry_dispatched or '—'),
+        field(_('Customer:'),         operation.get_customer_display()),
+        field(_('Shipper:'),          operation.get_shipper_display()),
+        field(_('Invoice:'),          operation.invoice or '—'),
+        field(_('PO / Order:'),       operation.po_order or '—'),
+        field(_('Seal:'),             operation.seal or '—'),
+        field(_('Carrier:'),          operation.get_carrier_display()),
+        field(_('PRO:'),              operation.pro or '—'),
+        field(_('Trailer:'),          operation.trailer or '—'),
+        field(_('Bundle Type:'),      operation.get_bundle_type_display_name()),
+        field(_('Bundle Qty:'),       operation.bundle_qty or '—'),
+        field(_('Weight:'),
               f"{operation.weight_lbs or '—'} LBS  /  {operation.weight_kgs or '—'} KGS"),
-        field('Description:',      operation.description or '—'),
-        field('Note:',             operation.note or '—'),
-        field('Damage:',           '⚠ YES — ' + (operation.damage_description or '')
+        field(_('Description:'),      operation.description or '—'),
+        field(_('Note:'),             operation.note or '—'),
+        field(_('Damage:'),           '⚠ YES — ' + (operation.damage_description or '')
                                   if operation.damage else 'No'),
     ]
 
@@ -362,10 +370,10 @@ def generate_pdf_report(operation):
     docs = operation.documents.all()
     if docs.exists():
         story.append(HRFlowable(width='100%', thickness=0.5, color=BORDER, spaceAfter=8))
-        story.append(Paragraph('ATTACHED FILES', S['section']))
+        story.append(Paragraph(_('ATTACHED FILES'), S['section']))
         file_rows = [
             [Paragraph(h, style('fh', fontName='Helvetica-Bold', fontSize=8, textColor=WHITE))
-             for h in ['#', 'Type', 'File Name', 'Uploaded']]
+             for h in ['#', _('Type'), _('File Name'), _('Uploaded')]]
         ]
         for i, d in enumerate(docs, 1):
             file_rows.append([
@@ -588,29 +596,29 @@ def generate_label_pdf(operation):
         desc_text = (operation.description or '—')[:60]
 
         rows = [
-            [Paragraph('DATE:', label_style),
+            [Paragraph(_('DATE:'), label_style),
              Paragraph(operation.date.strftime('%Y-%m-%d'), value_style),
-             Paragraph('PO/ORDER:', label_style),
+             Paragraph(_('PO/ORDER:'), label_style),
              Paragraph(str(operation.po_order or '—'), value_style)],
 
-            [Paragraph('CUSTOMER:', label_style),
+            [Paragraph(_('CUSTOMER:'), label_style),
              Paragraph(operation.get_customer_display(), value_style),
-             Paragraph('PRO:', label_style),
+             Paragraph(_('PRO:'), label_style),
              Paragraph(str(operation.pro or '—'), value_style)],
 
-            [Paragraph('SHIPPER:', label_style),
+            [Paragraph(_('SHIPPER:'), label_style),
              Paragraph(operation.get_shipper_display(), value_style),
-             Paragraph('WEIGHT:', label_style),
+             Paragraph(_('WEIGHT:'), label_style),
              Paragraph(f"{operation.weight_lbs or '—'} LBS", value_style)],
 
-            [Paragraph('CARRIER:', label_style),
+            [Paragraph(_('CARRIER:'), label_style),
              Paragraph(operation.get_carrier_display(), value_style),
-             Paragraph('BUNDLE TYPE:', label_style),
+             Paragraph(_('BUNDLE TYPE:'), label_style),
              Paragraph(operation.get_bundle_type_display_name(), value_style)],
 
-            [Paragraph('DESCRIPTION:', label_style),
+            [Paragraph(_('DESCRIPTION:'), label_style),
              Paragraph(desc_text, value_style),
-             Paragraph('NOTE:', label_style),
+             Paragraph(_('NOTE:'), label_style),
              Paragraph(note_text, value_style)],
         ]
 

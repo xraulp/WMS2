@@ -849,7 +849,7 @@ class FirmaDeLosMensajesTests(HiloBase):
         self._escribir(self.usuario_a, self.op, u'Necesito la factura.')
 
         cuerpo = mail.outbox[0].body
-        self.assertIn(u'<b>Customer Test</b> escribió', cuerpo)
+        self.assertIn('<b>Customer Test</b> wrote in the file', cuerpo)
         self.assertIn(u'Customer Test · cliente_a', cuerpo)
         self.assertNotIn(u'Customer Test, SA. de CV ·', cuerpo)
         # Y el dato de la operacion sigue completo.

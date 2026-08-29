@@ -1,5 +1,6 @@
+{% load i18n %}
 <!DOCTYPE html>
-<html lang="es">
+{% get_current_language as idioma %}<html lang="{{ idioma }}">
 <head>
   <meta charset="UTF-8"/>
 </head>
@@ -26,39 +27,36 @@
 
               <div style="padding:28px;">
                 <div style="font-size:14px; line-height:1.7; color:#334155; margin-bottom:18px;">
-                  Apreciado Socio Comercial!<br><br>
+                  {% trans "Dear business partner," %}<br><br>
                   {% if event == 'GOODS_RELEASED' %}
-                    Le informamos que la mercancía correspondiente a la entrada
-                    <b>{{ operation.custom_id }}</b> fue despachada
-                    {% if extra.exit_op %}mediante la salida <b>{{ extra.exit_op.custom_id }}</b>{% endif %}.
+                    {% blocktrans with entrada=operation.custom_id %}The goods for entry <b>{{ entrada }}</b> have been dispatched{% endblocktrans %}{% if extra.exit_op %}{% blocktrans with salida=extra.exit_op.custom_id %} on exit <b>{{ salida }}</b>{% endblocktrans %}{% endif %}.
                   {% else %}
-                    Se agregaron <b>{{ extra.count }}</b> archivo(s) al expediente digital de la operación
-                    <b>{{ operation.custom_id }}</b>.
+                    {% blocktrans with cuantos=extra.count operacion=operation.custom_id %}<b>{{ cuantos }}</b> file(s) were added to the digital file of operation <b>{{ operacion }}</b>.{% endblocktrans %}
                   {% endif %}
                 </div>
 
                 <div style="border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; margin-bottom:20px;">
                   <div style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#fff;">
-                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Operación</div>
+                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">{% trans "Operation" %}</div>
                     <div style="color:#0f172a;"><b>{{ operation.custom_id }}</b></div>
                   </div>
                   <div style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
-                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Fecha</div>
+                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">{% trans "Date" %}</div>
                     <div style="color:#0f172a;">{{ operation.date|date:"F j, Y" }}</div>
                   </div>
                   <div style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#fff;">
-                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Cliente</div>
+                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">{% trans "Customer" %}</div>
                     <div style="color:#0f172a;"><b>{{ operation.get_customer_display }}</b></div>
                   </div>
                   {% if operation.po_order %}
                   <div style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
-                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">PO / Order</div>
+                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">{% trans "PO / Order" %}</div>
                     <div style="color:#0f172a;">{{ operation.po_order }}</div>
                   </div>
                   {% endif %}
                   {% if operation.description %}
                   <div style="display:flex; padding:9px 14px; font-size:13px; background:#fff;">
-                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">Descripción</div>
+                    <div style="font-weight:600; color:#64748b; width:110px; flex-shrink:0; font-size:11px; text-transform:uppercase;">{% trans "Description" %}</div>
                     <div style="color:#0f172a;">{{ operation.description }}</div>
                   </div>
                   {% endif %}
@@ -66,7 +64,7 @@
 
                 {% if event == 'DOCUMENTS_ADDED' and extra.documents %}
                 <div style="font-size:13px; color:#334155; margin-bottom:20px;">
-                  <b>Archivos:</b>
+                  <b>{% trans "Files:" %}</b>
                   <ul style="margin:8px 0 0; padding-left:18px;">
                     {% for name in extra.documents %}<li>{{ name }}</li>{% endfor %}
                   </ul>
@@ -77,18 +75,18 @@
                   <a href="{{ digital_url }}"
                      style="display:inline-block; padding:10px 22px; background:#0ea5e9; color:#fff;
                             border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">
-                    Ver expediente digital
+                    {% trans "See the digital file" %}
                   </a>
                 </div>
 
                 <div style="font-size:14px; line-height:1.7; color:#334155; margin-top:18px;">
-                  Saludos Cordiales.
+                  {% trans "Kind regards." %}
                 </div>
               </div>
 
               <div style="padding:16px 28px; background:#f8fafc; border-top:1px solid #e2e8f0;
                           font-size:11px; color:#94a3b8; text-align:center;">
-                Mensaje automático del Sistema de Gestión de Almacenes de {{ tenant_name }} · {{ operation.custom_id }}
+                {% blocktrans with empresa=tenant_name id=operation.custom_id %}Automatic message from the Warehouse Management System of {{ empresa }} · {{ id }}{% endblocktrans %}
               </div>
 
             </td>

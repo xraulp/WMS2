@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %}
 El correo con el que la plataforma le manda una factura a una empresa.
 
@@ -27,7 +28,7 @@ vista previa del móvil sin abrir nada.
               Hello {{ factura.tenant.name }},
             </p>
             <p style="margin:0 0 18px;font-size:14px;color:#334155;line-height:1.5">
-              Please find attached invoice <strong>{{ factura.numero }}</strong> for the
+              {% trans "Please find attached invoice" %} <strong>{{ factura.numero }}</strong> for the
               service period {{ factura.periodo_inicio|date:"Y-m-d" }} to
               {{ factura.periodo_fin|date:"Y-m-d" }}.
             </p>
@@ -35,13 +36,13 @@ vista previa del móvil sin abrir nada.
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
                    style="border:1px solid #e2e8f0;border-radius:8px">
               <tr>
-                <td style="padding:12px 14px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b">Amount due</td>
+                <td style="padding:12px 14px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b">{% trans "Amount due" %}</td>
                 <td style="padding:12px 14px;border-bottom:1px solid #f1f5f9;font-size:16px;font-weight:600;color:#0f172a;text-align:right">
                   {{ factura.monto_usd }} USD
                 </td>
               </tr>
               <tr>
-                <td style="padding:12px 14px;font-size:12px;color:#64748b">Due date</td>
+                <td style="padding:12px 14px;font-size:12px;color:#64748b">{% trans "Due date" %}</td>
                 <td style="padding:12px 14px;font-size:14px;color:#0f172a;text-align:right">
                   {{ factura.vence_el|date:"Y-m-d" }}
                 </td>

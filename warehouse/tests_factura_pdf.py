@@ -171,7 +171,7 @@ class ElEnvioAlCliente(BaseFacturaPDF):
         respuesta = self._enviar(factura)
 
         self.assertEqual(len(mail.outbox), 0)
-        self.assertContains(respuesta, 'correo de facturación')
+        self.assertContains(respuesta, 'has no billing email')
         factura.refresh_from_db()
         self.assertIsNone(factura.enviada_el)
 
@@ -249,7 +249,7 @@ class QuedaEnLaBitacoraDeEnvios(BaseFacturaPDF):
         registro = NotificationLog.objects.get()
         self.assertEqual(registro.status, 'FAILED')
         self.assertIn('smtp caido', registro.detail)
-        self.assertContains(respuesta, 'No se pudo enviar')
+        self.assertContains(respuesta, 'Could not send')
         factura.refresh_from_db()
         self.assertIsNone(factura.enviada_el)
 

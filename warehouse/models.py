@@ -101,6 +101,15 @@ class Catalog(models.Model):
                             verbose_name='Dias en bodega antes de avisar',
                             help_text='Vacio = usar el plazo general de la empresa')
 
+    # En que idioma se le escribe a este cliente. Es suyo y no de quien manda el
+    # correo: un documento se lee en el idioma de quien lo recibe, y el operador
+    # que captura una entrada a las tres de la manana no tiene por que acordarse
+    # de en que idioma habla cada cliente. Vacio = el idioma de la casa.
+    LANGUAGE_CHOICES = [('', _('Default')), ('es', 'Espanol'), ('en', 'English')]
+    language            = models.CharField(max_length=5, blank=True, default='',
+                            choices=LANGUAGE_CHOICES,
+                            verbose_name='Idioma de los correos y documentos')
+
     class Meta:
         ordering = ['category', 'name']
 

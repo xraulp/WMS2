@@ -1062,3 +1062,222 @@ msgstr "Administrador de plataforma"
 msgid "Platform support"
 msgstr "Soporte de plataforma"
 
+msgid "Dear business partner,"
+msgstr "Apreciado socio comercial:"
+
+msgid "The goods for entry <b>%(entrada)s</b> have been dispatched"
+msgstr "Le informamos que la mercancía correspondiente a la entrada <b>%(entrada)s</b> fue despachada"
+
+msgid " on exit <b>%(salida)s</b>"
+msgstr " mediante la salida <b>%(salida)s</b>"
+
+msgid "<b>%(cuantos)s</b> file(s) were added to the digital file of operation <b>%(operacion)s</b>."
+msgstr "Se agregaron <b>%(cuantos)s</b> archivo(s) al expediente digital de la operación <b>%(operacion)s</b>."
+
+msgid "Files:"
+msgstr "Archivos:"
+
+msgid "See the digital file"
+msgstr "Ver expediente digital"
+
+msgid "Kind regards."
+msgstr "Saludos cordiales."
+
+msgid "New message about an operation"
+msgstr "Mensaje nuevo sobre una operación"
+
+msgid "<b>%(quien)s</b> wrote in the file of operation"
+msgstr "<b>%(quien)s</b> escribió en el expediente de la operación"
+
+msgid "Reply in the file"
+msgstr "Responder en el expediente"
+
+msgid "This notice is not repeated for every message. Open the file to see the whole conversation."
+msgstr "Este aviso no se repite por cada mensaje. Abra el expediente para ver la conversación completa."
+
+msgid "Weight"
+msgstr "Peso"
+
+msgid "Please find attached invoice"
+msgstr "Adjunta encontrará la factura"
+
+msgid "Amount due"
+msgstr "Importe"
+
+msgid "Due date"
+msgstr "Vencimiento"
+
+msgid "Goods Receipt"
+msgstr "Recepción de mercancías"
+
+msgid "Goods Dispatch"
+msgstr "Salida de mercancías"
+
+msgid "Transfer"
+msgstr "Trasbordo"
+
+msgid "Goods Inspection"
+msgstr "Revisión de mercancías"
+
+msgid "Inspection"
+msgstr "Revisión"
+
+msgid "Goods released"
+msgstr "Mercancía liberada"
+
+msgid "New documents"
+msgstr "Documentos nuevos"
+
+msgid "New message"
+msgstr "Mensaje nuevo"
+
+msgid "ID"
+msgstr "ID"
+
+msgid "Bundles"
+msgstr "Bultos"
+
+msgid "%(empresa)s has no billing email. It is set when the company is created, or in its record."
+msgstr "%(empresa)s no tiene correo de facturación. Se pone al crear la empresa o en su ficha."
+
+msgid "Attached to this email you will find the <b>Goods Receipt</b> report, the photographs and the corresponding documents."
+msgstr "Adjunto al presente correo encontrará el informe de <b>Recepción de Mercancías</b>, las fotografías y los documentos correspondientes."
+
+msgid "Attached to this email you will find the <b>Goods Dispatch</b> report, the photographs and the corresponding documents."
+msgstr "Adjunto al presente correo encontrará el informe de <b>Despacho de Mercancías</b>, las fotografías y los documentos correspondientes."
+
+msgid "General information:"
+msgstr "Información general:"
+
+msgid "*** PLEASE SEND THE INVOICE, BOL AND ANY OTHER DOCUMENTATION NEEDED FOR THIS OPERATION ***"
+msgstr "*** FAVOR DE ENVIAR LA(S) FACTURA(S), BOL Y DEMÁS DOCUMENTACIÓN NECESARIA PARA LA CORRESPONDIENTE OPERACIÓN ***"
+
+msgid "Default"
+msgstr "El de la casa"
+
+msgid "Emails and documents"
+msgstr "Correos y documentos"
+
+msgid "Write to this customer in"
+msgstr "Escribirle a este cliente en"
+
+msgid "Applies to the notification emails, the WhatsApp messages and the PDF reports."
+msgstr "Vale para los correos de aviso, los WhatsApp y los informes en PDF."
+
+msgid "Blank = use the company default (%(plazo)s days)."
+msgstr "En blanco = usar el plazo general de la empresa (%(plazo)s días)."
+
+msgid "Date:"
+msgstr "Fecha:"
+
+msgid "Type:"
+msgstr "Tipo:"
+
+msgid "Custom ID:"
+msgstr "Custom ID:"
+
+msgid "Entries Dispatched:"
+msgstr "Entradas despachadas:"
+
+msgid "Customer:"
+msgstr "Cliente:"
+
+msgid "Shipper:"
+msgstr "Remitente:"
+
+msgid "Invoice:"
+msgstr "Factura:"
+
+msgid "PO / Order:"
+msgstr "OC / pedido:"
+
+msgid "Seal:"
+msgstr "Sello:"
+
+msgid "Carrier:"
+msgstr "Transportista:"
+
+msgid "PRO:"
+msgstr "PRO:"
+
+msgid "Trailer:"
+msgstr "Caja:"
+
+msgid "Bundle Type:"
+msgstr "Tipo de bulto:"
+
+msgid "Bundle Qty:"
+msgstr "Bultos:"
+
+msgid "Weight:"
+msgstr "Peso:"
+
+msgid "Description:"
+msgstr "Descripción:"
+
+msgid "Note:"
+msgstr "Nota:"
+
+msgid "Damage:"
+msgstr "Daño:"
+
+msgid "DATE:"
+msgstr "FECHA:"
+
+msgid "PO/ORDER:"
+msgstr "OC/PEDIDO:"
+
+msgid "CUSTOMER:"
+msgstr "CLIENTE:"
+
+msgid "SHIPPER:"
+msgstr "REMITENTE:"
+
+msgid "WEIGHT:"
+msgstr "PESO:"
+
+msgid "CARRIER:"
+msgstr "TRANSPORTISTA:"
+
+msgid "BUNDLE TYPE:"
+msgstr "TIPO DE BULTO:"
+
+msgid "DESCRIPTION:"
+msgstr "DESCRIPCIÓN:"
+
+msgid "NOTE:"
+msgstr "NOTA:"
+
+msgid "ATTACHED FILES"
+msgstr "ARCHIVOS ADJUNTOS"
+
+msgid "File Name"
+msgstr "Nombre del archivo"
+
+msgid "Uploaded"
+msgstr "Subido"
+
+msgid "Operation Report: Goods Receipt"
+msgstr "Informe de operación: recepción de mercancías"
+
+msgid "Operation Report: Goods Dispatch"
+msgstr "Informe de operación: salida de mercancías"
+
+msgid "Operation Report: Transfer"
+msgstr "Informe de operación: trasbordo"
+
+msgid "Operation Report: Inspection"
+msgstr "Informe de operación: revisión"
+
+msgid "Operation Report"
+msgstr "Informe de operación"
+
+msgid "Automatic message from the Warehouse Management System of %(empresa)s · %(id)s"
+msgstr "Mensaje automático del Sistema de Gestión de Almacenes de %(empresa)s · %(id)s"
+
+msgid "Automatic message from the Warehouse Management System"
+msgstr "Mensaje automático del Sistema de Gestión de Almacenes"
+
+msgid "of %(empresa)s"
+msgstr "de %(empresa)s"
+

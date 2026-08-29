@@ -706,7 +706,21 @@ tbody td:has(.btn-action) {
         <div class="cf-g" style="min-width:120px">
           <label>{% trans "Alert after … days" %}</label>
           <input type="number" name="alert_days" min="1" max="3650" class="cf-i"
-                 placeholder="{{ tenant.alert_days_default|default:7 }} (empresa)">
+                 placeholder="{{ tenant.alert_days_default|default:7 }}">
+        </div>
+        {% comment %}
+        En que idioma se le escribe a este cliente. Va aqui y no en los ajustes
+        de quien captura, porque un correo se lee en el idioma del que lo
+        recibe: el operador no tiene por que acordarse de con quien habla cada
+        idioma a las tres de la manana.
+        {% endcomment %}
+        <div class="cf-g" style="min-width:110px">
+          <label>{% trans "Language" %}</label>
+          <select name="language" class="cf-i">
+            {% for valor, etiqueta in idiomas_del_cliente %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="cf-g">
           <label>&nbsp;</label>

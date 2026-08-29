@@ -93,8 +93,29 @@
           {% trans "days in the warehouse" %}
         </label>
         <span style="font-size:10px;color:var(--faint)">
-          En blanco = usar el plazo general de la empresa
-          ({{ entry.tenant.alert_days_default|default:7 }} días).
+          {% blocktrans with plazo=entry.tenant.alert_days_default|default:7 %}Blank = use the company default ({{ plazo }} days).{% endblocktrans %}
+        </span>
+      </div>
+
+      {% comment %}
+      El idioma de sus correos y de sus documentos. Es del cliente y no de quien
+      se los manda: un PDF se lee en el idioma del que lo recibe.
+      {% endcomment %}
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft);margin:12px 0 6px">
+        {% trans "Emails and documents" %}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px">
+        <label style="display:flex;align-items:center;gap:6px">
+          {% trans "Write to this customer in" %}
+          <select name="language"
+                  style="padding:4px 6px;border:1px solid var(--bdr);border-radius:6px;font-size:12px">
+            {% for valor, etiqueta in entry.LANGUAGE_CHOICES %}
+            <option value="{{ valor }}" {% if entry.language == valor %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <span style="font-size:10px;color:var(--faint)">
+          {% trans "Applies to the notification emails, the WhatsApp messages and the PDF reports." %}
         </span>
       </div>
     </div>

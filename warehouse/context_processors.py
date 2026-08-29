@@ -15,9 +15,13 @@ def preferencias(request):
     # Los idiomas que se ofrecen salen de la configuracion: anadir uno no
     # puede obligar a acordarse tambien de la barra de cada pantalla.
     idiomas = list(settings.LANGUAGES)
+    # Los del cliente llevan ademas la opcion vacia: "el de la casa".
+    from .models import Catalog
+    idiomas_del_cliente = list(Catalog.LANGUAGE_CHOICES)
     usuario = getattr(request, 'user', None)
     if not usuario or not usuario.is_authenticated:
-        return {'tema_usuario': '', 'idioma_usuario': '', 'idiomas': idiomas}
+        return {'tema_usuario': '', 'idioma_usuario': '', 'idiomas': idiomas,
+                'idiomas_del_cliente': idiomas_del_cliente}
     perfil = getattr(usuario, 'profile', None)
     return {
         # Vacio significa "el que tenga el sistema operativo": la plantilla no
@@ -25,4 +29,5 @@ def preferencias(request):
         'tema_usuario': getattr(perfil, 'theme', '') or '',
         'idioma_usuario': getattr(perfil, 'language', '') or '',
         'idiomas': idiomas,
+        'idiomas_del_cliente': idiomas_del_cliente,
     }

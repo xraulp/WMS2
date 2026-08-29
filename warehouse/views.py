@@ -670,7 +670,11 @@ def operation_pdf(request, pk):
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ##### 5.3. operation_pd  072526 20:09
     if not customer_can_access_op(request.user, op):
         return HttpResponse(_('Permission denied.'), status=403)
-    pdf = generate_pdf_report(op)
+    # El documento se escribe en el idioma del cliente, no en el de quien lo
+    # descarga: acaba en sus manos, y bajarlo desde la pantalla o recibirlo por
+    # correo no puede dar dos documentos distintos.
+    with notifications.en_el_idioma_de(notifications.resolve_customer(op)):
+        pdf = generate_pdf_report(op)
     resp = HttpResponse(pdf, content_type='application/pdf')
     resp['Content-Disposition'] = f'inline; filename="{op.custom_id}.pdf"'
     return resp
@@ -682,7 +686,8 @@ def operation_label(request, pk):
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant) ####operation_label 072526 20:10
     if not customer_can_access_op(request.user, op):
         return HttpResponse(_('Permission denied.'), status=403)
-    pdf = generate_label_pdf(op)
+    with notifications.en_el_idioma_de(notifications.resolve_customer(op)):
+        pdf = generate_label_pdf(op)
     resp = HttpResponse(pdf, content_type='application/pdf')
     resp['Content-Disposition'] = f'inline; filename="{op.custom_id}_label.pdf"'
     return resp
@@ -2130,10 +2135,16 @@ def catalog_create(request):
     dias = p.get('alert_days', '').strip()
     plazo = int(dias) if category == 'CUSTOMER' and dias.isdigit() and int(dias) > 0 else None
 
+    # En que idioma se le escribe. Vale para clientes y para nadie mas: en las
+    # otras categorias el formulario ni lo pinta.
+    idioma = p.get('language', '').strip()
+    if category != 'CUSTOMER' or idioma not in dict(Catalog.LANGUAGE_CHOICES):
+        idioma = ''
+
     entry = Catalog.objects.create(
         tenant=tenant,  # <--- AGREGAR ESTA LÍNEA 4.3. catalog_create 072526 19:57
         category=category, name=name,
-        alert_days=plazo,
+        alert_days=plazo, language=idioma,
         # Los dos formularios que llegan aquí -el del escritorio y el del móvil-
         # pintan la abreviatura y el operador la escribe, pero el alta no la
         # guardaba: se perdía sin avisar y solo se podía poner volviendo a
@@ -2195,6 +2206,11 @@ def catalog_edit(request, pk):
             # primer dia.
             dias = p.get('alert_days', '').strip()
             entry.alert_days = int(dias) if dias.isdigit() and int(dias) > 0 else None
+            # El idioma de sus correos y documentos. Uno que no se ofrece se
+            # descarta: el valor viaja en el formulario.
+            idioma = p.get('language', '').strip()
+            if idioma in dict(Catalog.LANGUAGE_CHOICES):
+                entry.language = idioma
         entry.save()
         return render(request, 'warehouse/partials/catalog_table.html',
                       _catalog_table_context(request, tenant,

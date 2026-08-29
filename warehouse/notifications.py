@@ -18,6 +18,8 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils import translation
+from django.utils.translation import gettext as _
 
 from .models import (Catalog, NotificationLog, UserProfile,
                      LADO_TENANT, LADO_CLIENTE)
@@ -43,6 +45,40 @@ FAILED  = 'FAILED'
 SKIPPED = 'SKIPPED'
 
 
+# ── EL IDIOMA DE QUIEN LO RECIBE ──────────────────────────────────────────────
+# Un correo y un PDF no se escriben en el idioma de quien los manda, sino en el
+# del que los lee. El operador que captura una entrada a las tres de la manana
+# no tiene por que acordarse de en que idioma habla cada cliente, asi que el
+# idioma vive en la ficha del cliente y esto lo aplica al componer.
+
+
+def idioma_del_cliente(customer):
+    """El idioma de la ficha, o cadena vacia para el de la casa."""
+    return getattr(customer, 'language', '') or ''
+
+
+def en_idioma(codigo):
+    """
+    Context manager que compone un texto en el idioma pedido.
+
+    Vacio significa el idioma de la casa, no "el que este puesto": si se deja
+    correr el de la peticion, un correo escrito por un operador que trabaja en
+    ingles le llegaria en ingles a un cliente que no lo eligio.
+    """
+    return translation.override(codigo or settings.LANGUAGE_CODE)
+
+
+def en_el_idioma_de(customer):
+    """
+    Lo mismo, para el cliente al que se le escribe.
+
+    Envuelve la composicion --el asunto, el cuerpo y el PDF adjunto--, no el
+    envio: para cuando el envio ocurre, el idioma puesto es el del usuario que
+    apreto el boton, y el correo saldria mitad en uno y mitad en otro.
+    """
+    return en_idioma(idioma_del_cliente(customer))
+
+
 # ── RESOLUCIÓN DE CLIENTE Y DESTINATARIOS ─────────────────────────────────────
 
 # Como se llama cada tipo de operacion en un correo o un WhatsApp, que es donde
@@ -50,16 +86,18 @@ SKIPPED = 'SKIPPED'
 # ENTRY se anunciaba como "Salida de Mercancias", de modo que una revision --que
 # no saca nada de la bodega-- le habria dicho al cliente que su carga se fue.
 NOMBRE_DEL_TIPO = {
-    'ENTRY': ('Recepcion de Mercancias', 'Recep de Mercancias'),
-    'EXIT':  ('Salida de Mercancias',    'Salida de Mercancias'),
-    'TD':    ('Trasbordo',               'Trasbordo'),
-    'RD':    ('Revision de Mercancias',  'Revision'),
+    'ENTRY': ('Goods Receipt', 'Goods Receipt'),
+    'EXIT':  ('Goods Dispatch', 'Goods Dispatch'),
+    'TD':    ('Transfer', 'Transfer'),
+    'RD':    ('Goods Inspection', 'Inspection'),
 }
 
 
 def nombre_del_tipo(operation_type, corto=False):
-    largo, breve = NOMBRE_DEL_TIPO.get(operation_type, ('Operacion', 'Operacion'))
-    return breve if corto else largo
+    # Se traduce al llamar y no al definir el diccionario: el idioma que manda
+    # es el del cliente al que se le escribe, y ese no se sabe al importar.
+    largo, breve = NOMBRE_DEL_TIPO.get(operation_type, ('Operation', 'Operation'))
+    return _(breve) if corto else _(largo)
 
 
 def resolve_customer(operation):
@@ -358,21 +396,21 @@ def _deliver_whatsapp(operation, customer, event, number, body, triggered_by=Non
 def _whatsapp_body(operation, event):
     tenant_name = operation.tenant.name if operation.tenant else 'WMS'
     if event == EVENT_RELEASED:
-        titulo = 'Mercancia liberada'
+        titulo = _('Goods released')
     elif event == EVENT_DOCUMENTS:
-        titulo = 'Documentos nuevos'
+        titulo = _('New documents')
     else:
         titulo = nombre_del_tipo(operation.operation_type, corto=True)
 
     return (f"*{tenant_name.upper()} — {titulo}*\n"
-            f"ID: {operation.custom_id}\n"
-            f"Date: {operation.date}\n"
-            f"Customer: {operation.get_customer_display()}\n"
-            f"Shipper: {operation.get_shipper_display()}\n"
-            f"Po/Order: {operation.po_order or '—'}\n"
-            f"Description: {operation.description or '—'}\n"
-            f"Bundles: {operation.bundle_qty or '—'}\n"
-            f"Weight: {operation.weight_lbs or '—'} LBS")
+            f"{_('ID')}: {operation.custom_id}\n"
+            f"{_('Date')}: {operation.date}\n"
+            f"{_('Customer')}: {operation.get_customer_display()}\n"
+            f"{_('Shipper')}: {operation.get_shipper_display()}\n"
+            f"{_('PO / Order')}: {operation.po_order or '—'}\n"
+            f"{_('Description')}: {operation.description or '—'}\n"
+            f"{_('Bundles')}: {operation.bundle_qty or '—'}\n"
+            f"{_('Weight')}: {operation.weight_lbs or '—'} LBS")
 
 
 def _event_email_body(operation, event, extra=None):
@@ -402,7 +440,8 @@ def notify_operation_created(operation, triggered_by=None, message_body='',
     pidió.
     """
     customer = resolve_customer(operation)
-    subject = build_subject(operation)
+    with en_el_idioma_de(customer):
+        subject = build_subject(operation)
 
     email_sent, email_error = False, 'no_email'
     if customer is None:
@@ -415,13 +454,16 @@ def notify_operation_created(operation, triggered_by=None, message_body='',
                          triggered_by=triggered_by)
         email_error = 'preference_off'
     else:
-        html_body = render_to_string('warehouse/email/report_email.html',
-                                     {'operation': operation, 'message_body': message_body})
-        pdf = None
-        try:
-            pdf = generate_pdf_report(operation)
-        except Exception as e:
-            logger.warning('No se pudo generar el PDF de %s: %s', operation.custom_id, e)
+        with en_el_idioma_de(customer):
+            html_body = render_to_string(
+                'warehouse/email/report_email.html',
+                {'operation': operation, 'message_body': message_body})
+            pdf = None
+            try:
+                pdf = generate_pdf_report(operation)
+            except Exception as e:
+                logger.warning('No se pudo generar el PDF de %s: %s',
+                               operation.custom_id, e)
         email_sent, email_error = _deliver_email(
             operation, customer, EVENT_CREATED, email_recipients(customer),
             subject, html_body, pdf=pdf, attach_documents=True,
@@ -431,9 +473,11 @@ def notify_operation_created(operation, triggered_by=None, message_body='',
 
     wants_wa = bool(customer and customer.wants_notification(WHATSAPP, EVENT_CREATED))
     if force_whatsapp or wants_wa:
+        with en_el_idioma_de(customer):
+            cuerpo_wa = _whatsapp_body(operation, EVENT_CREATED)
         _deliver_whatsapp(operation, customer, EVENT_CREATED,
                           whatsapp_number(customer),
-                          _whatsapp_body(operation, EVENT_CREATED),
+                          cuerpo_wa,
                           triggered_by=triggered_by)
 
     return email_sent, email_error
@@ -459,7 +503,10 @@ def notify_goods_released(entry_op, exit_op=None, triggered_by=None,
 
     already = {a.lower() for a in (already_notified or [])}
     extra = {'exit_op': exit_op}
-    subject = f"{customer.name} | {entry_op.tenant.name if entry_op.tenant else 'WMS'} | Mercancia liberada | {entry_op.custom_id}"
+    with en_el_idioma_de(customer):
+        subject = (f"{customer.name} | "
+                   f"{entry_op.tenant.name if entry_op.tenant else 'WMS'} | "
+                   f"{_('Goods released')} | {entry_op.custom_id}")
 
     sent = False
     if customer.wants_notification(EMAIL, EVENT_RELEASED):
@@ -469,15 +516,18 @@ def notify_goods_released(entry_op, exit_op=None, triggered_by=None,
                              subject=subject, detail='already_notified',
                              triggered_by=triggered_by)
         else:
-            sent, _ = _deliver_email(
+            with en_el_idioma_de(customer):
+                cuerpo = _event_email_body(entry_op, EVENT_RELEASED, extra)
+            sent, _error = _deliver_email(
                 entry_op, customer, EVENT_RELEASED, recipients, subject,
-                _event_email_body(entry_op, EVENT_RELEASED, extra),
-                triggered_by=triggered_by)
+                cuerpo, triggered_by=triggered_by)
 
     if customer.wants_notification(WHATSAPP, EVENT_RELEASED):
+        with en_el_idioma_de(customer):
+            cuerpo_wa = _whatsapp_body(entry_op, EVENT_RELEASED)
         _deliver_whatsapp(entry_op, customer, EVENT_RELEASED,
                           whatsapp_number(customer),
-                          _whatsapp_body(entry_op, EVENT_RELEASED),
+                          cuerpo_wa,
                           triggered_by=triggered_by)
     return sent
 
@@ -499,20 +549,25 @@ def notify_documents_added(operation, documents, triggered_by=None):
 
     names = [d.original_name or d.digital_name or '' for d in documents]
     extra = {'documents': names, 'count': len(names)}
-    subject = (f"{customer.name} | {operation.tenant.name if operation.tenant else 'WMS'} | "
-               f"Documentos nuevos | {operation.custom_id}")
+    with en_el_idioma_de(customer):
+        subject = (f"{customer.name} | "
+                   f"{operation.tenant.name if operation.tenant else 'WMS'} | "
+                   f"{_('New documents')} | {operation.custom_id}")
 
     sent = False
     if customer.wants_notification(EMAIL, EVENT_DOCUMENTS):
-        sent, _ = _deliver_email(
+        with en_el_idioma_de(customer):
+            cuerpo = _event_email_body(operation, EVENT_DOCUMENTS, extra)
+        sent, _error = _deliver_email(
             operation, customer, EVENT_DOCUMENTS, email_recipients(customer),
-            subject, _event_email_body(operation, EVENT_DOCUMENTS, extra),
-            triggered_by=triggered_by)
+            subject, cuerpo, triggered_by=triggered_by)
 
     if customer.wants_notification(WHATSAPP, EVENT_DOCUMENTS):
+        with en_el_idioma_de(customer):
+            cuerpo_wa = _whatsapp_body(operation, EVENT_DOCUMENTS)
         _deliver_whatsapp(operation, customer, EVENT_DOCUMENTS,
                           whatsapp_number(customer),
-                          _whatsapp_body(operation, EVENT_DOCUMENTS),
+                          cuerpo_wa,
                           triggered_by=triggered_by)
     return sent
 
@@ -545,9 +600,10 @@ def send_manual_email(operation, recipient, subject, message_body='', triggered_
 @_never_breaks(lambda e: (False, str(e)))
 def send_manual_whatsapp(operation, triggered_by=None):
     customer = resolve_customer(operation)
+    with en_el_idioma_de(customer):
+        cuerpo = _whatsapp_body(operation, EVENT_CREATED)
     return _deliver_whatsapp(operation, customer, EVENT_MANUAL,
-                             whatsapp_number(customer),
-                             _whatsapp_body(operation, EVENT_CREATED),
+                             whatsapp_number(customer), cuerpo,
                              triggered_by=triggered_by)
 
 
@@ -576,8 +632,11 @@ def enviar_factura(factura, triggered_by=None):
         log_notification(None, None, EMAIL, 'INVOICE_SENT', SKIPPED,
                          subject=factura.numero, detail='no_billing_email',
                          triggered_by=triggered_by, tenant=factura.tenant)
-        return False, ('%s no tiene correo de facturación. Se pone al crear la '
-                       'empresa o en su ficha.' % factura.tenant.name)
+        # Este no lo lee el destinatario sino quien pulso el boton, asi que va
+        # en el idioma del usuario y no en el de la empresa facturada.
+        return False, _('%(empresa)s has no billing email. It is set when the '
+                        'company is created, or in its record.') % {
+                            'empresa': factura.tenant.name}
 
     asunto = 'Invoice %s · %s' % (factura.numero, factura.tenant.name)
     cuerpo = render_to_string('warehouse/email/invoice_email.html', {
@@ -596,7 +655,7 @@ def enviar_factura(factura, triggered_by=None):
                          recipient=destino, subject=asunto, detail=str(e),
                          triggered_by=triggered_by, tenant=factura.tenant)
         logger.warning('Fallo el envio de la factura %s: %s', factura.numero, e)
-        return False, 'No se pudo enviar: %s' % e
+        return False, _('Could not send: %(error)s') % {'error': e}
 
     log_notification(None, None, EMAIL, 'INVOICE_SENT', SENT,
                      recipient=destino, subject=asunto,
@@ -691,7 +750,14 @@ def avisar_mensaje_nuevo(conversation, lado, mensaje=None, triggered_by=None):
         quien         = nombre_corto(
             operation.tenant.name if operation.tenant else 'WMS')
 
-    subject = f"Mensaje nuevo | {build_subject(operation)}"
+    # El aviso va en dos direcciones y el idioma es el del que lee: si escribio
+    # el cliente, lo recibe la empresa y manda el idioma de la casa; si escribio
+    # la empresa, lo recibe el cliente y manda el suyo.
+    lee_el_cliente = (lado != LADO_CLIENTE)
+    idioma_aviso = idioma_del_cliente(customer) if lee_el_cliente else ''
+
+    with en_idioma(idioma_aviso):
+        subject = f"{_('New message')} | {build_subject(operation)}"
 
     if not _hay_que_avisar(conversation, campo, ahora):
         log_notification(operation, customer, EMAIL, EVENT_MESSAGE, SKIPPED,
@@ -699,24 +765,25 @@ def avisar_mensaje_nuevo(conversation, lado, mensaje=None, triggered_by=None):
                          detail='aviso_reciente', triggered_by=triggered_by)
         return False, 'aviso_reciente'
 
-    cuerpo = render_to_string('warehouse/email/chat_email.html', {
-        'operation':   operation,
-        'tenant_name': operation.tenant.name if operation.tenant else 'WMS',
-        'de_quien':    quien,
-        'extracto':    (mensaje.body[:AVISO_EXTRACTO] if mensaje else ''),
-        'recortado':   bool(mensaje and len(mensaje.body) > AVISO_EXTRACTO),
-        # La firma del correo lleva las dos: arriba ya se dijo que empresa
-        # escribio, y aqui quien de esa empresa lo hizo.
-        'firma':       ('%s · %s' % (quien, mensaje.author_name)
-                        if mensaje and mensaje.author_name else ''),
-        'digital_url': operation_digital_url(operation, '/dashboard/'),
-        # Un mensaje puede ser solo un archivo, y entonces el extracto va
-        # vacio: sin esto el aviso diria que alguien escribio y no ensenaria
-        # nada. Van los nombres digitales, que son los que ese archivo va a
-        # tener en el expediente y en el ZIP.
-        'adjuntos':    ([a.digital_name or a.original_name
-                         for a in mensaje.adjuntos.all()] if mensaje else []),
-    })
+    with en_idioma(idioma_aviso):
+        cuerpo = render_to_string('warehouse/email/chat_email.html', {
+            'operation':   operation,
+            'tenant_name': operation.tenant.name if operation.tenant else 'WMS',
+            'de_quien':    quien,
+            'extracto':    (mensaje.body[:AVISO_EXTRACTO] if mensaje else ''),
+            'recortado':   bool(mensaje and len(mensaje.body) > AVISO_EXTRACTO),
+            # La firma del correo lleva las dos: arriba ya se dijo que empresa
+            # escribio, y aqui quien de esa empresa lo hizo.
+            'firma':       ('%s · %s' % (quien, mensaje.author_name)
+                            if mensaje and mensaje.author_name else ''),
+            'digital_url': operation_digital_url(operation, '/dashboard/'),
+            # Un mensaje puede ser solo un archivo, y entonces el extracto va
+            # vacio: sin esto el aviso diria que alguien escribio y no ensenaria
+            # nada. Van los nombres digitales, que son los que ese archivo va a
+            # tener en el expediente y en el ZIP.
+            'adjuntos':    ([a.digital_name or a.original_name
+                             for a in mensaje.adjuntos.all()] if mensaje else []),
+        })
 
     enviado, error = _deliver_email(
         operation, customer, EVENT_MESSAGE, destinatarios, subject, cuerpo,
