@@ -1,3 +1,3 @@
-<div class="status-msg status-error">
-  ✗ Failed to send email: {{ error }}. Please check your SMTP settings in settings.py.
+{% load i18n %}<div class="status-msg status-error">
+  ✗ {% blocktrans with detalle=error %}Failed to send email: {{ detalle }}.{% endblocktrans %} {% trans "Please check the mail settings." %}
 </div>

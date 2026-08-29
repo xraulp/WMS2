@@ -604,6 +604,17 @@ class WarehouseOperation(models.Model):
                     return 'Released Goods'
         return 'In Warehouse'
 
+    # El estado se guarda, se compara y se filtra por su texto en ingles: es lo
+    # que viaja en el formulario de busqueda y lo que esperan las vistas. Por
+    # eso traducirlo es cosa de la presentacion y nunca del valor -- quien
+    # filtra estando en espanol sigue mandando 'In Warehouse'.
+    @property
+    def status_label(self):
+        """El estado como se enseña, en el idioma que este puesto."""
+        if self.status == 'Released Goods':
+            return _('Released Goods')
+        return _('In Warehouse')
+
     # ── Permanencia en bodega ────────────────────────────────────────────────
     # La pregunta que nadie podia contestar sin repasar la tabla a ojo: que
     # llevaba demasiado tiempo guardado. Se calcula al mirar, no se guarda: un

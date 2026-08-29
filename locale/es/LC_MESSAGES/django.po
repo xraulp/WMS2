@@ -1307,3 +1307,204 @@ msgstr "Usuario o contraseña incorrectos."
 
 msgid "New Op"
 msgstr "Nueva op."
+
+# Las pantallas de las acciones de una operacion, el hilo, la bitacora de
+# borrados y el PDF del informe.
+
+msgid "Attached Files"
+msgstr "Archivos adjuntos"
+
+msgid "View"
+msgstr "Ver"
+
+msgid "Send Report by Email"
+msgstr "Enviar informe por correo"
+
+msgid "Recipient Email"
+msgstr "Correo del destinatario"
+
+msgid "Subject"
+msgstr "Asunto"
+
+msgid "Important Message"
+msgstr "Mensaje importante"
+
+msgid "Optional urgent note..."
+msgstr "Nota urgente opcional..."
+
+msgid "Send Report + PDF"
+msgstr "Enviar informe + PDF"
+
+msgid "Send WhatsApp Notification"
+msgstr "Enviar aviso por WhatsApp"
+
+msgid "Download PDF"
+msgstr "Descargar PDF"
+
+msgid "Custom ID"
+msgstr "Identificador"
+
+msgid "Created By"
+msgstr "Capturada por"
+
+msgid "Email Sent"
+msgstr "Correo enviado"
+
+msgid "Not sent"
+msgstr "Sin enviar"
+
+msgid "REF AA"
+msgstr "Ref. AA"
+
+msgid "DYS"
+msgstr "DYS"
+
+msgid "PEDIMENTO"
+msgstr "Pedimento"
+
+msgid "PRO"
+msgstr "PRO"
+
+msgid "⚠ YES"
+msgstr "⚠ SÍ"
+
+msgid "%(n)s unread message(s)"
+msgstr "%(n)s mensaje(s) sin leer"
+
+msgid "Conversation of the operation"
+msgstr "Conversación de la operación"
+
+msgid "%(dias)s days in the warehouse; the agreed term is %(plazo)s"
+msgstr "%(dias)s días en bodega; lo acordado son %(plazo)s"
+
+msgid "Released"
+msgstr "Liberada"
+
+msgid "PDF"
+msgstr "PDF"
+
+msgid "Delete"
+msgstr "Borrar"
+
+msgid "Start"
+msgstr "Inicio"
+
+msgid "End"
+msgstr "Fin"
+
+msgid "Nothing waiting for you"
+msgstr "No hay nada esperándote"
+
+msgid "Every conversation is read."
+msgstr "Todas las conversaciones están leídas."
+
+msgid "Show all operations"
+msgstr "Ver todas las operaciones"
+
+msgid "No operations found"
+msgstr "No se encontraron operaciones"
+
+msgid "No results for \"%(q)s\""
+msgstr "Sin resultados para «%(q)s»"
+
+msgid "Register your first operation."
+msgstr "Registra tu primera operación."
+
+msgid "Confirm Delete"
+msgstr "Confirmar el borrado"
+
+msgid "Operation:"
+msgstr "Operación:"
+
+msgid "Type your <strong>deletion password</strong> and the reason. The operation cannot be recovered; what is left of it is the line in the log."
+msgstr "Escribe tu <strong>contraseña de borrado</strong> y el motivo. La operación no se puede recuperar; del borrado queda el renglón en la bitácora."
+
+msgid "Your password"
+msgstr "Tu contraseña"
+
+msgid "Reason for the deletion"
+msgstr "Motivo del borrado"
+
+msgid "Yes, Delete"
+msgstr "Sí, borrar"
+
+msgid "Operation <strong>%(id)s</strong> saved. Report emailed to customer."
+msgstr "Operación <strong>%(id)s</strong> guardada. Informe enviado al cliente por correo."
+
+msgid "Operation <strong>%(id)s</strong> saved."
+msgstr "Operación <strong>%(id)s</strong> guardada."
+
+msgid "Operation <strong>%(id)s</strong> saved successfully."
+msgstr "Operación <strong>%(id)s</strong> guardada correctamente."
+
+msgid "WhatsApp sent."
+msgstr "WhatsApp enviado."
+
+msgid "No customer email on file."
+msgstr "El cliente no tiene correo en su ficha."
+
+msgid "SMTP not configured — email not sent."
+msgstr "SMTP sin configurar: el correo no se envió."
+
+msgid "View in Operations"
+msgstr "Ver en Operaciones"
+
+msgid "Report sent successfully to <strong>%(dest)s</strong>."
+msgstr "Informe enviado correctamente a <strong>%(dest)s</strong>."
+
+msgid "Failed to send email: %(detalle)s."
+msgstr "No se pudo enviar el correo: %(detalle)s."
+
+msgid "Please check the mail settings."
+msgstr "Revisa la configuración del correo."
+
+msgid "Please correct the errors below:"
+msgstr "Corrige los siguientes errores:"
+
+msgid "<strong>%(nombre)s</strong> (%(categoria)s) saved successfully."
+msgstr "<strong>%(nombre)s</strong> (%(categoria)s) guardado correctamente."
+
+msgid "Messages with %(quien)s"
+msgstr "Mensajes con %(quien)s"
+
+msgid "Attach a file"
+msgstr "Adjuntar un archivo"
+
+msgid "What you write here is seen by %(quien)s."
+msgstr "Lo que escribas aquí lo ve %(quien)s."
+
+msgid "What you write here is seen by the customer. Messages cannot be edited or deleted."
+msgstr "Lo que escribas aquí lo ve el cliente. Los mensajes no se editan ni se borran."
+
+msgid "The files you attach stay in the digital file of the operation."
+msgstr "Los archivos que adjuntes quedan en el expediente digital de la operación."
+
+msgid "Operations Report"
+msgstr "Informe de operaciones"
+
+msgid "Generated: %(fecha)s  ·  %(n)s records"
+msgstr "Generado: %(fecha)s  ·  %(n)s registros"
+
+msgid "PO/Order"
+msgstr "OC / Pedido"
+
+msgid "WHS"
+msgstr "BOD"
+
+msgid "RLS"
+msgstr "LIB"
+
+msgid "Attached is the operations report you requested."
+msgstr "Adjunto encontrará el informe de operaciones que solicitó."
+
+msgid "Records included: %(n)s"
+msgstr "Registros incluidos: %(n)s"
+
+msgid "Generated on: %(fecha)s (Central Time)"
+msgstr "Fecha y hora de generación: %(fecha)s (hora del centro)"
+
+msgid "Kind regards,"
+msgstr "Saludos cordiales,"
+
+msgid "Shift + scroll wheel to move across columns"
+msgstr "Mayúsculas + rueda del ratón para recorrer las columnas"

@@ -99,7 +99,7 @@ class BorradoDeOperacionesTests(BaseBorrado):
         respuesta = self._borrar_operacion(motivo='   ')
 
         self.assertTrue(WarehouseOperation.objects.filter(pk=self.op.pk).exists())
-        self.assertContains(respuesta, 'motivo')
+        self.assertContains(respuesta, 'Write the reason for the deletion.')
 
     def test_con_la_contrasena_equivocada_no_borra(self):
         self._borrar_operacion(password='otra')

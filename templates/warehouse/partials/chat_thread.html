@@ -7,7 +7,7 @@ bajo el boton esta para que quien escribe no tenga que acordarse.
 {% endcomment %}
 <div style="border-top:1px solid var(--bdr);padding-top:14px;margin-bottom:14px">
   <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:10px">
-    Mensajes {% if mi_lado == 'CUSTOMER' %}con {{ operation.tenant.name }}{% else %}con {{ operation.get_customer_display }}{% endif %}
+    {% if mi_lado == 'CUSTOMER' %}{% blocktrans with quien=operation.tenant.name %}Messages with {{ quien }}{% endblocktrans %}{% else %}{% blocktrans with quien=operation.get_customer_display %}Messages with {{ quien }}{% endblocktrans %}{% endif %}
   </div>
 
   {% comment %}
@@ -60,18 +60,18 @@ bajo el boton esta para que quien escribe no tenga que acordarse.
              style="display:none"
              onchange="document.getElementById('chat-elegidos').textContent =
                        Array.from(this.files).map(function(f){return f.name;}).join('  ·  ');">
-      <button type="button" class="btn btn-g" title="Adjuntar archivo"
+      <button type="button" class="btn btn-g" title="{% trans "Attach a file" %}"
               onclick="document.getElementById('chat-adjuntos').click()"
               style="padding:0 11px">📎</button>
       <button type="submit" class="btn btn-p">{% trans "Send" %}</button>
     </div>
     <div style="font-size:10px;color:var(--faint);margin-top:5px">
       {% if mi_lado == 'CUSTOMER' %}
-        Lo que escribas lo ve {{ operation.tenant.name }}.
+        {% blocktrans with quien=operation.tenant.name %}What you write here is seen by {{ quien }}.{% endblocktrans %}
       {% else %}
-        Lo que escribas lo ve el cliente. Los mensajes no se editan ni se borran.
+        {% trans "What you write here is seen by the customer. Messages cannot be edited or deleted." %}
       {% endif %}
-      Los archivos que adjuntes quedan en el expediente digital de la operacion.
+      {% trans "The files you attach stay in the digital file of the operation." %}
     </div>
   </form>
   {% endif %}

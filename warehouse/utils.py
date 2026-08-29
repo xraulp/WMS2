@@ -739,16 +739,17 @@ EXIT_COL  = colors.HexColor('#FF0000')  # rojo para EXIT ef4444
 COLOR_DEL_TIPO = {'ENTRY': ENTRY_COL, 'EXIT': EXIT_COL, 'TD': TD_COL, 'RD': RD_COL}
 
 # aqui copeo el nuevo codigo def generate_operations_report_pdf
-def generate_operations_report_pdf(operations, title='Operations Report',
+def generate_operations_report_pdf(operations, title=None,
                                    tenant=None):
     """El tenant decide el logo. Si no se pasa, se toma el de la primera
     operacion de la lista: todas son del mismo, porque las vistas ya filtran
     por empresa antes de llegar aqui."""
     from reportlab.platypus import Image  # importación necesaria para el logo
+    # El titulo se traduce aqui y no en la firma: un valor por defecto se evalua
+    # al importar el modulo, cuando todavia no hay idioma puesto.
+    if title is None:
+        title = _('Operations Report')
     buffer = BytesIO()
-    import sys
-    print("!!! NUEVA FUNCIÓN LANDSCAPE (2026-05-23) ejecutándose", file=sys.stderr)
-
     # Márgenes
     doc = SimpleDocTemplate(buffer,
                             pagesize=landscape(letter),
@@ -814,7 +815,10 @@ def generate_operations_report_pdf(operations, title='Operations Report',
     story.append(Spacer(1, 0.04*inch))
 
     # Subtítulo (con la misma alineación de columnas)
-    subtitle_text = f'Generated: {timezone.now().strftime("%Y-%m-%d %H:%M")}  ·  {len(operations)} records'
+    subtitle_text = _('Generated: %(fecha)s  ·  %(n)s records') % {
+        'fecha': timezone.now().strftime('%Y-%m-%d %H:%M'),
+        'n': len(operations),
+    }
     subtitle_para = Paragraph(subtitle_text, S('sub', fontName='Helvetica', fontSize=9,
                                                textColor=MID, alignment=1))
     if logo:
@@ -839,8 +843,9 @@ def generate_operations_report_pdf(operations, title='Operations Report',
 
     # Cabeceras de la tabla (12 columnas)
     headers = [
-        'Date', 'Custom ID', 'Type','Status', 'Customer', 'Shipper',
-        'Invoice', 'PO/Order', 'PRO', 'Description', 'Bundle Type', 'Bundle Qty', 'Weight LBS'
+        _('Date'), _('Custom ID'), _('Type'), _('Status'), _('Customer'), _('Shipper'),
+        _('Invoice'), _('PO/Order'), _('PRO'), _('Description'), _('Bundle Type'),
+        _('Bundle Qty'), _('Weight LBS'),
     ]
     header_cells = [Paragraph(h, S('h',
                                    fontName='Helvetica-Bold',
@@ -857,10 +862,13 @@ def generate_operations_report_pdf(operations, title='Operations Report',
         # Calcular abreviatura del estado
         if op.operation_type == 'ENTRY':
             status_val = op.status
+            # Abreviaturas de tres letras porque la columna mide media
+            # pulgada. Se traducen: en la tabla no cabe la palabra entera en
+            # ningun idioma, pero 'WHS' no le dice nada a quien lee en espanol.
             if status_val == 'In Warehouse':
-                status_abbr = 'WHS'
+                status_abbr = _('WHS')
             elif status_val == 'Released Goods':
-                status_abbr = 'RLS'
+                status_abbr = _('RLS')
             else:
                 status_abbr = '—'
         else:

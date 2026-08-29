@@ -40,9 +40,9 @@ vista.
     <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)">{% trans "Import Excel:" %}</label>
     <input type="file" name="import_file" accept=".xlsx,.xls" required
            style="font-size:11px;height:26px;border:1px solid var(--bdr);border-radius:6px;padding:2px 6px;background:var(--surface)">
-    <button type="submit" class="btn btn-g btn-sm" style="color:var(--green);border-color:var(--green)">⬆ Import</button>
+    <button type="submit" class="btn btn-g btn-sm" style="color:var(--green);border-color:var(--green)">⬆ {% trans "Import" %}</button>
   </form>
-  <a href="{% url 'operations_layout' %}" class="btn btn-g btn-sm" style="color:var(--accent);border-color:var(--accent)">⬇ Download Layout</a>
+  <a href="{% url 'operations_layout' %}" class="btn btn-g btn-sm" style="color:var(--accent);border-color:var(--accent)">⬇ {% trans "Download Layout" %}</a>
 </div>
 {% endif %}
 
@@ -112,14 +112,14 @@ vista.
             {% endcomment %}
             <button class="btn-action chat-aviso{% if op.tiene_hilo %} visible{% endif %}{% if op.sin_leer %} con-pendientes{% endif %}"
                     data-chat-op="{{ op.pk }}"
-                    title="{% if op.sin_leer %}{{ op.sin_leer }} mensaje(s) sin leer{% else %}Conversacion de la operacion{% endif %}"
+                    title="{% if op.sin_leer %}{% blocktrans with n=op.sin_leer %}{{ n }} unread message(s){% endblocktrans %}{% else %}{% trans "Conversation of the operation" %}{% endif %}"
                     onclick="openModal('{% url 'operation_detail' op.pk %}')">💬<span class="chat-n">{% if op.sin_leer %} {{ op.sin_leer }}{% endif %}</span></button>
           </td>
           <td style="white-space:nowrap;">
             {{ op.date|date:"Y-m-d" }}
             {% if op.alerta_permanencia %}
             <span class="{{ op.alerta_permanencia|clase_de_alerta }}"
-                  title="{{ op.dias_en_bodega }} dias en bodega; lo acordado son {{ op.plazo_de_alerta }}">
+                  title="{% blocktrans with dias=op.dias_en_bodega plazo=op.plazo_de_alerta %}{{ dias }} days in the warehouse; the agreed term is {{ plazo }}{% endblocktrans %}">
               {{ op.dias_en_bodega }}d
             </span>
             {% endif %}
@@ -132,9 +132,9 @@ vista.
           <td style="white-space:nowrap;">
             {% if op.operation_type == 'ENTRY' %}
               {% if op.status == 'Released Goods' %}
-                <span class="badge" style="background:var(--gsoft);color:var(--ok-ink);font-size:9px;">✓ Released</span>
+                <span class="badge" style="background:var(--gsoft);color:var(--ok-ink);font-size:9px;">✓ {% trans "Released" %}</span>
               {% else %}
-                <span class="badge" style="background:var(--asoft);color:var(--accent-ink);font-size:9px;">⬛ In Warehouse</span>
+                <span class="badge" style="background:var(--asoft);color:var(--accent-ink);font-size:9px;">⬛ {% trans "In Warehouse" %}</span>
               {% endif %}
             {% else %}
               <span style="color:var(--faint);font-size:11px;">—</span>
@@ -158,7 +158,7 @@ vista.
           <td style="white-space:nowrap;">{{ op.weight_kgs|default:"—" }}</td>
           <td style="white-space:nowrap;" title="{{ op.description }}">{{ op.description|default:"—"|truncatechars:25 }}</td>
           <td style="white-space:nowrap;" title="{{ op.note }}">{{ op.note|default:"—"|truncatechars:18 }}</td>
-          <td style="white-space:nowrap;">{% if op.damage %}<span class="badge" style="background:var(--rsoft);color:var(--err-ink);">⚠ Yes</span>{% else %}—{% endif %}</td>
+          <td style="white-space:nowrap;">{% if op.damage %}<span class="badge" style="background:var(--rsoft);color:var(--err-ink);">⚠ {% trans "Yes" %}</span>{% else %}—{% endif %}</td>
           <td style="white-space:nowrap;">{{ op.ref_aa|default:"—" }}</td>
           <td style="white-space:nowrap;">{{ op.ref_dys|default:"—" }}</td>
           <td style="white-space:nowrap;">{{ op.pedimento|default:"—" }}</td>
@@ -166,12 +166,12 @@ vista.
           <td style="white-space:nowrap;">{{ op.created_by.username|default:"—" }}</td>
           <td style="white-space:nowrap;">
             <div style="display:flex; gap:4px; align-items:center;">
-              <button class="btn-action" onclick="openModal('{% url 'operation_detail' op.pk %}')">View</button>
+              <button class="btn-action" onclick="openModal('{% url 'operation_detail' op.pk %}')">{% trans "View" %}</button>
               <button class="btn-action" onclick="openEditModal({{ op.pk }})">{% trans "Edit" %}</button>
-              <a class="btn-action" href="{% url 'operation_pdf' op.pk %}" target="_blank">PDF</a>
-              <button class="btn-action" onclick="openDigitalWithId('{{ op.custom_id }}')">📱 Digital</button> <!-- agregado 061026-->
+              <a class="btn-action" href="{% url 'operation_pdf' op.pk %}" target="_blank">{% trans "PDF" %}</a>
+              <button class="btn-action" onclick="openDigitalWithId('{{ op.custom_id }}')">📱 {% trans "Digital" %}</button> <!-- agregado 061026-->
               {% if profile and not profile.is_customer %}
-              <button class="btn-action btn-action-danger" onclick="confirmDelete({{ op.pk }}, '{{ op.custom_id }}')">Delete</button>
+              <button class="btn-action btn-action-danger" onclick="confirmDelete({{ op.pk }}, '{{ op.custom_id }}')">{% trans "Delete" %}</button>
               {% endif %}
             </div>
           </td>
@@ -197,9 +197,9 @@ vista.
   como se sabe sin probar que ya no hay mas tabla de ese lado.
   {% endcomment %}
   <div class="tabla-nav-barra">
-    <button type="button" class="nav-h" data-ir="inicio" title="{% trans "First column" %}">&#9198; Start</button>
-    <span class="tabla-nav-pista">Shift + scroll wheel to move across columns</span>
-    <button type="button" class="nav-h" data-ir="final" title="{% trans "Last column" %}">End &#9197;</button>
+    <button type="button" class="nav-h" data-ir="inicio" title="{% trans "First column" %}">&#9198; {% trans "Start" %}</button>
+    <span class="tabla-nav-pista">{% trans "Shift + scroll wheel to move across columns" %}</span>
+    <button type="button" class="nav-h" data-ir="final" title="{% trans "Last column" %}">{% trans "End" %} &#9197;</button>
   </div>
 </div>
 {% include 'warehouse/partials/tabla_navegable.html' %}
@@ -244,11 +244,11 @@ vista.
 {% else %}
 <div class="es">
   {% if solo_sin_leer %}
-  <h3>Nothing waiting for you</h3>
-  <p>Every conversation is read. <button onclick="verTodasLasOperaciones()" class="btn btn-g btn-sm">Show all operations</button></p>
+  <h3>{% trans "Nothing waiting for you" %}</h3>
+  <p>{% trans "Every conversation is read." %} <button onclick="verTodasLasOperaciones()" class="btn btn-g btn-sm">{% trans "Show all operations" %}</button></p>
   {% else %}
-  <h3>No operations found</h3>
-  <p>{% if search_query %}No results for "{{ search_query }}"{% else %}Register your first operation.{% endif %}</p>
+  <h3>{% trans "No operations found" %}</h3>
+  <p>{% if search_query %}{% blocktrans with q=search_query %}No results for "{{ q }}"{% endblocktrans %}{% else %}{% trans "Register your first operation." %}{% endif %}</p>
   {% endif %}
 </div>
 {% endif %}
@@ -257,26 +257,25 @@ vista.
 {% if profile and not profile.is_customer %}
 <div id="del-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:1000; align-items:center; justify-content:center;">
   <div style="background:var(--surface); border-radius:12px; padding:24px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,.3);">
-    <div style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:700; margin-bottom:10px; color:var(--ink);">🗑 Confirm Delete</div>
-    <p style="font-size:14px; color:var(--soft); margin-bottom:8px;">Operation: <strong id="del-id" style="color:var(--red);"></strong></p>
+    <div style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:700; margin-bottom:10px; color:var(--ink);">🗑 {% trans "Confirm Delete" %}</div>
+    <p style="font-size:14px; color:var(--soft); margin-bottom:8px;">{% trans "Operation:" %} <strong id="del-id" style="color:var(--red);"></strong></p>
     <p style="font-size:12px; color:var(--faint); margin-bottom:16px;">
-      Escribe tu <strong>contraseña de borrado</strong> y el motivo. La operación no se
-      puede recuperar; del borrado queda el renglón en la bitácora.
+      {% blocktrans %}Type your <strong>deletion password</strong> and the reason. The operation cannot be recovered; what is left of it is the line in the log.{% endblocktrans %}
     </p>
     <form id="del-form" method="POST" hx-post="" hx-target="#ops-table" hx-swap="innerHTML" hx-on::after-request="closeDel()">
       {% csrf_token %}
       <div style="position:relative; margin-bottom:16px;">
         <input type="password" name="confirm_password" id="del-pwd"
                style="width:100%; padding:10px 40px 10px 12px; border:1px solid var(--bdr-fuerte); border-radius:8px; font-size:14px;"
-               placeholder="Your password" required autocomplete="off">
+               placeholder="{% trans "Your password" %}" required autocomplete="off">
         <button type="button" onclick="toggleDelPw()"
                 style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:16px;">👁</button>
       </div>
       <input type="text" name="delete_reason" id="del-reason"
              style="width:100%; padding:10px 12px; border:1px solid var(--bdr-fuerte); border-radius:8px; font-size:14px; margin-bottom:16px;"
-             placeholder="Motivo del borrado" required autocomplete="off" maxlength="200">
+             placeholder="{% trans "Reason for the deletion" %}" required autocomplete="off" maxlength="200">
       <div style="display:flex; gap:10px;">
-        <button type="submit" style="flex:1; padding:10px; background:var(--red); color:var(--on-accent); border:none; border-radius:8px; font-weight:600; cursor:pointer;">Yes, Delete</button>
+        <button type="submit" style="flex:1; padding:10px; background:var(--red); color:var(--on-accent); border:none; border-radius:8px; font-weight:600; cursor:pointer;">{% trans "Yes, Delete" %}</button>
         <button type="button" onclick="closeDel()" style="flex:1; padding:10px; background:var(--bdr); border:none; border-radius:8px; cursor:pointer;">{% trans "Cancel" %}</button>
       </div>
     </form>

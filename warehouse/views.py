@@ -16,6 +16,7 @@ from io import BytesIO
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 import calendar
+import contextlib
 from django.http import Http404
 from django.utils.text import slugify
 import os, json, zipfile, re, logging
@@ -37,9 +38,6 @@ logger = logging.getLogger(__name__)
 # Plazo que propone el formulario de facturacion. Es solo la sugerencia de
 # la fecha que aparece escrita: quien emite puede cambiarla.
 DIAS_DE_VENCIMIENTO = 15
-
-now_local = timezone.localtime(timezone.now())
-generated_at = now_local.strftime('%Y-%m-%d %H:%M')
 
 ##### 072526 12:33 Función auxiliar para obtener el tenant
 def get_tenant_or_404(request):
@@ -537,28 +535,32 @@ def operation_detail(request, pk):
     if not customer_can_access_op(request.user, op):
         return HttpResponse(_('Permission denied.'), status=403)
 
+    # Los rotulos del detalle se arman aqui y no en la plantilla, asi que aqui
+    # es donde se traducen. El valor de al lado va como esta: un numero de
+    # factura o un nombre de cliente no se traducen, y el estado trae su propia
+    # etiqueta -- `status_label` -- porque el valor crudo es el que se filtra.
     fields = [
-        ('Date',             op.date.strftime('%Y-%m-%d')),
-        ('Type',             op.get_operation_type_display()),
-        ('Custom ID',        op.custom_id),
-        ('Status',           op.status),
-        ('Customer',         op.get_customer_display()),
-        ('Shipper',          op.get_shipper_display()),
-        ('Entries Disp.',    op.entry_dispatched),
-        ('Invoice',          op.invoice), ('PO / Order', op.po_order),
-        ('Seal',             op.seal),    ('Carrier',    op.get_carrier_display()),
-        ('PRO',              op.pro),     ('Trailer',    op.trailer),
-        ('Bundle Type',      op.get_bundle_type_display_name()),
-        ('Bundle Qty',       op.bundle_qty),
-        ('Weight LBS',       op.weight_lbs), ('Weight KGS', op.weight_kgs),
-        ('Description',      op.description), ('Note', op.note),
-        ('Customer Notes',   op.customer_notes),
-        ('Damage',           '⚠ YES' if op.damage else 'No'),
-        ('Email Sent',       op.email_sent_at.strftime('%Y-%m-%d') if op.email_sent else 'Not sent'),
-        ('Created By',       op.created_by.username if op.created_by else '—'),
-        ('REF AA',           op.ref_aa or '—'),
-        ('DYS',              op.ref_dys or '—'),
-        ('PEDIMENTO',        op.pedimento or '—'),
+        (_('Date'),             op.date.strftime('%Y-%m-%d')),
+        (_('Type'),             op.get_operation_type_display()),
+        (_('Custom ID'),        op.custom_id),
+        (_('Status'),           op.status_label),
+        (_('Customer'),         op.get_customer_display()),
+        (_('Shipper'),          op.get_shipper_display()),
+        (_('Entries Disp.'),    op.entry_dispatched),
+        (_('Invoice'),          op.invoice), (_('PO / Order'), op.po_order),
+        (_('Seal'),             op.seal),    (_('Carrier'),    op.get_carrier_display()),
+        (_('PRO'),              op.pro),     (_('Trailer'),    op.trailer),
+        (_('Bundle Type'),      op.get_bundle_type_display_name()),
+        (_('Bundle Qty'),       op.bundle_qty),
+        (_('Weight LBS'),       op.weight_lbs), (_('Weight KGS'), op.weight_kgs),
+        (_('Description'),      op.description), (_('Note'), op.note),
+        (_('Customer Notes'),   op.customer_notes),
+        (_('Damage'),           _('⚠ YES') if op.damage else _('No')),
+        (_('Email Sent'),       op.email_sent_at.strftime('%Y-%m-%d') if op.email_sent else _('Not sent')),
+        (_('Created By'),       op.created_by.username if op.created_by else '—'),
+        (_('REF AA'),           op.ref_aa or '—'),
+        (_('DYS'),              op.ref_dys or '—'),
+        (_('PEDIMENTO'),        op.pedimento or '—'),
     ]
     return render(request, 'warehouse/partials/operation_detail.html', {
         'operation': op, 'fields': fields,
@@ -1969,7 +1971,7 @@ def report_generator_pdf(request):
     ops = WarehouseOperation.objects.filter(pk__in=[i for i in ops_ids if i], tenant=tenant).select_related(
         'customer','shipper','carrier','bundle_type', 'created_by')
     ops = customer_ops_filter(request.user, ops)
-    title   = request.GET.get('title', 'Operations Report')
+    title   = request.GET.get('title', '').strip() or None
     pdf     = generate_operations_report_pdf(list(ops), title)
     resp    = HttpResponse(pdf, content_type='application/pdf')
     resp['Content-Disposition'] = f'inline; filename="report.pdf"'
@@ -1982,7 +1984,7 @@ def report_generator_email(request):
     from .utils import generate_operations_report_pdf
     tenant           = get_tenant_or_404(request)
     ids_raw          = request.POST.get('ids', '').strip().rstrip(',')
-    title            = request.POST.get('title', 'Operations Report')
+    title            = request.POST.get('title', '').strip()
     extra_emails_str = request.POST.get('extra_emails', '').strip()
     customer_id      = request.POST.get('customer_id', '').strip()
     all_customers    = request.POST.get('all_customers', '') == '1'
@@ -2029,15 +2031,27 @@ def report_generator_email(request):
     if not recipients:
         return HttpResponse(msg_error(_('There are no recipients. Type an address in the field above.')))
 
+    # El documento y el correo que lo lleva se escriben en el idioma de quien
+    # los recibe. Si el informe es de un solo cliente, es el suyo; si abarca
+    # varios, no hay un idioma que mande y se queda el de quien lo envia.
+    destinatario = None
+    if not all_customers and customer_id and customer_id.isdigit():
+        destinatario = Catalog.objects.filter(pk=int(customer_id), tenant=tenant).first()
+    idioma = (notifications.en_el_idioma_de(destinatario) if destinatario
+              else contextlib.nullcontext())
+
     try:
-        pdf = generate_operations_report_pdf(ops_list, title)
+        generado = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M')
+        with idioma:
+            titulo = title or _('Operations Report')
+            pdf = generate_operations_report_pdf(ops_list, titulo)
+            cuerpo = _('Attached is the operations report you requested.') + '\n\n'
+            cuerpo += _('Records included: %(n)s') % {'n': len(ops_list)} + '\n'
+            cuerpo += _('Generated on: %(fecha)s (Central Time)') % {'fecha': generado} + '\n\n'
+            cuerpo += _('Kind regards,') + '\n' + tenant.name
         email = EmailMessage(
-            subject=title,
-            body=f'Adjunto encontrará el reporte de operaciones solicitado.\n\n'
-                 f'Registros incluidos: {len(ops_list)}\n'
-                 f'Fecha y hora de generación: {generated_at} (Hora Central)\n\n'
-                 f'Saludos cordiales,\n'
-                 f'{tenant.name}',
+            subject=titulo,
+            body=cuerpo,
             to=recipients,
             cc=_get_cc_emails(tenant),
         )

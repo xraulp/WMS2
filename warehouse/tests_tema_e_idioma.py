@@ -156,3 +156,71 @@ class IdiomaEnElLoginTests(BaseDePreferencias):
         respuesta = self.client.get('/dashboard/')
 
         self.assertContains(respuesta, '<html lang="es"')
+
+
+class PantallasDeAccionesTests(TestCase):
+    """
+    Las pantallas que se abren desde Operations: el detalle de una operacion,
+    su tabla y los avisos que devuelven las acciones.
+
+    Estaban escritas a mano en ingles, asi que se quedaban en ingles con la
+    pantalla de alrededor ya traducida. Se comprueba con el idioma puesto
+    porque el defecto solo se ve asi: con el idioma de la casa, un texto sin
+    traducir y uno traducido se leen igual.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import date
+        from .models import Catalog, WarehouseOperation
+
+        cls.tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        cls.usuario = User.objects.create_user('capturista', password='x')
+        cls.perfil = UserProfile.objects.create(
+            user=cls.usuario, tenant=cls.tenant, role='manager')
+        cls.cliente = Catalog.objects.create(
+            tenant=cls.tenant, category='CUSTOMER', name='Cliente del Norte')
+        cls.op = WarehouseOperation.objects.create(
+            tenant=cls.tenant, operation_type='ENTRY', date=date.today(),
+            custom_id='ED260819-0001', customer=cls.cliente,
+            description='Mercancia de prueba', created_by=cls.usuario)
+
+    def setUp(self):
+        self.client.force_login(self.usuario)
+        self.client.post('/preferencias/idioma/', {'idioma': 'es'})
+
+    def test_el_detalle_se_lee_en_el_idioma_del_usuario(self):
+        respuesta = self.client.get('/operations/%s/' % self.op.pk)
+
+        # Un rotulo que arma la vista y uno que vive en la plantilla: los dos
+        # estaban en ingles y cada uno se arregla por su lado.
+        self.assertContains(respuesta, 'Capturada por')
+        self.assertContains(respuesta, 'Descargar PDF')
+
+    def test_el_estado_se_ensena_traducido_sin_cambiar_su_valor(self):
+        """Lo que se filtra sigue siendo el texto en ingles: el formulario de
+        busqueda manda 'In Warehouse' se lea como se lea la pantalla."""
+        self.assertEqual(self.op.status, 'In Warehouse')
+
+        respuesta = self.client.get('/operations/%s/' % self.op.pk)
+
+        self.assertContains(respuesta, 'En almacén')
+
+    def test_los_botones_de_la_tabla_se_traducen(self):
+        respuesta = self.client.get('/operations/search/')
+
+        self.assertContains(respuesta, '>Ver<')
+        self.assertContains(respuesta, '>Borrar<')
+
+    def test_el_pdf_del_informe_va_en_el_idioma_de_quien_lo_pide(self):
+        """A diferencia del PDF de una operacion, que va en el idioma del
+        cliente, este lo descarga el operador y puede abarcar varios clientes:
+        no hay una ficha de la que sacar el idioma."""
+        respuesta = self.client.get('/reports/pdf/', {'ids': str(self.op.pk)})
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta['Content-Type'], 'application/pdf')
+        # El texto de un PDF va comprimido; lo que se comprueba es que se
+        # genero con el idioma puesto y no revento al traducir.
+        self.assertGreater(len(respuesta.content), 500)
