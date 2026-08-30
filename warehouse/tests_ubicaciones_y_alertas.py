@@ -628,3 +628,69 @@ class TiposDeOperacionEnElMovilTests(BaseConPosiciones):
 
         self.assertEqual(op.operation_type, 'TD')
         self.assertTrue(op.custom_id.startswith('TD'))
+
+
+class ElContadorDeVencidasSePoneAlDiaTests(BaseConPosiciones):
+    """
+    Cambiar el plazo de un cliente guardaba bien el dato y dejaba el contador
+    diciendo lo de antes: se pinta al cargar el tablero y no lo refrescaba
+    nadie, asi que desde fuera parecia que el cambio no habia servido de nada.
+
+    Lo mismo pasaba al capturar la salida que libera una entrada, que es lo que
+    mas veces al dia mueve esta cuenta.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.cliente = Catalog.objects.create(
+            tenant=cls.tenant, category='CUSTOMER', name='Cliente con plazo')
+
+    def setUp(self):
+        self.client.force_login(self.jefa)
+        self.vieja = WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='ENTRY', custom_id='ED-VIEJA-1',
+            customer=self.cliente, description='x',
+            date=timezone.now().date() - timedelta(days=20))
+
+    def _contador(self):
+        return self.client.get('/operations/aging-count/').json()
+
+    def test_el_contador_se_puede_consultar_sin_recargar(self):
+        self.assertEqual(self._contador()['total'], 1)
+
+    def test_ampliar_el_plazo_apaga_la_alerta(self):
+        """Veinte dias en bodega dejan de ser tarde si el cliente admite
+        treinta."""
+        self.cliente.alert_days = 30
+        self.cliente.save(update_fields=['alert_days'])
+
+        self.assertEqual(self._contador()['total'], 0)
+
+    def test_guardar_el_plazo_avisa_a_la_pantalla(self):
+        respuesta = self.client.post('/catalog/%s/edit/' % self.cliente.pk, {
+            'name': self.cliente.name, 'alert_days': '30',
+        })
+
+        self.assertEqual(respuesta.headers.get('HX-Trigger'), 'alertas-cambiadas')
+
+    def test_guardar_la_ficha_sin_tocar_el_plazo_no_avisa(self):
+        """El aviso repinta la tabla de operaciones; mandarlo cuando nada
+        cambio seria trabajo para nada en cada guardado."""
+        respuesta = self.client.post('/catalog/%s/edit/' % self.cliente.pk, {
+            'name': 'Otro nombre',
+        })
+
+        self.assertIsNone(respuesta.headers.get('HX-Trigger'))
+
+    def test_la_salida_que_libera_una_entrada_tambien_avisa(self):
+        respuesta = self.client.post('/operations/create/', {
+            'date': str(timezone.now().date()), 'operation_type': 'EXIT',
+            'customer_id': self.cliente.pk, 'shipper_text': 'Ship',
+            'carrier_text': 'Carrier', 'bundle_type_text': 'PALLET',
+            'bundle_qty': '1', 'weight_lbs': '10', 'description': 'x',
+            'entry_dispatched': self.vieja.custom_id,
+        })
+
+        self.assertEqual(respuesta.headers.get('HX-Trigger'), 'alertas-cambiadas')
+        self.assertEqual(self._contador()['total'], 0)

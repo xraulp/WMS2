@@ -1377,6 +1377,58 @@ async function refrescarAvisosDeChat(){
 // ambar, y treinta segundos de retraso en eso no le cuestan nada a nadie.
 setInterval(refrescarAvisosDeChat, 30000);
 
+// El contador de vencidas, al dia sin recargar la pantalla.
+//
+// Se pintaba una vez al cargar el tablero y no lo refrescaba nadie -- el <span>
+// hasta tenia su id puesto --, asi que cambiar el plazo de un cliente guardaba
+// bien el dato y dejaba el aviso diciendo lo de antes. Desde fuera eso se lee
+// como que el cambio no sirvio de nada.
+//
+// No va en el latido de los treinta segundos a proposito: esto recorre las
+// entradas sin liberar de la empresa, y la cuenta solo cambia cuando alguien
+// captura, libera o toca un plazo. El servidor avisa de esas tres con la
+// cabecera `HX-Trigger: alertas-cambiadas`.
+async function refrescarVencidas(){
+  const boton = document.getElementById('tab-vencidas');
+  if (!boton) return;
+  try {
+    const resp = await fetch('{% url "resumen_de_vencidas" %}');
+    if (!resp.ok) return;
+    const datos = await resp.json();
+    const total = datos.total || 0;
+    document.getElementById('vencidas-n').textContent = total;
+    boton.classList.toggle('vacio', total === 0);
+    // Lo que va entre parentesis solo existe cuando hay urgentes, asi que se
+    // pinta y se quita aqui en vez de dejar un hueco vacio en la barra.
+    let extra = document.getElementById('vencidas-urgentes');
+    if (datos.urgentes) {
+      if (!extra) {
+        extra = document.createElement('span');
+        extra.id = 'vencidas-urgentes';
+        extra.style.fontWeight = '400';
+        boton.appendChild(extra);
+      }
+      extra.textContent = ' (' + datos.urgentes + ' {% trans "urgent" %})';
+    } else if (extra) {
+      extra.remove();
+    }
+  } catch (e) { /* si falla, el contador se queda como estaba */ }
+}
+
+// La tabla de operaciones lleva la marca de dias en cada fila, asi que un plazo
+// nuevo tambien la cambia. Se repinta respetando los filtros puestos: recargarla
+// sin ellos ensenaria otra tabla y pareceria que el guardado hizo algo mas.
+document.body.addEventListener('alertas-cambiadas', function(){
+  refrescarVencidas();
+  // Se pide desde el propio buscador para que htmx resuelva su `hx-include` y
+  // viajen los filtros que hay puestos, igual que cuando alguien teclea en el.
+  const buscador = document.querySelector('#ops-filtros [name="q"]');
+  if (buscador && document.getElementById('ops-table') && typeof htmx !== 'undefined') {
+    htmx.ajax('GET', '{% url "operations_search" %}',
+              {source: buscador, target: '#ops-table', swap: 'innerHTML'});
+  }
+});
+
 // Nueva versión de initActiveTab que respeta la URL//////// 061526
 // function initActiveTab() {
 //     // Si la URL tiene 'tab=digital', no hacemos nada (se fuerza después)

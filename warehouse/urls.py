@@ -27,6 +27,7 @@ urlpatterns = [
     # refresco del polling; el POST escribe.
     # Los numeros de los avisos de la tabla, para no recargarla entera.
     path('operations/chat-badges/', views.chat_badges, name='chat_badges'),
+    path('operations/aging-count/', views.resumen_de_vencidas, name='resumen_de_vencidas'),
     # La tabla acotada a lo que espera respuesta, que es a donde lleva el
     # contador global de mensajes sin leer.
     path('operations/unread/', views.operations_unread, name='operations_unread'),

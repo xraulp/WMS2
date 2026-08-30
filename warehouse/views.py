@@ -519,11 +519,18 @@ def operation_create(request):
     ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
         'customer','shipper','carrier','bundle_type')
     ops = customer_ops_filter(request.user, ops)[:200]
-    return render(request, 'warehouse/partials/operation_success.html', {
+    respuesta = render(request, 'warehouse/partials/operation_success.html', {
         'operation': op, 'operations': ops,
         'email_sent': email_sent, 'email_error': email_error,
         'has_whatsapp': bool(notifications.whatsapp_number(notifications.resolve_customer(op))),
     })
+    # Una entrada nueva puede nacer ya vencida --se captura con fecha de hace un
+    # mes-- y una salida libera las entradas que despacha. Las dos mueven el
+    # contador de vencidas, que se pinta una vez al cargar el tablero: sin este
+    # aviso sigue diciendo lo de antes hasta que alguien recargue.
+    if op.operation_type == 'ENTRY' or released_entries:
+        respuesta['HX-Trigger'] = 'alertas-cambiadas'
+    return respuesta
 
 
 # ── OPERATION DETAIL / DELETE / PDF / LABEL ───────────────────────────────────
@@ -2209,6 +2216,7 @@ def catalog_edit(request, pk):
         # Las preferencias de aviso solo existen para los clientes; para el resto
         # de categorías el formulario ni siquiera pinta los checkboxes, así que
         # leerlos ahí apagaría valores que nadie quiso cambiar.
+        cambio_el_plazo = False
         if entry.category == 'CUSTOMER':
             entry.notify_email        = p.get('notify_email') == 'on'
             entry.notify_whatsapp     = p.get('notify_whatsapp') == 'on'
@@ -2219,17 +2227,26 @@ def catalog_edit(request, pk):
             # que se guarda NULL y no un cero: un cero avisaria de todo desde el
             # primer dia.
             dias = p.get('alert_days', '').strip()
+            plazo_anterior = entry.alert_days
             entry.alert_days = int(dias) if dias.isdigit() and int(dias) > 0 else None
+            # El plazo decide que entradas estan vencidas, y ese contador se
+            # pinta una vez al cargar el tablero. Sin avisar a la pantalla, el
+            # dato se guarda bien y el aviso sigue diciendo lo de antes, que es
+            # exactamente lo que parece un cambio que no sirvio de nada.
+            cambio_el_plazo = plazo_anterior != entry.alert_days
             # El idioma de sus correos y documentos. Uno que no se ofrece se
             # descarta: el valor viaja en el formulario.
             idioma = p.get('language', '').strip()
             if idioma in dict(Catalog.LANGUAGE_CHOICES):
                 entry.language = idioma
         entry.save()
-        return render(request, 'warehouse/partials/catalog_table.html',
-                      _catalog_table_context(request, tenant,
-                                             catalog_scope_of(entry.category),
-                                             edit_success=f'{entry.name} updated.'))
+        respuesta = render(request, 'warehouse/partials/catalog_table.html',
+                           _catalog_table_context(request, tenant,
+                                                  catalog_scope_of(entry.category),
+                                                  edit_success=f'{entry.name} updated.'))
+        if cambio_el_plazo:
+            respuesta['HX-Trigger'] = 'alertas-cambiadas'
+        return respuesta
     return render(request, 'warehouse/partials/catalog_edit_form.html', {'entry': entry})
 
 
@@ -4037,6 +4054,26 @@ def _firmar(organizacion, autor):
     """La empresa primero y la persona despues, que es el orden en que se leen."""
     partes = [p for p in (organizacion, autor) if p]
     return ' · '.join(partes) or '—'
+
+
+@login_required
+@require_GET
+def resumen_de_vencidas(request):
+    """
+    Cuantas entradas se pasaron de su plazo, para poner el contador al dia sin
+    recargar la pantalla.
+
+    El numero se calculaba solo al cargar el tablero y no lo refrescaba nadie,
+    asi que cambiar el plazo de un cliente guardaba bien el dato y dejaba el
+    contador diciendo lo de antes -- y lo mismo pasaba al capturar la salida que
+    libera una entrada, que es lo que mas veces al dia cambia esta cuenta.
+
+    No va en el latido de los avisos de chat a proposito: esto recorre las
+    entradas sin liberar de la empresa, asi que se pregunta cuando algo pudo
+    cambiarlo y no cada treinta segundos.
+    """
+    tenant = get_tenant_or_404(request)
+    return JsonResponse(resumen_de_alertas(request.user, tenant))
 
 
 @login_required
