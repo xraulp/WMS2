@@ -887,12 +887,29 @@ function initActiveTab() {
         return;
     }
 
-    // Si no, usamos la pestaña por defecto según rol
+    // La pestaña por defecto según rol.
     {% if profile|can_see_tab:'form' %}
-        showTab('form');
+        let pestana = 'form';
     {% else %}
-        showTab('database');
+        let pestana = 'database';
     {% endif %}
+
+    // Pero si esta pantalla se acaba de recargar, se vuelve a donde estaba
+    // quien la recargó. Cambiar el idioma vuelve a pedir la pantalla -- la
+    // traducción la hace el servidor -- y sin esto te devolvía a capturar
+    // aunque estuvieras revisando la tabla; lo mismo hacía cualquier F5.
+    //
+    // `sessionStorage` y no `localStorage` a propósito: se acuerda mientras
+    // esta pestaña del navegador siga abierta, y al entrar mañana se arranca
+    // donde toca y no en la pantalla que quedó abierta ayer. Es además lo que
+    // evita que una computadora compartida abra a alguien en la pestaña del
+    // turno anterior.
+    const guardada = sessionStorage.getItem('activeTab');
+    // Una pestaña que este usuario no puede ver -- porque cambió de rol -- no
+    // se restaura: su botón no existe en la pantalla que le llegó.
+    if (guardada && document.getElementById('tab-' + guardada)) pestana = guardada;
+
+    showTab(pestana);
 }
 
 // function checkUrlParams() {
@@ -952,7 +969,7 @@ function showTab(t) {
     if (dq) dq.value = '';
   }
   if (t === 'digital') cargarPanelDigital();
-  localStorage.setItem('activeTab', t);
+  sessionStorage.setItem('activeTab', t);
 }
 
 // A donde lleva el contador global: la base de datos con la tabla acotada a las

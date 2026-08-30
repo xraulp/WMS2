@@ -352,3 +352,75 @@ class GestionYClientesTests(TestCase):
 
         self.assertContains(respuesta, 'sin acceso')
         self.assertNotContains(respuesta, '>no access<')
+
+
+class CambiarElIdiomaSinPerderElSitioTests(TestCase):
+    """
+    Cambiar el idioma vuelve a pedir la pantalla, porque la traduccion la hace
+    el servidor. Eso te devolvia a capturar aunque estuvieras revisando la
+    tabla, y se llevaba por delante lo que hubiera en el formulario.
+
+    Lo que se comprueba aqui es que la pantalla trae con que recuperar el sitio
+    y con que avisar. El comportamiento en si es del navegador.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        cls.usuario = User.objects.create_user('capturista', password='x')
+        UserProfile.objects.create(
+            user=cls.usuario, tenant=cls.tenant, role='manager')
+
+    def setUp(self):
+        self.client.force_login(self.usuario)
+
+    def test_la_pestana_se_guarda_y_se_vuelve_a_leer(self):
+        """Se guardaba desde hace tiempo y no la leia nadie: la mitad del
+        trabajo estaba hecha y no servia para nada."""
+        respuesta = self.client.get('/dashboard/')
+
+        self.assertContains(respuesta, "sessionStorage.setItem('activeTab'")
+        self.assertContains(respuesta, "sessionStorage.getItem('activeTab')")
+
+    def test_la_pestana_no_sobrevive_al_cierre_del_navegador(self):
+        """`sessionStorage` y no `localStorage`: manana se arranca capturando,
+        no en la pantalla que quedo abierta ayer."""
+        respuesta = self.client.get('/dashboard/')
+
+        self.assertNotContains(respuesta, "localStorage.setItem('activeTab'")
+
+    def test_el_movil_tambien_recupera_su_pestana(self):
+        respuesta = self.client.get('/mobile/')
+
+        self.assertContains(respuesta, "sessionStorage.getItem('mobileActiveTab')")
+
+    def test_se_avisa_antes_de_perder_lo_capturado(self):
+        respuesta = self.client.get('/dashboard/')
+
+        self.assertContains(respuesta, 'hayCapturaAMedias')
+        self.assertContains(respuesta, 'what you have captured is lost')
+
+    def test_el_aviso_no_salta_por_lo_que_rellena_la_propia_pantalla(self):
+        """
+        La fecha de hoy la pone un `load` de la pantalla, asi que la foto del
+        formulario tiene que tomarse despues de todos ellos -- de ahi el
+        `setTimeout` -- y solo cuenta como capturado lo que hizo la persona,
+        que es lo que dice `isTrusted`.
+
+        Comparando contra el HTML, el formulario nacia modificado y el aviso
+        saltaba siempre; un confirm que aparece cuando no toca bloquea la
+        pantalla entera hasta que alguien lo cierra a mano.
+        """
+        respuesta = self.client.get('/dashboard/')
+
+        self.assertContains(respuesta, 'CAPTURA_TOCADA')
+        self.assertContains(respuesta, 'e.isTrusted')
+        self.assertContains(respuesta, 'setTimeout(function () {')
+
+    def test_el_aviso_tambien_se_traduce(self):
+        self.client.post('/preferencias/idioma/', {'idioma': 'es'})
+
+        respuesta = self.client.get('/dashboard/')
+
+        self.assertContains(respuesta, 'se pierde lo que llevas capturado')

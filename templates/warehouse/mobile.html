@@ -565,8 +565,9 @@ fetch('/debug/catalog/').then(r=>r.json()).then(d=>{
 const MOB_PANELS = ['new','database','catalog','digital','reports','deletions'];
 
 function mobShowTab(t) {
-  // Guardar la pestaña activa en localStorage
-  localStorage.setItem('mobileActiveTab', t);
+  // La pestaña activa, para volver a ella si la pantalla se recarga. Ver
+  // `initMobileTab`: es sessionStorage y no localStorage a propósito.
+  sessionStorage.setItem('mobileActiveTab', t);
   console.log('📱 Pestaña cambiada a:', t);
 
   MOB_PANELS.forEach(n => {
@@ -607,12 +608,19 @@ function initMobileTab() {
         return;
     }
 
-    // Si no viene de QR, usar la pestaña por defecto según rol
+    // Si no viene de QR, la pestaña por defecto según rol
     {% if profile|can_see_tab:'form' %}
         let savedTab = 'new';
     {% else %}
         let savedTab = 'database';
     {% endif %}
+
+    // Y si la pantalla se acaba de recargar -- al cambiar el idioma, o con un
+    // F5 --, se vuelve a donde estaba quien la recargó. `sessionStorage` se
+    // acuerda mientras esta pestaña del navegador siga abierta y se olvida
+    // despues, que es lo que hace que mañana se arranque capturando.
+    const guardada = sessionStorage.getItem('mobileActiveTab');
+    if (guardada && document.getElementById('nav-' + guardada)) savedTab = guardada;
 
     mobShowTab(savedTab);
     // El panel digital queda cargado aunque no sea la pestana activa: no puede

@@ -30,9 +30,82 @@ en el idioma anterior hasta la siguiente navegacion.
 <span id="tema-eco" hidden></span>
 
 <script>
+{% comment %}
+El aviso se saca a una variable y se escapa: una traduccion puede llevar
+apostrofes, y dentro de una cadena de JavaScript eso cierra la comilla.
+{% endcomment %}
+{% trans "Changing the language reloads the screen and what you have captured is lost. Do you want to continue?" as t_perder_captura %}
+
+// Si hay una captura empezada, la recarga se la lleva por delante. Se mira solo
+// el formulario de captura -- en el escritorio y en el movil --, que es donde
+// se pierde trabajo de verdad: un filtro a medio escribir no vale un aviso.
+//
+// Se pregunta de dos maneras, y basta con que una diga que si:
+//
+// 1. Si la persona escribio o eligio algo. `input` y `change` los levanta el
+//    navegador solo cuando el cambio viene de ella; asignar un valor desde el
+//    guion no los dispara, que es justo la diferencia que hace falta.
+// 2. Comparando con una foto del formulario, para lo que el guion rellena por
+//    ella -- los desplegables del catalogo escriben el campo oculto sin
+//    levantar ningun evento.
+//
+// La foto se toma en un `setTimeout` dentro de `load` y no en `load` a secas:
+// la fecha de hoy la pone otro `load` de la pantalla, y quien se registra
+// primero corre primero. Tomandola en `load` la foto salia sin fecha, el
+// formulario nacia "modificado" y el aviso saltaba siempre -- y un confirm que
+// aparece cuando no toca bloquea la pantalla entera hasta que alguien lo
+// cierra a mano.
+let CAPTURA_AL_CARGAR = null;
+let CAPTURA_TOCADA = false;
+
+function fotoDeLaCaptura() {
+  return ['op-form', 'mob-op-form'].map(function (id) {
+    const form = document.getElementById(id);
+    if (!form) return '';
+    return Array.prototype.map.call(form.elements, function (campo) {
+      if (!campo.name || campo.disabled) return '';
+      if (campo.type === 'file') return campo.files ? campo.files.length : 0;
+      if (campo.type === 'checkbox' || campo.type === 'radio') return campo.checked;
+      return campo.value;
+    }).join('');
+  }).join('');
+}
+
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    CAPTURA_AL_CARGAR = fotoDeLaCaptura();
+    ['op-form', 'mob-op-form'].forEach(function (id) {
+      const form = document.getElementById(id);
+      if (!form) return;
+      ['input', 'change'].forEach(function (evento) {
+        form.addEventListener(evento, function (e) {
+          if (e.isTrusted) CAPTURA_TOCADA = true;
+        });
+      });
+    });
+  }, 0);
+});
+
+function hayCapturaAMedias() {
+  if (CAPTURA_TOCADA) return true;
+  // Sin foto no se avisa: preguntar por algo que no se sabe es peor que callar.
+  return CAPTURA_AL_CARGAR !== null && fotoDeLaCaptura() !== CAPTURA_AL_CARGAR;
+}
+
 // El idioma se guarda y la pagina se vuelve a pedir. La traduccion la hace el
-// servidor: sin recargar, la pantalla se quedaria en el idioma de antes.
+// servidor: sin recargar, la pantalla se quedaria en el idioma de antes. La
+// pestana en la que estabas se recupera sola al cargar.
 function cambiarIdioma(codigo) {
+  if (hayCapturaAMedias() && !confirm('{{ t_perder_captura|escapejs }}')) {
+    // El idioma no cambio, asi que el desplegable tiene que volver a decir el
+    // que sigue puesto: dejarlo en el nuevo seria mentir sobre en que idioma
+    // esta la pantalla.
+    const sel = document.getElementById('sel-idioma');
+    if (sel) Array.prototype.forEach.call(sel.options, function (o) {
+      o.selected = o.defaultSelected;
+    });
+    return;
+  }
   fetch('{% url "cambiar_idioma" %}', {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded',
