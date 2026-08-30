@@ -1330,105 +1330,14 @@ function closeModal(){
   refrescarAvisosDeChat();
 }
 
-// Los avisos de mensajes de la tabla, al dia sin recargar la pantalla.
-//
-// La tabla se pinta una vez y se queda quieta, asi que un mensaje que llega no
-// se veria hasta la siguiente recarga y el aviso de un hilo ya leido seguiria
-// encendido. Recargar la tabla entera no es opcion -- doscientas filas, el
-// scroll horizontal puesto a mano y los menus abiertos -- asi que solo viajan
-// los numeros y aqui se reparten.
-async function refrescarAvisosDeChat(){
-  const botones = document.querySelectorAll('[data-chat-op]');
-  const contador = document.getElementById('tab-sin-leer');
-  // Sin la tabla a la vista el contador sigue haciendo falta: quien esta en
-  // otra pestana es justo a quien hay que avisarle de que le escribieron.
-  if (!botones.length && !contador) return;
-  try {
-    const resp = await fetch('/operations/chat-badges/');
-    if (!resp.ok) return;
-    const datos = await resp.json();
-    if (contador) {
-      const total = datos.mensajes || 0;
-      document.getElementById('sin-leer-n').textContent = total;
-      contador.classList.toggle('vacio', total === 0);
-      contador.title = total === 0
-        ? 'Operations with unread messages'
-        : total + ' unread message(s) in ' + (datos.operaciones || 0) + ' operation(s)';
-    }
-    botones.forEach(function(boton){
-      const sinLeer = datos.hilos[boton.dataset.chatOp];
-      if (sinLeer === undefined) {           // esa operacion no tiene hilo
-        boton.classList.remove('visible', 'con-pendientes');
-        return;
-      }
-      boton.classList.add('visible');
-      boton.classList.toggle('con-pendientes', sinLeer > 0);
-      boton.querySelector('.chat-n').textContent = sinLeer > 0 ? ' ' + sinLeer : '';
-      boton.title = sinLeer > 0
-        ? sinLeer + ' mensaje(s) sin leer'
-        : 'Conversacion de la operacion';
-    });
-  } catch (e) {
-    // Un fallo de red no puede romper la tabla: el aviso se queda como estaba
-    // y el siguiente intento lo corrige.
-  }
-}
-// Mas espaciado que el hilo abierto: aqui solo se decide si algo se pinta en
-// ambar, y treinta segundos de retraso en eso no le cuestan nada a nadie.
-setInterval(refrescarAvisosDeChat, 30000);
+// Los dos avisos de la barra --mensajes sin leer y mercancia vencida-- viven
+// en `partials/avisos.html`, que incluyen tambien el movil: son plantillas
+// separadas y duplicar el guion es como el movil se fue quedando atras.
+</script>
 
-// El contador de vencidas, al dia sin recargar la pantalla.
-//
-// Se pintaba una vez al cargar el tablero y no lo refrescaba nadie -- el <span>
-// hasta tenia su id puesto --, asi que cambiar el plazo de un cliente guardaba
-// bien el dato y dejaba el aviso diciendo lo de antes. Desde fuera eso se lee
-// como que el cambio no sirvio de nada.
-//
-// No va en el latido de los treinta segundos a proposito: esto recorre las
-// entradas sin liberar de la empresa, y la cuenta solo cambia cuando alguien
-// captura, libera o toca un plazo. El servidor avisa de esas tres con la
-// cabecera `HX-Trigger: alertas-cambiadas`.
-async function refrescarVencidas(){
-  const boton = document.getElementById('tab-vencidas');
-  if (!boton) return;
-  try {
-    const resp = await fetch('{% url "resumen_de_vencidas" %}');
-    if (!resp.ok) return;
-    const datos = await resp.json();
-    const total = datos.total || 0;
-    document.getElementById('vencidas-n').textContent = total;
-    boton.classList.toggle('vacio', total === 0);
-    // Lo que va entre parentesis solo existe cuando hay urgentes, asi que se
-    // pinta y se quita aqui en vez de dejar un hueco vacio en la barra.
-    let extra = document.getElementById('vencidas-urgentes');
-    if (datos.urgentes) {
-      if (!extra) {
-        extra = document.createElement('span');
-        extra.id = 'vencidas-urgentes';
-        extra.style.fontWeight = '400';
-        boton.appendChild(extra);
-      }
-      extra.textContent = ' (' + datos.urgentes + ' {% trans "urgent" %})';
-    } else if (extra) {
-      extra.remove();
-    }
-  } catch (e) { /* si falla, el contador se queda como estaba */ }
-}
+{% include "warehouse/partials/avisos.html" %}
 
-// La tabla de operaciones lleva la marca de dias en cada fila, asi que un plazo
-// nuevo tambien la cambia. Se repinta respetando los filtros puestos: recargarla
-// sin ellos ensenaria otra tabla y pareceria que el guardado hizo algo mas.
-document.body.addEventListener('alertas-cambiadas', function(){
-  refrescarVencidas();
-  // Se pide desde el propio buscador para que htmx resuelva su `hx-include` y
-  // viajen los filtros que hay puestos, igual que cuando alguien teclea en el.
-  const buscador = document.querySelector('#ops-filtros [name="q"]');
-  if (buscador && document.getElementById('ops-table') && typeof htmx !== 'undefined') {
-    htmx.ajax('GET', '{% url "operations_search" %}',
-              {source: buscador, target: '#ops-table', swap: 'innerHTML'});
-  }
-});
-
+<script>
 // Nueva versión de initActiveTab que respeta la URL//////// 061526
 // function initActiveTab() {
 //     // Si la URL tiene 'tab=digital', no hacemos nada (se fuerza después)

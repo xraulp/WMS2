@@ -35,6 +35,29 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink
 .nav-logout{flex:0 0 50px;display:flex;align-items:center;justify-content:center;background:none;border:none;border-left:1px solid var(--bdr);cursor:pointer;font-size:11px;color:var(--faint);font-family:inherit;padding:8px}
 .nav-logout:hover{color:var(--red)}
 .pg{padding:14px}
+
+/*
+  La franja de avisos. Va bajo la barra y encima de todo lo demas porque es lo
+  que hay que ver sin buscarlo: quien anda por la bodega no entra a mirar si
+  hay algo, entra a capturar. Se pega arriba al hacer scroll por lo mismo.
+
+  Cada aviso se esconde solo cuando su cuenta esta en cero -- la clase la pone
+  y la quita `partials/avisos.html` --, y con los dos escondidos la franja
+  entera desaparece: una barra vacia ocupando sitio en un telefono es sitio
+  robado al formulario.
+*/
+.avisos{display:flex;gap:8px;padding:8px 14px;background:var(--bg-sutil);
+        border-bottom:1px solid var(--bdr);position:sticky;top:52px;z-index:90}
+.avisos:not(:has(.aviso:not(.vacio))){display:none}
+.avisos.vacio{display:none}
+.aviso{flex:1;border:none;border-radius:8px;padding:8px 10px;font-family:inherit;
+       font-size:12px;font-weight:600;cursor:pointer;text-align:center;
+       white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aviso.vacio{display:none}
+.aviso-mensajes{background:var(--warn-bg-suave);color:var(--warn-ink-fuerte);
+                border:1px solid var(--warn-bdr)}
+.aviso-vencidas{background:var(--err-bg);color:var(--err-ink-fuerte);
+                border:1px solid var(--err-bdr)}
 .panel{display:none}.panel.on{display:block}
 .card{background:var(--surface);border:1px solid var(--bdr-fuerte);border-radius:var(--r);padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .card-title{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:14px;padding-left:8px;border-left:3px solid var(--accent)}
@@ -152,6 +175,26 @@ tbody td:has(button), tbody td:has(.btn-action) {
     <span style="font-size:10px;opacity:.7"> [{{ profile.role|upper }}]</span>
     {% include "warehouse/partials/preferencias.html" %}
   </div>
+</div>
+
+{% comment %}
+Los dos avisos que el movil no tenia. Quien captura anda por la bodega y es
+quien puede hacer algo con los dos: mover la mercancia que se paso de plazo y
+contestarle al cliente que escribio. Tenerlos solo en el escritorio era
+ensenarselos a quien no esta ahi.
+
+Los ids son los que espera `partials/avisos.html`, que es el mismo guion que
+usa el tablero.
+{% endcomment %}
+<div class="avisos">
+  <button type="button" class="aviso aviso-mensajes vacio" id="tab-sin-leer"
+          onclick="mobVerSinLeer()">
+    💬 <span id="sin-leer-n">0</span> {% trans "unread" %}
+  </button>
+  <button type="button" class="aviso aviso-vencidas vacio" id="tab-vencidas"
+          onclick="mobVerVencidas()">
+    &#9200; <span id="vencidas-n">0</span> {% trans "aging" %}
+  </button>
 </div>
 
 <div class="pg">
@@ -751,6 +794,26 @@ document.addEventListener('click',function(e){
   });
 });
 
+// A donde lleva cada aviso: la tabla acotada a lo que el aviso anuncia. El
+// buscador se limpia porque la tabla que llega ya no le obedece, y dejarlo
+// escrito haria creer que si.
+function mobIrALaTabla(url){
+  mobShowTab('database');
+  const q = document.getElementById('mob-db-q');
+  if (q) q.value = '';
+  htmx.ajax('GET', url, {target:'#mob-ops-table', swap:'innerHTML'});
+}
+function mobVerSinLeer(){ mobIrALaTabla('{% url "operations_unread" %}'); }
+function mobVerVencidas(){ mobIrALaTabla('{% url "operations_aging" %}'); }
+
+// El tablero recibe las dos cuentas ya hechas en su contexto; aqui se piden al
+// cargar. Es una peticion mas, pero deja los contadores en un solo sitio --el
+// parcial-- en vez de repartir la misma cuenta entre la vista y el guion.
+window.addEventListener('load', function(){
+  if (typeof refrescarAvisosDeChat === 'function') refrescarAvisosDeChat();
+  if (typeof refrescarVencidas === 'function') refrescarVencidas();
+});
+
 // Los tipos que sacan mercancia de una entrada guardada, los mismos que en el
 // tablero. Una revision no entra aqui: la carga no se va, solo se mira, asi que
 // no consume ninguna entrada.
@@ -1087,6 +1150,12 @@ function openDigitalWithId(customId) {
 
 
 </script>
+
+{% comment %}
+El guion de los dos avisos, el mismo que usa el tablero. Va al final para que
+todo lo que llama --`mobShowTab`, htmx-- ya este definido.
+{% endcomment %}
+{% include "warehouse/partials/avisos.html" %}
 
 </body>
 </html>

@@ -1,0 +1,129 @@
+{% load i18n %}
+{% comment %}
+Los dos avisos de la barra: mensajes sin leer y mercancía pasada de plazo.
+
+Vive en un parcial y no en cada pantalla porque el tablero y el móvil son
+plantillas separadas —nada se hereda— y ese es justo el camino por el que el
+móvil se quedó sin la mitad de las cosas. Aquí está el guion; el marcado lo pone
+cada pantalla, que para eso una tiene pestañas anchas arriba y la otra una
+franja estrecha.
+
+Lo que este guion necesita de quien lo incluya, todo opcional: un contenedor con
+id `tab-sin-leer` que lleve dentro un `sin-leer-n`, otro `tab-vencidas` con un
+`vencidas-n`, y la clase `vacio` para esconderlos cuando no hay nada que decir.
+Lo que no exista se ignora, así que una pantalla puede pintar solo uno.
+{% endcomment %}
+<script>
+// Los avisos de mensajes, al día sin recargar la pantalla.
+//
+// La tabla se pinta una vez y se queda quieta, así que un mensaje que llega no
+// se vería hasta la siguiente recarga y el aviso de un hilo ya leído seguiría
+// encendido. Recargar la tabla entera no es opción --doscientas filas, el
+// scroll horizontal puesto a mano y los menús abiertos-- así que solo viajan
+// los números y aquí se reparten.
+{% trans "Operations with unread messages" as t_sin_leer_vacio %}
+{% trans "Conversation of the operation" as t_hilo %}
+
+async function refrescarAvisosDeChat(){
+  const botones = document.querySelectorAll('[data-chat-op]');
+  const contador = document.getElementById('tab-sin-leer');
+  // Sin la tabla a la vista el contador sigue haciendo falta: quien está en
+  // otra pestaña es justo a quien hay que avisarle de que le escribieron.
+  if (!botones.length && !contador) return;
+  try {
+    const resp = await fetch('{% url "chat_badges" %}');
+    if (!resp.ok) return;
+    const datos = await resp.json();
+    const numero = document.getElementById('sin-leer-n');
+    if (contador && numero) {
+      const total = datos.mensajes || 0;
+      numero.textContent = total;
+      contador.classList.toggle('vacio', total === 0);
+      contador.title = total === 0
+        ? '{{ t_sin_leer_vacio|escapejs }}'
+        : total + ' / ' + (datos.operaciones || 0);
+    }
+    botones.forEach(function(boton){
+      const sinLeer = datos.hilos[boton.dataset.chatOp];
+      if (sinLeer === undefined) {           // esa operación no tiene hilo
+        boton.classList.remove('visible', 'con-pendientes');
+        return;
+      }
+      boton.classList.add('visible');
+      boton.classList.toggle('con-pendientes', sinLeer > 0);
+      const n = boton.querySelector('.chat-n');
+      if (n) n.textContent = sinLeer > 0 ? ' ' + sinLeer : '';
+      boton.title = sinLeer > 0 ? sinLeer : '{{ t_hilo|escapejs }}';
+    });
+  } catch (e) {
+    // Un fallo de red no puede romper la tabla: el aviso se queda como estaba
+    // y el siguiente intento lo corrige.
+  }
+  ajustarFranjaDeAvisos();
+}
+// Más espaciado que el hilo abierto: aquí solo se decide si algo se pinta en
+// ámbar, y treinta segundos de retraso en eso no le cuestan nada a nadie.
+setInterval(refrescarAvisosDeChat, 30000);
+
+// El contador de vencidas.
+//
+// No va en el latido de los treinta segundos a propósito: esto recorre las
+// entradas sin liberar de la empresa, y la cuenta solo cambia cuando alguien
+// captura, libera o toca un plazo. El servidor avisa de esas tres con la
+// cabecera `HX-Trigger: alertas-cambiadas`.
+async function refrescarVencidas(){
+  const boton = document.getElementById('tab-vencidas');
+  const numero = document.getElementById('vencidas-n');
+  if (!boton || !numero) return;
+  try {
+    const resp = await fetch('{% url "resumen_de_vencidas" %}');
+    if (!resp.ok) return;
+    const datos = await resp.json();
+    const total = datos.total || 0;
+    numero.textContent = total;
+    boton.classList.toggle('vacio', total === 0);
+    // Lo que va entre paréntesis solo existe cuando hay urgentes, así que se
+    // pinta y se quita aquí en vez de dejar un hueco vacío en la barra.
+    let extra = document.getElementById('vencidas-urgentes');
+    if (datos.urgentes) {
+      if (!extra) {
+        extra = document.createElement('span');
+        extra.id = 'vencidas-urgentes';
+        extra.style.fontWeight = '400';
+        boton.appendChild(extra);
+      }
+      extra.textContent = ' (' + datos.urgentes + ' {% trans "urgent" %})';
+    } else if (extra) {
+      extra.remove();
+    }
+  } catch (e) { /* si falla, el contador se queda como estaba */ }
+  ajustarFranjaDeAvisos();
+}
+
+// La franja que agrupa los avisos --si la pantalla la tiene-- se esconde cuando
+// no queda ninguno encendido. La hoja de estilos ya lo hace con `:has()`, y
+// esto es el respaldo para el navegador que no lo entienda: una barra vacía
+// ocupando sitio en un teléfono es sitio robado al formulario.
+function ajustarFranjaDeAvisos(){
+  const franja = document.querySelector('.avisos');
+  if (!franja) return;
+  franja.classList.toggle('vacio', !franja.querySelector('.aviso:not(.vacio)'));
+}
+
+// La tabla de operaciones lleva la marca de días en cada fila, así que un plazo
+// nuevo también la cambia.
+//
+// Se pide desde el propio buscador de cada pantalla para que htmx resuelva su
+// `hx-include` y viajen los filtros que hay puestos: recargarla sin ellos
+// enseñaría otra tabla y parecería que el guardado hizo algo más.
+document.body.addEventListener('alertas-cambiadas', function(){
+  refrescarVencidas();
+  const buscador = document.querySelector('#ops-filtros [name="q"]')
+                || document.getElementById('mob-db-q');
+  if (buscador && typeof htmx !== 'undefined') {
+    htmx.ajax('GET', '{% url "operations_search" %}',
+              {source: buscador, target: buscador.getAttribute('hx-target'),
+               swap: 'innerHTML'});
+  }
+});
+</script>

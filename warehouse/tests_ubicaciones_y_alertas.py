@@ -741,3 +741,61 @@ class LasDosPantallasCapturanLoMismoTests(TestCase):
 
         self.assertEqual(faltan, set(),
                          'el movil no pide: %s' % ', '.join(sorted(faltan)))
+
+
+class LosAvisosLleganAlMovilTests(TestCase):
+    """
+    El movil no tenia los dos avisos de la barra --mercancia pasada de plazo y
+    mensajes sin leer-- y es donde mas falta hacen: quien anda por la bodega es
+    quien puede mover la carga vencida y contestarle al cliente en ese momento.
+    Tenerlos solo en el escritorio era ensenarselos a quien no esta ahi.
+
+    El guion de los dos vive en un parcial que incluyen las dos pantallas, para
+    no repetir por tercera vez el camino por el que el movil se fue quedando
+    atras.
+    """
+
+    def setUp(self):
+        tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        usuario = User.objects.create_user('capturista', password='x')
+        UserProfile.objects.create(user=usuario, tenant=tenant, role='manager')
+        self.client.force_login(usuario)
+
+    def test_el_movil_pinta_los_dos_avisos(self):
+        respuesta = self.client.get('/mobile/')
+
+        self.assertContains(respuesta, 'id="tab-vencidas"')
+        self.assertContains(respuesta, 'id="vencidas-n"')
+        self.assertContains(respuesta, 'id="tab-sin-leer"')
+        self.assertContains(respuesta, 'id="sin-leer-n"')
+
+    def test_los_avisos_nacen_apagados_y_los_enciende_el_guion(self):
+        """Sin dato todavia se pintan escondidos: un cero grande en la barra de
+        un telefono ocupa el sitio del formulario."""
+        respuesta = self.client.get('/mobile/')
+
+        self.assertContains(respuesta, 'class="aviso aviso-vencidas vacio"')
+
+    def test_cada_aviso_lleva_a_su_tabla(self):
+        respuesta = self.client.get('/mobile/')
+
+        self.assertContains(respuesta, 'mobVerVencidas()')
+        self.assertContains(respuesta, 'mobVerSinLeer()')
+
+    def test_las_dos_pantallas_usan_el_mismo_guion(self):
+        """Si algun dia se duplica, esta prueba deja de valer: comprueba que el
+        parcial esta en las dos, no que el codigo se parezca."""
+        for url in ('/dashboard/', '/mobile/'):
+            with self.subTest(pantalla=url):
+                respuesta = self.client.get(url)
+                self.assertContains(respuesta, 'async function refrescarVencidas()')
+                self.assertContains(respuesta, 'async function refrescarAvisosDeChat()')
+
+    def test_el_guion_no_esta_dos_veces_en_la_misma_pantalla(self):
+        """El tablero tenia su propia copia; al sacarla al parcial no puede
+        haber quedado la vieja."""
+        for url in ('/dashboard/', '/mobile/'):
+            with self.subTest(pantalla=url):
+                html = self.client.get(url).content.decode()
+                self.assertEqual(html.count('async function refrescarVencidas()'), 1)
