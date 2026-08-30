@@ -694,3 +694,50 @@ class ElContadorDeVencidasSePoneAlDiaTests(BaseConPosiciones):
 
         self.assertEqual(respuesta.headers.get('HX-Trigger'), 'alertas-cambiadas')
         self.assertEqual(self._contador()['total'], 0)
+
+
+class LasDosPantallasCapturanLoMismoTests(TestCase):
+    """
+    El tablero y el movil son plantillas separadas, con su propio HTML y su
+    propio guion: nada se hereda. Cada mejora que recibe una hay que llevarla a
+    la otra a mano, y asi fue como el movil se quedo sin ubicacion, sin dos de
+    los cuatro tipos de operacion y sin el sello, el PRO y la caja.
+
+    Esta prueba no comprueba una pantalla: comprueba que las dos siguen
+    pidiendo lo mismo. Es la unica manera de que la proxima diferencia se note
+    al escribirla y no meses despues, y menos en el movil, que es donde de
+    verdad se captura.
+    """
+
+    # El movil ofrece un solo selector de archivos en vez de los dos del
+    # tablero: en un telefono separar "fotos" de "documentos" es una pregunta
+    # que nadie quiere contestar con guantes puestos. Lo que se sube viaja por
+    # `photos` y el servidor lo clasifica por su tipo, asi que no se pierde
+    # nada.
+    CAMPOS_QUE_NO_APLICAN_AL_MOVIL = {'documents'}
+
+    def _campos(self, html, form_id):
+        import re
+        i = html.find('id="%s"' % form_id)
+        self.assertGreater(i, 0, 'no se encontro el formulario %s' % form_id)
+        trozo = html[i:html.find('</form>', i)]
+        return {n for n in re.findall(r'name="([\w-]+)"', trozo)
+                if n != 'csrfmiddlewaretoken'}
+
+    def setUp(self):
+        tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        usuario = User.objects.create_user('capturista', password='x')
+        UserProfile.objects.create(user=usuario, tenant=tenant, role='manager')
+        self.client.force_login(usuario)
+
+    def test_el_movil_pide_todos_los_campos_del_tablero(self):
+        del_tablero = self._campos(
+            self.client.get('/dashboard/').content.decode(), 'op-form')
+        del_movil = self._campos(
+            self.client.get('/mobile/').content.decode(), 'mob-op-form')
+
+        faltan = del_tablero - del_movil - self.CAMPOS_QUE_NO_APLICAN_AL_MOVIL
+
+        self.assertEqual(faltan, set(),
+                         'el movil no pide: %s' % ', '.join(sorted(faltan)))

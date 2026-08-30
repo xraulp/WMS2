@@ -261,6 +261,17 @@ tbody td:has(button), tbody td:has(.btn-action) {
         <input type="text" name="po_order" id="mob-po-order" class="form-input" placeholder="{% trans "PO / ORD..." %}">
       </div>
 
+      {% comment %}
+      El sello, el PRO y la caja son datos del transporte, y se leen de la caja
+      que esta delante: su sitio natural es el telefono, no la computadora a la
+      que hay que volver despues. Van en el mismo orden que en el tablero para
+      que quien use las dos pantallas no tenga que buscarlos en otro lado.
+      {% endcomment %}
+      <div class="form-row">
+        <label>{% trans "Seal" %}</label>
+        <input type="text" name="seal" class="form-input" placeholder="{% trans "Seal #..." %}">
+      </div>
+
       <div class="form-row">
         <label>{% trans "Carrier" %}</label>
         <div class="cb" id="mob-cb-carrier">
@@ -271,6 +282,16 @@ tbody td:has(button), tbody td:has(.btn-action) {
           <input type="hidden" name="carrier_text" id="mob-cb-carrier-text">
           <div class="cb-drop" id="mob-cb-carrier-drop"></div>
         </div>
+      </div>
+
+      <div class="form-row">
+        <label>PRO</label>
+        <input type="text" name="pro" class="form-input" placeholder="{% trans "PRO #..." %}">
+      </div>
+
+      <div class="form-row">
+        <label>{% trans "Trailer" %}</label>
+        <input type="text" name="trailer" class="form-input" placeholder="{% trans "Trailer #..." %}">
       </div>
 
       <div class="form-row">
