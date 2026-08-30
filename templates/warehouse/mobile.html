@@ -205,6 +205,39 @@ tbody td:has(button), tbody td:has(.btn-action) {
         <div id="mob-entries-list" style="margin-top:8px"></div>
       </div>
 
+      {% comment %}
+      Donde se guarda la mercancia. Solo se pregunta en una entrada -- lo mismo
+      que en el tablero, y lo decide `mobMostrarUbicacion` --, y aqui importa
+      mas que alli: quien captura anda por la bodega con el telefono en la mano
+      y esta delante del estante, que es justo cuando se sabe la posicion.
+
+      Las posiciones viajan todas en el HTML y se filtran al elegir bodega. Va
+      bien con las cientos que tiene una bodega normal; el dia que sean miles,
+      esto tiene que pasar a pedirselas al servidor, igual que en el tablero.
+      {% endcomment %}
+      {% if warehouses %}
+      <div class="form-row" id="mob-warehouse-row" style="display:none">
+        <label>{% trans "Warehouse" %}</label>
+        <select name="warehouse_id" id="mob-warehouse" class="form-input"
+                onchange="mobFiltrarUbicaciones()">
+          <option value="">{% trans "— None —" %}</option>
+          {% for w in warehouses %}
+          <option value="{{ w.pk }}">{{ w.code }} — {{ w.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-row" id="mob-location-row" style="display:none">
+        <label>{% trans "Location" %}</label>
+        <select name="location_id" id="mob-location" class="form-input">
+          <option value="">{% trans "— None —" %}</option>
+          {% for l in locations %}
+          <option value="{{ l.pk }}" data-bodega="{{ l.warehouse_id }}">{{ l.code }}{% if l.descripcion %} · {{ l.descripcion }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
       <div class="form-row">
         <label>{% trans "Shipper" %}</label>
         <div class="cb" id="mob-cb-shipper">
@@ -707,6 +740,63 @@ function mobOnTypeChange(val){
   row.style.display=val==='EXIT'?'block':'none';
   if(val==='EXIT'&&mobCustomerId)mobLoadEntries();
   else{mobSelEntries=[];document.getElementById('mob-ed').value='';}
+  mobMostrarUbicacion(val);
+}
+
+// La ubicacion solo se pregunta en una entrada: es la unica operacion que
+// guarda la mercancia. Al esconderla se vacia, porque un valor escondido se
+// manda igual -- y una salida diciendo en que estante quedo la carga que acaba
+// de salir es peor que no decir nada. El servidor lo vuelve a comprobar en
+// `ubicacion_del_post`; esto es solo para no ensenar lo que no toca.
+const MOB_TIPOS_CON_UBICACION = ['ENTRY'];
+
+function mobMostrarUbicacion(tipo){
+  const visible = MOB_TIPOS_CON_UBICACION.includes(tipo);
+  ['mob-warehouse-row','mob-location-row'].forEach(function(id){
+    const el=document.getElementById(id);
+    if(el)el.style.display = visible ? 'block' : 'none';
+  });
+  if(!visible){
+    ['mob-warehouse','mob-location'].forEach(function(id){
+      const sel=document.getElementById(id);
+      if(sel)sel.value='';
+    });
+  }
+}
+
+// Las posiciones de la bodega elegida. Sin bodega se ven todas: al capturar de
+// prisa se elige a veces la posicion primero, y esconderlas todas obligaria a
+// volver atras.
+//
+// Se reconstruye la lista en vez de esconder opciones con `hidden`: en el
+// telefono el desplegable lo pinta el sistema operativo, y una opcion escondida
+// no siempre desaparece de esa rueda. Quitarla del DOM no deja lugar a dudas.
+let MOB_POSICIONES = null;
+
+function mobFiltrarUbicaciones(){
+  const bodega=document.getElementById('mob-warehouse');
+  const sel=document.getElementById('mob-location');
+  if(!bodega||!sel)return;
+  if(MOB_POSICIONES===null){
+    MOB_POSICIONES=Array.prototype.slice.call(sel.options,1).map(function(o){
+      return {valor:o.value,texto:o.textContent,bodega:o.dataset.bodega};
+    });
+  }
+  const elegida=bodega.value;
+  const puesta=sel.value;
+  const vacia=sel.options[0];
+  sel.innerHTML='';
+  sel.appendChild(vacia);
+  MOB_POSICIONES.forEach(function(p){
+    if(elegida && p.bodega!==elegida)return;
+    const o=document.createElement('option');
+    o.value=p.valor; o.textContent=p.texto; o.dataset.bodega=p.bodega;
+    sel.appendChild(o);
+  });
+  // Una posicion que ya no pertenece a la bodega elegida no puede quedarse
+  // puesta: se mandaria al servidor sin que nadie la vea en la pantalla.
+  sel.value = Array.prototype.some.call(sel.options,function(o){return o.value===puesta;})
+            ? puesta : '';
 }
 function mobLoadEntries(){
   if(!mobCustomerId)return;
@@ -821,6 +911,7 @@ function resetMobForm(){
   document.getElementById('mob-previews').innerHTML='';
   document.getElementById('mob-dmg-desc').style.display='none';
   document.getElementById('mob-ed-row').style.display='none';
+  mobMostrarUbicacion('');
   mobSelEntries=[]; mobCustomerId='';
   // Re-check WhatsApp default
   const wa=document.getElementById('mob-wa');if(wa)wa.checked=true;

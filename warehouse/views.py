@@ -2587,6 +2587,13 @@ def mobile_dashboard(request):
         'shippers_json':     cat_json('SHIPPER'),
         'carriers_json':     cat_json('CARRIER'),
         'bundle_types_json': cat_json('BUNDLE_TYPE'),
+        # Las bodegas y las posiciones que se pueden elegir al capturar. Es el
+        # mismo contexto que el tablero: la captura de verdad se hace andando
+        # por la bodega con el telefono, asi que preguntar donde se guarda la
+        # mercancia solo en el escritorio era preguntarlo donde no se sabe.
+        'warehouses': Warehouse.objects.filter(tenant=tenant, active=True),
+        'locations':  Location.objects.filter(
+            tenant=tenant, active=True).select_related('warehouse'),
     }
     return render(request, 'warehouse/mobile.html', context)
 

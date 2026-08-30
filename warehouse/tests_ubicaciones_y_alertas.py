@@ -539,3 +539,51 @@ class PantallaDeVencidasTests(BaseDeBodegas):
 
         self.assertNotIn('OP-ZETA',
                          [op.custom_id for op in respuesta.context['operations']])
+
+
+class UbicacionEnElMovilTests(BaseConPosiciones):
+    """
+    La pantalla del movil es donde se captura de verdad -- quien registra una
+    entrada anda por la bodega con el telefono y esta delante del estante --, y
+    era la unica que no preguntaba donde queda la mercancia.
+
+    El guardado no cambia: `ubicacion_del_post` valida el POST venga de la
+    pantalla que venga. Lo que faltaba era ofrecerlo.
+    """
+
+    def setUp(self):
+        self.client.force_login(self.staff)
+
+    def test_la_pantalla_ofrece_las_bodegas_y_las_posiciones(self):
+        respuesta = self.client.get('/mobile/')
+
+        self.assertContains(respuesta, 'name="warehouse_id"')
+        self.assertContains(respuesta, 'name="location_id"')
+        self.assertContains(respuesta, self.a1.code)
+        self.assertContains(respuesta, self.lrd.code)
+
+    def test_no_ofrece_las_posiciones_de_otra_empresa(self):
+        respuesta = self.client.get('/mobile/')
+
+        self.assertNotContains(respuesta, 'value="%s"' % self.ajena.pk)
+
+    def test_cada_posicion_dice_de_que_bodega_es(self):
+        """Es lo que permite filtrarlas al elegir bodega sin volver a preguntar
+        al servidor."""
+        respuesta = self.client.get('/mobile/')
+
+        self.assertContains(respuesta, 'data-bodega="%s"' % self.lrd.pk)
+
+    def test_la_ubicacion_nace_escondida_y_solo_la_ensena_una_entrada(self):
+        respuesta = self.client.get('/mobile/')
+
+        self.assertContains(respuesta, 'id="mob-location-row" style="display:none"')
+        self.assertContains(respuesta, "MOB_TIPOS_CON_UBICACION = ['ENTRY']")
+
+    def test_una_entrada_capturada_desde_el_movil_guarda_su_posicion(self):
+        """El formulario del movil manda los mismos dos campos que el del
+        tablero, asi que el alta es la misma."""
+        op = self.alta(warehouse_id=self.lrd.pk, location_id=self.a1.pk)
+
+        self.assertEqual(op.location, self.a1)
+        self.assertEqual(op.warehouse, self.lrd)
