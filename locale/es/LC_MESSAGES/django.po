@@ -2034,3 +2034,6 @@ msgstr "Asignar"
 
 msgid "Changing the language reloads the screen and what you have captured is lost. Do you want to continue?"
 msgstr "Cambiar el idioma vuelve a cargar la pantalla y se pierde lo que llevas capturado. ¿Quieres continuar?"
+
+msgid "No free entries for this customer."
+msgstr "Este cliente no tiene entradas libres."

@@ -587,3 +587,44 @@ class UbicacionEnElMovilTests(BaseConPosiciones):
 
         self.assertEqual(op.location, self.a1)
         self.assertEqual(op.warehouse, self.lrd)
+
+
+class TiposDeOperacionEnElMovilTests(BaseConPosiciones):
+    """
+    Los cuatro tipos, tambien en el movil.
+
+    Estaban escritos a mano en la plantilla y solo habia dos: el trasbordo y la
+    revision no se podian capturar desde la pantalla en la que mas se captura.
+    Es el mismo vicio que el tablero ya habia resuelto sacandolos del modelo.
+    """
+
+    def setUp(self):
+        self.client.force_login(self.staff)
+
+    def test_la_pantalla_ofrece_los_cuatro(self):
+        respuesta = self.client.get('/mobile/')
+
+        for valor, _etiqueta in WarehouseOperation.TYPE_CHOICES:
+            with self.subTest(tipo=valor):
+                self.assertContains(respuesta, 'value="%s"' % valor)
+
+    def test_salen_del_modelo_y_no_escritos_a_mano(self):
+        """Anadir un quinto tipo no puede obligar a acordarse de esta
+        plantilla."""
+        respuesta = self.client.get('/mobile/')
+
+        self.assertContains(respuesta, 'Transfer (TD)')
+        self.assertContains(respuesta, 'Revision (RD)')
+
+    def test_el_trasbordo_tambien_consume_entradas(self):
+        """La salida y el trasbordo sacan mercancia de una entrada guardada; la
+        revision no, porque la carga no se va, solo se mira."""
+        respuesta = self.client.get('/mobile/')
+
+        self.assertContains(respuesta, "MOB_TIPOS_QUE_DESPACHAN = ['EXIT','TD']")
+
+    def test_un_trasbordo_capturado_desde_el_movil_se_guarda(self):
+        op = self.alta(operation_type='TD')
+
+        self.assertEqual(op.operation_type, 'TD')
+        self.assertTrue(op.custom_id.startswith('TD'))

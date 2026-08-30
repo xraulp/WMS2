@@ -2587,6 +2587,11 @@ def mobile_dashboard(request):
         'shippers_json':     cat_json('SHIPPER'),
         'carriers_json':     cat_json('CARRIER'),
         'bundle_types_json': cat_json('BUNDLE_TYPE'),
+        # Los tipos de operacion salen del modelo, igual que en el tablero.
+        # Escritos a mano aqui, el movil se quedo con dos de los cuatro: el
+        # trasbordo y la revision no se podian capturar desde la pantalla en la
+        # que mas se captura.
+        'tipos_de_operacion': WarehouseOperation.TYPE_CHOICES,
         # Las bodegas y las posiciones que se pueden elegir al capturar. Es el
         # mismo contexto que el tablero: la captura de verdad se hace andando
         # por la bodega con el telefono, asi que preguntar donde se guarda la

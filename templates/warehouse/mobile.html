@@ -193,8 +193,9 @@ tbody td:has(button), tbody td:has(.btn-action) {
         <label>{% trans "Type of Operation" %} <span style="color:var(--red)">*</span></label>
         <select name="operation_type" id="mob-op-type" class="form-input" onchange="mobOnTypeChange(this.value)">
           <option value="">{% trans "— Select —" %}</option>
-          <option value="ENTRY">{% trans "Entry (Goods Receipt)" %}</option>
-          <option value="EXIT">{% trans "Exit (Goods Dispatch)" %}</option>
+          {% for valor, etiqueta in tipos_de_operacion %}
+          <option value="{{ valor }}">{{ etiqueta }}</option>
+          {% endfor %}
         </select>
       </div>
 
@@ -729,16 +730,22 @@ document.addEventListener('click',function(e){
   });
 });
 
-// EXIT entries
+// Los tipos que sacan mercancia de una entrada guardada, los mismos que en el
+// tablero. Una revision no entra aqui: la carga no se va, solo se mira, asi que
+// no consume ninguna entrada.
+const MOB_TIPOS_QUE_DESPACHAN = ['EXIT','TD'];
+
 let mobSelEntries=[], mobCustomerId='';
 function mobOnCustomerSelect(id){
   mobCustomerId=String(id);
-  if(document.getElementById('mob-op-type')&&document.getElementById('mob-op-type').value==='EXIT')mobLoadEntries();
+  const t=document.getElementById('mob-op-type');
+  if(t&&MOB_TIPOS_QUE_DESPACHAN.includes(t.value))mobLoadEntries();
 }
 function mobOnTypeChange(val){
+  const despacha=MOB_TIPOS_QUE_DESPACHAN.includes(val);
   const row=document.getElementById('mob-ed-row');
-  row.style.display=val==='EXIT'?'block':'none';
-  if(val==='EXIT'&&mobCustomerId)mobLoadEntries();
+  row.style.display=despacha?'block':'none';
+  if(despacha&&mobCustomerId)mobLoadEntries();
   else{mobSelEntries=[];document.getElementById('mob-ed').value='';}
   mobMostrarUbicacion(val);
 }
@@ -803,7 +810,7 @@ function mobLoadEntries(){
   fetch('/operations/free-entries/?customer_id='+mobCustomerId)
     .then(r=>r.json()).then(data=>{
       const c=document.getElementById('mob-entries-list');
-      if(!data.length){c.innerHTML='<div style="color:var(--faint);font-size:13px;padding:8px 0">No free entries for this customer.</div>';return;}
+      if(!data.length){c.innerHTML='<div style="color:var(--faint);font-size:13px;padding:8px 0">{% trans "No free entries for this customer." as t_sin_entradas %}{{ t_sin_entradas|escapejs }}</div>';return;}
       c.innerHTML=data.map(e=>`
         <div id="mei-${e.custom_id}" onclick="mobToggleEntry('${e.custom_id}')"
              style="display:flex;justify-content:space-between;align-items:center;
