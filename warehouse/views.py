@@ -1423,16 +1423,24 @@ def _reservar_consecutivos(tenant, day, cantidad):
         fila, recien_creada = DocumentSequence.objects.get_or_create(
             tenant=tenant, day=day)
 
-        if recien_creada:
-            # Puente con los expedientes anteriores a este contador: se arranca
-            # donde se hubieran quedado, para no repetir sus nombres.
-            fila.last_value = _mayor_consecutivo_ya_usado(tenant, day)
-
         # SQLite no sabe bloquear filas y Django protesta si se le pide; en
         # local da igual, porque serializa las escrituras de todas formas.
         if connection.features.has_select_for_update:
             fila = (DocumentSequence.objects.select_for_update()
                     .get(pk=fila.pk))
+
+        # El puente con los expedientes anteriores va DESPUES de coger el
+        # bloqueo, y no antes.
+        #
+        # Estaba antes, y el `select_for_update` vuelve a traer la fila de la
+        # base: se llevaba por delante el valor recien sembrado, que todavia no
+        # estaba guardado. En SQLite no se notaba --no hay bloqueo, asi que la
+        # fila no se relee-- y en PostgreSQL la siembra no servia de nada: la
+        # primera subida del dia volvia a empezar en uno y repetia un nombre que
+        # ya habia salido impreso y adjunto en un correo, que es justo lo que
+        # este contador existe para evitar.
+        if recien_creada:
+            fila.last_value = _mayor_consecutivo_ya_usado(tenant, day)
 
         primero = fila.last_value + 1
         fila.last_value += cantidad

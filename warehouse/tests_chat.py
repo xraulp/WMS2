@@ -751,7 +751,16 @@ class LaPantallaNoEsperaAlCorreoTests(HiloBase):
                     # tiempo, un envio en linea de quince segundos tambien
                     # devuelve 200 y la prueba pasaria igual -- que es justo lo
                     # que hacia la version anterior de esta prueba.
-                    self.assertLess(tardo, 3, 'la vista se quedo esperando al correo')
+                    #
+                    # El limite se mide contra `ESPERA` y no contra un numero
+                    # suelto. Estaba en tres segundos, que valia cuando la base
+                    # de datos era local; con la base lejos, los viajes de ida y
+                    # vuelta de la propia peticion pasan de cuatro segundos y la
+                    # prueba caia sin que la vista hubiera esperado a nada. La
+                    # mitad del bloqueo sigue dejandola caer en cuanto la vista
+                    # vuelva a esperar al correo, que es lo unico que vigila.
+                    self.assertLess(tardo, ESPERA / 2,
+                                    'la vista se quedo esperando al correo')
                     # Y el aviso se intenta de verdad, no se pierde.
                     self.assertTrue(arranco.wait(10), 'el aviso nunca arranco')
                 finally:
