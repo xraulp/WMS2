@@ -34,7 +34,7 @@ function digitalOpen(customId) {
   if (q) q.value = customId;
   const destino = document.getElementById('digital-content') || document.getElementById('mob-digital-content');
   if (!destino) return;
-  htmx.ajax('GET','/digital/search/?q='+encodeURIComponent(customId),
+  htmx.ajax('GET', '{% url "digital_search" %}?q=' + encodeURIComponent(customId),
             {target:'#'+destino.id, swap:'innerHTML'});
 }
 </script>

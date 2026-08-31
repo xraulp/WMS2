@@ -1,0 +1,205 @@
+{% load i18n %}
+{% comment %}
+Bodegas y posiciones, en el telefono.
+
+Los datos son los mismos que en el tablero --los arma `_contexto_de_bodegas`--
+pero el marcado no puede serlo. Alli son once columnas con barra de navegacion
+horizontal; aqui cada posicion es una tarjeta, porque la pregunta que se hace
+delante de un estante no es "ensename la matriz" sino "que hay guardado en
+este".
+
+De ahi tambien el buscador por codigo, que en el tablero no hacia falta: quien
+esta parado en el pasillo teclea lo que dice la etiqueta en vez de bajar por
+una lista de cuatrocientas.
+
+Todo lo que se manda al servidor lleva `movil=1` para que la accion devuelva
+este panel y no el del escritorio. Ver `_plantilla_de_bodegas`.
+{% endcomment %}
+<style>
+.mloc-msg { border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:12px; }
+.mloc-bodegas { display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; margin-bottom:12px; }
+.mloc-bodega { flex:0 0 auto; background:var(--surface); border:1px solid var(--bdr);
+               border-radius:20px; padding:8px 14px; font-size:13px; color:var(--soft);
+               font-family:inherit; cursor:pointer; white-space:nowrap; }
+.mloc-bodega.on { border-color:var(--accent); color:var(--adark); font-weight:600; }
+.mloc-n { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--faint); margin-left:6px; }
+.mloc-barra { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+.mloc-cuenta { font-size:12px; color:var(--faint); margin-bottom:10px; }
+.mloc-lista { display:flex; flex-direction:column; gap:8px; }
+.mloc-tarjeta { display:flex; align-items:center; gap:10px; background:var(--surface);
+                border:1px solid var(--bdr); border-radius:var(--r); padding:11px 12px; }
+.mloc-tarjeta.apagada { opacity:.5; }
+.mloc-codigo { font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600;
+               color:var(--ink); }
+.mloc-donde { font-size:11px; color:var(--faint); margin-top:2px; }
+.mloc-guardadas { flex:0 0 auto; font-family:'IBM Plex Mono',monospace; font-size:13px;
+                  font-weight:600; background:var(--info-bg); border:1px solid var(--info-bdr);
+                  color:var(--info-ink); border-radius:8px; padding:7px 12px; cursor:pointer; }
+.mloc-vacia { flex:0 0 auto; font-size:11px; color:var(--bdr-fuerte); padding:7px 4px; }
+.mloc-switch { flex:0 0 auto; background:none; border:1px solid var(--bdr); border-radius:8px;
+               padding:7px 10px; font-size:11px; color:var(--soft); font-family:inherit;
+               cursor:pointer; }
+.mloc-form { display:flex; flex-direction:column; gap:9px; margin-bottom:14px; }
+.mloc-form .form-input, .mloc-form select { width:100%; }
+.mloc-par { display:flex; gap:8px; }
+.mloc-par > * { flex:1; min-width:0; }
+.mloc-pista { font-size:11px; color:var(--faint); line-height:1.5; }
+.mloc-plegable > summary { font-family:'IBM Plex Mono',monospace; font-size:11px;
+                           font-weight:600; text-transform:uppercase; letter-spacing:.08em;
+                           color:var(--faint); cursor:pointer; padding:10px 0; }
+</style>
+
+{% if error %}<div class="mloc-msg msg-error">&#9888; {{ error }}</div>{% endif %}
+{% if exito %}<div class="mloc-msg msg-success">&#10003; {{ exito }}</div>{% endif %}
+
+{% comment %}
+Las dos altas van plegadas. En el telefono lo que se hace mil veces es mirar, y
+lo que se hace una vez es montar la bodega; dejar los formularios abiertos
+empujaria la lista fuera de la pantalla todos los dias por una tarea de un dia.
+{% endcomment %}
+{% if puede_configurar %}
+<details class="mloc-plegable">
+  <summary>+ {% trans "New warehouse" %}</summary>
+  <form class="mloc-form" hx-post="{% url 'warehouse_create' %}"
+        hx-target="#mob-locations-content" hx-swap="innerHTML">
+    {% csrf_token %}
+    <input type="hidden" name="movil" value="1">
+    <input type="text" name="name" class="form-input" placeholder="{% trans "Name" %}" required>
+    <input type="text" name="code" class="form-input" placeholder="{% trans "Code" %}"
+           maxlength="10" required style="text-transform:uppercase">
+    <button type="submit" class="btn btn-p" style="margin:0">{% trans "Add" %}</button>
+    <div class="mloc-pista">
+      {% trans "The code goes in front of every location in that warehouse:" %} LRD-A-03-2
+    </div>
+  </form>
+</details>
+
+{% if bodegas %}
+<details class="mloc-plegable">
+  <summary>+ {% trans "Generate locations" %}</summary>
+  <form class="mloc-form" hx-post="{% url 'locations_generate' %}"
+        hx-target="#mob-locations-content" hx-swap="innerHTML">
+    {% csrf_token %}
+    <input type="hidden" name="movil" value="1">
+    <select name="warehouse" class="form-input" required>
+      {% for b in bodegas %}
+      <option value="{{ b.pk }}">{{ b.code }} &mdash; {{ b.name }}</option>
+      {% endfor %}
+    </select>
+    <div class="mloc-par">
+      <input type="text" name="zones"  class="form-input" placeholder="{% trans "Zone" %} A,B,C">
+      <input type="text" name="aisles" class="form-input" placeholder="{% trans "Aisle" %} 1-10">
+    </div>
+    <div class="mloc-par">
+      <input type="text" name="racks"  class="form-input" placeholder="{% trans "Rack" %} 01-04">
+      <input type="text" name="levels" class="form-input" placeholder="{% trans "Level" %} 1-4">
+    </div>
+    <div class="mloc-par">
+      <input type="text" name="positions" class="form-input" placeholder="{% trans "Position" %} A,B">
+      <select name="kind" class="form-input">
+        {% for valor, etiqueta in tipos_de_ubicacion %}
+        <option value="{{ valor }}">{{ etiqueta }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-p" style="margin:0">{% trans "Generate" %}</button>
+    <div class="mloc-pista">
+      {% trans "Comma-separated lists (A,B,C) or number ranges (1-10; 01-12 keeps the leading zero). Every level you fill in is crossed with the rest, and the ones you leave blank are skipped. What already exists is not duplicated, so you can generate again to extend a warehouse." %}
+    </div>
+  </form>
+</details>
+{% endif %}
+{% else %}
+<p class="mloc-pista" style="margin-bottom:12px">
+  {% trans "Read only: setting up warehouses and locations is the job of whoever administers the company." %}
+</p>
+{% endif %}
+
+{% if bodegas %}
+<div class="mloc-bodegas">
+  <button type="button" class="mloc-bodega {% if not bodega_filtrada %}on{% endif %}"
+          hx-get="{% url 'locations_panel' %}?movil=1{% if solo_ocupadas %}&amp;ocupadas=1{% endif %}"
+          hx-target="#mob-locations-content" hx-swap="innerHTML">{% trans "All" %}</button>
+  {% for b in bodegas %}
+  <button type="button" class="mloc-bodega {% if bodega_filtrada == b.pk|stringformat:'s' %}on{% endif %}"
+          hx-get="{% url 'locations_panel' %}?movil=1&amp;warehouse={{ b.pk }}{% if solo_ocupadas %}&amp;ocupadas=1{% endif %}"
+          hx-target="#mob-locations-content" hx-swap="innerHTML">
+    {{ b.code }}<span class="mloc-n">{{ b.num_ubicaciones }}</span>
+  </button>
+  {% endfor %}
+</div>
+
+<div class="mloc-barra">
+  {% comment %}
+  El buscador manda tambien la bodega y el paso de "solo ocupadas" que hubiera
+  puestos: teclear un codigo no puede deshacer el filtro que ya estaba, o la
+  lista cambiaria por dos motivos a la vez y pareceria que la busqueda hizo
+  otra cosa.
+  {% endcomment %}
+  <input type="text" name="q" value="{{ q }}" class="form-input" style="flex:1"
+         placeholder="{% trans "Location code..." %}"
+         hx-get="{% url 'locations_panel' %}?movil=1{% if bodega_filtrada %}&amp;warehouse={{ bodega_filtrada }}{% endif %}{% if solo_ocupadas %}&amp;ocupadas=1{% endif %}"
+         hx-target="#mob-locations-content" hx-swap="innerHTML"
+         hx-trigger="keyup changed delay:400ms">
+  <button type="button" class="mloc-switch" style="padding:11px 12px"
+          hx-get="{% url 'locations_panel' %}?movil=1{% if bodega_filtrada %}&amp;warehouse={{ bodega_filtrada }}{% endif %}{% if not solo_ocupadas %}&amp;ocupadas=1{% endif %}{% if q %}&amp;q={{ q|urlencode }}{% endif %}"
+          hx-target="#mob-locations-content" hx-swap="innerHTML">
+    {% if solo_ocupadas %}&#10005; {% trans "All" %}{% else %}{% trans "Occupied" %}{% endif %}
+  </button>
+</div>
+{% else %}
+<div style="text-align:center;padding:28px 12px;color:var(--faint)">
+  <div style="font-size:15px;font-weight:600;color:var(--soft);margin-bottom:6px">
+    {% trans "No warehouses yet" %}</div>
+  <div style="font-size:13px">
+    {% trans "Add the first one above. While there is none, registering an operation does not ask for the location." %}</div>
+</div>
+{% endif %}
+
+{% if ubicaciones %}
+<div class="mloc-cuenta">
+  {% blocktrans with ocupadas=posiciones_ocupadas count total=total_ubicaciones %}{{ total }} location, {{ ocupadas }} with goods{% plural %}{{ total }} locations, {{ ocupadas }} with goods{% endblocktrans %}{% if total_ubicaciones > 400 %} &mdash; {% trans "first 400 shown" %}{% endif %}
+</div>
+<div class="mloc-lista">
+  {% for u in ubicaciones %}
+  <div class="mloc-tarjeta {% if not u.active %}apagada{% endif %}">
+    <div style="flex:1;min-width:0">
+      <div class="mloc-codigo">{{ u.code }}</div>
+      <div class="mloc-donde">{{ u.warehouse.code }} &middot; {{ u.get_kind_display }}{% if not u.active %} &middot; {% trans "Off" %}{% endif %}</div>
+    </div>
+    {% comment %}
+    Tocar el numero lleva a la tabla de Operaciones acotada a esa posicion, que
+    es la pregunta siguiente en cuanto se ve que un estante tiene carga.
+    {% endcomment %}
+    {% if u.guardadas %}
+    <button type="button" class="mloc-guardadas" onclick="mobVerContenidoDeUbicacion('{{ u.pk }}')">
+      {{ u.guardadas }}
+    </button>
+    {% else %}
+    <span class="mloc-vacia">{% trans "empty" %}</span>
+    {% endif %}
+    {% if puede_configurar %}
+    <button type="button" class="mloc-switch"
+            hx-post="{% url 'location_toggle' u.pk %}?movil=1"
+            hx-target="#mob-locations-content" hx-swap="innerHTML"
+            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+      {% if u.active %}{% trans "Turn off" %}{% else %}{% trans "Turn on" %}{% endif %}
+    </button>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% elif q %}
+<div style="text-align:center;padding:24px 12px;color:var(--faint);font-size:13px">
+  {% trans "No location matches that code." %}
+</div>
+{% elif solo_ocupadas %}
+<div style="text-align:center;padding:24px 12px;color:var(--faint);font-size:13px">
+  {% trans "No location has goods waiting to be released." %}
+</div>
+{% elif bodegas %}
+<div style="text-align:center;padding:24px 12px;color:var(--faint);font-size:13px">
+  {% trans "No locations in this warehouse" %} &mdash;
+  {% trans "Use the generator above: A,B in Zone and 1-10 in Aisle give you twenty locations at once." %}
+</div>
+{% endif %}

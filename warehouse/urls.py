@@ -5,6 +5,8 @@ urlpatterns = [
     path('', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('dashboard/', views.dashboard, name='dashboard'),
+    # Las cifras de la empresa, el primer panel de las dos pantallas.
+    path('inicio/', views.inicio_panel, name='inicio_panel'),
     # Operations
     path('operations/create/', views.operation_create, name='operation_create'),
     path('operations/search/', views.operations_search, name='operations_search'),

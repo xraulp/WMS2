@@ -16,6 +16,28 @@
   document.addEventListener('htmx:beforeSwap', function(evt) {
     if (evt.detail.xhr.status === 422) { evt.detail.shouldSwap = true; evt.detail.isError = false; }
   });
+
+  // Las rutas, en un solo sitio.
+  //
+  // Estaban escritas a mano repartidas por el guion. Si alguien renombra una en
+  // urls.py el tablero falla al arrancar --porque la plantilla la resuelve-- y
+  // el movil se rompia en silencio, que es peor: la pantalla carga y el boton
+  // no hace nada.
+  //
+  // Las que llevan numero no se pueden resolver aqui, porque la etiqueta exige
+  // el argumento y aqui todavia no se sabe cual es. Se piden con un 0 de
+  // relleno y `mobUrlCon` lo cambia por el de verdad.
+  const MOB_URL = {
+    catalogo:        '{% url "debug_catalog" %}',
+    entradasLibres:  '{% url "free_entries" %}',
+    totalesDeSalida: '{% url "exit_entry_totals" %}',
+    digital:         '{% url "digital_search" %}',
+    editarCatalogo:  '{% url "catalog_edit" 0 %}',
+    accesoDeCliente: '{% url "customer_access" 0 %}',
+    editarOperacion: '{% url "operation_edit" 0 %}',
+    borrarOperacion: '{% url "operation_delete_confirm" 0 %}',
+  };
+  function mobUrlCon(plantilla, pk){ return plantilla.replace('/0/', '/' + pk + '/'); }
 </script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@600&display=swap" rel="stylesheet">
 <style>
@@ -201,7 +223,24 @@ usa el tablero.
 
 {% if profile|can_see_tab:'form' %}
 <!-- ══════ NEW OPERATION ══════ -->
-<div class="panel on" id="panel-new">
+{% comment %}
+Inicio. Las cifras de la empresa, que es lo primero que se ve al entrar.
+
+Se caia directo en el formulario de captura. Para quien captura todo el dia eso
+esta bien, pero deja sin contestar la pregunta con la que se abre la aplicacion
+--que hay pendiente-- y en un telefono recorrer seis pestanas para saberlo
+cuesta mas que en una pantalla grande.
+{% endcomment %}
+<div class="panel on" id="panel-inicio">
+  <div class="card">
+    <div class="card-title">{% trans "Home" %}</div>
+    <div id="mob-inicio-content">
+      <div style="color:var(--faint);font-size:13px;padding:20px">{% trans "Loading..." %}</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-new">
   <div class="card">
     <div class="card-title">{% trans "New Operation" %}</div>
     <div id="mob-form-msg"></div>
@@ -449,7 +488,12 @@ usa el tablero.
 {% endif %}
 
 <!-- ══════ DATABASE ══════ -->
-<div class="panel {% if not profile|can_see_tab:'form' %}on{% endif %}" id="panel-database">
+{% comment %}
+Ninguno nace encendido: la pantalla arranca en Inicio y de eso se encarga
+`initMobileTab`. Cuando este panel llevaba su propio "on" para quien no puede
+capturar, se pintaban dos a la vez hasta que corria el guion.
+{% endcomment %}
+<div class="panel" id="panel-database">
   <div class="card">
     <div class="card-title">{% trans "Operations" %}</div>
     <input type="text" id="mob-db-q" class="form-input" placeholder="{% trans "Search..." %}"
@@ -555,11 +599,27 @@ usa el tablero.
 </div>
 <script>
 function openCatalogEdit(pk) {
-  htmx.ajax('GET', '/catalog/'+pk+'/edit/', {target:'#cat-edit-body', swap:'innerHTML'});
+  htmx.ajax('GET', mobUrlCon(MOB_URL.editarCatalogo, pk), {target:'#cat-edit-body', swap:'innerHTML'});
   document.getElementById('cat-edit-modal').style.display = 'flex';
 }
 function closeCatalogEdit() {
   document.getElementById('cat-edit-modal').style.display = 'none';
+}
+
+// Repartir el acceso de un cliente. Mismo camino que en el tablero: el numero
+// de usuarios de la tabla es el boton, para que quien ve que un cliente no
+// tiene a nadie lo arregle ahi mismo.
+function abrirAccesoDeCliente(pk, nombre) {
+  document.getElementById('cust-access-title').textContent = nombre;
+  htmx.ajax('GET', mobUrlCon(MOB_URL.accesoDeCliente, pk),
+            {target:'#cust-access-body', swap:'innerHTML'});
+  document.getElementById('cust-access-modal').style.display = 'flex';
+}
+function cerrarAccesoDeCliente() {
+  document.getElementById('cust-access-modal').style.display = 'none';
+  // La cuenta de usuarios de la tabla acaba de cambiar.
+  htmx.ajax('GET', '{% url "catalog_list" %}?scope=customers',
+            {target:'#customer-table', swap:'innerHTML'});
 }
 </script>
 
@@ -577,6 +637,25 @@ function closeCatalogEdit() {
     </div>
   </div>
 </div>
+
+{% comment %}
+Bodegas y posiciones.
+
+Solo existia en el tablero, y es la pestana que mas sentido tiene en un
+telefono: "que hay guardado en este estante" es una pregunta que se hace de
+pie en el pasillo, no sentado. No se le pinta al cliente --donde tiene la
+empresa guardada su mercancia es cosa de la casa-- igual que en el tablero.
+{% endcomment %}
+{% if not profile.is_customer %}
+<div class="panel" id="panel-locations">
+  <div class="card">
+    <div class="card-title">{% trans "Warehouses and locations" %}</div>
+    <div id="mob-locations-content">
+      <div style="color:var(--faint);font-size:13px;padding:20px">{% trans "Loading..." %}</div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <!-- ══════ REPORT GENERATOR ══════ -->
 <div class="panel" id="panel-reports">
@@ -611,12 +690,15 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
 
 <!-- BOTTOM NAV — tabs shown based on role (#23) -->
 <div class="bottom-nav">
+  <button class="nav-btn on" id="nav-inicio" onclick="mobShowTab('inicio')">
+    <span class="icon">🏠</span>{% trans "Home" %}
+  </button>
   {% if profile|can_see_tab:'form' %}
-  <button class="nav-btn on" id="nav-new" onclick="mobShowTab('new')">
+  <button class="nav-btn" id="nav-new" onclick="mobShowTab('new')">
     <span class="icon">📦</span>{% trans "New Op" %}
   </button>
   {% endif %}
-  <button class="nav-btn {% if not profile|can_see_tab:'form' %}on{% endif %}" id="nav-database" onclick="mobShowTab('database')">
+  <button class="nav-btn" id="nav-database" onclick="mobShowTab('database')">
     <span class="icon">🗄️</span>{% trans "Operations" %}
   </button>
   <button class="nav-btn" id="nav-catalog" onclick="mobShowTab('catalog')">
@@ -625,6 +707,11 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
   <button class="nav-btn" id="nav-digital" onclick="mobShowTab('digital')">
     <span class="icon">📁</span>{% trans "Digital" %}
   </button>
+  {% if not profile.is_customer %}
+  <button class="nav-btn" id="nav-locations" onclick="mobShowTab('locations')">
+    <span class="icon">🗺</span>{% trans "Locations" %}
+  </button>
+  {% endif %}
   <button class="nav-btn" id="nav-reports" onclick="mobShowTab('reports')">
     <span class="icon">📊</span>{% trans "Reports" %}
   </button>
@@ -639,7 +726,29 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
 </div>
 
 
-<!-- MODAL PARA MÓVIL -->
+{% comment %}
+Quien entra por parte de un cliente.
+
+La tabla de clientes es la misma en las dos pantallas --`catalog_table.html`--
+y su boton llama a `abrirAccesoDeCliente`, pero esa funcion y su modal solo
+estaban en el tablero. En el telefono el boton se pintaba, se pulsaba y no
+pasaba nada: ni error a la vista ni pantalla, solo un ReferenceError en una
+consola que nadie tiene abierta andando por la bodega.
+{% endcomment %}
+<div id="cust-access-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:16px;overflow-y:auto"
+     onclick="if(event.target===this)cerrarAccesoDeCliente()">
+  <div style="background:var(--surface);border-radius:12px;width:100%;max-height:90vh;overflow-y:auto">
+    <div style="position:sticky;top:0;background:var(--surface);padding:12px 16px;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">
+        {% trans "Access" %} &mdash; <span id="cust-access-title"></span>
+      </span>
+      <button onclick="cerrarAccesoDeCliente()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--soft)">&#10005;</button>
+    </div>
+    <div id="cust-access-body" style="padding:16px"></div>
+  </div>
+</div>
+
+<!-- MODAL PARA MOVIL -->
 <div id="mobile-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; padding:16px; overflow-y:auto;">
   <div style="background:var(--surface); border-radius:12px; max-width:100%; width:100%; max-height:90vh; overflow-y:auto; font-family:'IBM Plex Sans',sans-serif; font-size:14px;">
     <div style="position:sticky; top:0; background:var(--surface); padding:12px 16px; border-bottom:1px solid var(--bdr); display:flex; justify-content:space-between; align-items:center;">
@@ -652,7 +761,7 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
 
 <script>
 const MOB_CAT = {customer:[],shipper:[],carrier:[],bundle_type:[]};
-fetch('/debug/catalog/').then(r=>r.json()).then(d=>{
+fetch(MOB_URL.catalogo).then(r=>r.json()).then(d=>{
   MOB_CAT.customer    = d.customers    || [];
   MOB_CAT.shipper     = d.shippers     || [];
   MOB_CAT.carrier     = d.carriers     || [];
@@ -660,7 +769,7 @@ fetch('/debug/catalog/').then(r=>r.json()).then(d=>{
 });
 
 // Tab names for all panels
-const MOB_PANELS = ['new','database','catalog','digital','reports','deletions'];
+const MOB_PANELS = ['inicio','new','database','catalog','digital','locations','reports','deletions'];
 
 function mobShowTab(t) {
   // La pestaña activa, para volver a ella si la pantalla se recarga. Ver
@@ -684,6 +793,17 @@ function mobShowTab(t) {
     cargarPanelDigital();
   }
 
+  // Las cifras se piden cada vez que se abre la pestana, no una sola vez al
+  // cargar: es justo la pantalla a la que se vuelve despues de capturar algo,
+  // y ensenar el numero de antes seria peor que no ensenarlo.
+  if (t === 'inicio') {
+    htmx.ajax('GET', '{% url "inicio_panel" %}?movil=1',
+              {target:'#mob-inicio-content', swap:'innerHTML'});
+  }
+  if (t === 'locations') {
+    htmx.ajax('GET', '{% url "locations_panel" %}?movil=1',
+              {target:'#mob-locations-content', swap:'innerHTML'});
+  }
   if (t === 'reports') {
     htmx.ajax('GET', '{% url "report_generator" %}', {target:'#report-content', swap:'innerHTML'});
   }
@@ -706,12 +826,8 @@ function initMobileTab() {
         return;
     }
 
-    // Si no viene de QR, la pestaña por defecto según rol
-    {% if profile|can_see_tab:'form' %}
-        let savedTab = 'new';
-    {% else %}
-        let savedTab = 'database';
-    {% endif %}
+    // Si no viene de QR, la pestaña por defecto es Inicio, para todos.
+    let savedTab = 'inicio';
 
     // Y si la pantalla se acaba de recargar -- al cambiar el idioma, o con un
     // F5 --, se vuelve a donde estaba quien la recargó. `sessionStorage` se
@@ -804,6 +920,13 @@ function mobIrALaTabla(url){
   htmx.ajax('GET', url, {target:'#mob-ops-table', swap:'innerHTML'});
 }
 function mobVerSinLeer(){ mobIrALaTabla('{% url "operations_unread" %}'); }
+
+// De una posicion a lo que tiene guardado. Es el mismo camino que en el
+// tablero: se ve que un estante tiene carga y lo siguiente que se quiere saber
+// es cual.
+function mobVerContenidoDeUbicacion(pk){
+  mobIrALaTabla('{% url "operations_search" %}?location=' + encodeURIComponent(pk));
+}
 function mobVerVencidas(){ mobIrALaTabla('{% url "operations_aging" %}'); }
 
 // El tablero recibe las dos cuentas ya hechas en su contexto; aqui se piden al
@@ -891,7 +1014,7 @@ function mobFiltrarUbicaciones(){
 }
 function mobLoadEntries(){
   if(!mobCustomerId)return;
-  fetch('/operations/free-entries/?customer_id='+mobCustomerId)
+  fetch(MOB_URL.entradasLibres + '?customer_id=' + mobCustomerId)
     .then(r=>r.json()).then(data=>{
       const c=document.getElementById('mob-entries-list');
       if(!data.length){c.innerHTML='<div style="color:var(--faint);font-size:13px;padding:8px 0">{% trans "No free entries for this customer." as t_sin_entradas %}{{ t_sin_entradas|escapejs }}</div>';return;}
@@ -916,7 +1039,7 @@ function mobToggleEntry(id){
   mobLoadEntries();
   // Autofill from entries
   if(mobSelEntries.length>0){
-    fetch('/operations/exit-totals/?ids='+encodeURIComponent(mobSelEntries.join(',')))
+    fetch(MOB_URL.totalesDeSalida + '?ids=' + encodeURIComponent(mobSelEntries.join(',')))
       .then(r=>r.json()).then(d=>{
         const lbs=document.getElementById('mob-lbs'),kgs=document.getElementById('mob-kgs');
         const bqty=document.querySelector('[name="bundle_qty"]'),desc=document.querySelector('[name="description"]');
@@ -1021,7 +1144,7 @@ function cargarPanelDigital(){
   if(!destino || typeof htmx==='undefined')return;
   const dq=document.getElementById('mob-digi-q');
   const q=dq?dq.value.trim():'';
-  htmx.ajax('GET','/digital/search/?q='+encodeURIComponent(q),
+  htmx.ajax('GET', MOB_URL.digital + '?q=' + encodeURIComponent(q),
             {target:'#mob-digital-content',swap:'innerHTML'});
 }
 
@@ -1034,10 +1157,18 @@ window.addEventListener('load',()=>{
   if(d)d.value=new Date().toISOString().split('T')[0];
 });
 
+{% comment %}
+Los textos que pinta el guion se sacan aqui y pasan por `escapejs`: una
+traduccion con apostrofe dentro de una cadena de JavaScript cierra la comilla y
+deja la pantalla sin funcionar.
+{% endcomment %}
+{% trans "Sign out?" as t_salir %}
+{% trans "Loading..." as t_cargando %}
+{% trans "Could not load" as t_no_cargo %}
 // Confirmar logout antes de salir
 function confirmLogout(event) {
     event.preventDefault();
-    if (confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+    if (confirm('{{ t_salir|escapejs }}')) {
         window.location.href = "{% url 'logout' %}";
     }
     return false;
@@ -1051,7 +1182,7 @@ function openModal(url) {
     if (!modal || !body) return;
 
     modal.style.display = 'flex';
-    body.innerHTML = '<div style="text-align:center;padding:20px;">Cargando...</div>';
+    body.innerHTML = '<div style="text-align:center;padding:20px;">{{ t_cargando|escapejs }}</div>';
 
     fetch(url, {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -1074,7 +1205,7 @@ function openModal(url) {
         });
     })
     .catch(error => {
-        body.innerHTML = '<div style="color:red;padding:20px;">Error al cargar</div>';
+        body.innerHTML = '<div style="color:red;padding:20px;">{{ t_no_cargo|escapejs }}</div>';
         console.error('Error:', error);
     });
 }
@@ -1084,48 +1215,39 @@ function closeMobileModal() {
     if (modal) modal.style.display = 'none';
 }
 
+// El detalle y la edicion de una operacion son los mismos parciales en las dos
+// pantallas, y sus botones de cerrar y cancelar llaman a `closeModal`, que solo
+// existia en el tablero. En el telefono, "Cancelar" al editar no hacia nada.
+function closeModal() { closeMobileModal(); }
+
 function openEditModal(pk) {
-    openModal('/operations/' + pk + '/edit/');
+    openModal(mobUrlCon(MOB_URL.editarOperacion, pk));
 }
 
-function confirmDelete(pk, customId) {
-    if (confirm('¿Eliminar la operación ' + customId + '?\nEsta acción no se puede deshacer.')) {
-        const password = prompt('Ingresa tu contraseña para confirmar:');
-        if (password) {
-            const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
-            const formData = new FormData();
-            formData.append('confirm_password', password);
-            formData.append('csrfmiddlewaretoken', csrf);
+{% comment %}
+Aqui vivia una segunda version de `confirmDelete`, propia del movil, y estaba
+rota de una manera fea: pedia la contrasena con un `prompt` y mandaba el borrado
+sin motivo. El servidor exige motivo, asi que los rechazaba todos --devolviendo
+la tabla con el aviso "escribe el motivo"-- y este guion tomaba cualquier
+respuesta por buena: pintaba la tabla que llegaba y anunciaba "Operacion
+eliminada correctamente". Nunca se borro nada desde el movil, y siempre dijo
+que si.
 
-            fetch('/operations/' + pk + '/delete-confirm/', {
-                method: 'POST',
-                body: formData,
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            })
-            .then(response => response.text())
-            .then(html => {
-                // Recargar la tabla
-                const tableContainer = document.getElementById('mob-ops-table');
-                if (tableContainer) {
-                    tableContainer.innerHTML = html;
-                }
-                alert('Operación eliminada correctamente.');
-                closeMobileModal();
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error al eliminar. Verifica tu contraseña.');
-            });
-        }
-    }
-}
+Ademas ganaba por orden de carga: la buena, la de `operations_table.html`, se
+define antes y esta la pisaba... hasta que una busqueda repintaba la tabla y
+volvia a definirla. El borrado del movil se comportaba distinto antes y despues
+de buscar.
+
+No se sustituye por nada: el modal con contrasena y motivo de
+`operations_table.html` ya lo incluyen las dos pantallas.
+{% endcomment %}
 
 // Función para refrescar catálogo después de guardar
 function onMobAfterCatSave(e) {
   if (e.detail.successful) {
     document.getElementById('mob-cat-form').reset();
     htmx.ajax('GET', '{% url "catalog_list" %}?scope=operational', {target:'#catalog-table', swap:'innerHTML'});
-    fetch('/debug/catalog/').then(r=>r.json()).then(d=>{
+    fetch(MOB_URL.catalogo).then(r=>r.json()).then(d=>{
       MOB_CAT.customer    = d.customers    || [];
       MOB_CAT.shipper     = d.shippers     || [];
       MOB_CAT.carrier     = d.carriers     || [];

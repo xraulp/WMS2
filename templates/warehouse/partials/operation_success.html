@@ -19,6 +19,6 @@
 {% endif %}
 
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-  <a href="/operations/{{ operation.pk }}/pdf/" target="_blank" class="btn btn-g btn-sm">📄 {% trans "Full Report PDF" %}</a>
-  <a href="/operations/{{ operation.pk }}/label/" target="_blank" class="btn btn-p btn-sm">🏷 {% trans "Print Labels" %}</a>
+  <a href="{% url 'operation_pdf' operation.pk %}" target="_blank" class="btn btn-g btn-sm">📄 {% trans "Full Report PDF" %}</a>
+  <a href="{% url 'operation_label' operation.pk %}" target="_blank" class="btn btn-p btn-sm">🏷 {% trans "Print Labels" %}</a>
 </div>

@@ -248,14 +248,14 @@ function userCustRender(prefix, items) {
   drop.style.display = 'block';
 }
 function userCustOpen(prefix) {
-  fetch('/debug/catalog/').then(r=>r.json()).then(d=>userCustRender(prefix, d.customers||[]));
+  fetch('{% url "debug_catalog" %}').then(r=>r.json()).then(d=>userCustRender(prefix, d.customers||[]));
 }
 function userCustFilter(prefix) {
   const isEdit = prefix.startsWith('edit-');
   const uid    = isEdit ? prefix.slice(5) : null;
   const inputId = isEdit ? 'edit-cust-input-'+uid : 'new-cust-input';
   const q = (document.getElementById(inputId)?.value||'').toLowerCase().trim();
-  fetch('/debug/catalog/').then(r=>r.json()).then(d=>
+  fetch('{% url "debug_catalog" %}').then(r=>r.json()).then(d=>
     userCustRender(prefix, (d.customers||[]).filter(i=>i.name.toLowerCase().includes(q))));
 }
 function userCustSelect(prefix, id, name) {

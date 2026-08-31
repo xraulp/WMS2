@@ -263,7 +263,7 @@ function reloadDigitalContent() {
   if (!customId) return;
   const target = document.getElementById('digital-content') || document.getElementById('mob-digital-content');
   if (!target) return;
-  fetch('/digital/search/?q=' + encodeURIComponent(customId))
+  fetch('{% url "digital_search" %}?q=' + encodeURIComponent(customId))
     .then(r => r.text())
     .then(html => {
       target.innerHTML = html;
@@ -278,7 +278,7 @@ function clearDigital() {
   if (q) q.value = '';
   const destino = document.getElementById('digital-content') || document.getElementById('mob-digital-content');
   if (!destino) return;
-  htmx.ajax('GET','/digital/search/',{target:'#'+destino.id, swap:'innerHTML'});
+  htmx.ajax('GET', '{% url "digital_search" %}', {target:'#'+destino.id, swap:'innerHTML'});
 }
 
 // El panel devuelto trae el motivo del rechazo pintado; se saca de ahi para
@@ -305,7 +305,7 @@ function confirmDeleteFile(docId, fileName) {
             formData.append('csrfmiddlewaretoken', csrf);
 
             let acepto = false;
-            fetch('/digital/file/' + docId + '/delete/', {
+            fetch('{% url "digital_delete_file" 0 %}'.replace('/0/', '/' + docId + '/'), {
                 method: 'POST',
                 body: formData,
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -387,7 +387,7 @@ function deleteSelectedFiles() {
   // pintado, que trae el motivo escrito: se muestra igual. Lanzar aqui dejaba la
   // pantalla sin actualizar y el aviso decia "Error 400" con HTML dentro.
   let acepto = false;
-  fetch('/digital/delete-multiple/', {
+  fetch('{% url "digital_delete_multiple" %}', {
     method: 'POST',
     body: formData,
     headers: { 'X-Requested-With': 'XMLHttpRequest' }

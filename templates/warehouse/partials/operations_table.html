@@ -290,7 +290,15 @@ function confirmDelete(pk, customId) {
   document.getElementById('del-pwd').value = '';
   document.getElementById('del-reason').value = '';
   const form = document.getElementById('del-form');
-  form.setAttribute('hx-post', '/operations/' + pk + '/delete-confirm/');
+  // El 0 es relleno: la etiqueta de la plantilla exige un numero y aqui no se
+  // sabe cual hasta que alguien pulsa.
+  form.setAttribute('hx-post',
+    '{% url "operation_delete_confirm" 0 %}'.replace('/0/', '/' + pk + '/'));
+  // El contenedor de la tabla no se llama igual en las dos pantallas. Con el
+  // destino fijo en `#ops-table`, htmx no encontraba a quien darle la respuesta
+  // en el movil y la tabla se quedaba con lo de antes.
+  form.setAttribute('hx-target',
+    document.getElementById('ops-table') ? '#ops-table' : '#mob-ops-table');
   htmx.process(form);
   modal.style.display = 'flex';
 }

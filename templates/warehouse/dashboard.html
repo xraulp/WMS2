@@ -174,10 +174,16 @@ tbody td:has(.btn-action) {
 </div>
 
 <div class="tabs">
+  {% comment %}
+  Inicio va primero y la ve todo el mundo: es la pantalla que contesta la
+  pregunta con la que se abre la aplicacion --que hay pendiente-- y antes habia
+  que recorrer pestanas para saberlo.
+  {% endcomment %}
+  <button class="tab on" id="tab-inicio" onclick="showTab('inicio')">{% trans "Home" %}</button>
   {% if profile|can_see_tab:'form' %}
-  <button class="tab on" id="tab-form" onclick="showTab('form')">{% trans "New Operation" %}</button>
+  <button class="tab" id="tab-form" onclick="showTab('form')">{% trans "New Operation" %}</button>
   {% endif %}
-  <button class="tab {% if not profile|can_see_tab:'form' %}on{% endif %}" id="tab-database" onclick="showTab('database')">{% trans "Operations" %}</button>
+  <button class="tab" id="tab-database" onclick="showTab('database')">{% trans "Operations" %}</button>
   {% if profile|can_see_tab:'catalog' %}
   <button class="tab" id="tab-catalog" onclick="showTab('catalog')">{% trans "Catalog" %}</button>
   {% endif %}
@@ -232,16 +238,25 @@ tbody td:has(.btn-action) {
 <div class="pg">
 
 {% if profile|can_see_tab:'form' %}
-<div class="panel on" id="panel-form">
+<div class="panel on" id="panel-inicio">
+  <div class="card">
+    <div class="ct">{% trans "Home" %}</div>
+    <div id="inicio-content">{% trans "Loading..." %}</div>
+  </div>
+</div>
+
+<div class="panel" id="panel-form">
   <div class="card">
     <div class="ct">{% trans "Register Operation" %}</div>
     <div id="form-msg-wrap"><div id="form-msg"></div></div>
-    <div id="print-bar" style="display:none;background:var(--asoft);border:1px solid var(--accent);border-radius:var(--rL);padding:10px 14px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap">
-      <span style="font-size:12px;font-weight:600;color:var(--adark)" id="print-bar-id"></span>
-      <a id="btn-print-report" href="#" target="_blank" class="btn btn-g btn-sm">📄 {% trans "Full Report PDF" %}</a>
-      <a id="btn-print-label"  href="#" target="_blank" class="btn btn-p btn-sm">🏷 {% trans "Print Labels" %}</a>
-      <button onclick="document.getElementById('print-bar').style.display='none'" class="btn btn-g btn-sm" style="margin-left:auto">✕ {% trans "Close" %}</button>
-    </div>
+    {% comment %}
+    Aqui habia una barra de impresion --"PDF completo" y "Imprimir etiquetas"--
+    con sus tres ids puestos y nadie que los rellenara nunca: el unico codigo
+    que la nombraba era el que la escondia. Lo que si funciona son los dos
+    enlaces de `operation_success.html`, que es lo que aparece en este mismo
+    hueco en cuanto se captura algo. La barra era el resto de un camino
+    anterior.
+    {% endcomment %}
 
     <form id="op-form"
           hx-post="{% url 'operation_create' %}"
@@ -457,7 +472,12 @@ tbody td:has(.btn-action) {
 </div>
 {% endif %}
 
-<div class="panel {% if not profile|can_see_tab:'form' %}on{% endif %}" id="panel-database">
+{% comment %}
+Ninguno nace encendido: la pantalla arranca en Inicio y de eso se encarga
+`initActiveTab`. Cuando este panel llevaba su propio "on" para quien no puede
+capturar, se pintaban dos a la vez hasta que corria el guion.
+{% endcomment %}
+<div class="panel" id="panel-database">
   <div class="card">
     <div class="ct">{% trans "Operations" %}</div>
     {% comment %}
@@ -751,7 +771,8 @@ tbody td:has(.btn-action) {
 </div>
 <script>
 function openCatalogEdit(pk) {
-  htmx.ajax('GET', '/catalog/'+pk+'/edit/', {target:'#cat-edit-body', swap:'innerHTML'});
+  htmx.ajax('GET', '{% url "catalog_edit" 0 %}'.replace('/0/', '/' + pk + '/'),
+            {target:'#cat-edit-body', swap:'innerHTML'});
   document.getElementById('cat-edit-modal').style.display = 'flex';
 }
 function closeCatalogEdit() {
@@ -759,7 +780,9 @@ function closeCatalogEdit() {
 }
 function abrirAccesoDeCliente(pk, nombre) {
   document.getElementById('cust-access-title').textContent = nombre;
-  htmx.ajax('GET', '/catalog/'+pk+'/access/', {target:'#cust-access-body', swap:'innerHTML'});
+  // El 0 es relleno: la etiqueta exige un numero y aqui no se sabe cual.
+  htmx.ajax('GET', '{% url "customer_access" 0 %}'.replace('/0/', '/' + pk + '/'),
+            {target:'#cust-access-body', swap:'innerHTML'});
   document.getElementById('cust-access-modal').style.display = 'flex';
 }
 function cerrarAccesoDeCliente() {
@@ -887,12 +910,10 @@ function initActiveTab() {
         return;
     }
 
-    // La pestaña por defecto según rol.
-    {% if profile|can_see_tab:'form' %}
-        let pestana = 'form';
-    {% else %}
-        let pestana = 'database';
-    {% endif %}
+    // La pestaña por defecto es Inicio, para todos. Se caia directo en el
+    // formulario de captura, que esta bien para quien captura todo el dia pero
+    // deja sin contestar la pregunta con la que se abre la aplicacion.
+    let pestana = 'inicio';
 
     // Pero si esta pantalla se acaba de recargar, se vuelve a donde estaba
     // quien la recargó. Cambiar el idioma vuelve a pedir la pantalla -- la
@@ -950,15 +971,17 @@ function loadCatalog() {
 loadCatalog();
 
 function showTab(t) {
-  const tabs = ['form','database','catalog','customers','locations','digital','reports','users','deletions','platform'];
+  const tabs = ['inicio','form','database','catalog','customers','locations','digital','reports','users','deletions','platform'];
   tabs.forEach(n=>{
     const p = document.getElementById('panel-'+n);
     const b = document.getElementById('tab-'+n);
     if (p) p.classList.toggle('on', n===t);
     if (b) b.classList.toggle('on', n===t);
   });
-  const pb = document.getElementById('print-bar');
-  if (pb) pb.style.display = 'none';
+  // Las cifras se piden cada vez que se abre la pestana, no una sola vez al
+  // cargar: es justo la pantalla a la que se vuelve despues de capturar algo,
+  // y ensenar el numero de antes seria peor que no ensenarlo.
+  if (t === 'inicio') htmx.ajax('GET','{% url "inicio_panel" %}',{target:'#inicio-content',swap:'innerHTML'});
   if (t === 'users') htmx.ajax('GET','{% url "user_management" %}',{target:'#users-content',swap:'innerHTML'});
   if (t === 'locations') htmx.ajax('GET','{% url "locations_panel" %}',{target:'#locations-content',swap:'innerHTML'});
   if (t === 'platform') htmx.ajax('GET','{% url "platform_tenant_list" %}',{target:'#platform-content',swap:'innerHTML'});
@@ -1317,7 +1340,9 @@ function onAfterCustSave(e){
 }
 
 function openModal(url){document.getElementById('modal').classList.add('on');htmx.ajax('GET',url,{target:'#modal-body',swap:'innerHTML'});}
-function openEditModal(pk){openModal('/operations/'+pk+'/edit/');}
+function openEditModal(pk){
+  openModal('{% url "operation_edit" 0 %}'.replace('/0/', '/' + pk + '/'));
+}
 function closeModal(){
   document.getElementById('modal').classList.remove('on');
   // Vaciar el modal y no solo ocultarlo. El panel del hilo se refresca solo
@@ -1398,7 +1423,7 @@ document.addEventListener('DOMContentLoaded',function(){
 
 function autofillExitTotals(selectedEntries){
   if(!selectedEntries.length)return;
-  fetch('/operations/exit-totals/?ids='+encodeURIComponent(selectedEntries.join(',')))
+  fetch('{% url "exit_entry_totals" %}?ids=' + encodeURIComponent(selectedEntries.join(',')))
     .then(r=>r.json())
     .then(d=>{
       const lbs=document.getElementById('id_lbs'),kgs=document.getElementById('id_kgs');
@@ -1440,7 +1465,7 @@ function submitOperationForm() {
     const spinner = document.querySelector('#op-form .htmx-indicator');
     if (spinner) spinner.style.display = 'inline-flex';
 
-    fetch('/operations/create/', {
+    fetch('{% url "operation_create" %}', {
         method: 'POST',
         body: formData,
         headers: {
@@ -1458,7 +1483,7 @@ function submitOperationForm() {
             accumulatedPhotos = [];
             accumulatedDocs = [];
             resetOpForm();
-            htmx.ajax('GET', '/operations/search/', { target: '#ops-table', swap: 'innerHTML' });
+            htmx.ajax('GET', '{% url "operations_search" %}', { target: '#ops-table', swap: 'innerHTML' });
             setTimeout(() => {
                 if (msgContainer) msgContainer.innerHTML = '';
             }, 5000);

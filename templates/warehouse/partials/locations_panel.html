@@ -231,7 +231,7 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
                       hx-post="{% url 'location_toggle' u.pk %}"
                       hx-target="#locations-content" hx-swap="innerHTML"
                       hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-                {% if u.active %}Turn off{% else %}Turn on{% endif %}
+                {% if u.active %}{% trans "Turn off" %}{% else %}{% trans "Turn on" %}{% endif %}
               </button>
               {% endif %}
             </td>
@@ -241,9 +241,9 @@ Devolver el panel completo es mas barato de mantener que coser cuatro trozos.
       </table>
     </div>
     <div class="tabla-nav-barra">
-      <button type="button" class="nav-h" data-ir="inicio" title="{% trans "First column" %}">&#9198; Start</button>
-      <span class="tabla-nav-pista">Shift + scroll wheel to move across columns</span>
-      <button type="button" class="nav-h" data-ir="final" title="{% trans "Last column" %}">End &#9197;</button>
+      <button type="button" class="nav-h" data-ir="inicio" title="{% trans "First column" %}">&#9198; {% trans "Start" %}</button>
+      <span class="tabla-nav-pista">{% trans "Shift + scroll wheel to move across columns" %}</span>
+      <button type="button" class="nav-h" data-ir="final" title="{% trans "Last column" %}">{% trans "End" %} &#9197;</button>
     </div>
   </div>
   {% include 'warehouse/partials/tabla_navegable.html' %}

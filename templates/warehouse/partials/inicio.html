@@ -1,0 +1,141 @@
+{% load i18n %}
+{% comment %}
+Las cifras de la empresa: el primer panel de las dos pantallas.
+
+Este parcial es uno solo a proposito. Las otras dos veces que algo tenia que
+salir en el tablero y en el movil se escribio dos veces, y las dos veces el
+movil se quedo atras. Aqui no hay tabla ancha que separar --son tarjetas en una
+rejilla que se acomoda sola, cuatro columnas en una pantalla y una en un
+telefono-- asi que no habia motivo para tener dos.
+
+Lo unico que difiere entre pantallas es el camino a las listas, porque cada una
+tiene su propia funcion para pintar la tabla. Eso lo resuelve `inicio_es_movil`,
+elige entre las funciones del movil y las del tablero.
+{% endcomment %}
+<style>
+.ini-rejilla { display:grid; gap:10px; margin-bottom:16px;
+               grid-template-columns:repeat(auto-fit, minmax(148px, 1fr)); }
+.ini-t { display:flex; flex-direction:column; justify-content:space-between;
+         gap:6px; background:var(--surface); border:1px solid var(--bdr);
+         border-radius:var(--r, 10px); padding:14px; text-align:left;
+         font-family:inherit; color:inherit; min-height:92px; }
+.ini-t.pulsable { cursor:pointer; }
+.ini-t.pulsable:hover { border-color:var(--accent); }
+.ini-n { font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600;
+         line-height:1; color:var(--ink); }
+.ini-e { font-size:11px; font-weight:600; text-transform:uppercase;
+         letter-spacing:.07em; color:var(--faint); }
+.ini-p { font-size:11px; color:var(--soft); }
+.ini-alerta .ini-n { color:var(--red); }
+.ini-alerta { border-color:var(--red); }
+.ini-urgente { color:var(--red); font-weight:600; }
+.ini-titulo { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600;
+              text-transform:uppercase; letter-spacing:.08em; color:var(--faint);
+              margin:0 0 10px; padding-left:8px; border-left:3px solid var(--accent); }
+.ini-fila { display:flex; align-items:center; gap:10px; padding:9px 0;
+            border-bottom:1px solid var(--bdr); font-size:13px; }
+.ini-fila:last-child { border-bottom:none; }
+.ini-id { font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:12px;
+          flex:0 0 auto; }
+.ini-quien { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+             white-space:nowrap; color:var(--soft); }
+.ini-cuando { flex:0 0 auto; font-size:11px; color:var(--faint); }
+.ini-nada { color:var(--faint); font-size:13px; padding:14px 0; }
+</style>
+
+<div class="ini-rejilla">
+
+  {% comment %}
+  Mercancia guardada. Entradas que nadie ha liberado, el mismo criterio que usan
+  la alerta de permanencia y el contador de posiciones ocupadas: si contaran
+  cosas distintas se contradirian en cuanto alguien libera algo.
+  {% endcomment %}
+  <button type="button" class="ini-t pulsable"
+          onclick="inicioVerEnBodega()">
+    <span class="ini-e">{% trans "In warehouse" %}</span>
+    <span class="ini-n">{{ inicio_en_bodega }}</span>
+    <span class="ini-p">{% trans "entries not released yet" %}</span>
+  </button>
+
+  <button type="button" class="ini-t pulsable {% if inicio_vencidas %}ini-alerta{% endif %}"
+          onclick="inicioVerVencidas()">
+    <span class="ini-e">{% trans "Past the deadline" %}</span>
+    <span class="ini-n">{{ inicio_vencidas }}</span>
+    <span class="ini-p">
+      {% if inicio_urgentes %}
+      <span class="ini-urgente">{% blocktrans with n=inicio_urgentes %}{{ n }} urgent{% endblocktrans %}</span>
+      {% else %}{% trans "goods stored too long" %}{% endif %}
+    </span>
+  </button>
+
+  <button type="button" class="ini-t pulsable" onclick="inicioVerTodas()">
+    <span class="ini-e">{% trans "Today" %}</span>
+    <span class="ini-n">{{ inicio_hoy }}</span>
+    <span class="ini-p">{% trans "operations registered" %}</span>
+  </button>
+
+  <button type="button" class="ini-t pulsable" onclick="inicioVerSinLeer()">
+    <span class="ini-e">{% trans "Unread messages" %}</span>
+    <span class="ini-n">{{ inicio_sin_leer }}</span>
+    <span class="ini-p">{% trans "waiting for an answer" %}</span>
+  </button>
+
+  {% comment %}
+  Cuanto sitio queda. Sin posiciones dadas de alta la captura tampoco pide
+  ubicacion, asi que la tarjeta seria un cero sin significado y no se pinta. Al
+  cliente tampoco: donde tiene la empresa guardada su mercancia es cosa de la
+  casa, igual que la pestana de bodegas.
+  {% endcomment %}
+  {% if inicio_posiciones and not profile.is_customer %}
+  <button type="button" class="ini-t pulsable" onclick="inicioVerUbicaciones()">
+    <span class="ini-e">{% trans "Locations" %}</span>
+    <span class="ini-n">{{ inicio_ocupadas }}</span>
+    <span class="ini-p">{% blocktrans with total=inicio_posiciones %}occupied of {{ total }}{% endblocktrans %}</span>
+  </button>
+  {% endif %}
+
+</div>
+
+<div class="ini-titulo">{% trans "Latest movements" %}</div>
+{% if inicio_ultimas %}
+<div>
+  {% for op in inicio_ultimas %}
+  <div class="ini-fila">
+    <span class="ini-id">{{ op.custom_id }}</span>
+    <span class="ini-quien">
+      {{ op.customer.name|default:"&mdash;" }}{% if op.location %} &middot; {{ op.location.code }}{% endif %}
+    </span>
+    <span class="ini-cuando">{{ op.date|date:"d/m" }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="ini-nada">{% trans "Nothing registered yet." %}</div>
+{% endif %}
+
+<script>
+{% comment %}
+Los caminos a las listas. El parcial es el mismo en las dos pantallas pero las
+funciones que pintan la tabla no lo son, asi que aqui se elige cual usar segun
+quien pidio el panel. Si algun dia alguna falta, la tarjeta se queda muda en vez
+de reventar: un numero que no lleva a ningun lado sigue siendo un numero util.
+{% endcomment %}
+{% if inicio_es_movil %}
+function inicioVerEnBodega(){ mobIrALaTabla('{% url "operations_search" %}?status=In%20Warehouse'); }
+function inicioVerVencidas(){ mobVerVencidas(); }
+function inicioVerSinLeer(){ mobVerSinLeer(); }
+function inicioVerTodas(){ mobIrALaTabla('{% url "operations_search" %}'); }
+function inicioVerUbicaciones(){ mobShowTab('locations'); }
+{% else %}
+function inicioVerEnBodega(){
+  showTab('database');
+  limpiarFiltrosDeLaTabla();
+  htmx.ajax('GET', '{% url "operations_search" %}?status=In%20Warehouse',
+            {target:'#ops-table', swap:'innerHTML'});
+}
+function inicioVerVencidas(){ verVencidas(); }
+function inicioVerSinLeer(){ verSinLeer(); }
+function inicioVerTodas(){ showTab('database'); verTodasLasOperaciones(); }
+function inicioVerUbicaciones(){ showTab('locations'); }
+{% endif %}
+</script>

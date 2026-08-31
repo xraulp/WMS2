@@ -155,6 +155,75 @@ def logout_view(request):
     return redirect('login')
 
 
+# ── INICIO ─────────────────────────────────────────────────────────────────
+
+@login_required
+@require_GET
+def inicio_panel(request):
+    """
+    Las cifras de la empresa, que es lo primero que se ve al entrar.
+
+    Antes se caia directo en el formulario de captura. Para quien captura todo
+    el dia eso esta bien, pero deja sin contestar la pregunta con la que se
+    abre la aplicacion --que hay pendiente-- y obliga a recorrer pestanas para
+    saberlo. Las cinco cifras de aqui son las cinco que hacen actuar: mercancia
+    guardada, mercancia pasada de plazo, lo capturado hoy, los mensajes
+    esperando y cuanto sitio queda.
+
+    Cada numero lleva a su lista. Un contador sin destino deja a alguien
+    buscando a mano por doscientas filas, que es peor que no tenerlo.
+
+    Lo pintan las dos pantallas con el mismo parcial. Aqui no hay tabla ancha
+    que separar --son tarjetas en una rejilla que se acomoda sola-- asi que no
+    hay motivo para tener dos, y tener dos es justo el camino por el que el
+    movil se fue quedando atras.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    hoy = timezone.localdate()
+
+    visibles = customer_ops_filter(
+        request.user, WarehouseOperation.objects.filter(tenant=tenant))
+
+    # Lo que sigue guardado: entradas que nadie ha liberado. Es el mismo
+    # criterio que usan la alerta de permanencia y el contador de posiciones, y
+    # tiene que serlo: tres numeros que cuentan lo mismo de tres maneras se
+    # contradicen en cuanto alguien libera algo.
+    en_bodega = visibles.filter(operation_type='ENTRY').filter(
+        Q(entry_dispatched__isnull=True) | Q(entry_dispatched='')).count()
+
+    alertas  = resumen_de_alertas(request.user, tenant)
+    mensajes = resumen_sin_leer(request.user, tenant)
+
+    # Cuanto sitio queda. Solo se pinta si la empresa tiene posiciones dadas de
+    # alta; sin ellas la captura tampoco pide ubicacion y la tarjeta seria un
+    # cero sin significado.
+    guardadas = Count('operations', filter=(
+        Q(operations__operation_type='ENTRY') &
+        (Q(operations__entry_dispatched__isnull=True) |
+         Q(operations__entry_dispatched=''))))
+    posiciones = Location.objects.filter(tenant=tenant, active=True)
+    total_posiciones = posiciones.count()
+    ocupadas = (posiciones.annotate(guardadas=guardadas)
+                .filter(guardadas__gt=0).count()) if total_posiciones else 0
+
+    return render(request, 'warehouse/partials/inicio.html', {
+        'profile': profile,
+        'tenant': tenant,
+        'inicio_en_bodega':  en_bodega,
+        'inicio_vencidas':   alertas['total'],
+        'inicio_urgentes':   alertas['urgentes'],
+        'inicio_hoy':        visibles.filter(date=hoy).count(),
+        'inicio_sin_leer':   mensajes['mensajes'],
+        'inicio_posiciones': total_posiciones,
+        'inicio_ocupadas':   ocupadas,
+        'inicio_ultimas':    visibles.select_related('customer', 'location')[:6],
+        # El parcial es uno solo, pero los caminos a las listas no: cada
+        # pantalla tiene su propia funcion para llevar a la tabla.
+        'inicio_es_movil':   request.GET.get('movil') == '1',
+    })
+
+
 # ── DASHBOARD ─────────────────────────────────────────────────────────────────
 
 #@login_required
@@ -1196,6 +1265,12 @@ def _contexto_de_bodegas(request, tenant, **extra):
     solo_ocupadas = request.GET.get('ocupadas') == '1'
     if solo_ocupadas:
         ubicaciones = ubicaciones.filter(guardadas__gt=0)
+    # Buscar por codigo. En el telefono es la forma normal de llegar: se esta
+    # parado delante del estante y se teclea lo que dice la etiqueta, en vez de
+    # bajar por una lista de cuatrocientas.
+    q = request.GET.get('q', '').strip()
+    if q:
+        ubicaciones = ubicaciones.filter(code__icontains=q)
     contexto = {
         'bodegas': bodegas,
         'ubicaciones': ubicaciones.order_by('-guardadas', 'code')[:400] if solo_ocupadas
@@ -1203,6 +1278,7 @@ def _contexto_de_bodegas(request, tenant, **extra):
         'total_ubicaciones': ubicaciones.count(),
         'bodega_filtrada': bodega_id,
         'solo_ocupadas': solo_ocupadas,
+        'q': q,
         # Cuantas posiciones estan ocupadas ahora mismo, para que la pantalla
         # pueda decirlo sin recorrer las cuatrocientas que pinta.
         'posiciones_ocupadas': ubicaciones.filter(guardadas__gt=0).count(),
@@ -1214,11 +1290,35 @@ def _contexto_de_bodegas(request, tenant, **extra):
     return contexto
 
 
+def _plantilla_de_bodegas(request):
+    """
+    Cual de las dos pantallas pidio el panel de bodegas.
+
+    Los datos son los mismos pero el marcado no puede serlo: la tabla de once
+    columnas del tablero no cabe en un telefono, y en el telefono es donde de
+    verdad se pregunta que hay guardado en un estante, porque quien lo pregunta
+    esta parado delante. Asi que lo que cambia es la plantilla, no la vista.
+
+    Las cuatro acciones devuelven el panel entero --dar de alta una bodega
+    cambia el desplegable del generador, generar cambia el contador-- y por eso
+    cada una tiene que devolver el panel de quien la llamo. El movil se anuncia
+    con `movil=1`, en la direccion o en el formulario.
+    """
+    if request.GET.get('movil') or request.POST.get('movil'):
+        return 'warehouse/partials/mobile_locations.html'
+    return 'warehouse/partials/locations_panel.html'
+
+
 @login_required
 def locations_panel(request):
     """La pantalla de bodegas y posiciones."""
     tenant = get_tenant_or_404(request)
-    return render(request, 'warehouse/partials/locations_panel.html',
+    # Donde tiene la empresa guardada su mercancia es cosa de la casa: al
+    # cliente no se le pinta la pestana, y aqui tampoco se le contesta.
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        return HttpResponse(_('Permission denied.'), status=403)
+    return render(request, _plantilla_de_bodegas(request),
                   _contexto_de_bodegas(request, tenant))
 
 
@@ -1243,7 +1343,7 @@ def warehouse_create(request):
             address=request.POST.get('address', '').strip())
 
     exito = None if error else _('Warehouse %(codigo)s created.') % {'codigo': codigo}
-    return render(request, 'warehouse/partials/locations_panel.html',
+    return render(request, _plantilla_de_bodegas(request),
                   _contexto_de_bodegas(request, tenant, error=error, exito=exito))
 
 
@@ -1266,7 +1366,7 @@ def locations_generate(request):
         bodega = Warehouse.objects.get(pk=int(request.POST.get('warehouse', '')),
                                        tenant=tenant)
     except (ValueError, TypeError, Warehouse.DoesNotExist):
-        return render(request, 'warehouse/partials/locations_panel.html',
+        return render(request, _plantilla_de_bodegas(request),
                       _contexto_de_bodegas(request, tenant,
                                            error=_('Select a warehouse first.')))
 
@@ -1284,10 +1384,10 @@ def locations_generate(request):
         aviso = _('That would create %(cuantas)d locations, over the limit '
                   'of %(tope)d. Split it into smaller runs.') % {
                       'cuantas': cuantas, 'tope': TOPE_DE_UBICACIONES}
-        return render(request, 'warehouse/partials/locations_panel.html',
+        return render(request, _plantilla_de_bodegas(request),
                       _contexto_de_bodegas(request, tenant, error=aviso))
     if not any(zonas + pasillos + estantes + niveles + posiciones):
-        return render(request, 'warehouse/partials/locations_panel.html',
+        return render(request, _plantilla_de_bodegas(request),
                       _contexto_de_bodegas(
                           request, tenant,
                           error=_('Fill at least one level '
@@ -1317,7 +1417,7 @@ def locations_generate(request):
         'cuantas': len(nuevas), 'bodega': bodega.code}
     if repetidas > 0:
         mensaje += ' ' + _('%(cuantas)d already existed.') % {'cuantas': repetidas}
-    return render(request, 'warehouse/partials/locations_panel.html',
+    return render(request, _plantilla_de_bodegas(request),
                   _contexto_de_bodegas(request, tenant, exito=mensaje))
 
 
@@ -1338,7 +1438,7 @@ def location_toggle(request, pk):
     ubi = get_object_or_404(Location, pk=pk, tenant=tenant)
     ubi.active = not ubi.active
     ubi.save(update_fields=['active'])
-    return render(request, 'warehouse/partials/locations_panel.html',
+    return render(request, _plantilla_de_bodegas(request),
                   _contexto_de_bodegas(request, tenant))
 
 

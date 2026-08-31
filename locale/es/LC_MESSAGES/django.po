@@ -2037,3 +2037,71 @@ msgstr "Cambiar el idioma vuelve a cargar la pantalla y se pierde lo que llevas 
 
 msgid "No free entries for this customer."
 msgstr "Este cliente no tiene entradas libres."
+
+# Bodegas y posiciones en el telefono.
+
+msgid "Occupied"
+msgstr "Ocupadas"
+
+msgid "Location code..."
+msgstr "Código de posición..."
+
+msgid "No location matches that code."
+msgstr "Ninguna posición coincide con ese código."
+
+
+# El panel de inicio: las cifras de la empresa.
+
+msgid "Home"
+msgstr "Inicio"
+
+msgid "In warehouse"
+msgstr "En bodega"
+
+msgid "entries not released yet"
+msgstr "entradas sin liberar"
+
+msgid "Past the deadline"
+msgstr "Pasadas de plazo"
+
+msgid "%(n)s urgent"
+msgstr "%(n)s urgentes"
+
+msgid "goods stored too long"
+msgstr "mercancía guardada de más"
+
+msgid "Today"
+msgstr "Hoy"
+
+msgid "operations registered"
+msgstr "operaciones capturadas"
+
+msgid "Unread messages"
+msgstr "Mensajes sin leer"
+
+msgid "waiting for an answer"
+msgstr "esperando respuesta"
+
+msgid "occupied of %(total)s"
+msgstr "ocupadas de %(total)s"
+
+msgid "Latest movements"
+msgstr "Últimos movimientos"
+
+msgid "Nothing registered yet."
+msgstr "Todavía no hay nada capturado."
+
+# Los avisos del guion del movil.
+
+msgid "Sign out?"
+msgstr "¿Cerrar sesión?"
+
+msgid "Could not load"
+msgstr "No se pudo cargar"
+
+# La cuenta de posiciones lleva plural: "1 posicion" y no "1 posiciones".
+
+msgid "%(total)s location, %(ocupadas)s with goods"
+msgid_plural "%(total)s locations, %(ocupadas)s with goods"
+msgstr[0] "%(total)s posición, %(ocupadas)s con mercancía"
+msgstr[1] "%(total)s posiciones, %(ocupadas)s con mercancía"

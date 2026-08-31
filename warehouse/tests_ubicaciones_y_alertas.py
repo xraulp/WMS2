@@ -799,3 +799,364 @@ class LosAvisosLleganAlMovilTests(TestCase):
             with self.subTest(pantalla=url):
                 html = self.client.get(url).content.decode()
                 self.assertEqual(html.count('async function refrescarVencidas()'), 1)
+
+
+class ElMovilNoEscribeRutasAManoTests(TestCase):
+    """
+    El guion del movil llevaba ocho llamadas con la ruta escrita a mano.
+
+    El problema no es la fealdad sino el silencio: si alguien renombra una ruta
+    en urls.py, el tablero --que las resuelve en la plantilla-- falla al
+    arrancar y se nota enseguida, mientras que el movil cargaba igual y el boton
+    simplemente dejaba de hacer nada.
+    """
+
+    RUTAS_A_MANO = (
+        '/debug/catalog/',
+        '/operations/free-entries/',
+        '/operations/exit-totals/',
+        '/digital/search/',
+        "'/catalog/'",
+        "'/operations/' + pk",
+    )
+
+    def setUp(self):
+        tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        usuario = User.objects.create_user('capturista', password='x')
+        UserProfile.objects.create(user=usuario, tenant=tenant, role='manager')
+        self.client.force_login(usuario)
+
+    def test_ninguna_ruta_va_escrita_a_mano_en_el_guion(self):
+        html = self.client.get('/mobile/').content.decode()
+        # La pantalla ya renderizada tiene las rutas de verdad, claro; lo que se
+        # mira es la plantilla, que es donde estaba el descuido.
+        with open('templates/warehouse/mobile.html', encoding='utf-8') as f:
+            plantilla = f.read()
+        for ruta in self.RUTAS_A_MANO:
+            with self.subTest(ruta=ruta):
+                self.assertNotIn(ruta, plantilla)
+        self.assertIn('const MOB_URL', html)
+
+    def test_las_rutas_con_numero_se_arman_bien(self):
+        """El 0 de relleno tiene que acabar siendo el numero de verdad."""
+        html = self.client.get('/mobile/').content.decode()
+
+        self.assertIn("editarCatalogo:  '/catalog/0/edit/'", html)
+        self.assertIn("editarOperacion: '/operations/0/edit/'", html)
+        self.assertIn("borrarOperacion: '/operations/0/delete-confirm/'", html)
+        self.assertIn("plantilla.replace('/0/', '/' + pk + '/')", html)
+
+
+class LasUbicacionesLleganAlMovilTests(TestCase):
+    """
+    El panel de bodegas solo existia en el tablero.
+
+    Es la pestana que mas sentido tiene en un telefono: "que hay guardado en
+    este estante" se pregunta de pie en el pasillo, y hasta ahora obligaba a
+    sentarse frente a una computadora. Las dos pantallas comparten la vista y el
+    contexto; lo que cambia es la plantilla, porque once columnas no caben en un
+    telefono.
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        self.jefa = User.objects.create_user('jefa', password='x')
+        UserProfile.objects.create(user=self.jefa, tenant=self.tenant, role='manager')
+        self.bodega = Warehouse.objects.create(
+            tenant=self.tenant, name='Bodega Laredo', code='LRD')
+        self.ubicacion = Location.objects.create(
+            tenant=self.tenant, warehouse=self.bodega, code='LRD-A-01', zone='A',
+            aisle='01', kind='STORAGE')
+        self.client.force_login(self.jefa)
+
+    def test_el_movil_pinta_la_pestana(self):
+        respuesta = self.client.get('/mobile/')
+
+        self.assertContains(respuesta, 'id="nav-locations"')
+        self.assertContains(respuesta, 'id="panel-locations"')
+        self.assertContains(respuesta, 'id="mob-locations-content"')
+
+    def test_la_pestana_esta_en_la_lista_de_paneles(self):
+        """Si falta ahi, el panel se abre pero el de antes no se apaga."""
+        html = self.client.get('/mobile/').content.decode()
+
+        self.assertIn("'digital','locations','reports'", html)
+
+    def test_el_panel_del_movil_es_otra_plantilla(self):
+        movil = self.client.get('/locations/?movil=1').content.decode()
+        tablero = self.client.get('/locations/').content.decode()
+
+        self.assertIn('mloc-tarjeta', movil)
+        self.assertNotIn('mloc-tarjeta', tablero)
+        self.assertIn('tabla-navegable', tablero)
+        # Los datos son los mismos: la posicion sale en las dos.
+        self.assertIn('LRD-A-01', movil)
+        self.assertIn('LRD-A-01', tablero)
+
+    def test_las_acciones_devuelven_el_panel_de_quien_las_pidio(self):
+        """Dar de alta desde el telefono no puede contestar con la tabla ancha:
+        el `hx-target` del movil se quedaria con el marcado del escritorio."""
+        respuesta = self.client.post('/locations/warehouse/create/',
+                                     {'name': 'Bodega Sur', 'code': 'SUR',
+                                      'movil': '1'})
+
+        self.assertContains(respuesta, 'mloc-tarjeta')
+        self.assertNotContains(respuesta, 'tabla-navegable')
+        self.assertTrue(Warehouse.objects.filter(tenant=self.tenant,
+                                                 code='SUR').exists())
+
+    def test_apagar_una_posicion_desde_el_movil_devuelve_el_panel_del_movil(self):
+        respuesta = self.client.post('/locations/%d/toggle/?movil=1'
+                                     % self.ubicacion.pk)
+
+        self.assertContains(respuesta, 'mloc-tarjeta')
+        self.ubicacion.refresh_from_db()
+        self.assertFalse(self.ubicacion.active)
+
+    def test_se_busca_por_codigo(self):
+        """El buscador por codigo es lo que hace practicable la pantalla en un
+        telefono: se teclea lo que dice la etiqueta del estante."""
+        Location.objects.create(tenant=self.tenant, warehouse=self.bodega,
+                                code='LRD-B-09', zone='B', aisle='09')
+
+        respuesta = self.client.get('/locations/?movil=1&q=B-09')
+
+        self.assertContains(respuesta, 'LRD-B-09')
+        self.assertNotContains(respuesta, 'LRD-A-01')
+
+    def test_la_cuenta_dice_una_posicion_y_no_una_posiciones(self):
+        """La linea de la cuenta es lo primero que se lee en la lista, asi que
+        no puede decir "1 posiciones"."""
+        respuesta = self.client.get('/locations/?movil=1')
+        self.assertContains(respuesta, '1 location, 0 with goods')
+
+        Location.objects.create(tenant=self.tenant, warehouse=self.bodega,
+                                code='LRD-A-02')
+
+        respuesta = self.client.get('/locations/?movil=1')
+        self.assertContains(respuesta, '2 locations, 0 with goods')
+
+    def test_al_cliente_no_se_le_ensena_donde_esta_la_mercancia(self):
+        """La pestana no se le pinta en ninguna de las dos pantallas, y la vista
+        tampoco le contesta: sin esto bastaba con teclear la direccion."""
+        cliente_tenant = Tenant.objects.create(
+            name='Ferreteria Lopez', type='customer', subdomain='lopez',
+            parent=self.tenant)
+        cliente = User.objects.create_user('lopez', password='x')
+        UserProfile.objects.create(user=cliente, tenant=cliente_tenant,
+                                   role='customer')
+        self.client.force_login(cliente)
+
+        html = self.client.get('/mobile/').content.decode()
+        self.assertNotIn('id="nav-locations"', html)
+
+        self.assertEqual(self.client.get('/locations/').status_code, 403)
+
+
+class ElPanelDeInicioTests(TestCase):
+    """
+    Las cifras de la empresa, que es lo primero que se ve al entrar.
+
+    Antes se caia directo en el formulario de captura: bien para quien captura
+    todo el dia, pero deja sin contestar la pregunta con la que se abre la
+    aplicacion --que hay pendiente-- y obliga a recorrer pestanas para saberlo.
+
+    El parcial es uno solo para las dos pantallas. Es lo que estas pruebas
+    cuidan mas: las dos veces anteriores que algo se escribio dos veces, el
+    movil se quedo atras.
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte',
+            alert_days_default=7)
+        self.jefa = User.objects.create_user('jefa', password='x')
+        UserProfile.objects.create(user=self.jefa, tenant=self.tenant, role='manager')
+        self.cliente = Catalog.objects.create(
+            tenant=self.tenant, category='CUSTOMER', name='Ferreteria Lopez')
+        self.client.force_login(self.jefa)
+
+    def _entrada(self, dias=0, liberada=False):
+        return WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='ENTRY', customer=self.cliente,
+            date=timezone.localdate() - timedelta(days=dias),
+            entry_dispatched='SAL-1' if liberada else '',
+            created_by=self.jefa)
+
+    def test_las_dos_pantallas_pintan_la_pestana(self):
+        for url, boton in (('/dashboard/', 'id="tab-inicio"'),
+                           ('/mobile/', 'id="nav-inicio"')):
+            with self.subTest(pantalla=url):
+                self.assertContains(self.client.get(url), boton)
+
+    def test_es_la_pestana_de_arranque_en_las_dos(self):
+        """Antes se arrancaba capturando; ahora se arranca sabiendo que hay."""
+        tablero = self.client.get('/dashboard/').content.decode()
+        movil = self.client.get('/mobile/').content.decode()
+
+        self.assertIn("let pestana = 'inicio';", tablero)
+        self.assertIn("let savedTab = 'inicio';", movil)
+        self.assertIn('<div class="panel on" id="panel-inicio">', tablero)
+        self.assertIn('<div class="panel on" id="panel-inicio">', movil)
+
+    def test_las_dos_pantallas_usan_el_mismo_parcial(self):
+        """Si algun dia se duplica, el movil se queda atras otra vez."""
+        tablero = self.client.get('/inicio/').content.decode()
+        movil = self.client.get('/inicio/?movil=1').content.decode()
+
+        for html in (tablero, movil):
+            self.assertIn('ini-rejilla', html)
+            self.assertIn('Latest movements', html)
+        # Lo unico que cambia es el camino a las listas.
+        self.assertIn('mobIrALaTabla', movil)
+        self.assertNotIn('mobIrALaTabla', tablero)
+        self.assertIn('limpiarFiltrosDeLaTabla', tablero)
+
+    def test_cuenta_lo_que_sigue_guardado(self):
+        self._entrada()
+        self._entrada()
+        self._entrada(liberada=True)
+
+        respuesta = self.client.get('/inicio/')
+
+        self.assertEqual(respuesta.context['inicio_en_bodega'], 2)
+
+    def test_cuenta_lo_capturado_hoy(self):
+        self._entrada()
+        self._entrada(dias=3)
+
+        respuesta = self.client.get('/inicio/')
+
+        self.assertEqual(respuesta.context['inicio_hoy'], 1)
+
+    def test_la_tarjeta_de_vencidas_se_enciende_sola(self):
+        """Sin nada pasado de plazo la tarjeta no puede pintarse en rojo: una
+        alarma que siempre esta encendida deja de mirarse."""
+        # La clase tambien esta en la hoja de estilos, asi que se mira la
+        # tarjeta y no la pagina: lo que importa es si el boton la lleva.
+        encendida = 'class="ini-t pulsable ini-alerta"'
+
+        self.assertNotContains(self.client.get('/inicio/'), encendida)
+
+        self._entrada(dias=30)
+
+        self.assertContains(self.client.get('/inicio/'), encendida)
+
+    def test_las_posiciones_solo_se_cuentan_si_las_hay(self):
+        """Sin bodegas dadas de alta la captura tampoco pide ubicacion, asi que
+        la tarjeta seria un cero sin significado."""
+        self.assertNotContains(self.client.get('/inicio/'), 'occupied of')
+
+        bodega = Warehouse.objects.create(
+            tenant=self.tenant, name='Bodega Laredo', code='LRD')
+        Location.objects.create(tenant=self.tenant, warehouse=bodega,
+                                code='LRD-A-01')
+
+        respuesta = self.client.get('/inicio/')
+        self.assertEqual(respuesta.context['inicio_posiciones'], 1)
+        self.assertEqual(respuesta.context['inicio_ocupadas'], 0)
+
+    def test_el_cliente_ve_lo_suyo_y_no_las_posiciones(self):
+        cliente_tenant = Tenant.objects.create(
+            name='Ferreteria Lopez', type='customer', subdomain='lopez',
+            parent=self.tenant)
+        usuario = User.objects.create_user('lopez', password='x')
+        UserProfile.objects.create(user=usuario, tenant=cliente_tenant,
+                                   role='customer', customer=self.cliente)
+        bodega = Warehouse.objects.create(
+            tenant=self.tenant, name='Bodega Laredo', code='LRD')
+        Location.objects.create(tenant=self.tenant, warehouse=bodega,
+                                code='LRD-A-01')
+        self.client.force_login(usuario)
+
+        respuesta = self.client.get('/inicio/')
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertNotContains(respuesta, 'occupied of')
+
+
+class LasDosPantallasHacenLoMismoTests(TestCase):
+    """
+    La pasada de paridad: cosas que el movil llamaba sin tenerlas.
+
+    Todas son la misma forma de descuido --codigo escrito a medias, con una
+    punta puesta y la otra no-- y todas se veian igual desde fuera: un boton
+    que se pinta, se pulsa y no pasa nada.
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(
+            name='Almacenes del Norte', type='organization', subdomain='norte')
+        self.jefa = User.objects.create_user('jefa', password='x')
+        UserProfile.objects.create(user=self.jefa, tenant=self.tenant, role='manager')
+        self.client.force_login(self.jefa)
+
+    def test_el_movil_puede_cerrar_el_modal_compartido(self):
+        """El detalle y la edicion de una operacion son el mismo parcial en las
+        dos pantallas, y sus botones llaman a `closeModal`. En el telefono
+        "Cancelar" al editar no hacia nada."""
+        html = self.client.get('/mobile/').content.decode()
+
+        self.assertIn('function closeModal()', html)
+
+    def test_el_movil_puede_repartir_el_acceso_de_un_cliente(self):
+        """La tabla de clientes es la misma en las dos pantallas y su boton
+        llama a `abrirAccesoDeCliente`, que solo existia en el tablero."""
+        html = self.client.get('/mobile/').content.decode()
+
+        self.assertIn('function abrirAccesoDeCliente(', html)
+        self.assertIn('function cerrarAccesoDeCliente(', html)
+        self.assertIn('id="cust-access-modal"', html)
+        self.assertIn('id="cust-access-body"', html)
+
+    def test_el_movil_ya_no_tiene_su_propia_copia_del_borrado(self):
+        """
+        Tenia una: pedia la contrasena con un `prompt`, mandaba el borrado sin
+        motivo --que el servidor exige-- y daba cualquier respuesta por buena,
+        asi que anunciaba "eliminada correctamente" sin haber borrado nada.
+        """
+        html = self.client.get('/mobile/').content.decode()
+
+        self.assertEqual(html.count('function confirmDelete('), 1)
+        self.assertNotIn('Ingresa tu contrase', html)
+        self.assertNotIn('eliminada correctamente', html)
+
+    def test_el_modal_de_borrado_contesta_a_la_tabla_que_existe(self):
+        """El destino estaba fijo en `#ops-table`, que en el movil no existe:
+        htmx no encontraba a quien darle la respuesta."""
+        html = self.client.get('/mobile/').content.decode()
+
+        self.assertIn("document.getElementById('ops-table') ? '#ops-table' : '#mob-ops-table'",
+                      html)
+
+    def test_ninguna_pantalla_escribe_rutas_a_mano(self):
+        """Dentro de una cadena de JavaScript, una ruta renombrada no rompe el
+        arranque: el boton deja de funcionar y nadie se entera."""
+        import os
+        base = 'templates/warehouse'
+        ficheros = [os.path.join(base, 'dashboard.html'),
+                    os.path.join(base, 'mobile.html')]
+        ficheros += [os.path.join(base, 'partials', f)
+                     for f in os.listdir(os.path.join(base, 'partials'))
+                     # `partials/mobile.html` es una copia vieja que ninguna
+                     # vista ni plantilla referencia.
+                     if f.endswith('.html') and f != 'mobile.html']
+        a_mano = []
+        for ruta in ficheros:
+            with open(ruta, encoding='utf-8') as f:
+                for n, linea in enumerate(f, 1):
+                    for prefijo in ("'/operations/", "'/catalog/", "'/digital/",
+                                    "'/debug/", '"/operations/', '"/catalog/'):
+                        if prefijo in linea:
+                            a_mano.append('%s:%d' % (ruta, n))
+        self.assertEqual(a_mano, [], 'rutas a mano en: %s' % ', '.join(a_mano))
+
+    def test_la_barra_de_impresion_muerta_ya_no_esta(self):
+        """Tenia sus tres ids puestos y nadie que los rellenara: el unico codigo
+        que la nombraba era el que la escondia."""
+        html = self.client.get('/dashboard/').content.decode()
+
+        self.assertNotIn('print-bar', html)
+        self.assertNotIn('btn-print-report', html)
