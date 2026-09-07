@@ -57,6 +57,30 @@ def catalog_scope_of(category):
     """A que pantalla pertenece una categoria."""
     return 'customers' if category in CATALOG_ADMIN_CATEGORIES else 'operational'
 
+def siguiente_consecutivo(modelo, prefijo, fecha=None, campo='custom_id'):
+    """
+    El siguiente numero libre de la forma `PREFIJO` + `AAMMDD` + `-NNNN`.
+
+    Se cuenta por el prefijo del propio numero y no por la fecha de alta: el
+    lookup `__date` resuelve la fecha en la zona horaria de la aplicacion y
+    `datetime.date()` en UTC, y con unas horas de diferencia las dos no son la
+    misma -- el contador miraba el dia equivocado y el numero se repetia.
+
+    El bucle no es paranoia: dos altas a la vez cuentan lo mismo y piden el
+    mismo numero, y aqui eso es una excepcion de base de datos en la cara de
+    quien estaba creando una tarea.
+    """
+    from django.utils import timezone as _tz
+    fecha = fecha or _tz.localdate()
+    raiz = f'{prefijo}{fecha.strftime("%y%m%d")}-'
+    cuantos = modelo.objects.filter(**{f'{campo}__startswith': raiz}).count()
+    while True:
+        cuantos += 1
+        numero = f'{raiz}{cuantos:04d}'
+        if not modelo.objects.filter(**{campo: numero}).exists():
+            return numero
+
+
 class Catalog(models.Model):
     CATEGORY_CHOICES = [
         ('CUSTOMER',    _('Customer')),
@@ -77,6 +101,21 @@ class Catalog(models.Model):
     notes         = models.TextField(blank=True, null=True)
     whatsapp      = models.CharField(max_length=30, blank=True, null=True,
                                      help_text='+521XXXXXXXXXX')
+
+    # ── La cadena de entrega (solo para category='CUSTOMER') ─────────────────
+    # Van en la ficha y no en cada tarea de cruce porque son casi siempre los
+    # mismos para un cliente. Un dato que se teclea una vez al ano en vez de
+    # una vez por embarque es un dato que casi nunca sale mal, y aqui salir mal
+    # significa que la mercancia se le entrega a quien no es. Al emitir la
+    # remision se proponen y se pueden cambiar ese dia si toca otra linea.
+    rfc = models.CharField(max_length=20, blank=True, default='',
+                           verbose_name='RFC')
+    linea_de_enlace = models.CharField(
+        max_length=200, blank=True, default='',
+        verbose_name='Linea transportista de enlace',
+        help_text='A quien se le deja la carga en la frontera mexicana')
+    domicilio_de_enlace = models.TextField(
+        blank=True, default='', verbose_name='Domicilio de entrega en la frontera')
     active        = models.BooleanField(default=True)
     created_at    = models.DateTimeField(auto_now_add=True)
 
@@ -2728,10 +2767,9 @@ class CrossingTask(models.Model):
         return self.custom_id or f'TC-{self.pk}'
 
     def generar_custom_id(self):
-        fecha = self.created_at.date() if self.created_at else timezone.localdate()
-        cuantas = CrossingTask.objects.filter(
-            tenant=self.tenant, created_at__date=fecha).exclude(pk=self.pk).count()
-        return f'{self.PREFIJO}{fecha.strftime("%y%m%d")}-{cuantas + 1:04d}'
+        fecha = (timezone.localdate(self.created_at) if self.created_at
+                 else timezone.localdate())
+        return siguiente_consecutivo(CrossingTask, self.PREFIJO, fecha)
 
     def save(self, *args, **kwargs):
         if not self.custom_id:
@@ -2947,3 +2985,348 @@ class CambioDeDiaDeCruce(models.Model):
 
     def __str__(self):
         return f'{self.task_id}: {self.fecha_anterior} -> {self.fecha_nueva}'
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  LOS DOS PAPELES: LA LISTA DE PREPARACION Y LA ORDEN DE CARGA
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# La historia que hay que romper tiene cinco eslabones: oficina emite la orden
+# en cuanto el cliente da la primera instruccion, el papel sale de la impresora
+# y se va a la bodega, el cliente cambia la instruccion, nadie se lo dice a
+# bodega, y el transfer se va con mercancia de mas o de menos -- y el problema
+# aparece en la aduana, que es el peor sitio posible para descubrirlo.
+#
+# El eslabon que se rompe no es el tercero. El cliente va a seguir cambiando de
+# opinion: eso es el negocio. Es el segundo: **existe un papel definitivo
+# circulando desde antes de que la informacion sea definitiva**.
+#
+# Por eso hay dos papeles y no uno. La lista de preparacion sale desde el
+# minuto uno, no ampara nada y lo dice impreso en grande; la orden de carga no
+# se puede emitir hasta que los pedimentos estan pagados -- en ese punto la
+# instruccion ya costo dinero y ya no cambia casi nunca --. Bodega no pierde
+# nada: sigue pudiendo adelantar trabajo el dia uno. Lo que pierde el papel
+# adelantado es la autoridad que hoy tiene y no deberia tener.
+#
+# La lista de preparacion no es un modelo: es un PDF que se saca cuando hace
+# falta. Lo que se guarda es la orden, porque es la que ampara.
+
+
+class LoadOrder(models.Model):
+    """
+    La orden de carga de una tarea, en una version concreta.
+
+    No hay orden suelta que se pueda escribir a mano: sale de un boton dentro
+    de la tarea y su contenido es, siempre, lo que la tarea decia en ese
+    momento. Por eso cada version guarda su propia copia de los renglones --
+    si mirara la tarea en vivo, una orden impresa hace tres dias diria hoy otra
+    cosa, que es exactamente el problema que se esta resolviendo.
+
+    Cualquier cambio en la tarea despues de emitida sube la orden a v2 y marca
+    la anterior como obsoleta. El QR del pie codifica la orden y su version, y
+    quien va a surtir lo pistolea antes de empezar: el papel sigue sin saber
+    nada, pero ahora se le puede preguntar al sistema en cinco segundos sin
+    llamar a oficina.
+    """
+
+    PREFIJO = 'OC'
+
+    task    = models.ForeignKey(CrossingTask, on_delete=models.CASCADE,
+                                related_name='ordenes')
+    # El numero es el mismo en todas las versiones de la misma orden: lo que
+    # cambia es la version. En el papel se lee "OC260902-0007 v2".
+    custom_id = models.CharField(max_length=20, blank=True)
+    version   = models.PositiveIntegerField(default=1)
+
+    # La version anterior no se borra: alguien la tiene impresa en la mano, y
+    # el sistema tiene que poder contestarle que ya no vale.
+    obsoleta   = models.BooleanField(default=False)
+    emitida_en = models.DateTimeField(auto_now_add=True)
+    emitida_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                    blank=True, related_name='ordenes_emitidas')
+
+    class Meta:
+        ordering = ['-version']
+        verbose_name = 'Orden de carga'
+        verbose_name_plural = 'Ordenes de carga'
+        unique_together = [('custom_id', 'version')]
+
+    def __str__(self):
+        return f'{self.custom_id} v{self.version}'
+
+    @property
+    def etiqueta(self):
+        return f'{self.custom_id} v{self.version}'
+
+    @property
+    def total_bultos(self):
+        return sum(r.bultos for r in self.renglones.all())
+
+    @property
+    def total_kilos(self):
+        pesos = [r.weight_kgs for r in self.renglones.all() if r.weight_kgs]
+        return sum(pesos) if pesos else None
+
+    # ── Cuando se puede emitir ───────────────────────────────────────────────
+
+    @staticmethod
+    def faltantes_para_emitir(task):
+        """
+        Lo que impide emitir la orden de carga de `task`, para la pantalla.
+
+        Se habilita despues de "pedimentos pagados". Entre que la tarea se crea
+        y que los pedimentos se pagan pueden pasar dias, y en todo ese tiempo
+        no existe ninguna orden de carga. Es a proposito: si alguien de oficina
+        pide "sacame la orden ya" -- y va a pasar --, la respuesta del sistema
+        es la lista de preparacion, que es lo que esa persona necesitaba de
+        verdad.
+        """
+        faltan = []
+        if not task.renglones.exists():
+            faltan.append(_('No shipments in this crossing yet'))
+            return faltan
+
+        pedimentos = task.pedimentos
+        if not pedimentos:
+            faltan.append(_('No pedimento for this merchandise yet'))
+        else:
+            sin_pagar = [p for p in pedimentos if p.estado != Pedimento.PAGADO]
+            if sin_pagar:
+                faltan.append(
+                    _('These pedimentos are not paid yet: %(cuales)s')
+                    % {'cuales': ', '.join(p.etiqueta for p in sin_pagar)})
+
+        # Y no puede quedar mercancia sin pedimento. Esta comprobacion existia
+        # antes como puerta de la revision; su sitio es este, que es donde de
+        # verdad importa que no falte nada.
+        sueltos = []
+        for renglon in task.renglones.select_related('operation'):
+            op = renglon.operation
+            dentro = sum(e.bultos for e in op.renglones_de_pedimento.all())
+            if (op.bundle_qty or 0) - dentro > 0:
+                sueltos.append(op.custom_id)
+        if sueltos:
+            faltan.append(_('These shipments still have bundles without a '
+                            'pedimento: %(cuales)s')
+                          % {'cuales': ', '.join(sueltos)})
+        return faltan
+
+
+    # ── El cuadre ────────────────────────────────────────────────────────────
+
+    def cuadre(self, fase=None):
+        """
+        Que dice el escaneo contra lo que dice esta orden.
+
+        Devuelve un diccionario con las tres cosas que pueden salir mal --
+        falta, sobra y repetido -- y con lo que va bien. `sobra` es el caso
+        grave: mercancia que se va sin amparar, y que aparece en la aduana.
+
+        La condicion para la remision no es "ya se pistoleo todo": es que lo
+        escaneado sea **exactamente** lo que dice la orden vigente, ni mas ni
+        menos.
+        """
+        from . import bultos as _bultos
+
+        fase = fase or EscaneoDeBulto.CARGA
+        esperados = {}
+        for renglon in self.renglones.select_related('operation'):
+            for n in range(1, (renglon.bultos or 0) + 1):
+                esperados[(renglon.operation.custom_id, n)] = renglon
+
+        escaneados = {}
+        repetidos = []
+        for e in (self.task.escaneos.filter(fase=fase)
+                  .select_related('operation').order_by('created_at')):
+            clave = (e.operation.custom_id, e.numero_de_bulto)
+            if clave in escaneados:
+                repetidos.append(e)
+            else:
+                escaneados[clave] = e
+
+        faltan = [_bultos.codigo(op, n) for (op, n) in esperados
+                  if (op, n) not in escaneados]
+        sobran = [_bultos.codigo(op, n) for (op, n) in escaneados
+                  if (op, n) not in esperados]
+        dentro = [k for k in escaneados if k in esperados]
+
+        return {
+            'esperados':  len(esperados),
+            'verificados': len(dentro),
+            'faltan':     sorted(faltan),
+            'sobran':     sorted(sobran),
+            'repetidos':  [_bultos.codigo(e.operation.custom_id,
+                                          e.numero_de_bulto) for e in repetidos],
+            'cuadra':     (not faltan and not sobran and bool(esperados)),
+        }
+
+    @property
+    def puede_emitir_remision(self):
+        """
+        Si el escaneo de carga cuadra contra esta orden y esta orden vale.
+
+        Una remision pertenece a la version con la que se emitio: si la tarea
+        cambia despues, la orden sube de version, esta queda obsoleta y la
+        remision se vuelve a bloquear hasta verificar lo que cambio.
+        """
+        return not self.obsoleta and self.cuadre()['cuadra']
+
+
+class LoadOrderItem(models.Model):
+    """
+    Un renglon de la orden, copiado tal como estaba al emitirla.
+
+    Se copia y no se mira en vivo por la misma razon por la que existe la
+    version: la orden que alguien lleva impresa tiene que poder compararse
+    contra lo que decia cuando se imprimio, no contra lo que dice la tarea
+    ahora.
+    """
+    order     = models.ForeignKey(LoadOrder, on_delete=models.CASCADE,
+                                  related_name='renglones')
+    operation = models.ForeignKey(WarehouseOperation, on_delete=models.CASCADE,
+                                  related_name='renglones_de_orden')
+
+    # La copia. Los nombres largos van en texto y no por clave foranea a
+    # proposito: si manana alguien corrige el nombre de un proveedor en el
+    # catalogo, la orden emitida no puede cambiar sola.
+    po_order    = models.CharField(max_length=200, blank=True, default='')
+    bultos      = models.PositiveIntegerField(default=0)
+    bundle_type = models.CharField(max_length=200, blank=True, default='')
+    weight_lbs  = models.DecimalField(max_digits=10, decimal_places=2,
+                                      null=True, blank=True)
+    weight_kgs  = models.DecimalField(max_digits=10, decimal_places=2,
+                                      null=True, blank=True)
+    ubicacion   = models.CharField(max_length=100, blank=True, default='')
+    pedimento   = models.CharField(max_length=100, blank=True, default='')
+    shipper     = models.CharField(max_length=200, blank=True, default='')
+    invoice     = models.CharField(max_length=200, blank=True, default='')
+    descripcion = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['operation__custom_id']
+        verbose_name = 'Renglon de la orden de carga'
+        verbose_name_plural = 'Renglones de la orden de carga'
+
+    def __str__(self):
+        return f'{self.operation.custom_id} x{self.bultos}'
+
+
+class EscaneoDeBulto(models.Model):
+    """
+    Un bulto pistoleado.
+
+    El escaneo se hace dos veces: una al preparar y otra al cargar. La de
+    preparar no habilita nada -- adelanta trabajo y deja marcado lo que ya esta
+    en el anden --; la de cargar es la que cuenta. Si entre una y otra no se
+    movio nada, la segunda es un repaso rapido en vez de empezar de cero.
+    """
+
+    PREPARACION = 'PREPARACION'
+    CARGA       = 'CARGA'
+    FASES = [
+        (PREPARACION, _('Picking')),
+        (CARGA,       _('Loading')),
+    ]
+
+    task      = models.ForeignKey(CrossingTask, on_delete=models.CASCADE,
+                                  related_name='escaneos')
+    # Contra que version se pistoleo. La de preparacion puede no tener orden
+    # todavia: la lista de preparacion existe desde el minuto uno.
+    order     = models.ForeignKey(LoadOrder, on_delete=models.SET_NULL,
+                                  null=True, blank=True, related_name='escaneos')
+    operation = models.ForeignKey(WarehouseOperation, on_delete=models.CASCADE,
+                                  related_name='escaneos')
+    numero_de_bulto = models.PositiveIntegerField()
+    fase      = models.CharField(max_length=12, choices=FASES, default=CARGA)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name='escaneos')
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Bulto escaneado'
+        verbose_name_plural = 'Bultos escaneados'
+        # Un bulto se pistolea una vez por fase. El segundo disparo sobre el
+        # mismo bulto no es otro bulto: es el mismo otra vez, y la pantalla lo
+        # tiene que decir en vez de contarlo dos veces.
+        unique_together = [('task', 'operation', 'numero_de_bulto', 'fase')]
+
+    def __str__(self):
+        from . import bultos as _bultos
+        return _bultos.codigo(self.operation.custom_id, self.numero_de_bulto)
+
+
+class Remision(models.Model):
+    """
+    El papel que se le entrega al transfer.
+
+    Lleva lo mismo que la orden de carga sobre la mercancia, y encima toda la
+    cadena de entrega: quien cruza, a quien le deja la carga en la frontera
+    mexicana, a donde va despues y a quien se le factura el servicio. En la
+    practica son tres empresas distintas, y hoy esa informacion viaja de boca
+    en boca.
+
+    Solo se emite cuando lo escaneado es exactamente lo que dice la orden
+    vigente -- ni falta ni sobra --, y pertenece a la version con la que se
+    emitio, igual que una aprobacion pertenece a la proforma que se aprobo.
+    """
+
+    PREFIJO = 'RM'
+
+    task  = models.ForeignKey(CrossingTask, on_delete=models.CASCADE,
+                              related_name='remisiones')
+    order = models.ForeignKey(LoadOrder, on_delete=models.PROTECT,
+                              related_name='remisiones')
+    custom_id = models.CharField(max_length=20, blank=True, unique=True)
+
+    # ── Quien cruza ──────────────────────────────────────────────────────────
+    transfer_empresa = models.CharField(max_length=200, blank=True, default='')
+    transfer_chofer  = models.CharField(max_length=200, blank=True, default='')
+    transfer_unidad  = models.CharField(max_length=100, blank=True, default='')
+    sello            = models.CharField(max_length=100, blank=True, default='')
+
+    # ── A quien se le entrega en la frontera ────────────────────────────────
+    # Se propone de la ficha del cliente, porque es casi siempre la misma: un
+    # dato que se teclea una vez al ano en vez de una vez por embarque es un
+    # dato que casi nunca sale mal, y aqui salir mal significa que la mercancia
+    # se le entrega a quien no es.
+    linea_de_enlace     = models.CharField(max_length=200, blank=True, default='')
+    domicilio_de_enlace = models.TextField(blank=True, default='')
+
+    # ── El dueno de la mercancia ─────────────────────────────────────────────
+    destinatario           = models.CharField(max_length=200, blank=True, default='')
+    destinatario_rfc       = models.CharField(max_length=20, blank=True, default='')
+    destinatario_domicilio = models.TextField(blank=True, default='')
+
+    # ── La salida de emergencia ──────────────────────────────────────────────
+    # Cuando el escaneo no cuadra y el camion tiene que salir igual. Solo un
+    # manager o superior, y con motivo escrito. Prefiero un embarque irregular
+    # que quede registrado con nombre y hora a uno que se vaya por fuera del
+    # sistema -- que es lo que pasa siempre que un candado no tiene salida.
+    con_discrepancia    = models.BooleanField(default=False)
+    motivo_discrepancia = models.TextField(blank=True, default='')
+    diferencia          = models.TextField(blank=True, default='',
+                                           verbose_name='La diferencia exacta')
+    autorizada_por = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                       null=True, blank=True,
+                                       related_name='remisiones_autorizadas')
+
+    bultos_verificados = models.PositiveIntegerField(default=0)
+    bultos_de_la_orden = models.PositiveIntegerField(default=0)
+    verificada_por = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                       null=True, blank=True,
+                                       related_name='remisiones_verificadas')
+    verificada_en  = models.DateTimeField(null=True, blank=True)
+
+    emitida_en  = models.DateTimeField(auto_now_add=True)
+    emitida_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                    blank=True, related_name='remisiones_emitidas')
+
+    class Meta:
+        ordering = ['-emitida_en']
+        verbose_name = 'Remision'
+        verbose_name_plural = 'Remisiones'
+
+    def __str__(self):
+        return self.custom_id or f'RM-{self.pk}'

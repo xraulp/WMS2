@@ -1,0 +1,55 @@
+{% load i18n %}
+{% get_current_language as idioma_actual %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Is this sheet still good?" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);
+         color:var(--ink);min-height:100vh;display:flex;align-items:center;
+         justify-content:center;padding:20px}
+    .aviso{max-width:460px;width:100%;border-radius:16px;padding:34px 24px;
+           text-align:center}
+    .ok {background:var(--ok-bg);color:var(--ok-ink-fuerte);border:2px solid var(--ok-ink)}
+    .mal{background:var(--rsoft);color:var(--err-ink-fuerte);border:2px solid var(--red)}
+    .grande{font-size:26px;font-weight:700;line-height:1.25;margin:0 0 12px}
+    .mono{font-family:'IBM Plex Mono',monospace}
+    .dato{font-size:15px;margin:6px 0}
+    .btn{display:inline-block;margin-top:18px;padding:11px 18px;border-radius:8px;
+         text-decoration:none;font-size:15px;font-weight:600;
+         background:var(--accent);color:var(--on-accent)}
+  </style>
+</head>
+<body>
+{% comment %}
+Lo que contesta el QR del pie de una hoja impresa. Quien va a surtir lo pistolea
+antes de empezar y esto dice una de dos cosas, a pantalla completa y sin leer.
+El papel sigue sin saber nada -- pero ahora se le puede preguntar al sistema en
+cinco segundos, sin llamar a oficina.
+{% endcomment %}
+<div class="aviso {% if esta_vigente %}ok{% else %}mal{% endif %}">
+  {% if esta_vigente %}
+    <p class="grande">✓ {% trans "This sheet is good. Go ahead." %}</p>
+    <p class="dato mono">{{ orden.custom_id }} v{{ orden.version }}</p>
+  {% else %}
+    <p class="grande">✕ {% trans "This sheet is out of date." %}</p>
+    <p class="dato">
+      {% trans "You are holding" %} <span class="mono">{{ orden.custom_id }} v{{ version_impresa }}</span>.
+    </p>
+    {% if vigente %}
+    <p class="dato">
+      {% trans "The one in force is" %}
+      <span class="mono"><strong>v{{ vigente.version }}</strong></span>,
+      {% trans "issued" %} {{ vigente.emitida_en|date:"d/m H:i" }}.
+    </p>
+    {% endif %}
+  {% endif %}
+  <p class="dato">{{ orden.task.custom_id }} · {{ orden.task.customer.name }}</p>
+  <a class="btn" href="{% url 'carga_verificar' orden.task.pk %}">{% trans "Verify the load" %}</a>
+</div>
+</body>
+</html>

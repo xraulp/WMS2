@@ -1,0 +1,228 @@
+{% load i18n %}
+{% get_current_language as idioma_actual %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Verify the load" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    a{color:inherit}
+    .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
+        padding:11px 14px;background:var(--ink);color:var(--on-accent);flex-wrap:wrap}
+    .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600}
+    .tb a{color:var(--bdr);text-decoration:none;font-size:12px}
+    .wrap{max-width:640px;margin:12px auto 70px;padding:0 12px}
+    .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
+          padding:14px;margin-bottom:12px}
+    .mono{font-family:'IBM Plex Mono',monospace}
+    .soft{color:var(--soft)}
+    .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:var(--r);
+         padding:9px 14px;font-size:14px;font-family:inherit;cursor:pointer;color:var(--ink)}
+    .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+    .btn-sm{padding:3px 8px;font-size:12px}
+    .msg-error{background:var(--rsoft);color:var(--err-ink);padding:10px 12px;
+               border-radius:var(--r);font-size:14px;margin-bottom:10px}
+    .msg-aviso{background:var(--info-bg);color:var(--info-ink);padding:10px 12px;
+               border-radius:var(--r);font-size:14px;margin-bottom:10px}
+
+    .cab{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;
+         justify-content:space-between}
+    .cab .oc{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600}
+    .vig{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;
+         font-weight:600}
+    .v-ok {background:var(--ok-bg);color:var(--ok-ink-fuerte)}
+    .v-mal{background:var(--rsoft);color:var(--err-ink-fuerte)}
+
+    /* El contador. Es lo unico que se mira de reojo mientras se sube un bulto,
+       asi que va grande y arriba del todo. */
+    .contador{text-align:center;padding:14px 0}
+    .contador b{display:block;font-family:'IBM Plex Mono',monospace;font-size:38px;
+                line-height:1}
+    .contador span{display:block;font-size:12px;color:var(--soft);margin-top:4px}
+    .c-cuadra b{color:var(--ok-ink-fuerte)}
+    .c-falta b {color:var(--err-ink-fuerte)}
+
+    /* La caja de texto que siempre tiene el foco. Las pistolas BT433 se
+       comportan como un teclado, asi que esto no es un campo mas: es toda la
+       pantalla de escaneo. */
+    .disparo input{width:100%;font-family:'IBM Plex Mono',monospace;font-size:19px;
+                   padding:14px 12px;border:2px solid var(--accent);
+                   border-radius:var(--r);background:var(--surface);color:var(--ink);
+                   text-align:center;letter-spacing:1px}
+    .disparo input:focus{outline:none;border-color:var(--adark)}
+
+    .op{display:flex;gap:10px;align-items:center;justify-content:space-between;
+        padding:10px 0;border-bottom:1px solid var(--bg)}
+    .op:last-child{border-bottom:none}
+    .op .ubi{font-size:11px;color:var(--soft)}
+    .op .n{font-family:'IBM Plex Mono',monospace;font-size:15px;white-space:nowrap}
+    .op.listo .n{color:var(--ok-ink-fuerte);font-weight:600}
+
+    .mal{background:var(--rsoft);border:1px solid var(--red);border-radius:10px;
+         padding:11px 13px;font-size:13px;color:var(--err-ink);margin-bottom:10px}
+    .mal b{display:block;margin-bottom:3px;color:var(--err-ink-fuerte)}
+    .mal .codigos{font-family:'IBM Plex Mono',monospace;font-size:12px}
+
+    .fase{display:flex;gap:6px;margin-bottom:12px}
+    .fase a{flex:1;text-align:center;padding:8px;border:1px solid var(--bdr);
+            border-radius:var(--r);font-size:13px;text-decoration:none;
+            background:var(--surface)}
+    .fase a.on{background:var(--accent);border-color:var(--accent);
+               color:var(--on-accent);font-weight:600}
+
+    .ultimos{font-size:12px;color:var(--soft);line-height:1.9}
+    .ultimos form{display:inline}
+  </style>
+</head>
+<body>
+
+<div class="tb">
+  <span class="tb-brand">WMS — {% trans "Verify the load" %}</span>
+  <a href="{% url 'cruces_panel' %}?customer={{ tarea.customer_id }}">← {{ tarea.custom_id }}</a>
+</div>
+
+<div class="wrap">
+
+  {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
+  {% if aviso %}<div class="msg-aviso">{{ aviso }}</div>{% endif %}
+
+  {% if not orden %}
+  <div class="card">
+    <p style="margin:0">
+      {% trans "This crossing has no load order yet." %}
+      <span class="soft">{% trans "Until the pedimentos are paid, what bodega uses is the picking list." %}</span>
+    </p>
+  </div>
+  {% else %}
+
+  <div class="card">
+    <div class="cab">
+      <div>
+        <div class="oc">{{ orden.custom_id }}</div>
+        <div class="soft" style="font-size:12px">
+          {{ tarea.custom_id }} · {{ tarea.customer.name }}
+        </div>
+      </div>
+      <span class="vig {% if orden.obsoleta %}v-mal{% else %}v-ok{% endif %}">
+        v{{ orden.version }} {% if orden.obsoleta %}{% trans "obsolete" %}{% else %}{% trans "in force" %}{% endif %}
+      </span>
+    </div>
+  </div>
+
+  {% comment %}
+  El escaneo se hace dos veces: una al preparar y otra al cargar. La de
+  preparar no habilita nada -- adelanta trabajo y deja marcado lo que ya esta
+  en el anden --; la de cargar es la que cuenta.
+  {% endcomment %}
+  <div class="fase">
+    <a href="?fase=PREPARACION" class="{% if fase == 'PREPARACION' %}on{% endif %}">{% trans "Picking" %}</a>
+    <a href="?fase=CARGA" class="{% if fase == 'CARGA' %}on{% endif %}">{% trans "Loading" %}</a>
+  </div>
+
+  <div class="card contador {% if cuadre.cuadra %}c-cuadra{% else %}c-falta{% endif %}">
+    <b>{{ cuadre.verificados }} / {{ cuadre.esperados }}</b>
+    <span>{% trans "bundles scanned" %}</span>
+  </div>
+
+  {% comment %}
+  Las tres cosas que pueden salir mal. `sobra` es la grave: mercancia que se va
+  sin amparar, y que aparece en la aduana.
+  {% endcomment %}
+  {% if cuadre.sobran %}
+  <div class="mal">
+    <b>{% trans "These are not on the order" %}</b>
+    <span class="codigos">{{ cuadre.sobran|join:" · " }}</span>
+  </div>
+  {% endif %}
+  {% if cuadre.repetidos %}
+  <div class="mal">
+    <b>{% trans "Scanned twice" %}</b>
+    <span class="codigos">{{ cuadre.repetidos|join:" · " }}</span>
+  </div>
+  {% endif %}
+
+  <div class="card disparo">
+    {% comment %}
+    Siempre con el foco puesto: la pistola dispara el codigo y un Enter, asi que
+    si el foco se pierde el disparo se va a ninguna parte y quien carga no se
+    entera hasta el final.
+    {% endcomment %}
+    <form method="post" action="{% url 'carga_escanear' tarea.pk %}"
+          autocomplete="off">
+      {% csrf_token %}
+      <input type="hidden" name="fase" value="{{ fase }}">
+      <input type="text" name="codigo" id="disparo" inputmode="text"
+             placeholder="{% trans "Point the scanner at the label" %}"
+             autofocus autocomplete="off" autocapitalize="off" spellcheck="false">
+    </form>
+    <p class="soft" style="font-size:11px;margin:8px 0 0;text-align:center">
+      {% trans "Or type it: ED260901-0001-3" %}
+    </p>
+  </div>
+
+  <div class="card">
+    <p class="soft" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">
+      {% trans "By shipment" %}
+    </p>
+    {% for fila in por_operacion %}
+    <div class="op {% if fila.completo %}listo{% endif %}">
+      <div>
+        <span class="mono">{{ fila.renglon.operation.custom_id }}</span>
+        {% if fila.renglon.ubicacion %}<div class="ubi">{{ fila.renglon.ubicacion }}</div>{% endif %}
+      </div>
+      <span class="n">{{ fila.hechos }} / {{ fila.renglon.bultos }}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if cuadre.faltan %}
+  <div class="card">
+    <p class="soft" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">
+      {% trans "Still missing" %}
+    </p>
+    <span class="mono" style="font-size:12px;color:var(--soft)">{{ cuadre.faltan|join:" · " }}</span>
+  </div>
+  {% endif %}
+
+  {% if tarea.escaneos.all %}
+  <div class="card ultimos">
+    <p class="soft" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">
+      {% trans "Last scans" %}
+    </p>
+    {% for e in ultimos_escaneos %}
+    <span class="mono">{{ e }}</span>
+    <form method="post" action="{% url 'carga_borrar_escaneo' tarea.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="escaneo" value="{{ e.pk }}">
+      <button class="btn btn-sm" type="submit" title="{% trans "Undo" %}">✕</button>
+    </form><br>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+
+<script>
+/* El foco vuelve a la caja pase lo que pase. La pistola dispara el codigo y un
+   Enter; si el foco se ha ido a otro sitio, el disparo se pierde y quien esta
+   cargando no se entera hasta el final, que es cuando ya no sirve de nada. */
+(function(){
+  var caja = document.getElementById('disparo');
+  if (!caja) return;
+  function enfocar(){ try { caja.focus(); } catch (e) {} }
+  enfocar();
+  document.addEventListener('click', function(e){
+    /* Salvo cuando se esta pulsando un boton de verdad. */
+    if (e.target.closest('button, a, input, select, textarea')) return;
+    enfocar();
+  });
+  setInterval(enfocar, 1500);
+})();
+</script>
+</body>
+</html>

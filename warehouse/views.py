@@ -30,12 +30,13 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
                      Warehouse, Location, Pedimento, PedimentoBundle,
                      PedimentoDocument, ParametrosDeImpuestos,
                      RenglonDeImpuestos, CrossingTask, CrossingTaskItem,
-                     CambioDeDiaDeCruce,
+                     CambioDeDiaDeCruce, LoadOrder, LoadOrderItem,
+                     EscaneoDeBulto, Remision, siguiente_consecutivo,
                      LADO_TENANT, LADO_CLIENTE)
 from .utils import (generate_pdf_report, generate_label_pdf, generar_pdf_factura,
                     nombre_corto)
 from .almacen import url_firmada
-from . import notifications, pedimentos, impuestos
+from . import notifications, pedimentos, impuestos, bultos
 
 logger = logging.getLogger(__name__)
 
@@ -5304,6 +5305,20 @@ def renglon_crear(request):
 # cliente la lee todos los dias.
 
 
+def _versionar_orden(tarea, usuario=None):
+    """
+    Sube la orden de carga a la version siguiente, si es que habia una.
+
+    Cualquier cambio en la tarea despues de emitida la sube a v2 y marca la
+    anterior como obsoleta. Va en un solo sitio y no repartido por cada vista:
+    la accion que se olvidara de llamarlo seria la que deja circulando un papel
+    que ya no es verdad, que es el problema entero.
+    """
+    if tarea.ordenes.exists():
+        return emitir_orden_de_carga(tarea, usuario)
+    return None
+
+
 def _cruce_del_tenant(request, pk):
     """La tarea `pk` si es de esta empresa, y si quien mira puede verla."""
     tenant  = get_tenant_or_404(request)
@@ -5363,6 +5378,12 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
         tarea.sin_factura = tarea.operaciones_sin_factura
         tarea.dias = tarea.dias_para_el_cruce
         tarea.libres = libres
+        # La orden de carga vigente y lo que impide emitirla. El boton se pinta
+        # atenuado con el motivo escrito al lado, no encendido dando error.
+        tarea.orden = tarea.ordenes.order_by('-version').first()
+        tarea.faltan_para_orden = LoadOrder.faltantes_para_emitir(tarea)
+        tarea.cuadre = tarea.orden.cuadre() if tarea.orden else None
+        tarea.remision = tarea.remisiones.order_by('-emitida_en').first()
 
     contexto.update({'tareas': tareas, 'libres': libres})
     return contexto
@@ -5477,6 +5498,7 @@ def cruce_meter(request, pk):
     CrossingTaskItem.objects.create(
         task=tarea, operation=op, added_by=request.user, motivo=motivo,
         desde=(request.POST.get('desde') or CrossingTaskItem.DESDE_LA_TAREA))
+    _versionar_orden(tarea, request.user)
 
     volver = request.POST.get('volver')
     if volver == 'impuestos':
@@ -5497,6 +5519,7 @@ def cruce_sacar(request, pk):
             request, tarea.customer_id,
             _('The load order is already out: say why this shipment comes out.'))
     renglon.delete()
+    _versionar_orden(tarea, request.user)
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
 
 
@@ -5550,5 +5573,340 @@ def cruce_cancelar(request, pk):
             request, tarea.customer_id,
             _('This crossing is already on its way; it cannot be cancelled.'))
     tarea.estado = CrossingTask.CANCELADA
+    tarea.save(update_fields=['estado', 'updated_at'])
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  LA ORDEN DE CARGA, EL ESCANEO Y LA REMISION
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _pedimento_que_ampara(op):
+    """
+    El numero de pedimento que cubre los bultos de esta operacion.
+
+    Se mira primero el reparto por bultos, que es de donde sale de verdad desde
+    que el pedimento es una entidad, y solo despues el campo suelto de la
+    operacion -- que es lo unico que tienen las capturadas antes de eso. Al
+    reves, la orden de carga saldria sin pedimento en el caso normal.
+    """
+    enlaces = op.renglones_de_pedimento.select_related('pedimento')
+    numeros = []
+    for enlace in enlaces:
+        numero = enlace.pedimento.numero or enlace.pedimento.etiqueta
+        if numero and numero not in numeros:
+            numeros.append(numero)
+    if numeros:
+        return ' · '.join(numeros)[:100]
+    return (op.pedimento or '').strip()
+
+
+def _renglones_de_la_orden(orden, task):
+    """
+    Copia en la orden lo que la tarea dice en este momento.
+
+    Se copia y no se mira en vivo: la orden que alguien lleva impresa tiene que
+    poder compararse contra lo que decia cuando se imprimio, no contra lo que
+    dice la tarea ahora. Ese es justo el eslabon que se esta rompiendo.
+    """
+    for renglon in task.renglones.select_related(
+            'operation', 'operation__bundle_type', 'operation__shipper',
+            'operation__location'):
+        op = renglon.operation
+        LoadOrderItem.objects.create(
+            order=orden, operation=op,
+            po_order=(op.po_order or '').strip(),
+            bultos=op.bundle_qty or 0,
+            bundle_type=op.get_bundle_type_display_name() or '',
+            weight_lbs=op.weight_lbs, weight_kgs=op.weight_kgs,
+            ubicacion=(op.location.code if op.location else ''),
+            pedimento=_pedimento_que_ampara(op),
+            shipper=op.get_shipper_display() or '',
+            invoice=(op.invoice or '').strip(),
+            descripcion=(op.description or '').strip())
+
+
+def emitir_orden_de_carga(task, usuario=None):
+    """
+    Emite la orden, o sube de version la que ya existia.
+
+    La version anterior no se borra: alguien la tiene impresa en la mano, y el
+    sistema tiene que poder contestarle que ya no vale cuando la pistolee.
+    """
+    ultima = task.ordenes.order_by('-version').first()
+    if ultima:
+        ultima.obsoleta = True
+        ultima.save(update_fields=['obsoleta'])
+        numero, version = ultima.custom_id, ultima.version + 1
+    else:
+        numero = siguiente_consecutivo(LoadOrder, LoadOrder.PREFIJO)
+        version = 1
+
+    orden = LoadOrder.objects.create(task=task, custom_id=numero,
+                                     version=version, emitida_por=usuario)
+    _renglones_de_la_orden(orden, task)
+    if task.estado == CrossingTask.ABIERTA:
+        task.estado = CrossingTask.CON_ORDEN
+        task.save(update_fields=['estado', 'updated_at'])
+    return orden
+
+
+@login_required
+@require_POST
+def orden_emitir(request, pk):
+    """
+    El boton de la orden de carga. Atenuado hasta que los pedimentos se pagan.
+
+    Entre que la tarea se crea y que los pedimentos se pagan pueden pasar dias,
+    y en todo ese tiempo no existe ninguna orden. Es a proposito: si alguien de
+    oficina pide "sacame la orden ya" -- y va a pasar --, la respuesta del
+    sistema es la lista de preparacion, que es lo que esa persona necesitaba de
+    verdad.
+    """
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+
+    faltan = LoadOrder.faltantes_para_emitir(tarea)
+    if faltan:
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('The load order cannot be issued yet — missing: %(faltan)s.')
+            % {'faltan': '; '.join(str(f) for f in faltan)})
+
+    emitir_orden_de_carga(tarea, request.user)
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+
+@login_required
+def orden_vigencia(request, pk, version):
+    """
+    Lo que contesta el QR del pie de una hoja impresa.
+
+    Quien va a surtir lo pistolea antes de empezar y la pantalla dice una de
+    dos cosas: hoja vigente, o esta hoja esta vencida y hay una v3. El papel
+    sigue sin saber nada -- pero ahora se le puede preguntar al sistema en
+    cinco segundos, sin llamar a oficina.
+    """
+    tenant = get_tenant_or_404(request)
+    orden = get_object_or_404(LoadOrder, pk=pk, task__tenant=tenant)
+    vigente = orden.task.ordenes.order_by('-version').first()
+    return render(request, 'warehouse/orden_vigencia.html', {
+        'orden': orden,
+        'version_impresa': int(version),
+        'vigente': vigente,
+        'esta_vigente': (not orden.obsoleta and orden.version == int(version)
+                         and vigente and vigente.pk == orden.pk),
+    })
+
+
+@login_required
+def carga_verificar(request, pk):
+    """
+    La pantalla de escaneo, para el telefono del que esta cargando.
+
+    Las pistolas BT433 se comportan como un teclado: cada disparo llega como si
+    alguien hubiera tecleado el codigo y pulsado Enter. Asi que esto no
+    necesita camara, ni permisos, ni libreria: es una caja de texto que siempre
+    tiene el foco. Quien carga la lleva colgada y dispara mientras sube el
+    bulto, que es como se trabaja de verdad en un anden.
+    """
+    tarea = _cruce_del_tenant(request, pk)
+    orden = tarea.ordenes.order_by('-version').first()
+    fase = (request.GET.get('fase') or EscaneoDeBulto.CARGA).upper()
+    if fase not in dict(EscaneoDeBulto.FASES):
+        fase = EscaneoDeBulto.CARGA
+
+    contexto = {
+        'tarea': tarea,
+        'orden': orden,
+        'fase': fase,
+        'es_carga': fase == EscaneoDeBulto.CARGA,
+        'profile': get_profile(request.user),
+        'error': request.session.pop('error_de_carga', None),
+        'aviso': request.session.pop('aviso_de_carga', None),
+    }
+    if orden:
+        contexto['cuadre'] = orden.cuadre(fase)
+        # Por operacion, que es como se mira en el anden: se va tachando.
+        por_operacion = []
+        escaneados = set(
+            (e.operation.custom_id, e.numero_de_bulto)
+            for e in tarea.escaneos.filter(fase=fase).select_related('operation'))
+        for renglon in orden.renglones.select_related('operation'):
+            hechos = sum(1 for n in range(1, renglon.bultos + 1)
+                         if (renglon.operation.custom_id, n) in escaneados)
+            por_operacion.append({
+                'renglon': renglon, 'hechos': hechos,
+                'completo': hechos >= renglon.bultos,
+            })
+        contexto['por_operacion'] = por_operacion
+    # Los ultimos disparos, para poder deshacer el que se colo. Pasa: se
+    # pistolea el bulto de al lado.
+    contexto['ultimos_escaneos'] = list(
+        tarea.escaneos.filter(fase=fase).select_related('operation')
+        .order_by('-created_at')[:8])
+    return render(request, 'warehouse/carga.html', contexto)
+
+
+@login_required
+@require_POST
+def carga_escanear(request, pk):
+    """
+    Un disparo de la pistola.
+
+    Lo que no se reconoce se rechaza. Un codigo interpretado a medias es peor
+    que uno rechazado: lo segundo se ve en el momento, lo primero aparece en la
+    aduana.
+    """
+    tenant = get_tenant_or_404(request)
+    tarea  = _cruce_del_tenant(request, pk)
+    fase = (request.POST.get('fase') or EscaneoDeBulto.CARGA).upper()
+    if fase not in dict(EscaneoDeBulto.FASES):
+        fase = EscaneoDeBulto.CARGA
+    volver = f"{reverse('carga_verificar', args=[tarea.pk])}?fase={fase}"
+
+    custom_id, numero = bultos.leer(request.POST.get('codigo'))
+    if not custom_id:
+        request.session['error_de_carga'] = str(
+            _('That code says nothing: %(x)s')
+            % {'x': (request.POST.get('codigo') or '')[:40]})
+        return redirect(volver)
+    if numero is None:
+        # La etiqueta vieja o el identificador tecleado a mano. Se sabe de que
+        # operacion es pero no de que bulto, y aqui la diferencia es todo el
+        # punto: sin numero no se puede decir cuales 19 se subieron.
+        request.session['error_de_carga'] = str(
+            _('%(op)s has no bundle number in that code. Scan the barcode '
+              'under the QR, or type it as %(op)s-1.') % {'op': custom_id})
+        return redirect(volver)
+
+    op = WarehouseOperation.objects.filter(tenant=tenant,
+                                           custom_id=custom_id).first()
+    if op is None:
+        request.session['error_de_carga'] = str(
+            _('%(op)s is not an operation of this company.') % {'op': custom_id})
+        return redirect(volver)
+
+    orden = tarea.ordenes.order_by('-version').first()
+    ya = EscaneoDeBulto.objects.filter(task=tarea, operation=op,
+                                       numero_de_bulto=numero, fase=fase).first()
+    if ya:
+        # Repetido: no es otro bulto, es el mismo otra vez. Se dice en vez de
+        # contarlo dos veces.
+        request.session['aviso_de_carga'] = str(
+            _('%(codigo)s was already scanned at %(hora)s.')
+            % {'codigo': bultos.codigo(custom_id, numero),
+               'hora': timezone.localtime(ya.created_at).strftime('%H:%M')})
+        return redirect(volver)
+
+    EscaneoDeBulto.objects.create(task=tarea, order=orden, operation=op,
+                                  numero_de_bulto=numero, fase=fase,
+                                  created_by=request.user)
+    return redirect(volver)
+
+
+@login_required
+@require_POST
+def carga_borrar_escaneo(request, pk):
+    """Deshacer un disparo. Pasa: se pistolea el bulto de al lado."""
+    tarea = _cruce_del_tenant(request, pk)
+    escaneo = get_object_or_404(EscaneoDeBulto, pk=request.POST.get('escaneo'),
+                                task=tarea)
+    fase = escaneo.fase
+    escaneo.delete()
+    return redirect(f"{reverse('carga_verificar', args=[tarea.pk])}?fase={fase}")
+
+
+@login_required
+@require_POST
+def remision_emitir(request, pk):
+    """
+    El papel que se le entrega al transfer.
+
+    Solo sale cuando lo escaneado es exactamente lo que dice la orden vigente.
+    Y tiene una salida de emergencia -- porque si no, el candado no sirve: lo
+    que pasa siempre que un candado no tiene salida es que el embarque se va
+    por fuera del sistema. Con discrepancia solo la autoriza un manager o
+    superior y con motivo escrito, y la remision sale con la diferencia
+    impresa en el papel que lleva el chofer.
+    """
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+
+    orden = tarea.ordenes.order_by('-version').first()
+    if orden is None:
+        return _cruces_con_error(request, tarea.customer_id,
+                                 _('There is no load order yet.'))
+    if orden.obsoleta:
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('The crossing changed: check what changed against %(o)s.')
+            % {'o': orden.etiqueta})
+
+    cuadre = orden.cuadre()
+    con_discrepancia = not cuadre['cuadra']
+    motivo = (request.POST.get('motivo') or '').strip()
+
+    if con_discrepancia:
+        # Nunca staff, nunca sin motivo.
+        if not (profile.is_manager() or profile.is_admin()
+                or profile.is_superadmin()):
+            return _cruces_con_error(
+                request, tarea.customer_id,
+                _('The scan does not match. Only a manager can let the truck '
+                  'leave with a difference.'))
+        if not motivo:
+            return _cruces_con_error(
+                request, tarea.customer_id,
+                _('Write why the truck is leaving with a difference.'))
+
+    diferencia = ''
+    if con_discrepancia:
+        partes = []
+        if cuadre['faltan']:
+            partes.append(_('missing %(n)d: %(cuales)s')
+                          % {'n': len(cuadre['faltan']),
+                             'cuales': ', '.join(cuadre['faltan'][:8])})
+        if cuadre['sobran']:
+            partes.append(_('unlisted %(n)d: %(cuales)s')
+                          % {'n': len(cuadre['sobran']),
+                             'cuales': ', '.join(cuadre['sobran'][:8])})
+        diferencia = ' · '.join(str(p) for p in partes)
+
+    ultimo = tarea.escaneos.filter(fase=EscaneoDeBulto.CARGA).order_by(
+        '-created_at').first()
+    cliente = tarea.customer
+
+    Remision.objects.create(
+        task=tarea, order=orden,
+        custom_id=siguiente_consecutivo(Remision, Remision.PREFIJO),
+        transfer_empresa=(request.POST.get('transfer_empresa') or '').strip(),
+        transfer_chofer=(request.POST.get('transfer_chofer') or '').strip(),
+        transfer_unidad=(request.POST.get('transfer_unidad') or '').strip(),
+        sello=(request.POST.get('sello') or '').strip(),
+        # Se proponen de la ficha del cliente y se pueden cambiar ese dia.
+        linea_de_enlace=((request.POST.get('linea_de_enlace') or '').strip()
+                         or cliente.linea_de_enlace),
+        domicilio_de_enlace=((request.POST.get('domicilio_de_enlace') or '').strip()
+                             or cliente.domicilio_de_enlace),
+        destinatario=cliente.name,
+        destinatario_rfc=cliente.rfc,
+        destinatario_domicilio=(cliente.address or ''),
+        con_discrepancia=con_discrepancia,
+        motivo_discrepancia=motivo if con_discrepancia else '',
+        diferencia=diferencia,
+        autorizada_por=request.user if con_discrepancia else None,
+        bultos_verificados=cuadre['verificados'],
+        bultos_de_la_orden=cuadre['esperados'],
+        verificada_por=(ultimo.created_by if ultimo else None),
+        verificada_en=(ultimo.created_at if ultimo else None),
+        emitida_por=request.user)
+
+    tarea.estado = CrossingTask.CARGADA
     tarea.save(update_fields=['estado', 'updated_at'])
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")

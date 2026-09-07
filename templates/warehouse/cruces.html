@@ -70,6 +70,20 @@
     .campo{display:flex;flex-direction:column;gap:3px}
     .campo span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)}
 
+    /* Los tres papeles de la tarea, uno al lado del otro. */
+    .papeles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+             gap:10px;padding:12px 15px;border-top:1px solid var(--bdr)}
+    .papel{border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;
+           background:var(--surface)}
+    .papel h4{margin:0 0 6px;font-size:10px;text-transform:uppercase;
+              letter-spacing:.05em;color:var(--soft);font-weight:600}
+    .papel .ok {color:var(--ok-ink-fuerte)}
+    .papel .mal{color:var(--err-ink-fuerte);font-weight:600}
+    .papel input{width:100%;font-size:13px}
+    .btn-off{background:var(--bg-sutil);border-color:var(--bdr);color:var(--soft);
+             cursor:not-allowed}
+    .motivo{font-size:11px;color:var(--err-ink);margin-top:6px;line-height:1.45}
+
     .historial{padding:9px 15px;border-top:1px dashed var(--bdr);font-size:11px;
                color:var(--soft);line-height:1.6}
 
@@ -289,6 +303,117 @@
         <button class="btn btn-sm btn-d" type="submit">{% trans "Cancel this crossing" %}</button>
       </form>
       {% endif %}
+    </div>
+
+    {% comment %}
+    Los dos papeles. La lista de preparacion sale desde el minuto uno y no
+    ampara nada; la orden de carga no se puede emitir hasta que los pedimentos
+    estan pagados. Bodega no pierde nada -- sigue adelantando trabajo el dia
+    uno --; lo que pierde el papel adelantado es la autoridad que hoy tiene y
+    no deberia tener.
+    {% endcomment %}
+    <div class="papeles">
+      <div class="papel">
+        <h4>{% trans "Load order" %}</h4>
+        {% if t.orden %}
+          <div class="mono" style="font-size:15px;font-weight:600">
+            {{ t.orden.custom_id }} <span class="soft">v{{ t.orden.version }}</span>
+          </div>
+          <div class="soft" style="font-size:11px">
+            {% trans "issued" %} {{ t.orden.emitida_en|date:"d/m H:i" }}
+            {% if t.orden.emitida_por %} · {{ t.orden.emitida_por.username }}{% endif %}
+            {% if t.orden.version > 1 %}
+            <br>{% blocktrans count n=t.orden.version %}version {{ n }}{% plural %}version {{ n }} — the earlier ones are obsolete{% endblocktrans %}
+            {% endif %}
+          </div>
+          {% if not es_cliente %}
+          <form method="post" action="{% url 'orden_emitir' t.pk %}" style="margin-top:8px">
+            {% csrf_token %}
+            <button class="btn btn-sm" type="submit">{% trans "Re-issue (new version)" %}</button>
+          </form>
+          {% endif %}
+        {% elif t.faltan_para_orden %}
+          {% comment %}
+          Atenuado con el motivo escrito al lado. Si alguien de oficina pide
+          "sacame la orden ya", la respuesta del sistema es la lista de
+          preparacion, que es lo que esa persona necesitaba de verdad.
+          {% endcomment %}
+          <button class="btn btn-sm btn-off" type="button" disabled>🔒 {% trans "Load order" %}</button>
+          <div class="motivo">
+            {% for f in t.faltan_para_orden %}{{ f }}{% if not forloop.last %} · {% endif %}{% endfor %}
+          </div>
+        {% elif not es_cliente %}
+          <form method="post" action="{% url 'orden_emitir' t.pk %}" style="margin:0">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-p" type="submit">{% trans "Issue the load order" %}</button>
+          </form>
+        {% endif %}
+      </div>
+
+      <div class="papel">
+        <h4>{% trans "Load check" %}</h4>
+        {% if t.orden %}
+          <div style="font-size:15px;font-weight:600"
+               class="{% if t.cuadre.cuadra %}ok{% else %}mal{% endif %}">
+            {{ t.cuadre.verificados }} / {{ t.cuadre.esperados }}
+          </div>
+          <div class="soft" style="font-size:11px">{% trans "bundles scanned one by one" %}</div>
+          <a class="btn btn-sm" style="margin-top:8px;display:inline-block"
+             href="{% url 'carga_verificar' t.pk %}">{% trans "Scan" %}</a>
+        {% else %}
+          <div class="soft" style="font-size:12px">{% trans "there is nothing to check against yet" %}</div>
+        {% endif %}
+      </div>
+
+      <div class="papel">
+        <h4>{% trans "Remision" %}</h4>
+        {% if t.remision %}
+          <div class="mono" style="font-size:15px;font-weight:600">{{ t.remision.custom_id }}</div>
+          <div class="soft" style="font-size:11px">
+            {{ t.remision.bultos_verificados }} / {{ t.remision.bultos_de_la_orden }}
+            {% trans "verified" %}
+            {% if t.remision.con_discrepancia %}
+            <br><span class="mal">{% trans "ISSUED WITH A DIFFERENCE" %}</span>
+            {% endif %}
+          </div>
+        {% elif not t.orden %}
+          <div class="soft" style="font-size:12px">{% trans "needs a load order first" %}</div>
+        {% elif not es_cliente %}
+          {% comment %}
+          El boton esta atenuado hasta que el escaneo cuadra. Y tiene salida de
+          emergencia, porque si no el candado no sirve: lo que pasa siempre que
+          un candado no tiene salida es que el embarque se va por fuera del
+          sistema. Solo manager o superior, y con motivo escrito.
+          {% endcomment %}
+          <details>
+            <summary class="btn btn-sm {% if t.cuadre.cuadra %}btn-p{% else %}btn-off{% endif %}"
+                     style="display:inline-block">
+              {% if not t.cuadre.cuadra %}🔒 {% endif %}{% trans "Issue the remision" %}
+            </summary>
+            <form method="post" action="{% url 'remision_emitir' t.pk %}"
+                  style="margin-top:9px;display:grid;gap:6px;text-align:left;min-width:230px">
+              {% csrf_token %}
+              <input type="text" name="transfer_empresa" placeholder="{% trans "Transfer company" %}">
+              <input type="text" name="transfer_chofer" placeholder="{% trans "Driver" %}">
+              <input type="text" name="transfer_unidad" placeholder="{% trans "Unit / trailer" %}">
+              <input type="text" name="sello" placeholder="{% trans "Seal" %}">
+              <input type="text" name="linea_de_enlace"
+                     value="{{ cliente.linea_de_enlace }}"
+                     placeholder="{% trans "Connecting carrier" %}">
+              {% if not t.cuadre.cuadra %}
+              <div class="motivo">
+                {% trans "The scan does not match." %}
+                {% if t.cuadre.faltan %}{% trans "Missing:" %} {{ t.cuadre.faltan|join:", " }}{% endif %}
+                {% if t.cuadre.sobran %} · {% trans "Unlisted:" %} {{ t.cuadre.sobran|join:", " }}{% endif %}
+              </div>
+              <input type="text" name="motivo" required
+                     placeholder="{% trans "Why does it leave anyway?" %}">
+              {% endif %}
+              <button class="btn btn-sm btn-p" type="submit">{% trans "Issue it" %}</button>
+            </form>
+          </details>
+        {% endif %}
+      </div>
     </div>
 
     {% if t.cambios_de_dia.all %}

@@ -131,4 +131,15 @@ urlpatterns = [
     path('cruces/<int:pk>/remove/', views.cruce_sacar, name='cruce_sacar'),
     path('cruces/<int:pk>/day/', views.cruce_cambiar_dia, name='cruce_cambiar_dia'),
     path('cruces/<int:pk>/cancel/', views.cruce_cancelar, name='cruce_cancelar'),
+
+    # La orden de carga, el escaneo y la remision.
+    path('cruces/<int:pk>/order/', views.orden_emitir, name='orden_emitir'),
+    path('cruces/<int:pk>/verify/', views.carga_verificar, name='carga_verificar'),
+    path('cruces/<int:pk>/verify/scan/', views.carga_escanear, name='carga_escanear'),
+    path('cruces/<int:pk>/verify/undo/', views.carga_borrar_escaneo,
+         name='carga_borrar_escaneo'),
+    path('cruces/<int:pk>/remision/', views.remision_emitir, name='remision_emitir'),
+    # Lo que contesta el QR del pie de una hoja impresa.
+    path('orden/<int:pk>/v<int:version>/', views.orden_vigencia,
+         name='orden_vigencia'),
 ]
