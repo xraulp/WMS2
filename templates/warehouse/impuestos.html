@@ -1,0 +1,369 @@
+{% load i18n %}
+{% get_current_language as idioma_actual %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Duties" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    a{color:inherit}
+    .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
+        padding:12px 18px;background:var(--ink);color:var(--on-accent);flex-wrap:wrap}
+    .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
+    .tb a{color:var(--bdr);text-decoration:none;font-size:12px}
+    .wrap{max-width:1200px;margin:16px auto 60px;padding:0 14px}
+    .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
+          padding:16px;margin-bottom:14px}
+    .ct{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin:0 0 10px}
+    .mono{font-family:'IBM Plex Mono',monospace}
+    .soft{color:var(--soft)}
+    select,input[type=text],input[type=number],input[type=date]{
+      font-family:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--bdr);
+      border-radius:var(--r);background:var(--surface);color:var(--ink);max-width:100%}
+    .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:var(--r);
+         padding:6px 12px;font-size:13px;font-family:inherit;cursor:pointer;color:var(--ink)}
+    .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+    .btn-sm{padding:3px 8px;font-size:12px}
+    .msg-error{background:var(--rsoft);color:var(--err-ink);padding:9px 12px;
+               border-radius:var(--r);font-size:13px;margin-bottom:10px}
+
+    .vistazo{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+    .cuadro{flex:1 1 130px;min-width:120px;border:1px solid var(--bdr);border-radius:10px;
+            padding:10px 12px;background:var(--surface)}
+    .cuadro b{display:block;font-family:'IBM Plex Mono',monospace;font-size:19px;line-height:1.1}
+    .cuadro span{display:block;font-size:11px;color:var(--soft);margin-top:3px}
+    .c-ok{background:var(--ok-bg);border-color:var(--ok-ink)}
+    .c-ok b{color:var(--ok-ink-fuerte)}
+    .c-mal{background:var(--rsoft);border-color:var(--red)}
+    .c-mal b{color:var(--err-ink-fuerte)}
+
+    .hoja{width:100%;border-collapse:collapse;background:var(--surface)}
+    .hoja th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
+             color:var(--soft);padding:8px 9px;border-bottom:1px solid var(--bdr);
+             background:var(--bg-sutil);white-space:nowrap}
+    .hoja td{padding:8px 9px;font-size:13px;border-bottom:1px solid var(--bg);
+             vertical-align:middle}
+    .hoja .num{text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap}
+    .hoja tr.falta{background:var(--rsoft)}
+
+    /* El status no es un adorno: contesta de quien es la pelota. Verde cuando
+       ya no pide nada, ambar cuando la pelota es de la casa, azul cuando es
+       del cliente. */
+    .st{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;
+        font-weight:600;white-space:nowrap}
+    .st-nada  {background:var(--bg-sutil);color:var(--soft)}
+    .st-casa  {background:var(--rsoft);color:var(--err-ink)}
+    .st-cliente{background:var(--asoft);color:var(--accent-ink)}
+    .st-listo {background:var(--ok-bg);color:var(--ok-ink-fuerte)}
+
+    .provisional{font-size:10px;text-transform:uppercase;letter-spacing:.04em;
+                 color:var(--err-ink);display:block}
+    .exacto{font-size:11px;color:var(--soft);display:block}
+    .valor-casilla{width:110px;font-family:'IBM Plex Mono',monospace}
+    .desglose{font-size:11px;color:var(--soft);line-height:1.5}
+    .desglose b{color:var(--ink)}
+
+    .scroll{overflow-x:auto}
+
+    @media (max-width:760px){
+      .wrap{padding:0 10px}
+      /* En el telefono la hoja no se encoge: cada renglon pasa a ser una ficha
+         con sus etiquetas delante. Es la misma informacion, apilada. */
+      .hoja, .hoja thead, .hoja tbody, .hoja tr, .hoja td{display:block;width:100%}
+      .hoja thead{display:none}
+      .hoja tr{border:1px solid var(--bdr);border-radius:10px;margin-bottom:10px;
+               padding:6px 0;background:var(--surface)}
+      .hoja td{border:none;display:flex;justify-content:space-between;gap:10px;
+               padding:4px 12px}
+      .hoja td::before{content:attr(data-etq);font-size:10px;text-transform:uppercase;
+                       letter-spacing:.05em;color:var(--soft);flex:0 0 auto}
+      .hoja .num{text-align:right}
+      .hoja tfoot tr{background:var(--bg-sutil)}
+    }
+  </style>
+</head>
+<body>
+
+<div class="tb">
+  <span class="tb-brand">WMS — {% trans "Duties" %}</span>
+  <a href="{% url 'dashboard' %}">← {% trans "Back to the dashboard" %}</a>
+</div>
+
+<div class="wrap">
+
+  {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
+
+  <div class="card">
+    <p class="ct">{% trans "Customer" %}</p>
+    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select name="customer" onchange="this.form.submit()">
+        <option value="">— {% trans "Select a customer" %} —</option>
+        {% for c in clientes %}
+        <option value="{{ c.pk }}" {% if cliente and c.pk == cliente.pk %}selected{% endif %}>
+          {{ c.name }}{% if c.abbreviation %} · {{ c.abbreviation }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <noscript><button class="btn" type="submit">{% trans "Show" %}</button></noscript>
+    </form>
+  </div>
+
+  {% if not cliente %}
+  <div class="card">
+    <p class="soft" style="margin:0">
+      {% trans "Pick a customer to see their duty sheet." %}
+    </p>
+  </div>
+  {% else %}
+
+  <div class="vistazo">
+    <div class="cuadro">
+      <b>{{ resumen.abiertos }}</b><span>{% trans "Open shipments" %}</span>
+    </div>
+    <div class="cuadro {% if resumen.sin_factura %}c-mal{% else %}c-ok{% endif %}">
+      <b>{{ resumen.sin_factura }}</b><span>{% trans "Without commercial invoice" %}</span>
+    </div>
+    <div class="cuadro">
+      <b>{{ resumen.esperando }}</b><span>{% trans "Waiting for their review" %}</span>
+    </div>
+    <div class="cuadro">
+      <b>{{ resumen.total|floatformat:0 }}</b><span>{% trans "Estimated duties MXN" %}</span>
+    </div>
+  </div>
+
+  {% comment %}
+  El tipo de cambio de trabajo se enseña aqui y no en la fila de contadores,
+  como se pidio. Va alto a proposito: mas vale que sobre dinero en la cuenta a
+  que falte y se pierda el dia de cruce. Lo ven la casa y el agente aduanal,
+  nunca el cliente.
+  {% endcomment %}
+  {% if puede_editar %}
+  <div class="card" style="padding:10px 16px">
+    <span class="soft" style="font-size:12px">
+      {% trans "Working exchange rate" %}
+      <b class="mono" style="color:var(--ink)">{{ parametros.tipo_de_cambio }}</b>
+      · {% trans "pre-validation" %}
+      <b class="mono" style="color:var(--ink)">{{ parametros.prevalidacion }}</b>
+      · {% trans "in force since" %} {{ parametros.vigente_desde|date:"d/m/Y" }}
+    </span>
+  </div>
+  {% endif %}
+
+  <div class="card scroll" style="padding:0;overflow:hidden">
+    <table class="hoja">
+      <thead>
+        <tr>
+          <th>{% trans "Status" %}</th>
+          <th>{% trans "Invoice" %}</th>
+          <th>{% trans "Entry" %}</th>
+          <th>{% trans "PO / Order" %}</th>
+          <th>{% trans "Pedimento" %}</th>
+          <th class="num">{% trans "Invoice value USD" %}</th>
+          <th class="num">{% trans "Approx. duty MXN" %}</th>
+          {% if puede_editar %}<th></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in renglones %}
+        <tr class="{% if not r.tiene_factura %}falta{% endif %}">
+          <td data-etq="{% trans "Status" %}">
+            {% comment %}
+            El status se escribe solo: sale de lo que ya paso en el sistema.
+            Ninguno se teclea, y por eso no hay ningun desplegable aqui.
+            {% endcomment %}
+            <span class="st
+              {% if r.status == 'PAGADO' %}st-listo
+              {% elif r.status == 'EN_REVISION' or r.status == 'LISTO_PAGO' %}st-cliente
+              {% elif r.status == 'ELAB_PED' %}st-casa
+              {% else %}st-nada{% endif %}">{{ r.status_texto }}</span>
+          </td>
+          <td data-etq="{% trans "Invoice" %}">
+            {% if r.tiene_factura %}
+              <span class="soft">{% trans "YES" %}</span>
+            {% elif r.operation %}
+              {% comment %}
+              Cada NO es un boton: se sube el archivo aqui mismo, sin buscar el
+              correo en el que se pidio.
+              {% endcomment %}
+              <form method="post" enctype="multipart/form-data" style="margin:0"
+                    action="{% url 'operacion_subir_factura' r.operation.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="customer" value="{{ cliente.pk }}">
+                <label class="btn btn-sm" style="cursor:pointer">
+                  {% trans "NO — upload" %}
+                  <input type="file" name="archivo" style="display:none"
+                         onchange="this.form.submit()">
+                </label>
+              </form>
+            {% else %}
+              <span class="soft">{% trans "NO" %}</span>
+            {% endif %}
+          </td>
+          <td data-etq="{% trans "Entry" %}" class="mono">{{ r.entrada|default:"—" }}</td>
+          <td data-etq="{% trans "PO / Order" %}"><strong>{{ r.pedido|default:"—" }}</strong></td>
+          <td data-etq="{% trans "Pedimento" %}" class="mono">
+            {% if r.pedimento %}{{ r.pedimento.numero|default:r.pedimento.etiqueta }}{% else %}—{% endif %}
+          </td>
+          <td data-etq="{% trans "Invoice value USD" %}" class="num">
+            {% if puede_editar %}
+            <form method="post" action="{% url 'renglon_guardar' r.pk %}" style="margin:0">
+              {% csrf_token %}
+              {% comment %}
+              Se guarda lo que se tecleo y no solo el resultado: quien vuelva en
+              octubre tiene que ver `500+700` y no un `1,200` huerfano.
+              {% endcomment %}
+              <input type="text" name="valor" class="valor-casilla" data-suma
+                     value="{{ r.valor_expresion }}" placeholder="500+700"
+                     title="{% trans "Accepts an addition: 500+700" %}"
+                     onchange="this.form.submit()">
+              <span class="exacto" data-suma-resultado></span>
+            </form>
+            {% else %}
+              {{ r.valor_mercancia|default:"—" }}
+            {% endif %}
+            {% if r.valor_es_provisional %}
+            <span class="provisional">{% trans "provisional · from the proforma" %}</span>
+            {% endif %}
+            {% if r.valor_anterior %}
+            <span class="exacto">{% trans "was" %} {{ r.valor_anterior }}</span>
+            {% endif %}
+          </td>
+          <td data-etq="{% trans "Approx. duty MXN" %}" class="num">
+            {% if r.estimado %}
+              <strong>{{ r.estimado|floatformat:2 }}</strong>
+              {% comment %}
+              La cifra exacta al lado, en gris, cuando alguien redondeo: el
+              redondeo es de la casa, y esto es para que se vea de cuanto fue el
+              salto que se dio.
+              {% endcomment %}
+              {% if r.impuesto_reportado and r.cuenta %}
+              <span class="exacto">{% trans "exact" %} {{ r.cuenta.T_total_pedimento }}</span>
+              {% endif %}
+            {% else %}
+              <span class="soft">—</span>
+            {% endif %}
+          </td>
+          {% if puede_editar %}
+          <td data-etq="">
+            <details>
+              <summary class="btn btn-sm" style="display:inline-block">{% trans "Detail" %}</summary>
+              <form method="post" action="{% url 'renglon_guardar' r.pk %}"
+                    style="margin-top:8px;display:grid;gap:6px;min-width:230px;text-align:left">
+                {% csrf_token %}
+                <input type="hidden" name="valor" value="{{ r.valor_expresion }}">
+                <label class="desglose">{% trans "Freight and packing USD" %}
+                  <input type="number" step="0.01" name="fletes" value="{{ r.fletes|default_if_none:'' }}" style="width:100%"></label>
+                <label class="desglose">{% trans "Additions USD" %}
+                  <input type="number" step="0.01" name="incrementables" value="{{ r.incrementables|default_if_none:'' }}" style="width:100%"></label>
+                <label class="desglose">{% trans "IGI rate (0.15 = 15%)" %}
+                  <input type="number" step="0.0001" name="tasa_igi" value="{{ r.tasa_igi }}" style="width:100%"></label>
+                <label class="desglose" style="display:flex;gap:6px;align-items:center">
+                  <input type="hidden" name="tmec_present" value="1">
+                  <input type="checkbox" name="aplica_tmec" value="1" {% if r.aplica_tmec %}checked{% endif %}>
+                  {% trans "T-MEC applies (origin MX / USA / CAN)" %}</label>
+                <label class="desglose">{% trans "Duty sent to the customer (rounded)" %}
+                  <input type="number" step="0.01" name="impuesto_reportado"
+                         value="{{ r.impuesto_reportado|default_if_none:'' }}" style="width:100%"></label>
+                {% if r.cuenta %}
+                <div class="desglose">
+                  {% trans "Customs value" %} <b>{{ r.cuenta.I_valor_en_aduana }}</b> ·
+                  DTA <b>{{ r.cuenta.K_dta }}</b> ·
+                  IGI <b>{{ r.cuenta.M_igi }}</b> ·
+                  IVA <b>{{ r.cuenta.Q_iva }}</b><br>
+                  {% trans "Adjustment factor" %} <b>{{ r.cuenta.G_factor_ajuste }}</b>
+                </div>
+                {% endif %}
+                <button class="btn btn-sm btn-p" type="submit">{% trans "Save" %}</button>
+              </form>
+            </details>
+          </td>
+          {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="soft">{% trans "No shipments in this sheet yet." %}</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="6" data-etq="" style="text-align:right;font-weight:600">
+            {% trans "ESTIMATED TOTAL" %}
+          </td>
+          <td class="num" data-etq="{% trans "ESTIMATED TOTAL" %}" style="font-weight:700">
+            {{ resumen.total|floatformat:2 }}
+          </td>
+          {% if puede_editar %}<td></td>{% endif %}
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  {% if puede_editar %}
+  {% comment %}
+  El renglon de la factura que se adelanta a la mercancia. Ya hay algo que
+  reportar -- un pedido, un valor, un ETA -- y todavia no existe ninguna
+  entrada. Al capturarla, el renglon se enlaza solo por el numero de pedido.
+  {% endcomment %}
+  <div class="card">
+    <p class="ct">{% trans "A shipment that has not arrived yet" %}</p>
+    <form method="post" action="{% url 'renglon_crear' %}"
+          style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      {% csrf_token %}
+      <input type="hidden" name="customer" value="{{ cliente.pk }}">
+      <input type="text" name="po_order" placeholder="{% trans "PO / Order" %}" required>
+      <input type="text" name="guia" placeholder="{% trans "Waybill" %}">
+      <input type="date" name="eta" title="ETA">
+      <button class="btn" type="submit">+ {% trans "Add row" %}</button>
+    </form>
+    <p class="soft" style="font-size:11px;margin:8px 0 0">
+      {% trans "With a waybill and a carrier the row shows an ETA instead of “not arrived”." %}
+    </p>
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+
+<script>
+/* La casilla que suma, como en Excel. Mientras se escribe, el resultado
+   aparece debajo en gris; lo que se guarda es la cuenta entera, no el total,
+   asi que quien vuelva en octubre ve de donde salio el numero.
+
+   Esto es solo la ayuda visual: quien resuelve de verdad la cuenta es el
+   servidor, en `warehouse/impuestos.py`. Un calculo que solo vive en el
+   navegador es un calculo que se pierde con el primer telefono viejo. */
+(function(){
+  function pinta(campo){
+    var salida = campo.parentElement.querySelector('[data-suma-resultado]');
+    if (!salida) return;
+    var texto = (campo.value || '').trim();
+    if (!texto || /^[0-9.,\s]+$/.test(texto)) { salida.textContent = ''; return; }
+    if (!/^[0-9+\-*/().,\s]+$/.test(texto) || texto.indexOf('**') >= 0) {
+      salida.textContent = '?'; return;
+    }
+    try {
+      var n = Function('"use strict";return (' + texto.replace(/,/g, '') + ')')();
+      salida.textContent = (typeof n === 'number' && isFinite(n))
+        ? '= ' + n.toLocaleString(undefined, {minimumFractionDigits: 2,
+                                              maximumFractionDigits: 2})
+        : '?';
+    } catch (e) { salida.textContent = '?'; }
+  }
+  function barre(){
+    document.querySelectorAll('[data-suma]').forEach(function(campo){
+      if (campo.dataset.listo) return;
+      campo.dataset.listo = '1';
+      campo.addEventListener('input', function(){ pinta(campo); });
+      pinta(campo);
+    });
+  }
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', barre);
+  else barre();
+})();
+</script>
+</body>
+</html>

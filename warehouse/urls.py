@@ -116,4 +116,10 @@ urlpatterns = [
          name='operacion_marcar_factura'),
     path('operations/<int:pk>/invoice/upload/', views.operacion_subir_factura,
          name='operacion_subir_factura'),
+
+    # La hoja de impuestos. Una por cliente, viva siempre: no se abre al llegar
+    # a un paso, se mira tres veces al dia.
+    path('impuestos/', views.impuestos_panel, name='impuestos_panel'),
+    path('impuestos/new/', views.renglon_crear, name='renglon_crear'),
+    path('impuestos/<int:pk>/save/', views.renglon_guardar, name='renglon_guardar'),
 ]

@@ -1170,6 +1170,15 @@ class Tenant(models.Model):
     # Facturación (solo para organizations)
     billing_email = models.EmailField(blank=True, null=True, verbose_name="Email de Facturación")
 
+    # Como se nombra la empresa en los papeles que lee el cliente: en la hoja
+    # de impuestos el status se escribe "ELAB PED · DYSER". Recortar la razon
+    # social no sirve -- "DYSER Group LLC" daria "DYSER GROUP" -- porque lo que
+    # se dicta por telefono es una palabra elegida, no un recorte.
+    short_name = models.CharField(max_length=20, blank=True, default='',
+                                  verbose_name="Nombre corto",
+                                  help_text="Como aparece en la hoja de impuestos. "
+                                            "Vacio = se recorta el nombre.")
+
     # A los cuantos dias en bodega una entrada empieza a avisar. Es el plazo de
     # la casa; cada cliente puede tener el suyo (`Catalog.alert_days`), porque
     # una semana para uno es lo normal y para otro ya es una factura de
@@ -2344,3 +2353,291 @@ class ParametrosDeImpuestos(models.Model):
         fila = (cls.objects.filter(tenant=tenant, vigente_desde__lte=fecha)
                 .order_by('-vigente_desde', '-created_at').first())
         return fila or cls(tenant=tenant, vigente_desde=fecha)
+
+
+class RenglonDeImpuestos(models.Model):
+    """
+    Un embarque en la hoja de impuestos del cliente.
+
+    La hoja no se abre "al llegar a un paso": esta siempre, una por cliente,
+    viva desde que le llega el primer embarque hasta que cruza el ultimo. Se
+    mira tres veces al dia y siempre por lo mismo -- despues de capturar una
+    entrada, cuando llega una factura, y cuando el cliente llama preguntando
+    cuanto va a pagar, que es la pregunta que mas veces se contesta.
+
+    El renglon existe aparte de la operacion porque a veces nace antes que
+    ella: la factura puede llegar antes que la mercancia, y entonces hay algo
+    que reportar -- un pedido, un valor, un ETA -- sin que exista todavia
+    ninguna entrada. Cuando la mercancia llega, el renglon se enlaza con su
+    operacion y deja de estar suelto.
+
+    De toda la tabla, la unica columna que se teclea es la del valor. El
+    status, las fechas, la entrada, el pedido y el pedimento ya estan en el
+    sistema por haber hecho el trabajo.
+    """
+
+    # Los seis status. Ninguno se teclea: todos salen de lo que ya paso. Y los
+    # seis contestan la misma pregunta -- de quien es la pelota -- dicha con
+    # las palabras del papel que el cliente ya lee.
+    NO_HA_LLEGADO = 'NO_HA_LLEGADO'
+    ETA           = 'ETA'
+    ELAB_PED      = 'ELAB_PED'
+    EN_REVISION   = 'EN_REVISION'
+    LISTO_PAGO    = 'LISTO_PAGO'
+    PAGADO        = 'PAGADO'
+
+    tenant   = models.ForeignKey('Tenant', on_delete=models.CASCADE,
+                                 related_name='renglones_de_impuestos')
+    customer = models.ForeignKey(Catalog, on_delete=models.PROTECT,
+                                 related_name='renglones_de_impuestos',
+                                 limit_choices_to={'category': 'CUSTOMER'},
+                                 verbose_name='Cliente')
+
+    # El embarque, cuando ya llego. Vacio mientras la factura va por delante de
+    # la mercancia.
+    operation = models.OneToOneField(WarehouseOperation, on_delete=models.CASCADE,
+                                     null=True, blank=True,
+                                     related_name='renglon_de_impuestos')
+
+    # Con lo que el cliente identifica su embarque. Cuando hay operacion se lee
+    # de ella; esto es para el renglon que todavia no la tiene.
+    po_order = models.CharField(max_length=200, blank=True, default='',
+                                verbose_name='Pedido')
+    carrier  = models.ForeignKey(Catalog, on_delete=models.SET_NULL, null=True,
+                                 blank=True, related_name='renglones_como_carrier',
+                                 limit_choices_to={'category': 'CARRIER'})
+    guia     = models.CharField(max_length=200, blank=True, default='')
+    eta      = models.DateField(null=True, blank=True)
+
+    # ── El valor ─────────────────────────────────────────────────────────────
+    # Se guarda lo que se tecleo y no solo el resultado. Un embarque puede
+    # traer dos o tres facturas, y quien vuelva a este renglon en octubre tiene
+    # que ver `500+700` y no un `1,200` huerfano del que ya nadie se acuerda de
+    # donde salio.
+    valor_expresion  = models.CharField(max_length=60, blank=True, default='',
+                                        verbose_name='Valor tal como se tecleo')
+    valor_mercancia  = models.DecimalField(max_digits=14, decimal_places=2,
+                                           null=True, blank=True,
+                                           verbose_name='Valor de mercancia USD')
+    fletes           = models.DecimalField(max_digits=14, decimal_places=2,
+                                           null=True, blank=True)
+    incrementables   = models.DecimalField(max_digits=14, decimal_places=2,
+                                           null=True, blank=True)
+    tasa_igi         = models.DecimalField(max_digits=6, decimal_places=4,
+                                           default=Decimal('0'),
+                                           verbose_name='Tasa de IGI')
+    aplica_tmec      = models.BooleanField(default=False,
+                                           verbose_name='Aplica el T-MEC')
+
+    # Lo que se le mando al cliente, que puede no ser la cifra exacta: el
+    # redondeo es de la casa, siempre hacia arriba y a numero cerrado. El
+    # sistema calcula y propone; nunca decide ni redondea por su cuenta.
+    impuesto_reportado = models.DecimalField(max_digits=14, decimal_places=2,
+                                             null=True, blank=True,
+                                             verbose_name='Impuesto reportado MXN')
+
+    # Del valor anterior, cuando se corrige al llegar la factura: en tres meses
+    # dice cuanto se despegan las proformas de cada proveedor.
+    valor_anterior = models.DecimalField(max_digits=14, decimal_places=2,
+                                         null=True, blank=True)
+
+    notas       = models.TextField(blank=True, default='')
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+    updated_by  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                    blank=True, related_name='renglones_tocados')
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Renglon de la hoja de impuestos'
+        verbose_name_plural = 'Renglones de la hoja de impuestos'
+
+    def __str__(self):
+        return f'{self.pedido or "sin pedido"} de {self.customer}'
+
+    # ── Lo que se lee del embarque cuando ya existe ──────────────────────────
+
+    @property
+    def pedido(self):
+        """El numero de pedido, que es con lo que el cliente lo identifica."""
+        if self.operation and (self.operation.po_order or '').strip():
+            return self.operation.po_order.strip()
+        return (self.po_order or '').strip()
+
+    @property
+    def entrada(self):
+        return self.operation.custom_id if self.operation else ''
+
+    @property
+    def transportista(self):
+        if self.operation:
+            return self.operation.get_carrier_display()
+        return self.carrier.name if self.carrier else ''
+
+    @property
+    def guia_de_embarque(self):
+        if self.operation and (self.operation.pro or '').strip():
+            return self.operation.pro.strip()
+        return (self.guia or '').strip()
+
+    @property
+    def fecha_estimada(self):
+        if self.operation and self.operation.eta:
+            return self.operation.eta
+        return self.eta
+
+    @property
+    def fecha_reportado(self):
+        """El dia que se capturo la entrada. Antes se tecleaba."""
+        return self.operation.date if self.operation else None
+
+    @property
+    def pedimento(self):
+        """El pedimento en el que cayeron los bultos de este embarque."""
+        if not self.operation:
+            return None
+        renglon = self.operation.renglones_de_pedimento.select_related(
+            'pedimento').first()
+        return renglon.pedimento if renglon else None
+
+    # ── La factura, que decide si el valor es firme ──────────────────────────
+
+    @property
+    def factura_comercial(self):
+        """El archivo de la factura, si esta cargado."""
+        if not self.operation:
+            return None
+        return self.operation.documents.filter(
+            ranura=OperationDocument.RANURA_FACTURA_COMERCIAL).first()
+
+    @property
+    def tiene_factura(self):
+        return self.factura_comercial is not None
+
+    @property
+    def estado_del_valor(self):
+        """
+        `SIN_NADA`, `PROFORMA` o `FACTURA`.
+
+        No se adivina: lo decide el archivo. Mientras el renglon no tenga
+        colgada una factura comercial el valor es provisional venga de donde
+        venga, y en el momento en que se carga el documento deja de serlo. Sin
+        clic de confirmacion.
+        """
+        if self.tiene_factura:
+            return 'FACTURA'
+        if self.valor_mercancia:
+            return 'PROFORMA'
+        return 'SIN_NADA'
+
+    @property
+    def valor_es_provisional(self):
+        return self.estado_del_valor == 'PROFORMA'
+
+    # ── El status, que se escribe solo ───────────────────────────────────────
+
+    @property
+    def status(self):
+        """La clave del status, deducida de lo que ya paso en el sistema."""
+        ped = self.pedimento
+        if ped is not None:
+            if ped.estado in (Pedimento.VALIDADO, Pedimento.PAGADO):
+                return self.PAGADO
+            if ped.estado == Pedimento.APROBADO:
+                return self.LISTO_PAGO
+            if ped.estado == Pedimento.EN_REVISION:
+                return self.EN_REVISION
+        if self.operation is not None:
+            # Llego la mercancia y se esta elaborando el pedimento. Es el hueco
+            # largo, y el momento en que mas falta hace reclamar la factura:
+            # sin este status esos dias se verian como "no ha llegado", que es
+            # falso.
+            return self.ELAB_PED
+        if self.fecha_estimada and self.transportista and self.guia_de_embarque:
+            return self.ETA
+        return self.NO_HA_LLEGADO
+
+    @property
+    def status_texto(self):
+        """
+        El status como se escribe en la hoja que ve el cliente.
+
+        Las abreviaciones no se teclean: la del cliente sale del catalogo y la
+        del tenant de su nombre corto.
+        """
+        from .utils import nombre_corto
+        clave = self.status
+
+        # Las dos abreviaciones que van al final del status. Ninguna se teclea
+        # aqui: la del cliente ya existe en su ficha del catalogo y la del
+        # tenant en sus ajustes.
+        #
+        # Y si alguna falta, no se inventa: el nombre completo recortado a doce
+        # letras da cosas como "CUSTOMER TES", que en un papel que el cliente
+        # lee parece un error del sistema. Sin abreviacion, el status va solo.
+        yo   = (self.tenant.short_name or '').strip().upper()
+        if not yo:
+            corto = nombre_corto(self.tenant.name).upper()
+            yo = corto if len(corto) <= 12 else ''
+        suyo = (self.customer.abbreviation or '').strip().upper()
+
+        def con(texto, abrev):
+            return f'{texto} \u00b7 {abrev}' if abrev else texto
+
+        if clave == self.NO_HA_LLEGADO:
+            return 'NO HA LLEGADO'
+        if clave == self.ETA:
+            return 'ETA %s' % self.fecha_estimada.strftime('%d/%m')
+        if clave == self.ELAB_PED:
+            return con('ELAB PED', yo)
+        if clave == self.EN_REVISION:
+            return con('ENVIADO A REVISION Y MV', suyo)
+        if clave == self.LISTO_PAGO:
+            return con('LISTO PARA VALIDACION Y PAGO', suyo)
+        return 'VALIDADOS Y PAGADOS'
+
+    @property
+    def la_pelota_es_del_cliente(self):
+        """De quien se espera el siguiente movimiento."""
+        return self.status == self.EN_REVISION
+
+    # ── La cuenta ────────────────────────────────────────────────────────────
+
+    def calcular(self, parametros=None):
+        """
+        La hoja de impuestos de este renglon, con los parametros que valian.
+
+        Se usan los del dia en que se reporto -- el dia de la entrada -- y no
+        los de hoy: un estimado dado en marzo con la cuota de marzo tiene que
+        seguir enseñando esa cuota en agosto.
+        """
+        from . import impuestos as _impuestos
+        if parametros is None:
+            parametros = ParametrosDeImpuestos.vigentes(
+                self.tenant, self.fecha_reportado)
+        return _impuestos.calcular(
+            valor_mercancia=self.valor_mercancia or 0,
+            fletes=self.fletes or 0,
+            incrementables=self.incrementables or 0,
+            tipo_de_cambio=parametros.tipo_de_cambio,
+            aplica_tmec=self.aplica_tmec,
+            tasa_igi=self.tasa_igi or 0,
+            prevalidacion=parametros.prevalidacion,
+            dta_sin_tmec=parametros.dta_sin_tmec,
+            dta_con_tmec=parametros.dta_con_tmec)
+
+    @property
+    def impuesto_estimado(self):
+        """
+        Lo que se le va a decir al cliente, en pesos.
+
+        Es lo reportado si alguien lo escribio -- el redondeo es de la casa --
+        y si no la cifra exacta que sale de la cuenta. Sin valor todavia,
+        `None`: la columna va vacia y el renglon sale en la hoja del dia
+        pidiendo el documento, que es para lo que existe.
+        """
+        if self.impuesto_reportado is not None:
+            return self.impuesto_reportado
+        if not self.valor_mercancia:
+            return None
+        return self.calcular()['T_total_pedimento']

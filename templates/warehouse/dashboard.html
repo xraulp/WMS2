@@ -192,6 +192,8 @@ tbody td:has(.btn-action) {
   {% endcomment %}
   <a class="tab" href="{% url 'pedimentos_panel' %}"
      style="text-decoration:none;display:inline-flex;align-items:center">{% trans "Pedimentos" %}</a>
+  <a class="tab" href="{% url 'impuestos_panel' %}"
+     style="text-decoration:none;display:inline-flex;align-items:center">{% trans "Duties" %}</a>
   {% if profile|can_see_tab:'catalog' %}
   <button class="tab" id="tab-catalog" onclick="showTab('catalog')">{% trans "Catalog" %}</button>
   {% endif %}

@@ -173,3 +173,73 @@ def reparto_por_factura(valores_de_facturas, factor_ajuste, tipo_de_cambio):
         renglones.append((_centavos(v), en_aduana))
         total += en_aduana
     return renglones, _centavos(total)
+
+
+# ── La casilla que suma, como en Excel ───────────────────────────────────────
+#
+# Un embarque puede traer dos o tres facturas comerciales, y hoy eso se suma
+# con la calculadora antes de teclear el total. La casilla del valor acepta la
+# suma escrita -- `500+700` -- y la resuelve ahi mismo.
+#
+# Lo que importa no es la suma: es que se guarda **lo que se tecleo** y no solo
+# el resultado. Quien vuelva a ese renglon en octubre ve `500+700` y no un
+# `1,200` huerfano del que ya nadie se acuerda de donde salio.
+
+import re as _re
+
+# Lo unico que se acepta: digitos, punto, coma de miles y los cuatro
+# operadores, mas parentesis. No es una restriccion de estilo -- es que aqui
+# entra texto de un formulario, y evaluar texto de un formulario sin acotarlo
+# es abrir una puerta que no hace falta abrir.
+_EXPRESION_VALIDA = _re.compile(r'^[0-9+\-*/().,\s]+$')
+
+
+class ExpresionInvalida(ValueError):
+    """Lo tecleado en la casilla del valor no es una cuenta."""
+
+
+def resolver_expresion(texto):
+    """
+    El numero que sale de lo tecleado en la casilla del valor.
+
+    Acepta un numero suelto (`1200`, `1,200.00`) y una cuenta con sumas,
+    restas, multiplicaciones y divisiones (`500+700`, `3*250.50`). Devuelve un
+    `Decimal`, o `None` si la casilla esta vacia -- que es el caso normal
+    mientras no hay ni factura ni proforma.
+
+    Levanta `ExpresionInvalida` cuando lo tecleado no es una cuenta. La casilla
+    avisa mientras se escribe, pero el aviso de la pantalla no es un candado:
+    esto es lo que impide que un dedazo acabe guardado como valor de una
+    factura.
+    """
+    texto = (texto or '').strip()
+    if not texto:
+        return None
+    if not _EXPRESION_VALIDA.match(texto):
+        raise ExpresionInvalida(texto)
+    # El asterisco doble es la potencia, y `9**9**9` cabe en una casilla y se
+    # come la maquina antes de devolver nada. Aqui nadie eleva nada: una casilla
+    # de valor de factura suma, resta y multiplica.
+    if '**' in texto.replace(' ', ''):
+        raise ExpresionInvalida(texto)
+    # Y un largo razonable, por la misma razon: lo que se teclea de verdad son
+    # dos o tres numeros sumados.
+    if len(texto) > 60:
+        raise ExpresionInvalida(texto)
+
+    # Las comas son separador de miles, no decimal: es como llegan los valores
+    # escritos, `162,300.00`. Se quitan antes de evaluar.
+    limpio = texto.replace(',', '').replace(' ', '')
+    if not limpio:
+        return None
+    try:
+        # `eval` acotado: sin nombres, sin builtins y sobre un texto que ya
+        # paso el filtro de arriba. Los numeros se convierten a Decimal para no
+        # arrastrar el error del punto flotante en cifras de dinero.
+        limpio_decimal = _re.sub(r'(\d+\.?\d*)', r"Decimal('\1')", limpio)
+        valor = eval(limpio_decimal, {'__builtins__': {}, 'Decimal': Decimal}, {})
+    except Exception as e:
+        raise ExpresionInvalida(texto) from e
+    if not isinstance(valor, Decimal):
+        valor = _dec(valor)
+    return _centavos(valor)
