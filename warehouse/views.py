@@ -28,6 +28,7 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
                      CATALOG_SCOPES, catalog_scope_of, Invoice,
                      Conversation, ConversationRead, Message,
                      Warehouse, Location, Pedimento, PedimentoBundle,
+                     PedimentoDocument,
                      LADO_TENANT, LADO_CLIENTE)
 from .utils import (generate_pdf_report, generate_label_pdf, generar_pdf_factura,
                     nombre_corto)
@@ -4484,15 +4485,65 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None):
             aduana, patente = p.aduana, p.patente
             break
 
+    # Cada pedimento llega a la plantilla con sus ranuras ya montadas y con la
+    # lista de lo que le falta. Se hace aqui y no en la plantilla porque el
+    # boton de enviar a revision tiene que decir **que** falta, y una plantilla
+    # que calcula eso a base de `{% if %}` deja de poder explicarlo.
+    etiquetas = dict(PedimentoDocument.RANURAS)
+    for ped in lista:
+        cajones = ped.documentos_por_ranura()
+        ped.ranuras_envio = [
+            (clave, etiquetas[clave], cajones.get(clave, []),
+             clave in PedimentoDocument.RANURAS_PARA_REVISION)
+            for clave in PedimentoDocument.RANURAS_DE_ENVIO
+            # La de fotos de series aparece o no aparece segun la mercancia. No
+            # es una casilla de "no aplica" que alguien marque cada vez.
+            if clave != PedimentoDocument.FOTOS_SERIES
+            or ped.necesita_fotos_de_series
+        ]
+        ped.ranuras_posteriores = [
+            (clave, etiquetas[clave], cajones.get(clave, []))
+            for clave in PedimentoDocument.RANURAS_POSTERIORES
+        ]
+        ped.faltan = ped.faltantes_para_revision
+        # Se calcula una vez aqui y la plantilla solo la lee: si la pantalla
+        # decidiera por su cuenta cuando enseñar cada boton, tarde o temprano
+        # enseñaria uno que la vista rechaza.
+        ped.editable = ped.se_puede_armar
+        ped.listo_para_revision = ped.puede_enviarse_a_revision
+        ped.sin_factura = ped.operaciones_sin_factura
+        # Las fotos que se pueden elegir: las del expediente de sus propias
+        # operaciones, que es donde ya estan.
+        if ped.necesita_fotos_de_series:
+            suyas = [r.operation_id for r in ped.renglones.all()]
+            ped.fotos_candidatas = list(
+                OperationDocument.objects.filter(
+                    operation_id__in=suyas, file_type='PHOTO'))
+            ped.fotos_elegidas = {d.documento_de_operacion_id
+                                  for d in cajones.get(
+                                      PedimentoDocument.FOTOS_SERIES, [])}
+        else:
+            ped.fotos_candidatas = []
+            ped.fotos_elegidas = set()
+
+    # Y cada embarque, con su factura comercial si la tiene y con los archivos
+    # entre los que se puede elegir cual lo es.
+    for op in embarques:
+        op.docs_del_expediente = list(op.documents.all())
+        op.factura_comercial = next(
+            (d for d in op.docs_del_expediente
+             if d.ranura == OperationDocument.RANURA_FACTURA_COMERCIAL), None)
+
     contexto.update({
         'pedimentos': lista,
+        'embarques': embarques,
         'sin_repartir': sin_repartir,
         'aduana': aduana,
         'nombre_de_aduana': pedimentos.nombre_de_aduana(aduana),
         'patente': patente,
         'resumen': {
             'embarques':      len(embarques),
-            'sin_factura':    sum(1 for op in embarques if not (op.invoice or '').strip()),
+            'sin_factura':    sum(1 for op in embarques if not op.factura_comercial),
             'sin_repartir':   sum(op.bultos_sueltos for op in sin_repartir),
             'pedimentos':     lista.count(),
             'con_numero':     sum(1 for p in lista if p.tiene_numero),
@@ -4565,6 +4616,12 @@ def pedimento_numero(request, pk):
         raise Http404
     ped = _pedimento_del_tenant(request, pk)
 
+    if not ped.se_puede_armar:
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('%(ped)s is already with the customer; it cannot be changed.')
+            % {'ped': ped.etiqueta})
+
     aduana      = pedimentos.solo_digitos(request.POST.get('ped_aduana'))
     patente     = pedimentos.solo_digitos(request.POST.get('ped_patente'))
     consecutivo = pedimentos.solo_digitos(request.POST.get('ped_consecutivo'))
@@ -4607,6 +4664,12 @@ def pedimento_asignar(request, pk):
     if profile.is_customer():
         raise Http404
     ped = _pedimento_del_tenant(request, pk)
+
+    if not ped.se_puede_armar:
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('%(ped)s is already with the customer; it cannot be changed.')
+            % {'ped': ped.etiqueta})
 
     op = get_object_or_404(WarehouseOperation, pk=request.POST.get('operation'),
                            tenant=ped.tenant, customer=ped.customer)
@@ -4655,6 +4718,12 @@ def pedimento_quitar(request, pk):
     if profile.is_customer():
         raise Http404
     ped = _pedimento_del_tenant(request, pk)
+    if not ped.se_puede_armar:
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('%(ped)s is already with the customer; it cannot be changed.')
+            % {'ped': ped.etiqueta})
+
     renglon = get_object_or_404(PedimentoBundle, pk=request.POST.get('renglon'),
                                 pedimento=ped)
     renglon.delete()
@@ -4682,3 +4751,322 @@ def pedimento_borrar(request, pk):
             _('This pedimento already went to the customer; it cannot be deleted.'))
     ped.delete()
     return redirect(f"{reverse('pedimentos_panel')}?customer={cliente_id}")
+
+
+# ── Las ranuras del pedimento ────────────────────────────────────────────────
+#
+# Lo que el cliente revisa son seis ranuras, y el boton de enviar a revision se
+# enciende solo cuando estan las que hacen falta. La lista de lo que falta la
+# calcula el propio pedimento; aqui solo se llena y se vacia.
+
+
+def _guess_type(nombre):
+    """De que tipo es un archivo, por su extension."""
+    ext = nombre.rsplit('.', 1)[-1].lower() if '.' in nombre else ''
+    if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'):
+        return 'PHOTO'
+    if ext in ('mp4', 'mov', 'avi', 'mkv', 'webm'):
+        return 'VIDEO'
+    if ext in ('pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv'):
+        return 'DOCUMENT'
+    return 'OTHER'
+
+
+@login_required
+@require_POST
+def pedimento_subir(request, pk):
+    """
+    Meter un archivo en una ranura del pedimento.
+
+    Las ranuras de recepcion -- la manifestacion de valor y su acuse -- las
+    llena el cliente, asi que a el si se le deja subir. Las de envio son del
+    lado de la casa.
+    """
+    profile = get_profile(request.user)
+    ped = _pedimento_del_tenant(request, pk)
+
+    ranura = request.POST.get('ranura', '')
+    if ranura not in dict(PedimentoDocument.RANURAS):
+        raise Http404
+
+    if profile.is_customer():
+        # El cliente solo llena lo suyo, y solo en sus pedimentos.
+        if ranura not in (PedimentoDocument.MANIFESTACION, PedimentoDocument.ACUSE):
+            raise Http404
+        if ped.customer_id != getattr(profile.customer, 'pk', None):
+            raise Http404
+
+    if ranura in PedimentoDocument.RANURAS_DE_ENVIO and not ped.se_puede_armar:
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('%(ped)s is already with the customer; its documents cannot be '
+              'changed.') % {'ped': ped.etiqueta})
+
+    archivos = request.FILES.getlist('archivo')
+    if not archivos:
+        return _panel_con_error(request, ped.customer_id,
+                                _('Pick a file first.'))
+    for f in archivos:
+        PedimentoDocument.objects.create(
+            pedimento=ped, ranura=ranura, file=f, original_name=f.name,
+            uploaded_by=request.user)
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+@login_required
+@require_POST
+def pedimento_quitar_documento(request, pk):
+    """Vaciar un renglon de una ranura."""
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+    if not ped.se_puede_armar:
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('%(ped)s is already with the customer; it cannot be changed.')
+            % {'ped': ped.etiqueta})
+
+    doc = get_object_or_404(PedimentoDocument, pk=request.POST.get('documento'),
+                            pedimento=ped)
+    doc.delete()
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+@login_required
+@require_POST
+def pedimento_fotos_de_series(request, pk):
+    """
+    Elegir del expediente las fotos de numeros de serie.
+
+    No se suben otra vez: ya se tomaron al recibir la mercancia y viven en el
+    expediente de la operacion. Subirlas de nuevo crearia dos verdades sobre la
+    misma caja, y el dia que no cuadren nadie sabria cual mirar.
+    """
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+
+    if not ped.se_puede_armar:
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('%(ped)s is already with the customer; it cannot be changed.')
+            % {'ped': ped.etiqueta})
+
+    # Solo se pueden elegir documentos de las operaciones que van dentro.
+    operaciones = [r.operation_id for r in ped.renglones.all()]
+    elegidos = OperationDocument.objects.filter(
+        pk__in=request.POST.getlist('documento'), operation_id__in=operaciones)
+
+    ped.documentos.filter(ranura=PedimentoDocument.FOTOS_SERIES).delete()
+    for doc in elegidos:
+        PedimentoDocument.objects.create(
+            pedimento=ped, ranura=PedimentoDocument.FOTOS_SERIES,
+            documento_de_operacion=doc, uploaded_by=request.user)
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+@login_required
+@require_POST
+def operacion_marcar_factura(request, pk):
+    """
+    Decir cual de los archivos del expediente es la factura comercial.
+
+    Es una de las dos condiciones para mandar a revision, y hasta ahora el
+    sistema no podia contestarla: el expediente tenia fotos, guias y facturas
+    todas del mismo color. Marcarla no mueve el archivo ni lo duplica; solo
+    dice que papel hace.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
+    doc_id = request.POST.get('documento')
+    volver = request.POST.get('customer') or (op.customer_id or '')
+
+    # Una operacion tiene una factura comercial, no varias: marcar otra
+    # sustituye a la anterior en vez de dejar dos candidatas.
+    op.documents.filter(
+        ranura=OperationDocument.RANURA_FACTURA_COMERCIAL
+    ).update(ranura='')
+    if doc_id:
+        doc = get_object_or_404(OperationDocument, pk=doc_id, operation=op)
+        doc.ranura = OperationDocument.RANURA_FACTURA_COMERCIAL
+        doc.save(update_fields=['ranura'])
+    return redirect(f"{reverse('pedimentos_panel')}?customer={volver}")
+
+
+@login_required
+@require_POST
+def operacion_subir_factura(request, pk):
+    """Subir la factura comercial de un embarque desde esta pantalla."""
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+
+    op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
+    volver = request.POST.get('customer') or (op.customer_id or '')
+    archivo = request.FILES.get('archivo')
+    if not archivo:
+        return _panel_con_error(request, volver, _('Pick a file first.'))
+
+    op.documents.filter(
+        ranura=OperationDocument.RANURA_FACTURA_COMERCIAL
+    ).update(ranura='')
+    OperationDocument.objects.create(
+        tenant=tenant, operation=op, file=archivo,
+        file_type=_guess_type(archivo.name), original_name=archivo.name,
+        uploaded_by=request.user,
+        ranura=OperationDocument.RANURA_FACTURA_COMERCIAL)
+    return redirect(f"{reverse('pedimentos_panel')}?customer={volver}")
+
+
+@login_required
+@require_POST
+def pedimento_enviar_a_revision(request, pk):
+    """
+    Mandarlo al cliente.
+
+    El boton solo se pinta encendido cuando se puede, pero la comprobacion se
+    repite aqui: un boton deshabilitado es una cortesia de la pantalla, no un
+    candado, y este pedimento va a salir a la vista del cliente.
+    """
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+
+    if not ped.enviar_a_revision():
+        faltan = ped.faltantes_para_revision
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('It cannot go to review yet — missing: %(faltan)s.')
+            % {'faltan': ', '.join(str(f) for f in faltan)} if faltan else
+            _('This pedimento is not in a state that can be sent to review.'))
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+@login_required
+def pedimento_archivo(request, pk):
+    """
+    Entrega un archivo de una ranura del pedimento.
+
+    Misma puerta que `document_file` y por la misma razon: el bucket esta
+    publicado, asi que enlazar a el directamente seria entregar el archivo a
+    cualquiera que acierte la ruta, sin sesion y sin dejar rastro. Aqui hay que
+    estar dentro, hay que ser de la empresa -- o el cliente dueño del pedimento
+    -- y el enlace que sale caduca en minutos.
+
+    Un renglon que apunta al expediente de una operacion se delega en
+    `document_file`, que ya sabe comprobar el acceso a esa operacion. Asi la
+    regla vive en un solo sitio.
+    """
+    tenant = get_tenant_or_404(request)
+    doc = get_object_or_404(
+        PedimentoDocument.objects.select_related('pedimento',
+                                                 'documento_de_operacion'),
+        pk=pk, pedimento__tenant=tenant)
+
+    profile = get_profile(request.user)
+    if profile.is_customer() and \
+       doc.pedimento.customer_id != getattr(profile.customer, 'pk', None):
+        return HttpResponse(_('Permission denied.'), status=403)
+
+    if doc.documento_de_operacion_id:
+        return document_file(request, doc.documento_de_operacion_id)
+
+    if not doc.file or not doc.file.name:
+        raise Http404('El documento no tiene archivo')
+
+    descargar = request.GET.get('download') == '1'
+    nombre = doc.original_name or os.path.basename(doc.file.name)
+
+    logger.info('Documento de pedimento %s (%s) abierto por %s en %s%s',
+                doc.pk, doc.file.name, request.user.username, tenant.subdomain,
+                ' [descarga]' if descargar else '')
+
+    firmada = url_firmada(doc.file, descargar_como=nombre if descargar else None)
+    if firmada:
+        respuesta = redirect(firmada)
+        respuesta['Cache-Control'] = 'private, no-store'
+        return respuesta
+    try:
+        contenido = doc.file.open('rb')
+    except Exception as e:
+        logger.warning('No se pudo abrir el archivo del pedimento %s: %s', doc.pk, e)
+        raise Http404('El archivo no esta disponible')
+    return FileResponse(contenido, as_attachment=descargar, filename=nombre)
+
+
+@login_required
+@require_GET
+def pedimento_zip(request, pk):
+    """
+    Todo el expediente del pedimento en un ZIP.
+
+    Es lo que se le manda al agente aduanal y lo que el cliente se lleva de una
+    vez. Los archivos van con el nombre de su ranura delante, porque un ZIP con
+    cinco PDF llamados como salieron del escaner no se puede repartir: quien lo
+    abre tiene que poder decir cual es el COVE sin abrirlos todos.
+
+    La factura comercial **no** va dentro. Es del cliente y ya la tiene: se la
+    mando el a la casa, y devolversela es hacerle buscar entre sus propios
+    archivos el que le importa.
+    """
+    tenant = get_tenant_or_404(request)
+    ped = get_object_or_404(Pedimento, pk=pk, tenant=tenant)
+
+    profile = get_profile(request.user)
+    if profile.is_customer() and \
+       ped.customer_id != getattr(profile.customer, 'pk', None):
+        return HttpResponse(_('Permission denied.'), status=403)
+
+    etiquetas = dict(PedimentoDocument.RANURAS)
+    base = ped.numero or ('pedimento-%d' % ped.orden)
+    base = base.replace('/', '_')
+
+    buf = BytesIO()
+    metidos = 0
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # Se numera dentro de cada ranura para que dos fotos de series no se
+        # pisen al llamarse igual.
+        por_ranura = {}
+        for doc in ped.documentos.select_related('documento_de_operacion'):
+            por_ranura.setdefault(doc.ranura, []).append(doc)
+
+        for ranura, docs in por_ranura.items():
+            nombre_ranura = str(etiquetas.get(ranura, ranura)).replace('/', '_')
+            ancho = _ancho_de_numeracion(len(docs))
+            for idx, doc in enumerate(docs, 1):
+                archivo = doc.archivo
+                if not archivo or not archivo.name:
+                    continue
+                ext = os.path.splitext(doc.nombre or archivo.name)[1].lower()
+                sufijo = f' {idx:0{ancho}d}' if len(docs) > 1 else ''
+                # Guion normal y no raya: el nombre viaja dentro de un ZIP
+                # que se abre en la maquina de quien lo recibe, y los
+                # descompresores viejos de Windows todavia leen los nombres en
+                # cp437. Un caracter que no este ahi sale como basura.
+                destino = f'{base} - {nombre_ranura}{sufijo}{ext}'
+                try:
+                    archivo.open('rb')
+                    try:
+                        zf.writestr(destino, archivo.read())
+                        metidos += 1
+                    finally:
+                        archivo.close()
+                except Exception as e:
+                    logger.warning('No se pudo agregar al ZIP el documento de '
+                                   'pedimento %s: %s', doc.pk, e)
+
+    if not metidos:
+        raise Http404('El pedimento no tiene archivos')
+
+    buf.seek(0)
+    resp = HttpResponse(buf.read(), content_type='application/zip')
+    resp['Content-Disposition'] = f'attachment; filename="{base}.zip"'
+    return resp

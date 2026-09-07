@@ -950,6 +950,25 @@ class OperationDocument(models.Model):
     # existian siguen exactamente donde estaban, sin migracion de datos.
     orden         = models.PositiveIntegerField(default=0, verbose_name="Orden")
 
+    # Que papel hace este archivo dentro del expediente, cuando hace uno
+    # concreto. Casi todos no hacen ninguno -- son fotos de la mercancia, guias,
+    # notas -- y por eso el valor por defecto es vacio y no hay que rellenarlo
+    # nunca.
+    #
+    # La unica ranura por ahora es la factura comercial, y no es un capricho de
+    # clasificacion: es una de las dos condiciones para poder mandar un
+    # pedimento a revision. Sin ella el cliente no tiene contra que comparar el
+    # pedimento, asi que el sistema tiene que poder contestar "esta cargada o
+    # no" sin que nadie lo mire a ojo.
+    RANURA_FACTURA_COMERCIAL = 'FACTURA_COMERCIAL'
+    RANURA_CHOICES = [
+        ('',                        _('No particular role')),
+        (RANURA_FACTURA_COMERCIAL,  _('Commercial invoice')),
+    ]
+    ranura = models.CharField(max_length=30, blank=True, default='',
+                              choices=RANURA_CHOICES,
+                              verbose_name='Papel dentro del expediente')
+
     # De que mensaje del hilo llego este archivo, si es que llego por ahi.
     #
     # Los adjuntos del chat **son** documentos del expediente, no una segunda
@@ -1934,6 +1953,18 @@ class Pedimento(models.Model):
         return bool(self.numero)
 
     @property
+    def se_puede_armar(self):
+        """
+        Si todavia se le pueden mover los bultos, el numero y los archivos.
+
+        Deja de poderse en cuanto sale a revision. Lo que el cliente tiene
+        delante no puede cambiar por debajo mientras lo mira: aprobaria un
+        pedimento y quedaria aprobado otro. Cuando el cliente pide correcciones
+        vuelve a abrirse, que es justo para lo que pidio las correcciones.
+        """
+        return self.estado in (self.BORRADOR, self.CORRECCIONES)
+
+    @property
     def etiqueta(self):
         """Como se le nombra en pantalla: su numero si lo tiene, si no su orden."""
         return self.numero or f'Pedimento {self.orden}'
@@ -1977,6 +2008,92 @@ class Pedimento(models.Model):
         """
         return any(r.operation.has_serial_numbers
                    for r in self.renglones.select_related('operation'))
+
+    # ── Enviar a revision ────────────────────────────────────────────────────
+    #
+    # Que el pedimento no dependa de la tarea de cruce no quiere decir que se
+    # pueda mandar a revision en cualquier momento. Una revision es el cliente
+    # comparando el pedimento contra su factura: sin la factura no tiene contra
+    # que compararlo, y sin numero no esta revisando un pedimento sino un
+    # borrador. Mandarle algo incompleto gasta el unico momento de atencion que
+    # da, y la segunda vez ya no lo mira igual.
+    #
+    # Por eso lo que hay aqui no es un booleano sino una lista de lo que falta:
+    # en la pantalla el boton se ve atenuado **con el motivo escrito al lado**,
+    # y no encendido dando error al pulsarlo.
+
+    def documentos_por_ranura(self):
+        """Los documentos que hay, agrupados por ranura."""
+        cajones = {}
+        for doc in self.documentos.all():
+            cajones.setdefault(doc.ranura, []).append(doc)
+        return cajones
+
+    @property
+    def operaciones_sin_factura(self):
+        """
+        Los embarques de este pedimento a los que les falta la factura comercial.
+
+        Se mira el expediente y no el campo de texto `invoice`: lo que hace
+        falta es el archivo cargado, porque es lo que el cliente compara. Tener
+        apuntado el numero de factura no es tenerla.
+        """
+        faltan = []
+        for renglon in self.renglones.select_related('operation'):
+            op = renglon.operation
+            tiene = op.documents.filter(
+                ranura=OperationDocument.RANURA_FACTURA_COMERCIAL).exists()
+            if not tiene:
+                faltan.append(op)
+        return faltan
+
+    @property
+    def faltantes_para_revision(self):
+        """
+        Lo que impide mandar este pedimento a revision, escrito para la pantalla.
+
+        Lista vacia significa que el boton se enciende. El orden es el de la
+        importancia: primero lo que no se puede suplir con nada, despues las
+        ranuras del expediente.
+        """
+        faltan = []
+        if not self.renglones.exists():
+            faltan.append(_('No goods assigned yet'))
+        if not self.tiene_numero:
+            faltan.append(_('The pedimento number'))
+        sin_factura = self.operaciones_sin_factura
+        if sin_factura:
+            faltan.append(_('The commercial invoice of %(ops)s')
+                          % {'ops': ', '.join(op.custom_id for op in sin_factura)})
+
+        cajones = self.documentos_por_ranura()
+        etiquetas = dict(PedimentoDocument.RANURAS)
+        for ranura in PedimentoDocument.RANURAS_PARA_REVISION:
+            if not cajones.get(ranura):
+                faltan.append(etiquetas[ranura])
+        # Las fotos de series solo se exigen cuando la mercancia las trae. La
+        # ranura no esta y no se pide: no es una casilla de "no aplica" que
+        # alguien marque cada vez, es que no aparece.
+        if self.necesita_fotos_de_series and not cajones.get(
+                PedimentoDocument.FOTOS_SERIES):
+            faltan.append(etiquetas[PedimentoDocument.FOTOS_SERIES])
+        return faltan
+
+    @property
+    def puede_enviarse_a_revision(self):
+        return self.estado in (self.BORRADOR, self.CORRECCIONES) \
+               and not self.faltantes_para_revision
+
+    def enviar_a_revision(self):
+        """Marca el pedimento como enviado. Devuelve si se pudo."""
+        if not self.puede_enviarse_a_revision:
+            return False
+        self.estado = self.EN_REVISION
+        self.enviado_a_revision_en = timezone.now()
+        self.correcciones_pedidas = ''
+        self.save(update_fields=['estado', 'enviado_a_revision_en',
+                                 'correcciones_pedidas', 'updated_at'])
+        return True
 
     # -- El candado ----------------------------------------------------------
 
@@ -2055,3 +2172,175 @@ class PedimentoBundle(models.Model):
 
     def __str__(self):
         return f'{self.bultos} de {self.operation.custom_id} a {self.pedimento.etiqueta}'
+
+
+class PedimentoDocument(models.Model):
+    """
+    Un archivo en una de las ranuras del pedimento.
+
+    Las ranuras no son categorias sueltas: son la lista de lo que el cliente
+    revisa. Por eso el pedimento sabe decir que le falta sin que nadie lo mire
+    a ojo, y por eso el boton de enviar a revision se enciende solo en cuanto
+    entra lo ultimo.
+
+    Un renglon guarda **o** un archivo propio **o** un documento del expediente
+    de una operacion, nunca los dos. La segunda forma existe por las fotos de
+    numeros de serie: se toman al recibir la mercancia y ya viven en el
+    expediente, asi que la ranura las **elige**, no pide subirlas otra vez.
+    Subirlas dos veces crearia dos verdades sobre la misma caja.
+    """
+
+    # Las seis que se mandan al cliente.
+    M3           = 'M3'
+    PROFORMA     = 'PROFORMA'
+    COVE         = 'COVE'
+    CARTA_318    = 'CARTA_318'
+    FOTOS_SERIES = 'FOTOS_SERIES'
+    OTROS        = 'OTROS'
+    # Las cuatro que llegan despues, ya con el pedimento fuera.
+    MANIFESTACION    = 'MANIFESTACION'
+    ACUSE            = 'ACUSE'
+    PEDIMENTO_PAGADO = 'PEDIMENTO_PAGADO'
+    SHIPPER          = 'SHIPPER'
+
+    RANURAS = [
+        (M3,           _('M3 file')),
+        (PROFORMA,     _('Pedimento draft')),
+        (COVE,         _('COVE')),
+        (CARTA_318,    _('318 letter')),
+        (FOTOS_SERIES, _('Serial-number photos')),
+        (OTROS,        _('Other')),
+        (MANIFESTACION,    _('Statement of value')),
+        (ACUSE,            _('Statement of value receipt')),
+        (PEDIMENTO_PAGADO, _('Paid pedimento')),
+        (SHIPPER,          _('Shipper')),
+    ]
+
+    # Las que hacen falta para poder mandar a revision. La de fotos de series
+    # solo cuenta cuando la mercancia trae ese dato -- lo decide el propio
+    # pedimento a partir de sus bultos, no una marca de "no aplica" que alguien
+    # pone cada vez.
+    RANURAS_PARA_REVISION = (PROFORMA, COVE, CARTA_318)
+
+    # Las que se mandan, en el orden en que se enseñan.
+    RANURAS_DE_ENVIO = (M3, PROFORMA, COVE, CARTA_318, FOTOS_SERIES, OTROS)
+    # Las que llegan despues.
+    RANURAS_POSTERIORES = (MANIFESTACION, ACUSE, PEDIMENTO_PAGADO, SHIPPER)
+
+    pedimento = models.ForeignKey('Pedimento', on_delete=models.CASCADE,
+                                  related_name='documentos')
+    ranura    = models.CharField(max_length=20, choices=RANURAS)
+
+    # Un archivo propio de esta ranura. Vacio cuando el renglon apunta al
+    # expediente de una operacion.
+    file          = models.FileField(upload_to=ruta_documento, max_length=255,
+                                     blank=True, null=True)
+    original_name = models.CharField(max_length=255, blank=True)
+
+    # O un documento que ya vive en el expediente de la operacion. Se usa para
+    # las fotos de numeros de serie, que se tomaron al recibir.
+    documento_de_operacion = models.ForeignKey(
+        OperationDocument, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='usos_en_pedimentos')
+
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                    blank=True, related_name='documentos_de_pedimento')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['ranura', 'uploaded_at']
+        verbose_name = 'Documento del pedimento'
+        verbose_name_plural = 'Documentos del pedimento'
+
+    def __str__(self):
+        return f'{self.get_ranura_display()} de {self.pedimento.etiqueta}'
+
+    @property
+    def nombre(self):
+        """Como se llama este archivo en pantalla."""
+        if self.documento_de_operacion_id:
+            doc = self.documento_de_operacion
+            return doc.original_name or os.path.basename(doc.file.name or '')
+        return self.original_name or os.path.basename(self.file.name or '')
+
+    @property
+    def archivo(self):
+        """El `FieldFile` real, venga de esta ranura o del expediente."""
+        if self.documento_de_operacion_id:
+            return self.documento_de_operacion.file
+        return self.file
+
+
+class ParametrosDeImpuestos(models.Model):
+    """
+    Los cuatro numeros del calculo que no salen de ninguna formula.
+
+    El tipo de cambio de trabajo, la cuota de prevalidacion y las dos tasas del
+    DTA. Los pone la casa y cambian con el tiempo, asi que viven juntos en una
+    pantalla de ajustes y no escondidos dentro de cada hoja de impuestos.
+
+    Y se guardan con **la fecha desde la que valen**, no como un campo que se
+    pisa. La prevalidacion es el ejemplo claro: se cambia una vez al ano, sale
+    de la regla general de comercio exterior 1.8.3, y un calculo de marzo tiene
+    que seguir enseñando la cuota de marzo aunque en abril sea otra. Sin
+    historico, cambiar la cuota reescribiria hacia atras todos los estimados ya
+    dados a los clientes.
+    """
+
+    tenant        = models.ForeignKey('Tenant', on_delete=models.CASCADE,
+                                      related_name='parametros_de_impuestos')
+    vigente_desde = models.DateField(default=timezone.localdate,
+                                     verbose_name='Vigente desde')
+
+    # Alto a proposito, y nunca del DOF. Es una decision de negocio: mas vale
+    # que sobre dinero en la cuenta a que falte y se pierda el dia de cruce.
+    # El del DOF se enseña al lado, en gris, solo para saber de cuanto es el
+    # colchon -- y eso lo ven el tenant y el agente aduanal, nunca el cliente.
+    tipo_de_cambio = models.DecimalField(
+        max_digits=10, decimal_places=4, default=Decimal('19.0000'),
+        verbose_name='Tipo de cambio de trabajo')
+
+    # Lo cobra la empresa que hace la prevalidacion. Es un cobro, no una
+    # formula, asi que no se calcula.
+    prevalidacion = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('300.00'),
+        verbose_name='Cuota de prevalidacion (MXN)')
+
+    # Ocho al millar sobre el valor en aduana.
+    dta_sin_tmec = models.DecimalField(
+        max_digits=8, decimal_places=6, default=Decimal('0.008'),
+        verbose_name='Tasa del DTA sin T-MEC')
+
+    # Cero: con T-MEC no se paga derecho de tramite. Va como parametro y no
+    # clavado en el codigo por mantenimiento -- si algun ano pasa a ser una
+    # cuota fija, se cambia aqui y no hay que tocar nada.
+    dta_con_tmec = models.DecimalField(
+        max_digits=8, decimal_places=6, default=Decimal('0'),
+        verbose_name='Tasa del DTA con T-MEC')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name='parametros_creados')
+
+    class Meta:
+        ordering = ['-vigente_desde', '-created_at']
+        verbose_name = 'Parametros de impuestos'
+        verbose_name_plural = 'Parametros de impuestos'
+
+    def __str__(self):
+        return f'{self.tenant} desde {self.vigente_desde}'
+
+    @classmethod
+    def vigentes(cls, tenant, fecha=None):
+        """
+        Los parametros que valian en `fecha` -- hoy si no se dice otra cosa.
+
+        Si el tenant no ha tocado nunca sus ajustes devuelve una fila sin
+        guardar, con los valores por omision. Asi el calculo funciona desde el
+        primer dia sin obligar a nadie a pasar por una pantalla de ajustes
+        antes de poder dar un estimado.
+        """
+        fecha = fecha or timezone.localdate()
+        fila = (cls.objects.filter(tenant=tenant, vigente_desde__lte=fecha)
+                .order_by('-vigente_desde', '-created_at').first())
+        return fila or cls(tenant=tenant, vigente_desde=fecha)

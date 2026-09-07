@@ -75,6 +75,38 @@
                  padding:9px 0;border-bottom:1px solid var(--err-bdr)}
     .fila-suelta:last-child{border-bottom:none}
 
+    /* Las ranuras. Cada una es una caja con nombre, porque lo que el cliente
+       revisa es una lista concreta y no "los archivos del pedimento". Una
+       ranura vacia se ve vacia: es la mitad de la informacion. */
+    .ranuras{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+             gap:8px;padding:12px 14px;border-top:1px solid var(--bdr)}
+    .ranura{border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;
+            background:var(--surface)}
+    .ranura.vacia{border-style:dashed}
+    .ranura.pide{border-color:var(--red);background:var(--rsoft)}
+    .ranura h4{margin:0 0 5px;font-size:11px;text-transform:uppercase;
+               letter-spacing:.04em;color:var(--soft);font-weight:600}
+    .ranura .archivo{display:flex;justify-content:space-between;align-items:center;
+                     gap:8px;font-size:12px;padding:2px 0}
+    .ranura .archivo a{font-family:'IBM Plex Mono',monospace;word-break:break-all}
+    .ranura .nada{font-size:12px;color:var(--soft);font-style:italic}
+    .subir{margin-top:6px}
+    .subir input[type=file]{font-size:11px;max-width:100%}
+
+    /* El boton de enviar a revision y su motivo. El candado se dice en la
+       pantalla, no en un error despues de pulsar. */
+    .revision{padding:12px 14px;border-top:1px solid var(--bdr);
+              display:flex;gap:12px;flex-wrap:wrap;align-items:center;
+              justify-content:space-between}
+    .revision .motivo{font-size:12px;color:var(--err-ink);flex:1 1 240px}
+    .btn-off{background:var(--bg-sutil);border-color:var(--bdr);color:var(--soft);
+             cursor:not-allowed}
+    .ya-salio{font-size:12px;color:var(--ok-ink-fuerte);font-weight:600}
+
+    .factura{padding:10px 14px;border-top:1px solid var(--bdr);
+             background:var(--rsoft);font-size:12px}
+    .factura form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
+
     .casillas{display:flex;gap:6px;align-items:center}
     .casillas input{width:56px;text-align:center;font-family:'IBM Plex Mono',monospace;
                     font-size:16px;letter-spacing:1px;padding:6px 4px}
@@ -198,7 +230,7 @@
       </div>
       <div style="text-align:right">
         <span class="estado">{{ p.get_estado_display }}</span>
-        {% if puede_editar %}
+        {% if puede_editar and p.editable %}
         <form method="post" action="{% url 'pedimento_numero' p.pk %}"
               style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           {% csrf_token %}
@@ -266,7 +298,7 @@
           <td data-etq="{% trans "Lbs" %}" class="num">{{ r.weight_lbs|default:"—" }}</td>
           <td data-etq="{% trans "Kgs" %}" class="num">{{ r.weight_kgs|default:"—" }}</td>
           <td data-etq="">
-            {% if puede_editar %}
+            {% if puede_editar and p.editable %}
             <form method="post" action="{% url 'pedimento_quitar' p.pk %}" style="margin:0">
               {% csrf_token %}
               <input type="hidden" name="renglon" value="{{ r.pk }}">
@@ -281,7 +313,7 @@
       </tbody>
     </table>
 
-    {% if puede_editar and sin_repartir %}
+    {% if puede_editar and p.editable and sin_repartir %}
     <div style="padding:10px 14px;border-top:1px solid var(--bdr);background:var(--bg-sutil)">
       <form method="post" action="{% url 'pedimento_asignar' p.pk %}"
             style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -308,7 +340,178 @@
     </div>
     {% endif %}
 
-    {% if puede_editar and p.estado == 'BORRADOR' and not p.renglones.all %}
+    {% comment %}
+    Lo que el cliente revisa. Seis ranuras con nombre, no "los archivos del
+    pedimento": la lista concreta es lo que permite decir que falta, y lo que
+    permite que el boton de abajo se encienda solo.
+
+    La de fotos de numeros de serie no esta cuando la mercancia no las trae --
+    no aparece atenuada ni con un "no aplica" que alguien tenga que marcar.
+    {% endcomment %}
+    <div class="ranuras">
+      {% for clave, etiqueta, archivos, obligatoria in p.ranuras_envio %}
+      <div class="ranura{% if not archivos %} vacia{% if obligatoria %} pide{% endif %}{% endif %}">
+        <h4>{{ etiqueta }}{% if obligatoria and not archivos %} *{% endif %}</h4>
+        {% for d in archivos %}
+        <div class="archivo">
+          <a href="{% url 'pedimento_archivo' d.pk %}" target="_blank">{{ d.nombre }}</a>
+          {% if puede_editar and p.editable %}
+          <form method="post" action="{% url 'pedimento_quitar_documento' p.pk %}" style="margin:0">
+            {% csrf_token %}
+            <input type="hidden" name="documento" value="{{ d.pk }}">
+            <button class="btn btn-sm" type="submit" title="{% trans "Take out" %}">✕</button>
+          </form>
+          {% endif %}
+        </div>
+        {% empty %}
+        <div class="nada">{% trans "empty" %}</div>
+        {% endfor %}
+
+        {% if puede_editar and p.editable and clave != 'FOTOS_SERIES' %}
+        <form class="subir" method="post" enctype="multipart/form-data"
+              action="{% url 'pedimento_subir' p.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="ranura" value="{{ clave }}">
+          <input type="file" name="archivo" multiple onchange="this.form.submit()">
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% comment %}
+    Las fotos de numeros de serie no se suben: se eligen del expediente de la
+    operacion, que es donde ya estan desde que se recibio la mercancia.
+    Subirlas otra vez crearia dos verdades sobre la misma caja.
+    {% endcomment %}
+    {% if puede_editar and p.editable and p.fotos_candidatas %}
+    <div style="padding:10px 14px;border-top:1px solid var(--bdr);background:var(--bg-sutil)">
+      <form method="post" action="{% url 'pedimento_fotos_de_series' p.pk %}">
+        {% csrf_token %}
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--soft);margin-bottom:6px">
+          {% trans "Serial-number photos — pick them from the shipment file" %}
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+          {% for foto in p.fotos_candidatas %}
+          <label style="display:flex;gap:6px;align-items:center;font-size:12px">
+            <input type="checkbox" name="documento" value="{{ foto.pk }}"
+                   {% if foto.pk in p.fotos_elegidas %}checked{% endif %}>
+            <span class="mono">{{ foto.original_name|default:foto.pk }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <button class="btn btn-sm" type="submit">{% trans "Save the choice" %}</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {% comment %}
+    La factura comercial no es del pedimento sino del embarque, pero se marca
+    aqui porque es aqui donde estorba que falte: sin ella el cliente no tiene
+    contra que comparar el pedimento.
+    {% endcomment %}
+    {% if puede_editar and p.editable %}
+      {% for op in p.sin_factura %}
+      <div class="factura">
+        <strong>{{ op.custom_id }}</strong> — {% trans "no commercial invoice loaded" %}
+        <form method="post" enctype="multipart/form-data"
+              action="{% url 'operacion_subir_factura' op.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="customer" value="{{ cliente.pk }}">
+          <input type="file" name="archivo" onchange="this.form.submit()">
+        </form>
+        {% if op.docs_del_expediente %}
+        <form method="post" action="{% url 'operacion_marcar_factura' op.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="customer" value="{{ cliente.pk }}">
+          <select name="documento">
+            <option value="">— {% trans "or mark one already in the file" %} —</option>
+            {% for d in op.docs_del_expediente %}
+            <option value="{{ d.pk }}">{{ d.original_name|default:d.pk }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-sm" type="submit">{% trans "Mark as invoice" %}</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% endif %}
+
+    {% comment %}
+    El boton, en sus tres estados. Vive aqui dentro y no abajo del todo porque
+    las revisiones salen de una en una: conforme llega cada embarque se elabora
+    su pedimento y se envia por separado.
+
+    Cuando esta apagado, el motivo va escrito al lado. Un boton que parece
+    activo y luego da error hace perder el viaje; uno atenuado que dice que
+    falta es una instruccion.
+    {% endcomment %}
+    <div class="revision">
+      {% if p.documentos.all %}
+      <a class="btn btn-sm" href="{% url 'pedimento_zip' p.pk %}">
+        ↓ {% trans "Download the whole pedimento (ZIP)" %}
+      </a>
+      {% endif %}
+      {% if p.estado == 'EN_REVISION' %}
+        <span class="ya-salio">
+          {% trans "Under customer review since" %} {{ p.enviado_a_revision_en|date:"d/m H:i" }}
+        </span>
+      {% elif p.estado == 'APROBADO' or p.estado == 'VALIDADO' or p.estado == 'PAGADO' %}
+        <span class="ya-salio">{{ p.get_estado_display }}</span>
+      {% elif p.listo_para_revision %}
+        {% if puede_editar %}
+        <form method="post" action="{% url 'pedimento_enviar_a_revision' p.pk %}" style="margin:0">
+          {% csrf_token %}
+          <button class="btn btn-p" type="submit">{% trans "Send to review" %}</button>
+        </form>
+        {% endif %}
+      {% else %}
+        <span class="motivo">
+          {% trans "Missing:" %}
+          {% for falta in p.faltan %}{{ falta }}{% if not forloop.last %} · {% endif %}{% endfor %}
+        </span>
+        <button class="btn btn-off" type="button" disabled>🔒 {% trans "Send to review" %}</button>
+      {% endif %}
+    </div>
+
+    {% comment %}
+    Lo que llega despues, ya con el pedimento fuera. Se enseña siempre para que
+    se vea el camino entero, y solo se puede llenar cuando el pedimento ya
+    salio: una manifestacion de valor de un pedimento que aun es borrador no
+    significa nada.
+    {% endcomment %}
+    {% if p.estado != 'BORRADOR' %}
+    <div class="ranuras" style="background:var(--bg-sutil)">
+      {% for clave, etiqueta, archivos in p.ranuras_posteriores %}
+      <div class="ranura{% if not archivos %} vacia{% endif %}">
+        <h4>{{ etiqueta }}</h4>
+        {% for d in archivos %}
+        <div class="archivo">
+          <a href="{% url 'pedimento_archivo' d.pk %}" target="_blank">{{ d.nombre }}</a>
+        </div>
+        {% empty %}
+        <div class="nada">{% trans "pending" %}</div>
+        {% endfor %}
+        {% comment %}
+        Estas ranuras se llenan con el pedimento ya fuera, asi que no se cierran
+        al enviarlo: la manifestacion de valor llega justo despues. Las dos
+        primeras las sube el cliente y las otras dos la casa, asi que a cada uno
+        se le pinta lo suyo: un campo que al usarlo da un error no es un campo.
+        {% endcomment %}
+        {% if puede_editar or clave == 'MANIFESTACION' or clave == 'ACUSE' %}
+        <form class="subir" method="post" enctype="multipart/form-data"
+              action="{% url 'pedimento_subir' p.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="ranura" value="{{ clave }}">
+          <input type="file" name="archivo" onchange="this.form.submit()">
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if puede_editar and p.editable and p.estado == 'BORRADOR' and not p.renglones.all %}
     <div style="padding:8px 14px;border-top:1px solid var(--bdr)">
       <form method="post" action="{% url 'pedimento_borrar' p.pk %}" style="margin:0">
         {% csrf_token %}

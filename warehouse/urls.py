@@ -98,4 +98,22 @@ urlpatterns = [
     path('pedimentos/<int:pk>/assign/', views.pedimento_asignar, name='pedimento_asignar'),
     path('pedimentos/<int:pk>/unassign/', views.pedimento_quitar, name='pedimento_quitar'),
     path('pedimentos/<int:pk>/delete/', views.pedimento_borrar, name='pedimento_borrar'),
+
+    # Las ranuras del expediente del pedimento, que son las que deciden si el
+    # boton de enviar a revision se enciende.
+    path('pedimentos/<int:pk>/upload/', views.pedimento_subir, name='pedimento_subir'),
+    path('pedimentos/<int:pk>/upload/remove/', views.pedimento_quitar_documento,
+         name='pedimento_quitar_documento'),
+    path('pedimentos/<int:pk>/serials/', views.pedimento_fotos_de_series,
+         name='pedimento_fotos_de_series'),
+    path('pedimentos/file/<int:pk>/', views.pedimento_archivo, name='pedimento_archivo'),
+    path('pedimentos/<int:pk>/zip/', views.pedimento_zip, name='pedimento_zip'),
+    path('pedimentos/<int:pk>/review/', views.pedimento_enviar_a_revision,
+         name='pedimento_enviar_a_revision'),
+    # La factura comercial es del embarque, no del pedimento, pero se marca y
+    # se sube desde esta pantalla porque es aqui donde estorba que falte.
+    path('operations/<int:pk>/invoice/mark/', views.operacion_marcar_factura,
+         name='operacion_marcar_factura'),
+    path('operations/<int:pk>/invoice/upload/', views.operacion_subir_factura,
+         name='operacion_subir_factura'),
 ]

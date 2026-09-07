@@ -16,10 +16,12 @@ que se prueba aqui es lo que cambia al dejar de serlo:
    libre y ninguna casilla -- siguen funcionando y no bloquean a nadie.
 """
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from . import pedimentos
-from .models import (Catalog, Pedimento, PedimentoBundle, Tenant, UserProfile,
+from .models import (Catalog, OperationDocument, Pedimento, PedimentoBundle,
+                     PedimentoDocument, Tenant, UserProfile,
                      WarehouseOperation)
 
 
@@ -560,4 +562,313 @@ class PantallaDeArmarPedimentosTests(BaseDeAlmacen):
         respuesta = self.client.post('/pedimentos/%d/number/' % ajeno.pk,
                                      {'ped_aduana': '24', 'ped_patente': '1515',
                                       'ped_consecutivo': '6005000'})
+        self.assertEqual(respuesta.status_code, 404)
+
+
+class ExpedienteDelPedimentoTests(BaseDeAlmacen):
+    """
+    Las ranuras del pedimento y el boton de enviar a revision.
+
+    Una revision es el cliente comparando el pedimento contra su factura. Sin
+    la factura no tiene contra que compararlo, y sin numero no esta revisando
+    un pedimento sino un borrador. Mandarle algo incompleto gasta el unico
+    momento de atencion que da. Asi que lo que se prueba aqui es que el boton
+    no se enciende hasta que esta todo, que dice **que** falta, y que un
+    pedimento que ya salio deja de poder cambiar por debajo.
+    """
+
+    def setUp(self):
+        self.client.force_login(self.jefa)
+        self.entrada = self.operacion('ED260901-0001', bundle_qty=4)
+        self.ped = Pedimento.objects.create(
+            tenant=self.tenant, customer=self.cliente, orden=1,
+            created_by=self.jefa)
+        PedimentoBundle.objects.create(pedimento=self.ped,
+                                       operation=self.entrada, bultos=4)
+
+    # -- Utilidades ----------------------------------------------------------
+
+    def archivo(self, nombre='x.pdf'):
+        return SimpleUploadedFile(nombre, b'%PDF-1.4 x',
+                                  content_type='application/pdf')
+
+    def poner_numero(self):
+        self.ped.ped_aduana, self.ped.ped_patente = '24', '1515'
+        self.ped.ped_consecutivo = '6005000'
+        self.ped.save()
+
+    def poner_factura(self, op=None):
+        OperationDocument.objects.create(
+            tenant=self.tenant, operation=op or self.entrada,
+            file=self.archivo('factura.pdf'), original_name='factura.pdf',
+            ranura=OperationDocument.RANURA_FACTURA_COMERCIAL)
+
+    def subir(self, ranura, nombre='doc.pdf'):
+        return self.client.post('/pedimentos/%d/upload/' % self.ped.pk,
+                                {'ranura': ranura, 'archivo': self.archivo(nombre)})
+
+    def completar_expediente(self):
+        for ranura in PedimentoDocument.RANURAS_PARA_REVISION:
+            self.subir(ranura, ranura.lower() + '.pdf')
+
+    # -- Lo que falta --------------------------------------------------------
+
+    def test_recien_creado_falta_de_todo(self):
+        faltan = [str(f) for f in self.ped.faltantes_para_revision]
+        self.assertIn('The pedimento number', faltan)
+        self.assertTrue(any('ED260901-0001' in f for f in faltan))
+        self.assertIn('COVE', faltan)
+
+    def test_el_numero_apuntado_no_es_la_factura_cargada(self):
+        # Tener escrito el numero de factura en la operacion no basta: lo que
+        # el cliente compara es el archivo.
+        self.entrada.invoice = 'FAC-993'
+        self.entrada.save()
+        self.poner_numero()
+        self.completar_expediente()
+        faltan = [str(f) for f in self.ped.faltantes_para_revision]
+        self.assertTrue(any('ED260901-0001' in f for f in faltan))
+        self.assertFalse(self.ped.puede_enviarse_a_revision)
+
+    def test_con_todo_puesto_el_boton_se_enciende(self):
+        self.poner_numero()
+        self.poner_factura()
+        self.completar_expediente()
+        self.assertEqual(self.ped.faltantes_para_revision, [])
+        self.assertTrue(self.ped.puede_enviarse_a_revision)
+
+    def test_un_pedimento_vacio_no_sale_aunque_tenga_papeles(self):
+        vacio = Pedimento.objects.create(tenant=self.tenant, customer=self.cliente,
+                                         orden=2, ped_aduana='24',
+                                         ped_patente='1515',
+                                         ped_consecutivo='6005001')
+        faltan = [str(f) for f in vacio.faltantes_para_revision]
+        self.assertIn('No goods assigned yet', faltan)
+
+    # -- Las fotos de numeros de serie ---------------------------------------
+
+    def test_sin_series_esa_ranura_ni_se_pide(self):
+        # No es una casilla de "no aplica" que alguien marque cada vez: es que
+        # la ranura no aparece.
+        self.poner_numero()
+        self.poner_factura()
+        self.completar_expediente()
+        self.assertFalse(self.ped.necesita_fotos_de_series)
+        self.assertTrue(self.ped.puede_enviarse_a_revision)
+
+    def test_con_series_la_ranura_es_obligatoria(self):
+        self.entrada.has_serial_numbers = True
+        self.entrada.save()
+        self.poner_numero()
+        self.poner_factura()
+        self.completar_expediente()
+        self.assertTrue(self.ped.necesita_fotos_de_series)
+        faltan = [str(f) for f in self.ped.faltantes_para_revision]
+        self.assertIn('Serial-number photos', faltan)
+
+    def test_las_fotos_se_eligen_del_expediente_y_no_se_suben_otra_vez(self):
+        self.entrada.has_serial_numbers = True
+        self.entrada.save()
+        foto = OperationDocument.objects.create(
+            tenant=self.tenant, operation=self.entrada, file_type='PHOTO',
+            file=self.archivo('serie.jpg'), original_name='serie.jpg')
+        self.client.post('/pedimentos/%d/serials/' % self.ped.pk,
+                         {'documento': foto.pk})
+        renglon = self.ped.documentos.get(ranura=PedimentoDocument.FOTOS_SERIES)
+        # Apunta al archivo del expediente; no hay una segunda copia.
+        self.assertEqual(renglon.documento_de_operacion_id, foto.pk)
+        self.assertFalse(renglon.file)
+        self.assertEqual(renglon.nombre, 'serie.jpg')
+
+    def test_no_se_pueden_elegir_fotos_de_otra_operacion(self):
+        ajena = self.operacion('ED260901-0009', bundle_qty=1)
+        foto = OperationDocument.objects.create(
+            tenant=self.tenant, operation=ajena, file_type='PHOTO',
+            file=self.archivo('otra.jpg'), original_name='otra.jpg')
+        self.client.post('/pedimentos/%d/serials/' % self.ped.pk,
+                         {'documento': foto.pk})
+        self.assertEqual(
+            self.ped.documentos.filter(
+                ranura=PedimentoDocument.FOTOS_SERIES).count(), 0)
+
+    # -- La factura comercial ------------------------------------------------
+
+    def test_subir_la_factura_desde_esta_pantalla(self):
+        self.client.post('/operations/%d/invoice/upload/' % self.entrada.pk,
+                         {'customer': self.cliente.pk,
+                          'archivo': self.archivo('factura.pdf')})
+        self.assertTrue(self.entrada.documents.filter(
+            ranura=OperationDocument.RANURA_FACTURA_COMERCIAL).exists())
+
+    def test_marcar_como_factura_uno_que_ya_estaba(self):
+        doc = OperationDocument.objects.create(
+            tenant=self.tenant, operation=self.entrada,
+            file=self.archivo('algo.pdf'), original_name='algo.pdf')
+        self.client.post('/operations/%d/invoice/mark/' % self.entrada.pk,
+                         {'customer': self.cliente.pk, 'documento': doc.pk})
+        doc.refresh_from_db()
+        self.assertEqual(doc.ranura, OperationDocument.RANURA_FACTURA_COMERCIAL)
+
+    def test_solo_hay_una_factura_por_embarque(self):
+        # Marcar otra sustituye a la anterior en vez de dejar dos candidatas.
+        primero = OperationDocument.objects.create(
+            tenant=self.tenant, operation=self.entrada,
+            file=self.archivo('uno.pdf'), original_name='uno.pdf',
+            ranura=OperationDocument.RANURA_FACTURA_COMERCIAL)
+        segundo = OperationDocument.objects.create(
+            tenant=self.tenant, operation=self.entrada,
+            file=self.archivo('dos.pdf'), original_name='dos.pdf')
+        self.client.post('/operations/%d/invoice/mark/' % self.entrada.pk,
+                         {'customer': self.cliente.pk, 'documento': segundo.pk})
+        primero.refresh_from_db()
+        segundo.refresh_from_db()
+        self.assertEqual(primero.ranura, '')
+        self.assertEqual(segundo.ranura,
+                         OperationDocument.RANURA_FACTURA_COMERCIAL)
+
+    # -- Enviar a revision ---------------------------------------------------
+
+    def test_no_sale_si_falta_algo_aunque_se_fuerce_la_url(self):
+        # El boton deshabilitado es una cortesia de la pantalla, no un candado,
+        # y este pedimento va a salir a la vista del cliente.
+        respuesta = self.client.post('/pedimentos/%d/review/' % self.ped.pk)
+        self.assertEqual(respuesta.status_code, 422)
+        self.ped.refresh_from_db()
+        self.assertEqual(self.ped.estado, Pedimento.BORRADOR)
+
+    def test_sale_y_queda_la_fecha(self):
+        self.poner_numero()
+        self.poner_factura()
+        self.completar_expediente()
+        respuesta = self.client.post('/pedimentos/%d/review/' % self.ped.pk)
+        self.assertEqual(respuesta.status_code, 302)
+        self.ped.refresh_from_db()
+        self.assertEqual(self.ped.estado, Pedimento.EN_REVISION)
+        self.assertIsNotNone(self.ped.enviado_a_revision_en)
+
+    # -- Lo que ya salio no cambia por debajo --------------------------------
+
+    def enviar(self):
+        self.poner_numero()
+        self.poner_factura()
+        self.completar_expediente()
+        self.client.post('/pedimentos/%d/review/' % self.ped.pk)
+        self.ped.refresh_from_db()
+
+    def test_un_pedimento_en_revision_no_deja_cambiar_el_numero(self):
+        self.enviar()
+        respuesta = self.client.post('/pedimentos/%d/number/' % self.ped.pk,
+                                     {'ped_aduana': '24', 'ped_patente': '1515',
+                                      'ped_consecutivo': '6009999'})
+        self.assertEqual(respuesta.status_code, 422)
+        self.ped.refresh_from_db()
+        self.assertEqual(self.ped.numero, '24-1515-6005000')
+
+    def test_ni_mover_sus_bultos(self):
+        self.enviar()
+        otra = self.operacion('ED260901-0002', bundle_qty=2)
+        respuesta = self.client.post('/pedimentos/%d/assign/' % self.ped.pk,
+                                     {'operation': otra.pk, 'bultos': '1'})
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertEqual(self.ped.renglones.count(), 1)
+
+    def test_ni_quitarle_un_documento_de_los_que_el_cliente_esta_mirando(self):
+        self.enviar()
+        doc = self.ped.documentos.filter(
+            ranura=PedimentoDocument.COVE).first()
+        respuesta = self.client.post(
+            '/pedimentos/%d/upload/remove/' % self.ped.pk, {'documento': doc.pk})
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertTrue(PedimentoDocument.objects.filter(pk=doc.pk).exists())
+
+    def test_pero_la_manifestacion_de_valor_si_entra_despues(self):
+        # Llega justo despues de que el pedimento salga, asi que esa ranura no
+        # se cierra al enviarlo.
+        self.enviar()
+        respuesta = self.subir(PedimentoDocument.MANIFESTACION, 'manif.pdf')
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertTrue(self.ped.documentos.filter(
+            ranura=PedimentoDocument.MANIFESTACION).exists())
+
+    def test_pedir_correcciones_lo_vuelve_a_abrir(self):
+        # No es un paso atras ni un fracaso: es el cliente haciendo su trabajo,
+        # y por eso el pedimento se puede volver a tocar.
+        self.enviar()
+        self.ped.estado = Pedimento.CORRECCIONES
+        self.ped.save()
+        self.assertTrue(self.ped.se_puede_armar)
+        respuesta = self.client.post('/pedimentos/%d/number/' % self.ped.pk,
+                                     {'ped_aduana': '24', 'ped_patente': '1515',
+                                      'ped_consecutivo': '6009999'})
+        self.assertEqual(respuesta.status_code, 302)
+
+
+class ZipDelPedimentoTests(BaseDeAlmacen):
+    """
+    El expediente entero en un archivo.
+
+    Es lo que se le manda al agente aduanal. Lo que se prueba es que los
+    nombres de dentro se puedan repartir: un ZIP con cinco PDF llamados como
+    salieron del escaner obliga a abrirlos todos para saber cual es el COVE.
+    """
+
+    def setUp(self):
+        self.client.force_login(self.jefa)
+        self.ped = Pedimento.objects.create(
+            tenant=self.tenant, customer=self.cliente, orden=1,
+            ped_aduana='24', ped_patente='1515', ped_consecutivo='6005000')
+
+    def subir(self, ranura, nombre):
+        PedimentoDocument.objects.create(
+            pedimento=self.ped, ranura=ranura, original_name=nombre,
+            file=SimpleUploadedFile(nombre, b'%PDF-1.4 x',
+                                    content_type='application/pdf'))
+
+    def descargar(self):
+        import io as _io
+        import zipfile as _zip
+        respuesta = self.client.get('/pedimentos/%d/zip/' % self.ped.pk)
+        if respuesta.status_code != 200:
+            return respuesta, None
+        crudo = (b''.join(respuesta.streaming_content)
+                 if getattr(respuesta, 'streaming', False) else respuesta.content)
+        return respuesta, _zip.ZipFile(_io.BytesIO(crudo))
+
+    def test_cada_archivo_lleva_el_nombre_de_su_ranura(self):
+        self.subir(PedimentoDocument.COVE, 'escaneo001.pdf')
+        self.subir(PedimentoDocument.CARTA_318, 'escaneo002.pdf')
+        respuesta, zf = self.descargar()
+        self.assertEqual(respuesta.status_code, 200)
+        nombres = zf.namelist()
+        self.assertTrue(any('COVE' in n for n in nombres), nombres)
+        self.assertTrue(any('318' in n for n in nombres), nombres)
+        # Y el numero de pedimento delante, para saber de cual es sin abrirlo.
+        self.assertTrue(all(n.startswith('24-1515-6005000') for n in nombres))
+
+    def test_dos_archivos_de_la_misma_ranura_no_se_pisan(self):
+        self.subir(PedimentoDocument.OTROS, 'a.pdf')
+        self.subir(PedimentoDocument.OTROS, 'b.pdf')
+        _respuesta, zf = self.descargar()
+        self.assertEqual(len(zf.namelist()), 2)
+        self.assertEqual(len(set(zf.namelist())), 2)
+
+    def test_los_nombres_son_seguros_fuera_de_aqui(self):
+        # El ZIP se abre en la maquina de quien lo recibe, a veces con un
+        # descompresor viejo que lee los nombres en cp437.
+        self.subir(PedimentoDocument.COVE, 'cove.pdf')
+        _respuesta, zf = self.descargar()
+        for nombre in zf.namelist():
+            nombre.encode('cp437')
+
+    def test_un_pedimento_sin_archivos_no_baja_un_zip_vacio(self):
+        respuesta, _zf = self.descargar()
+        self.assertEqual(respuesta.status_code, 404)
+
+    def test_el_pedimento_de_otra_empresa_no_se_baja(self):
+        otro = Tenant.objects.create(name='Bodegas del Sur', type='organization',
+                                     subdomain='sur')
+        ajeno_cliente = Catalog.objects.create(category='CUSTOMER', name='Zeta',
+                                               tenant=otro)
+        ajeno = Pedimento.objects.create(tenant=otro, customer=ajeno_cliente)
+        respuesta = self.client.get('/pedimentos/%d/zip/' % ajeno.pk)
         self.assertEqual(respuesta.status_code, 404)
