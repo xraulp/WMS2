@@ -1,0 +1,355 @@
+{% load i18n %}
+{% get_current_language as idioma_actual %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Pedimentos" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    a{color:inherit}
+    .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
+        padding:12px 18px;background:var(--ink);color:var(--on-accent);flex-wrap:wrap}
+    .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
+    .tb a{color:var(--bdr);text-decoration:none;font-size:12px}
+    .wrap{max-width:1100px;margin:16px auto 60px;padding:0 14px}
+    .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
+          padding:16px;margin-bottom:14px}
+    .ct{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin:0 0 10px}
+    .mono{font-family:'IBM Plex Mono',monospace}
+    .soft{color:var(--soft)}
+    select,input[type=text],input[type=number]{
+      font-family:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--bdr);
+      border-radius:var(--r);background:var(--surface);color:var(--ink);max-width:100%}
+    .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:var(--r);
+         padding:7px 13px;font-size:13px;font-family:inherit;cursor:pointer;color:var(--ink)}
+    .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+    .btn-sm{padding:4px 9px;font-size:12px}
+    .btn-d{border-color:var(--red);color:var(--red);background:var(--surface)}
+    .msg-error{background:var(--rsoft);color:var(--err-ink);padding:9px 12px;
+               border-radius:var(--r);font-size:13px;margin-bottom:10px}
+
+    /* Los cuadritos de un vistazo: el panorama sin leer una sola linea. Van en
+       el orden del trabajo, asi que el rojo mas a la izquierda es siempre por
+       donde hay que empezar. */
+    .vistazo{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+    .cuadro{flex:1 1 120px;min-width:110px;border:1px solid var(--bdr);border-radius:10px;
+            padding:10px 12px;background:var(--surface)}
+    .cuadro b{display:block;font-family:'IBM Plex Mono',monospace;font-size:20px;line-height:1.1}
+    .cuadro span{display:block;font-size:11px;color:var(--soft);margin-top:3px}
+    .c-ok   {background:var(--ok-bg);border-color:var(--ok-ink)}
+    .c-ok b {color:var(--ok-ink-fuerte)}
+    .c-mal  {background:var(--rsoft);border-color:var(--red)}
+    .c-mal b{color:var(--err-ink-fuerte)}
+    .c-cero b, .c-cero span{color:var(--soft)}
+
+    /* De donde salen la aduana y el agente: del numero, no de un selector. */
+    .deducido{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--soft);
+              border-top:1px dashed var(--bdr);padding-top:10px;margin-top:4px}
+    .deducido b{color:var(--ink);font-family:'IBM Plex Mono',monospace}
+
+    .ped{border:1px solid var(--bdr);border-radius:12px;margin-bottom:12px;overflow:hidden}
+    .ped-hd{padding:12px 14px;background:var(--bg-sutil);border-bottom:1px solid var(--bdr);
+            display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;justify-content:space-between}
+    .ped-num{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600}
+    .ped-sin{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--soft);font-style:italic}
+    .ped-sub{font-size:12px;color:var(--soft);margin-top:3px}
+    .estado{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;
+            background:var(--asoft);color:var(--accent-ink)}
+
+    table{width:100%;border-collapse:collapse}
+    th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
+       color:var(--soft);padding:7px 10px;border-bottom:1px solid var(--bdr);
+       background:var(--bg-sutil);white-space:nowrap}
+    td{padding:8px 10px;font-size:13px;border-bottom:1px solid var(--bg);vertical-align:middle}
+    .num{text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap}
+
+    /* El bloque de lo que falta por repartir. En rojo a proposito: mientras
+       haya mercancia sin pedimento no se puede emitir la orden de carga. */
+    .suelto{border:1px solid var(--red);border-radius:12px;background:var(--rsoft);padding:14px}
+    .suelto .ct{color:var(--err-ink-fuerte)}
+    .fila-suelta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+                 padding:9px 0;border-bottom:1px solid var(--err-bdr)}
+    .fila-suelta:last-child{border-bottom:none}
+
+    .casillas{display:flex;gap:6px;align-items:center}
+    .casillas input{width:56px;text-align:center;font-family:'IBM Plex Mono',monospace;
+                    font-size:16px;letter-spacing:1px;padding:6px 4px}
+    .casillas input.p4{width:70px}
+    .casillas input.p7{width:104px}
+
+    /* En el telefono la tabla no cabe: cada renglon pasa a ser una ficha con
+       sus etiquetas delante. Es la misma informacion, apilada. */
+    @media (max-width:640px){
+      .wrap{padding:0 10px}
+      table, thead, tbody, tr, td{display:block;width:100%}
+      thead{display:none}
+      tr{border-bottom:1px solid var(--bdr);padding:8px 0}
+      td{border:none;padding:3px 12px;display:flex;justify-content:space-between;gap:10px}
+      td::before{content:attr(data-etq);font-size:10px;text-transform:uppercase;
+                 letter-spacing:.05em;color:var(--soft);flex:0 0 auto}
+      .num{text-align:right}
+    }
+  </style>
+</head>
+<body>
+
+<div class="tb">
+  <span class="tb-brand">WMS — {% trans "Pedimentos" %}</span>
+  <a href="{% url 'dashboard' %}">← {% trans "Back to the dashboard" %}</a>
+</div>
+
+<div class="wrap">
+
+  {% comment %}
+  El candado saltando. Sale aqui arriba, dentro de la pantalla y con la pantalla
+  entera detras, y no como una pagina suelta con una frase: el mensaje dice que
+  patente choca con cual, y para arreglarlo hay que estar viendo los pedimentos.
+  {% endcomment %}
+  {% if error %}
+  <div class="msg-error">&#10007; {{ error }}</div>
+  {% endif %}
+
+  {% comment %}
+  El cliente se elige arriba y manda en toda la pantalla. Juntar los pedimentos
+  de todos los clientes en una lista no ayudaria a nadie: un pedimento nunca
+  mezcla dos clientes, asi que una lista mezclada solo obligaria a filtrar con
+  los ojos.
+  {% endcomment %}
+  <div class="card">
+    <p class="ct">{% trans "Customer" %}</p>
+    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select name="customer" onchange="this.form.submit()">
+        <option value="">— {% trans "Select a customer" %} —</option>
+        {% for c in clientes %}
+        <option value="{{ c.pk }}" {% if cliente and c.pk == cliente.pk %}selected{% endif %}>
+          {{ c.name }}{% if c.abbreviation %} · {{ c.abbreviation }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <noscript><button class="btn" type="submit">{% trans "Show" %}</button></noscript>
+    </form>
+  </div>
+
+  {% if not cliente %}
+  <div class="card">
+    <p class="soft" style="margin:0">
+      {% trans "Pick a customer to see their pedimentos and the goods still waiting to be assigned." %}
+    </p>
+  </div>
+  {% else %}
+
+  {% comment %}
+  Los cuadritos. Solo estan los que el sistema puede contestar hoy de verdad:
+  cuantos embarques hay, a cuantos les falta la factura comercial, cuantos
+  bultos siguen sin repartir y cuantos pedimentos ya tienen numero. Los de
+  revision, validacion y pago llegaran cuando existan las ranuras de
+  documentos del pedimento — un cuadrito que enseña un numero inventado es
+  peor que un hueco, porque se cree.
+  {% endcomment %}
+  <div class="vistazo">
+    <div class="cuadro">
+      <b>{{ resumen.embarques }}</b>
+      <span>{% trans "Shipments in warehouse" %}</span>
+    </div>
+    <div class="cuadro {% if resumen.sin_factura %}c-mal{% else %}c-ok{% endif %}">
+      <b>{{ resumen.sin_factura }}</b>
+      <span>{% trans "Without commercial invoice" %}</span>
+    </div>
+    <div class="cuadro {% if resumen.sin_repartir %}c-mal{% else %}c-ok{% endif %}">
+      <b>{{ resumen.sin_repartir }}</b>
+      <span>{% trans "Bundles not assigned yet" %}</span>
+    </div>
+    <div class="cuadro {% if not resumen.pedimentos %}c-cero{% elif resumen.con_numero == resumen.pedimentos %}c-ok{% else %}c-mal{% endif %}">
+      <b>{{ resumen.con_numero }} / {{ resumen.pedimentos }}</b>
+      <span>{% trans "Pedimentos with a number" %}</span>
+    </div>
+  </div>
+
+  {% if patente %}
+  <div class="card" style="padding:12px 16px">
+    <div class="deducido" style="border-top:none;padding-top:0;margin-top:0">
+      <span>{% trans "Read from the pedimento number" %}</span>
+      <span>{% trans "Customs" %} <b>{{ aduana }}</b> · {{ nombre_de_aduana }}</span>
+      <span>{% trans "Broker license" %} <b>{{ patente }}</b></span>
+    </div>
+  </div>
+  {% endif %}
+
+  {% for p in pedimentos %}
+  <div class="ped">
+    <div class="ped-hd">
+      <div>
+        {% if p.tiene_numero %}
+          <div class="ped-num">{{ p.numero }}</div>
+          <div class="ped-sub">Pedimento {{ p.orden }}</div>
+        {% else %}
+          <div class="ped-sin">{% trans "no number yet" %}</div>
+          <div class="ped-num">Pedimento {{ p.orden }}</div>
+        {% endif %}
+        <div class="ped-sub">
+          {% blocktrans count bultos=p.total_bultos %}{{ bultos }} bundle{% plural %}{{ bultos }} bundles{% endblocktrans %}
+          {% if p.total_libras %} · {{ p.total_libras }} lbs · {{ p.total_kilos }} kg{% endif %}
+          {% if p.necesita_fotos_de_series %} · {% trans "needs serial-number photos" %}{% endif %}
+        </div>
+      </div>
+      <div style="text-align:right">
+        <span class="estado">{{ p.get_estado_display }}</span>
+        {% if puede_editar %}
+        <form method="post" action="{% url 'pedimento_numero' p.pk %}"
+              style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          {% csrf_token %}
+          <span class="casillas">
+            {% comment %}
+            Si el candado acaba de rechazar un numero, las casillas enseñan lo
+            que se tecleo y no lo que habia guardado: lo que hay que hacer con
+            un numero rechazado es corregirle un digito, no volver a escribirlo
+            entero de memoria.
+            {% endcomment %}
+            {% if intento.pk == p.pk %}
+            <input type="text" name="ped_aduana"  maxlength="2" inputmode="numeric"
+                   placeholder="24" value="{{ intento.aduana }}">
+            <input type="text" name="ped_patente" maxlength="4" inputmode="numeric" class="p4"
+                   placeholder="1780" value="{{ intento.patente }}">
+            <input type="text" name="ped_consecutivo" maxlength="7" inputmode="numeric" class="p7"
+                   placeholder="6003555" value="{{ intento.consecutivo }}">
+            {% else %}
+            <input type="text" name="ped_aduana"  maxlength="2" inputmode="numeric"
+                   placeholder="24" value="{{ p.ped_aduana }}">
+            <input type="text" name="ped_patente" maxlength="4" inputmode="numeric" class="p4"
+                   placeholder="1780" value="{{ p.ped_patente }}">
+            <input type="text" name="ped_consecutivo" maxlength="7" inputmode="numeric" class="p7"
+                   placeholder="6003555" value="{{ p.ped_consecutivo }}">
+            {% endif %}
+          </span>
+          <button class="btn btn-sm" type="submit">{% trans "Save number" %}</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>{% trans "Bundles" %}</th>
+          <th>{% trans "Entry no." %}</th>
+          <th>{% trans "PO / Order" %}</th>
+          <th>{% trans "Type" %}</th>
+          <th>{% trans "Shipper" %}</th>
+          <th class="num">{% trans "Lbs" %}</th>
+          <th class="num">{% trans "Kgs" %}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in p.renglones.all %}
+        <tr>
+          <td data-etq="{% trans "Bundles" %}" class="mono">{{ r.bultos }} {% trans "of" %} {{ r.operation.bundle_qty|default:"?" }}</td>
+          <td data-etq="{% trans "Entry no." %}" class="mono">{{ r.operation.custom_id }}</td>
+          {% comment %}
+          El numero de pedido es con lo que el cliente identifica su embarque,
+          asi que va delante y completo: una entrada puede traer varios,
+          separados por comas o espacios, y se enseñan todos.
+          {% endcomment %}
+          <td data-etq="{% trans "PO / Order" %}"><strong>{{ r.operation.po_order|default:"—" }}</strong></td>
+          <td data-etq="{% trans "Type" %}">{{ r.operation.get_bundle_type_display_name|default:"—" }}</td>
+          <td data-etq="{% trans "Shipper" %}">{{ r.operation.get_shipper_display|default:"—" }}</td>
+          {% comment %}
+          El peso de estos bultos, no el de la operacion entera. Cuando una
+          entrada se parte entre dos pedimentos, enseñar aqui el peso completo
+          seria decir que los seis bultos de este renglon pesan lo que pesan
+          los diez que llegaron.
+          {% endcomment %}
+          <td data-etq="{% trans "Lbs" %}" class="num">{{ r.weight_lbs|default:"—" }}</td>
+          <td data-etq="{% trans "Kgs" %}" class="num">{{ r.weight_kgs|default:"—" }}</td>
+          <td data-etq="">
+            {% if puede_editar %}
+            <form method="post" action="{% url 'pedimento_quitar' p.pk %}" style="margin:0">
+              {% csrf_token %}
+              <input type="hidden" name="renglon" value="{{ r.pk }}">
+              <button class="btn btn-sm" type="submit">{% trans "Take out" %}</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="soft">{% trans "Nothing assigned to this pedimento yet." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if puede_editar and sin_repartir %}
+    <div style="padding:10px 14px;border-top:1px solid var(--bdr);background:var(--bg-sutil)">
+      <form method="post" action="{% url 'pedimento_asignar' p.pk %}"
+            style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        {% csrf_token %}
+        <select name="operation">
+          {% for op in sin_repartir %}
+          <option value="{{ op.pk }}">
+            {{ op.custom_id }}{% if op.po_order %} · {{ op.po_order }}{% endif %} — {{ op.bultos_sueltos }} {% trans "left" %}
+          </option>
+          {% endfor %}
+        </select>
+        <input type="number" name="bultos" min="1" value="1" style="width:76px"
+               aria-label="{% trans "Bundles" %}" placeholder="{% trans "Bundles" %}">
+        {% comment %}
+        El peso se teclea en libras, que es como llegan los embarques, y el
+        sistema pone los kilos. No se sugiere ninguno: repartir el peso de la
+        entrada por partes iguales seria inventarselo, porque los bultos de un
+        embarque no pesan lo mismo.
+        {% endcomment %}
+        <input type="number" name="weight_lbs" step="0.01" min="0" style="width:104px"
+               aria-label="{% trans "Lbs" %}" placeholder="{% trans "Lbs" %}">
+        <button class="btn btn-sm btn-p" type="submit">{% trans "Assign bundles" %}</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {% if puede_editar and p.estado == 'BORRADOR' and not p.renglones.all %}
+    <div style="padding:8px 14px;border-top:1px solid var(--bdr)">
+      <form method="post" action="{% url 'pedimento_borrar' p.pk %}" style="margin:0">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-d" type="submit">{% trans "Delete this empty pedimento" %}</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  {% if puede_editar %}
+  <form method="post" action="{% url 'pedimento_create' %}" style="margin-bottom:16px">
+    {% csrf_token %}
+    <input type="hidden" name="customer" value="{{ cliente.pk }}">
+    <button class="btn" type="submit">+ {% trans "Add pedimento" %}</button>
+  </form>
+  {% endif %}
+
+  {% if sin_repartir %}
+  <div class="suelto">
+    <p class="ct">{% trans "WITHOUT A PEDIMENTO" %}</p>
+    {% for op in sin_repartir %}
+    <div class="fila-suelta">
+      <span class="mono">{{ op.custom_id }}</span>
+      {% if op.po_order %}<strong>{{ op.po_order }}</strong>{% endif %}
+      <span class="soft">
+        {{ op.bultos_sueltos }} {% trans "of" %} {{ op.bundle_qty|default:"?" }} {% trans "bundles still unassigned" %}
+      </span>
+      {% if not op.invoice %}
+      <span class="soft">· {% trans "no commercial invoice" %}</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <p class="soft" style="font-size:12px;margin:10px 0 0">
+      {% trans "The load order cannot be issued while there are goods without a pedimento." %}
+    </p>
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+
+</body>
+</html>

@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import uuid
+from decimal import Decimal
 
 from django.db import connection, models, transaction
 from django.contrib.auth.models import User
@@ -578,6 +579,51 @@ class WarehouseOperation(models.Model):
         help_text='Número de pedimento - no obligatorio'
     )
 
+    # ── El numero de pedimento, desglosado ───────────────────────────────────
+    # `pedimento` se queda donde esta y sigue siendo el numero escrito: es lo
+    # que sale en los nombres de archivo, en los reportes y en las busquedas, y
+    # es lo unico que tienen las operaciones capturadas antes de esto.
+    #
+    # Estas tres casillas son ese mismo numero por dentro. No duplican el dato
+    # -- `save` compone `pedimento` a partir de ellas -- sino que lo hacen
+    # legible para el sistema: con la aduana y la patente separadas, el candado
+    # del agente aduanal se comprueba sin preguntarle a nadie y sin un campo
+    # nuevo que alguien tenga que acordarse de rellenar. El desglose vive en
+    # `warehouse/pedimentos.py`, que es quien sabe del Anexo 22.
+    ped_aduana = models.CharField(
+        max_length=2, blank=True, default='',
+        verbose_name='Aduana de despacho',
+        help_text='2 digitos. 24 = Nuevo Laredo, 80 = Colombia')
+    ped_patente = models.CharField(
+        max_length=4, blank=True, default='',
+        verbose_name='Patente del agente aduanal',
+        help_text='4 digitos')
+    ped_consecutivo = models.CharField(
+        max_length=7, blank=True, default='',
+        verbose_name='Ano y consecutivo',
+        help_text='7 digitos: el ultimo digito del ano mas el consecutivo')
+
+    # Cuando se espera la mercancia. Se teclea al capturar porque el
+    # transportista y la guia llegan por correo del cliente antes que la carga,
+    # y con eso el reporte de impuestos puede enseñar un ETA en vez de un
+    # "no ha llegado", que no dice nada.
+    eta = models.DateField(
+        null=True, blank=True,
+        verbose_name='ETA',
+        help_text='Fecha estimada de llegada')
+
+    # Lo marca quien recibe la mercancia, que es el unico momento del proceso
+    # en que alguien tiene esa caja delante. Decide solo si el pedimento
+    # necesita fotos de numeros de serie para poder mandarse a revision: sin
+    # esto, esa comprobacion habria que hacerla de memoria cada vez, y las
+    # comprobaciones de memoria son las que fallan el dia que hay prisa.
+    #
+    # Ojo con no confundirlo con las fotos de la mercancia, que son otra cosa:
+    # esas se toman siempre, son del expediente digital y no suben al pedimento.
+    has_serial_numbers = models.BooleanField(
+        default=False,
+        verbose_name='Esta mercancia tiene numeros de serie')
+
     class Meta:
         ordering = ['-date', '-created_at']
 
@@ -717,9 +763,45 @@ class WarehouseOperation(models.Model):
         ).exclude(pk=self.pk).count()
         return f"{prefix}{date_str}-{str(count+1).zfill(4)}"
 
+    # ── El pedimento, leido por dentro ───────────────────────────────────────
+    # Las tres propiedades de abajo son la unica forma en que el resto del
+    # sistema deberia preguntar por la aduana y la patente de una operacion.
+    # Miran primero las casillas y, si estan vacias, intentan desglosar el
+    # numero escrito: asi una operacion capturada antes de que existieran las
+    # casillas responde igual, siempre que su numero tenga la forma buena.
+
+    @property
+    def pedimento_desglosado(self):
+        """`(aduana, patente, consecutivo)`, vengan de donde vengan."""
+        from . import pedimentos
+        if self.ped_aduana or self.ped_patente or self.ped_consecutivo:
+            return (self.ped_aduana or '', self.ped_patente or '',
+                    self.ped_consecutivo or '')
+        return pedimentos.desglosar(self.pedimento)
+
+    @property
+    def patente_aduanal(self):
+        """La patente del agente aduanal, o cadena vacia si no se sabe."""
+        return self.pedimento_desglosado[1]
+
+    @property
+    def aduana_de_despacho(self):
+        """La aduana por la que despacha, o cadena vacia si no se sabe."""
+        return self.pedimento_desglosado[0]
+
     def save(self, *args, **kwargs):
         if not self.custom_id:
             self.custom_id = self.generate_custom_id()
+        # El numero escrito se compone de las casillas y no al reves: quien
+        # teclea llena las tres casillas, y `pedimento` es el resultado. Solo
+        # se pisa cuando las tres estan completas, para no borrar el numero de
+        # las operaciones viejas -- las que tienen texto libre y ninguna
+        # casilla -- ni el de una importacion de Excel.
+        from . import pedimentos
+        compuesto = pedimentos.numero_corrido(
+            self.ped_aduana, self.ped_patente, self.ped_consecutivo)
+        if compuesto:
+            self.pedimento = compuesto
         super().save(*args, **kwargs)
 
 ###Agrega esta función en models.py dentro de la clase WarehouseOperation
@@ -1716,3 +1798,260 @@ class ConversationRead(models.Model):
 
     def __str__(self):
         return f"{self.user.username} leyo {self.conversation_id} hasta {self.last_read_at}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  EL PEDIMENTO
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Hasta ahora el pedimento era un campo de texto de la operacion, y eso no
+# alcanza para representar como se agrupa de verdad. El ejemplo que lo decide:
+#
+#     ED260901-0001 -- llega por XPO, dos pallets: uno del proveedor ABC LLC
+#                      y otro de 123 LLC.
+#     ED260901-0002 -- llega por ABF, un pallet de ABC LLC.
+#
+# El cliente quiere juntar en un pedimento lo de ABC LLC:
+#
+#     Pedimento 1515-6005000 = 1 pallet de la 0001 + el pallet entero de la 0002
+#     Pedimento 1515-6005001 = el pallet que sobra de la 0001
+#
+# Lo que se asigna a un pedimento no es la operacion: son **bultos**. Una
+# operacion se parte entre dos pedimentos y dos operaciones caen en uno. Por
+# eso el pedimento es una entidad con un reparto, y por eso el campo
+# `pedimento` de la operacion se queda como esta: sirve para las operaciones
+# sueltas y para no romper nada de lo que ya funciona.
+#
+# Y el pedimento **no** cuelga de la tarea de cruce, aunque la tarea sea donde
+# mas se mire. Un pedimento se manda a revision con solo la llegada y la
+# factura comercial, sin que exista ninguna tarea programada. La regla, escrita
+# entera: todo nace del embarque. Llega la mercancia, se captura la entrada,
+# entra sola al reporte de impuestos, se pide la factura, se elabora su
+# pedimento, se manda a revision, el cliente aprueba. La tarea de cruce aparece
+# despues y hace otra cosa: juntar lo que ya esta listo y meterlo en un camion
+# un dia concreto.
+
+
+class Pedimento(models.Model):
+    """
+    Un pedimento en preparacion, con los bultos que van dentro.
+
+    Cuelga del cliente y no de la tarea de cruce, por lo dicho arriba. Nace sin
+    numero -- primero se agrupa la mercancia y despues el agente aduanal da el
+    numero -- y por eso se llama "Pedimento 1" hasta que lo tiene.
+    """
+
+    # El camino de un pedimento, con dueno en cada tramo. `CORRECCIONES` no es
+    # un fracaso ni un paso atras: es el cliente haciendo su trabajo, y por eso
+    # vuelve a BORRADOR en cuanto se corrige, sin dejar marca en ningun sitio.
+    BORRADOR     = 'BORRADOR'
+    EN_REVISION  = 'EN_REVISION'
+    CORRECCIONES = 'CORRECCIONES'
+    APROBADO     = 'APROBADO'
+    VALIDADO     = 'VALIDADO'
+    PAGADO       = 'PAGADO'
+    ESTADOS = [
+        (BORRADOR,     _('Draft')),
+        (EN_REVISION,  _('Under customer review')),
+        (CORRECCIONES, _('Corrections requested')),
+        (APROBADO,     _('Approved by the customer')),
+        (VALIDADO,     _('Validated')),
+        (PAGADO,       _('Paid')),
+    ]
+
+    tenant   = models.ForeignKey('Tenant', on_delete=models.CASCADE,
+                                 related_name='pedimentos')
+    customer = models.ForeignKey(Catalog, on_delete=models.PROTECT,
+                                 related_name='pedimentos',
+                                 limit_choices_to={'category': 'CUSTOMER'},
+                                 verbose_name='Cliente')
+
+    # Como se le llama mientras no tiene numero. Se asigna al crearlo contando
+    # los que ya tiene el cliente y no vuelve a cambiar: un nombre que se mueve
+    # al borrar otro pedimento no sirve para hablar por telefono, que es para
+    # lo que existe.
+    orden = models.PositiveIntegerField(default=1, verbose_name='Numero provisional')
+
+    # Las tres casillas del Anexo 22. Mismo criterio que en la operacion: se
+    # guardan separadas porque de ahi salen la aduana y la patente, que son las
+    # que sostienen el candado.
+    ped_aduana      = models.CharField(max_length=2, blank=True, default='',
+                                       verbose_name='Aduana de despacho')
+    ped_patente     = models.CharField(max_length=4, blank=True, default='',
+                                       verbose_name='Patente del agente aduanal')
+    ped_consecutivo = models.CharField(max_length=7, blank=True, default='',
+                                       verbose_name='Ano y consecutivo')
+    # Los dos digitos que pone el sistema, no quien teclea. Se sellan al validar
+    # -- antes de eso el ano de validacion todavia no ha ocurrido.
+    anio_validacion = models.CharField(max_length=2, blank=True, default='',
+                                       verbose_name='Ano de validacion')
+
+    estado = models.CharField(max_length=15, choices=ESTADOS, default=BORRADOR)
+
+    # Las fechas de cada tramo. Se guardan sueltas y no en una bitacora porque
+    # lo que se necesita de ellas es responder "cuanto lleva parado aqui", y
+    # eso se contesta con la fecha del tramo en el que esta.
+    enviado_a_revision_en = models.DateTimeField(null=True, blank=True)
+    aprobado_en           = models.DateTimeField(null=True, blank=True)
+    validado_en           = models.DateTimeField(null=True, blank=True)
+    pagado_en             = models.DateTimeField(null=True, blank=True)
+
+    # Lo que el cliente escribio al pedir correcciones. Se guarda el ultimo y
+    # no el historial: quien lo lee esta arreglando el pedimento de ahora.
+    correcciones_pedidas = models.TextField(blank=True, default='')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name='pedimentos_creados')
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Pedimento'
+        verbose_name_plural = 'Pedimentos'
+
+    def __str__(self):
+        return self.etiqueta
+
+    # -- Como se lee y como se llama -----------------------------------------
+
+    @property
+    def numero(self):
+        """El numero escrito, `24-1780-6003555`, o cadena vacia si aun no tiene."""
+        from . import pedimentos as ped
+        return ped.numero_corrido(self.ped_aduana, self.ped_patente,
+                                  self.ped_consecutivo)
+
+    @property
+    def numero_completo(self):
+        """Los quince digitos por grupos, `26 24 1780 6003555`."""
+        from . import pedimentos as ped
+        return ped.numero_completo(self.ped_aduana, self.ped_patente,
+                                   self.ped_consecutivo, self.anio_validacion)
+
+    @property
+    def tiene_numero(self):
+        return bool(self.numero)
+
+    @property
+    def etiqueta(self):
+        """Como se le nombra en pantalla: su numero si lo tiene, si no su orden."""
+        return self.numero or f'Pedimento {self.orden}'
+
+    @property
+    def aduana(self):
+        return self.ped_aduana or ''
+
+    @property
+    def patente(self):
+        return self.ped_patente or ''
+
+    # -- El reparto ----------------------------------------------------------
+
+    @property
+    def total_bultos(self):
+        """Cuantos bultos van dentro, sumando todos los renglones del reparto."""
+        return sum(r.bultos for r in self.renglones.all())
+
+    @property
+    def total_libras(self):
+        """Las libras que van dentro, sumando los renglones que las tengan."""
+        pesos = [r.weight_lbs for r in self.renglones.all() if r.weight_lbs]
+        return sum(pesos) if pesos else None
+
+    @property
+    def total_kilos(self):
+        """Los kilos, que salen de las libras y nunca se teclean."""
+        pesos = [r.weight_kgs for r in self.renglones.all() if r.weight_kgs]
+        return sum(pesos) if pesos else None
+
+    @property
+    def necesita_fotos_de_series(self):
+        """
+        Si a este pedimento hay que subirle fotos de numeros de serie.
+
+        No se decide a mano ni se marca como "no aplica" cada vez: se hereda de
+        los bultos. Si alguna de las operaciones que van dentro trae numeros de
+        serie, la ranura aparece y es obligatoria; si ninguna, no aparece. Asi
+        la comprobacion no depende de que alguien se acuerde.
+        """
+        return any(r.operation.has_serial_numbers
+                   for r in self.renglones.select_related('operation'))
+
+    # -- El candado ----------------------------------------------------------
+
+    def choque_con(self, otros):
+        """
+        Si este pedimento no puede ir con `otros` -- y por que.
+
+        `otros` es un iterable de pedimentos o de numeros. Devuelve `None` si
+        cabe. El razonamiento vive en `warehouse.pedimentos.choque`; aqui solo
+        se traducen los objetos a numeros.
+        """
+        from . import pedimentos as ped
+        numeros = [o.numero if hasattr(o, 'numero') else str(o or '')
+                   for o in otros if o is not None]
+        numeros = [n for n in numeros if n and n != self.numero]
+        return ped.choque(self.numero, numeros)
+
+
+class PedimentoBundle(models.Model):
+    """
+    Un renglon del reparto: tantos bultos de tal operacion van a tal pedimento.
+
+    Es el modelo entero de la agrupacion. `bultos` es una cantidad y no una
+    lista de bultos concretos porque en bodega no se numeran uno a uno: se
+    cuentan. Lo que hace falta saber es cuantos de esta operacion se fueron a
+    este pedimento, y eso es un numero.
+    """
+    pedimento = models.ForeignKey(Pedimento, on_delete=models.CASCADE,
+                                  related_name='renglones')
+    operation = models.ForeignKey(WarehouseOperation, on_delete=models.CASCADE,
+                                  related_name='renglones_de_pedimento')
+    bultos    = models.PositiveIntegerField(
+                    default=1, verbose_name='Bultos que van a este pedimento')
+
+    # El peso de estos bultos, no el de la operacion entera. Cuando una entrada
+    # se parte entre dos pedimentos, el peso tambien se parte, y no por partes
+    # iguales: los bultos de un embarque no pesan lo mismo. Asi que se teclea.
+    #
+    # No se sugiere ni se calcula. Un peso propuesto que nadie comprueba es
+    # peor que una casilla vacia: la casilla vacia se ve, y el numero inventado
+    # se firma. Se teclea en libras porque asi llegan los embarques, y los
+    # kilos -- que son con los que se trabaja de este lado -- los pone el
+    # sistema, para que nadie convierta a mano.
+    weight_lbs = models.DecimalField(max_digits=10, decimal_places=2,
+                                     null=True, blank=True,
+                                     verbose_name='Libras de estos bultos')
+    weight_kgs = models.DecimalField(max_digits=10, decimal_places=2,
+                                     null=True, blank=True,
+                                     verbose_name='Kilos de estos bultos')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['operation__custom_id']
+        verbose_name = 'Reparto de bultos'
+        verbose_name_plural = 'Reparto de bultos'
+        # Una operacion aparece una sola vez en cada pedimento. Si van seis
+        # bultos, van en un renglon de seis y no en seis renglones de uno: dos
+        # renglones de la misma operacion en el mismo pedimento no significan
+        # nada distinto y solo hacen que las sumas dependan de como se capturo.
+        unique_together = [('pedimento', 'operation')]
+
+    # Una libra son 0.45359237 kilos exactos. La constante vive aqui y no en la
+    # vista para que la conversion sea la misma se guarde desde donde se guarde.
+    KILOS_POR_LIBRA = Decimal('0.45359237')
+
+    def save(self, *args, **kwargs):
+        # Los kilos salen de las libras siempre que haya libras. Si alguien
+        # borra las libras, los kilos se van con ellas: un peso en kilos sin su
+        # original no se puede comprobar el dia que no cuadre.
+        if self.weight_lbs is not None:
+            self.weight_kgs = (self.weight_lbs * self.KILOS_POR_LIBRA
+                               ).quantize(Decimal('0.01'))
+        else:
+            self.weight_kgs = None
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.bultos} de {self.operation.custom_id} a {self.pedimento.etiqueta}'

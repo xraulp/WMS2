@@ -184,6 +184,14 @@ tbody td:has(.btn-action) {
   <button class="tab" id="tab-form" onclick="showTab('form')">{% trans "New Operation" %}</button>
   {% endif %}
   <button class="tab" id="tab-database" onclick="showTab('database')">{% trans "Operations" %}</button>
+  {% comment %}
+  Armar pedimentos vive en su propia pantalla y no en una pestana de esta,
+  porque no comparte nada con el resto del tablero: no es una lista de
+  operaciones filtrada, es un reparto de bultos. El enlace se pinta como una
+  pestana mas para que este donde se le va a buscar.
+  {% endcomment %}
+  <a class="tab" href="{% url 'pedimentos_panel' %}"
+     style="text-decoration:none;display:inline-flex;align-items:center">{% trans "Pedimentos" %}</a>
   {% if profile|can_see_tab:'catalog' %}
   <button class="tab" id="tab-catalog" onclick="showTab('catalog')">{% trans "Catalog" %}</button>
   {% endif %}
@@ -377,8 +385,28 @@ tbody td:has(.btn-action) {
           <div class="fl">DYS</div>
           <div class="fi"><input type="text" name="ref_dys" placeholder="{% trans "DYS reference..." %}"></div>
 
-          <div class="fl">PEDIMENTO</div>
-          <div class="fi"><input type="text" name="pedimento" placeholder="{% trans "Pedimento number..." %}"></div>
+          {% comment %}
+          El pedimento deja de ser un campo de texto libre. Son quince digitos
+          con estructura -- el Anexo 22 dice cual -- y de los trece que se
+          teclean salen la aduana y la patente del agente aduanal, que son las
+          que sostienen el candado de que un camion no lleve dos agentes. El
+          bloque entero, con la casilla de numeros de serie, vive en un partial
+          compartido con el telefono para que las dos pantallas no se separen.
+          {% endcomment %}
+          {% comment %}
+          Este bloque no cabe en la rejilla del formulario: `.fg` reparte
+          110px de etiqueta y 160px de campo, y tres casillas con sus pies no
+          entran en 160. Asi que ocupa las dos columnas y crece a lo alto, que
+          es la unica direccion en la que sobra sitio. El resto del formulario
+          no se toca.
+          {% endcomment %}
+          <div class="fl" style="grid-column:1/-1;height:auto;padding:7px 10px 0;border-bottom:none">PEDIMENTO</div>
+          <div class="fi" style="grid-column:1/-1;height:auto;display:block;padding:6px 10px 10px">
+            {% include "warehouse/partials/campos_de_pedimento.html" %}
+          </div>
+
+          <div class="fl">ETA</div>
+          <div class="fi"><input type="date" name="eta"></div>
 
          <!-- Nuevos campos REF AA, DYS, PEDIMENTO -->
         </div>

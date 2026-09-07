@@ -88,4 +88,14 @@ urlpatterns = [
     # Debug
     path('debug/catalog/', views.debug_catalog, name='debug_catalog'),
     path('mobile/', views.mobile_dashboard, name='mobile_dashboard'),
+
+    # Armar pedimentos. Cuelga del cliente y no de una tarea de cruce: un
+    # pedimento se elabora y se manda a revision con solo la llegada y la
+    # factura comercial, sin que exista ninguna tarea programada.
+    path('pedimentos/', views.pedimentos_panel, name='pedimentos_panel'),
+    path('pedimentos/new/', views.pedimento_create, name='pedimento_create'),
+    path('pedimentos/<int:pk>/number/', views.pedimento_numero, name='pedimento_numero'),
+    path('pedimentos/<int:pk>/assign/', views.pedimento_asignar, name='pedimento_asignar'),
+    path('pedimentos/<int:pk>/unassign/', views.pedimento_quitar, name='pedimento_quitar'),
+    path('pedimentos/<int:pk>/delete/', views.pedimento_borrar, name='pedimento_borrar'),
 ]

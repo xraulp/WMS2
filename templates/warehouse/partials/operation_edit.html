@@ -22,9 +22,19 @@
   <!-- Full edit for staff/manager/admin -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
     {% for label, fname, value in edit_fields %}
-    <div>
+    <div{% if fname == '__pedimento__' %} style="grid-column:1/-1"{% endif %}>
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft);display:block;margin-bottom:3px">{{ label }}</label>
-      {% if fname == 'operation_type' %}
+      {% if fname == '__pedimento__' %}
+        {% comment %}
+        El mismo bloque que la captura, para que corregir un numero pase por la
+        misma comprobacion que teclearlo la primera vez. `op` es el nombre que
+        espera el partial para rellenar las casillas.
+        {% endcomment %}
+        {% include "warehouse/partials/campos_de_pedimento.html" with op=operation %}
+        <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft);display:block;margin:8px 0 3px">ETA</label>
+        <input type="date" name="eta" value="{{ operation.eta|date:'Y-m-d' }}"
+               style="width:100%;padding:5px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px">
+      {% elif fname == 'operation_type' %}
         {% comment %}
         El tipo no se edita. El POST nunca lo ha guardado, asi que el
         desplegable que habia aqui prometia un cambio que no ocurria; y el tipo

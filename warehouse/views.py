@@ -18,6 +18,7 @@ from decimal import Decimal, InvalidOperation
 import calendar
 import contextlib
 from django.http import Http404
+from django.urls import reverse
 from django.utils.text import slugify
 import os, json, zipfile, re, logging
 
@@ -26,14 +27,31 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
                      NotificationLog, PlatformUser, PLATFORM_ROLE_CHOICES,
                      CATALOG_SCOPES, catalog_scope_of, Invoice,
                      Conversation, ConversationRead, Message,
-                     Warehouse, Location,
+                     Warehouse, Location, Pedimento, PedimentoBundle,
                      LADO_TENANT, LADO_CLIENTE)
 from .utils import (generate_pdf_report, generate_label_pdf, generar_pdf_factura,
                     nombre_corto)
 from .almacen import url_firmada
-from . import notifications
+from . import notifications, pedimentos
 
 logger = logging.getLogger(__name__)
+
+
+def parse_date_or_none(valor):
+    """Una fecha `AAAA-MM-DD` de un formulario, o `None` si viene vacia o mal.
+
+    Los campos de fecha opcionales -- el ETA, de momento -- no pueden tumbar
+    una captura por venir a medias: quien esta recibiendo mercancia a las tres
+    de la manana no tiene por que pelearse con un formato.
+    """
+    from datetime import datetime
+    texto = (valor or '').strip()
+    if not texto:
+        return None
+    try:
+        return datetime.strptime(texto, '%Y-%m-%d').date()
+    except ValueError:
+        return None
 
 # Plazo que propone el formulario de facturacion. Es solo la sugerencia de
 # la fecha que aparece escrita: quien emite puede cambiarla.
@@ -491,6 +509,20 @@ def operation_create(request):
     if not p.get('description','').strip():
         required_errors.append(_('Description'))
 
+    # El pedimento se teclea en tres casillas de largo fijo, y el error que se
+    # cuela tecleando de prisa es un cero de mas en el consecutivo. Se caza
+    # aqui, con el mensaje que dice cuantos digitos hay, en vez de dejar que
+    # siete digitos y medio acaben en un documento oficial. Las tres vacias
+    # pasan sin ruido: un embarque se captura antes de que el agente aduanal
+    # de el numero.
+    errores_de_pedimento = pedimentos.errores_de_casillas(
+        p.get('ped_aduana'), p.get('ped_patente'), p.get('ped_consecutivo'))
+    if errores_de_pedimento:
+        err_html = format_html(
+            '<div class="msg-error" id="op-err">&#10007; {}</div>',
+            ' '.join(str(e) for e in errores_de_pedimento))
+        return HttpResponse(err_html, status=422)
+
     if required_errors:
         fields = ', '.join(required_errors)
         err_html = format_html(
@@ -533,6 +565,14 @@ def operation_create(request):
         ref_aa=p.get('ref_aa', '').strip(),
         ref_dys=p.get('ref_dys', '').strip(),
         pedimento=p.get('pedimento', '').strip(),
+        # El numero por dentro. `save()` compone `pedimento` a partir de las
+        # tres casillas cuando estan completas, asi que el campo de arriba
+        # sigue sirviendo a quien pegue un numero suelto o importe de Excel.
+        ped_aduana=pedimentos.solo_digitos(p.get('ped_aduana')),
+        ped_patente=pedimentos.solo_digitos(p.get('ped_patente')),
+        ped_consecutivo=pedimentos.solo_digitos(p.get('ped_consecutivo')),
+        eta=parse_date_or_none(p.get('eta')),
+        has_serial_numbers=bool(p.get('has_serial_numbers')),
     )
     op.save()
 
@@ -2800,6 +2840,18 @@ def operation_edit(request, pk):
             try: return int(v) if v and str(v).strip() else None
             except: return None
 
+        # La misma comprobacion que al capturar. Sin ella, corregir seria la
+        # puerta de atras por la que entra el cero de mas: la pantalla avisa
+        # mientras se teclea, pero un aviso que no frena el guardado no es un
+        # candado. El mensaje sale arriba del formulario y no se pierde nada
+        # de lo tecleado, porque el formulario no se vuelve a pintar.
+        errores_de_pedimento = pedimentos.errores_de_casillas(
+            p.get('ped_aduana'), p.get('ped_patente'), p.get('ped_consecutivo'))
+        if errores_de_pedimento and not profile.is_customer():
+            return HttpResponse(format_html(
+                '<div class="msg-error">&#10007; {}</div>',
+                ' '.join(str(e) for e in errores_de_pedimento)), status=422)
+
         if profile.is_customer():
             op.customer_notes = p.get('customer_notes', op.customer_notes or '')
             op.save(update_fields=['customer_notes', 'updated_at'])
@@ -2827,6 +2879,17 @@ def operation_edit(request, pk):
             op.ref_aa = p.get('ref_aa', op.ref_aa or '')
             op.ref_dys = p.get('ref_dys', op.ref_dys or '')
             op.pedimento = p.get('pedimento', op.pedimento or '')
+            # Las tres casillas del pedimento tambien se corrigen. Solo se
+            # tocan si el formulario las mando: hay pantallas de edicion que
+            # no las llevan, y ausencia no es borrado.
+            if 'ped_aduana' in p or 'ped_patente' in p or 'ped_consecutivo' in p:
+                op.ped_aduana      = pedimentos.solo_digitos(p.get('ped_aduana'))
+                op.ped_patente     = pedimentos.solo_digitos(p.get('ped_patente'))
+                op.ped_consecutivo = pedimentos.solo_digitos(p.get('ped_consecutivo'))
+            if 'eta' in p:
+                op.eta = parse_date_or_none(p.get('eta'))
+            if 'has_serial_numbers_present' in p:
+                op.has_serial_numbers = bool(p.get('has_serial_numbers'))
             # Donde queda la mercancia tambien se corrige: hasta ahora solo se
             # podia poner al capturar, asi que una posicion mal elegida se
             # quedaba puesta para siempre. El tipo no se toca al editar, de modo
@@ -2879,7 +2942,13 @@ def operation_edit(request, pk):
         ('Damage Desc.',     'damage_description', op.damage_description),
         ('REF AA',           'ref_aa',           op.ref_aa or ''),
         ('DYS',              'ref_dys',          op.ref_dys or ''),
-        ('PEDIMENTO',        'pedimento',        op.pedimento or ''),
+        # El pedimento no es un campo de texto: son tres casillas con su largo
+        # fijo, mas el ETA y la casilla de numeros de serie. La plantilla las
+        # reconoce por este nombre y mete el bloque compartido, el mismo que
+        # usan la captura del tablero y la del telefono. Corregir un pedimento
+        # tiene que pasar por la misma comprobacion que capturarlo; si no, el
+        # cero de mas entra por la puerta de atras.
+        ('PEDIMENTO',        '__pedimento__',    ''),
     ]
     contexto = {
         'operation': op, 'edit_fields': edit_fields,
@@ -4313,3 +4382,303 @@ def cambiar_idioma(request):
         # devuelve esa decision al `Accept-Language`.
         respuesta.delete_cookie(settings.LANGUAGE_COOKIE_NAME)
     return respuesta
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ARMAR PEDIMENTOS
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# La pantalla donde se reparte la mercancia en pedimentos. Cuelga del cliente y
+# no de una tarea de cruce: un pedimento se elabora y se manda a revision con
+# solo la llegada y la factura comercial, sin que exista ninguna tarea
+# programada. Por eso esta pantalla se abre desde el dia que llega la
+# mercancia, y el dia de cruce se decide cuando se decida.
+#
+# Lo que se reparte son bultos y no operaciones. Una entrada de dos pallets
+# puede quedar partida entre dos pedimentos, y dos entradas pueden caer en uno.
+# `PedimentoBundle` guarda esos renglones; aqui solo se cuentan.
+
+
+def _bultos_repartidos(operaciones):
+    """Cuantos bultos de cada operacion ya estan dentro de algun pedimento."""
+    filas = (PedimentoBundle.objects
+             .filter(operation__in=operaciones)
+             .values('operation_id')
+             .annotate(total=Sum('bultos')))
+    return {f['operation_id']: f['total'] for f in filas}
+
+
+
+
+def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None):
+    """
+    Todo lo que necesita la pantalla de armar pedimentos.
+
+    Va aparte de la vista porque las acciones que fallan -- el candado del
+    agente aduanal, sobre todo -- tienen que repintar **esta misma pantalla**
+    con el aviso dentro. Devolver un fragmento suelto dejaba al usuario en una
+    pagina en blanco con una frase: el mensaje era el correcto y la pantalla
+    era inservible, que es la peor combinacion.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+
+    clientes = Catalog.objects.filter(
+        tenant=tenant, category='CUSTOMER', active=True).order_by('name')
+
+    # Un usuario de cliente solo ve lo suyo, con el mismo criterio que el resto
+    # de las pantallas: la llave la da el perfil, no el parametro de la URL.
+    if profile.is_customer():
+        clientes = clientes.filter(pk=getattr(profile.customer, 'pk', None))
+        cliente = clientes.first()
+    else:
+        pedido = cliente_pk if cliente_pk is not None else request.GET.get('customer')
+        cliente = clientes.filter(pk=pedido).first() if pedido else None
+
+    contexto = {
+        'clientes': clientes,
+        'cliente': cliente,
+        'profile': profile,
+        'puede_editar': not profile.is_customer(),
+        'aduanas': sorted(pedimentos.ADUANAS.items()),
+        'error': error,
+        # Lo que se acababa de teclear cuando el candado lo rechazo. Vuelve a
+        # la pantalla porque lo que hay que hacer con un numero rechazado es
+        # mirarlo y corregir un digito, no acordarse de el y escribirlo entero
+        # otra vez.
+        'intento': intento or {},
+    }
+    if cliente is None:
+        return contexto
+
+    lista = (Pedimento.objects
+             .filter(tenant=tenant, customer=cliente)
+             .prefetch_related('renglones__operation__shipper',
+                               'renglones__operation__bundle_type')
+             .order_by('orden'))
+
+    # Los embarques del cliente que todavia estan en bodega. Son los unicos que
+    # se pueden repartir: lo que ya salio no se mete en un pedimento nuevo.
+    embarques = (WarehouseOperation.objects
+                 .filter(tenant=tenant, customer=cliente, operation_type='ENTRY')
+                 .select_related('shipper', 'bundle_type', 'warehouse', 'location')
+                 .order_by('-date', '-created_at'))
+    embarques = [op for op in embarques if op.status != 'Released Goods']
+
+    repartidos = _bultos_repartidos(embarques)
+    sin_repartir = []
+    for op in embarques:
+        total = op.bundle_qty or 0
+        dentro = repartidos.get(op.pk, 0)
+        if total - dentro > 0:
+            op.bultos_sueltos = total - dentro
+            op.bultos_dentro  = dentro
+            sin_repartir.append(op)
+
+    # La aduana y el agente aduanal no se eligen: salen del numero del primer
+    # pedimento que los tenga. Se enseñan arriba como informacion, para que se
+    # vea de que agente es este grupo sin que nadie tenga que abrirlo.
+    aduana = patente = ''
+    for p in lista:
+        if p.tiene_numero:
+            aduana, patente = p.aduana, p.patente
+            break
+
+    contexto.update({
+        'pedimentos': lista,
+        'sin_repartir': sin_repartir,
+        'aduana': aduana,
+        'nombre_de_aduana': pedimentos.nombre_de_aduana(aduana),
+        'patente': patente,
+        'resumen': {
+            'embarques':      len(embarques),
+            'sin_factura':    sum(1 for op in embarques if not (op.invoice or '').strip()),
+            'sin_repartir':   sum(op.bultos_sueltos for op in sin_repartir),
+            'pedimentos':     lista.count(),
+            'con_numero':     sum(1 for p in lista if p.tiene_numero),
+        },
+    })
+    return contexto
+
+
+@login_required
+def pedimentos_panel(request):
+    """
+    Los pedimentos de un cliente, con su reparto y con lo que falta por repartir.
+
+    El cliente se elige arriba. Sin cliente elegido no se pinta ningun reparto:
+    juntar los pedimentos de todos los clientes en una sola lista no ayuda a
+    nadie, porque un pedimento nunca mezcla dos clientes.
+    """
+    return render(request, 'warehouse/pedimentos.html',
+                  _contexto_de_pedimentos(request))
+
+
+def _panel_con_error(request, cliente_pk, mensaje, intento=None):
+    """La pantalla otra vez, con el aviso arriba y sin haber guardado nada."""
+    return render(request, 'warehouse/pedimentos.html',
+                  _contexto_de_pedimentos(request, cliente_pk, str(mensaje), intento),
+                  status=422)
+
+
+def _pedimento_del_tenant(request, pk):
+    """El pedimento `pk` si es de esta empresa; si no, 404."""
+    tenant = get_tenant_or_404(request)
+    return get_object_or_404(Pedimento, pk=pk, tenant=tenant)
+
+
+@login_required
+@require_POST
+def pedimento_create(request):
+    """Un pedimento nuevo y vacio para un cliente."""
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+
+    cliente = get_object_or_404(Catalog, pk=request.POST.get('customer'),
+                                tenant=tenant, category='CUSTOMER')
+    # El orden se cuenta sobre los que ya existen y no se recalcula nunca mas:
+    # un nombre que se mueve al borrar otro pedimento no sirve para hablar por
+    # telefono, que es justo para lo que existe "Pedimento 2".
+    ultimo = (Pedimento.objects.filter(tenant=tenant, customer=cliente)
+              .aggregate(Max('orden'))['orden__max'] or 0)
+    Pedimento.objects.create(tenant=tenant, customer=cliente, orden=ultimo + 1,
+                             created_by=request.user)
+    return redirect(f"{reverse('pedimentos_panel')}?customer={cliente.pk}")
+
+
+@login_required
+@require_POST
+def pedimento_numero(request, pk):
+    """
+    Teclear o corregir el numero de un pedimento, con el candado del agente.
+
+    Aqui es donde salta la comprobacion que da sentido a todo el formato: si la
+    patente no coincide con la de los pedimentos que ya estan en el grupo, no se
+    guarda, y el mensaje dice con cual choca. Un DODA no puede llevar pedimentos
+    de dos agentes aduanales, y esperar a descubrirlo al emitir el documento es
+    descubrirlo cuando ya no se puede arreglar barato.
+    """
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+
+    aduana      = pedimentos.solo_digitos(request.POST.get('ped_aduana'))
+    patente     = pedimentos.solo_digitos(request.POST.get('ped_patente'))
+    consecutivo = pedimentos.solo_digitos(request.POST.get('ped_consecutivo'))
+
+    intento = {'pk': ped.pk, 'aduana': aduana, 'patente': patente,
+               'consecutivo': consecutivo}
+
+    errores = pedimentos.errores_de_casillas(aduana, patente, consecutivo)
+    if errores:
+        return _panel_con_error(request, ped.customer_id,
+                                ' '.join(str(e) for e in errores), intento)
+
+    nuevo = pedimentos.numero_corrido(aduana, patente, consecutivo)
+    if nuevo:
+        hermanos = (Pedimento.objects
+                    .filter(tenant=ped.tenant, customer=ped.customer)
+                    .exclude(pk=ped.pk))
+        choca = pedimentos.choque(nuevo, [h.numero for h in hermanos])
+        if choca:
+            return _panel_con_error(request, ped.customer_id,
+                                    choca['mensaje'], intento)
+
+    ped.ped_aduana, ped.ped_patente, ped.ped_consecutivo = aduana, patente, consecutivo
+    ped.save(update_fields=['ped_aduana', 'ped_patente', 'ped_consecutivo',
+                            'updated_at'])
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+@login_required
+@require_POST
+def pedimento_asignar(request, pk):
+    """
+    Meter bultos de una operacion en este pedimento.
+
+    Si la operacion ya tiene un renglon aqui se le suman: dos renglones de la
+    misma operacion en el mismo pedimento no significan nada distinto y solo
+    harian que las sumas dependieran de como se capturo.
+    """
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+
+    op = get_object_or_404(WarehouseOperation, pk=request.POST.get('operation'),
+                           tenant=ped.tenant, customer=ped.customer)
+
+    try:
+        cuantos = int(request.POST.get('bultos') or 0)
+    except (TypeError, ValueError):
+        cuantos = 0
+
+    # No se puede meter mas de lo que llego. El caso de "19 de 20" es normal y
+    # se apoya; el de "21 de 20" es un error de dedo, y dejarlo pasar solo
+    # aplaza el problema hasta que alguien cuente los bultos en el anden.
+    dentro = _bultos_repartidos([op]).get(op.pk, 0)
+    libres = (op.bundle_qty or 0) - dentro
+    if cuantos < 1 or cuantos > libres:
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('%(op)s has %(libres)d bundles left to assign.')
+            % {'op': op.custom_id, 'libres': libres})
+
+    # El peso de estos bultos se teclea, en libras. Es opcional: quien reparte
+    # a veces todavia no lo tiene, y no dejar guardar por eso pararia el
+    # trabajo por un dato que llega despues.
+    try:
+        libras = Decimal(request.POST.get('weight_lbs') or '')
+    except (InvalidOperation, TypeError):
+        libras = None
+
+    renglon, creado = PedimentoBundle.objects.get_or_create(
+        pedimento=ped, operation=op,
+        defaults={'bultos': cuantos, 'weight_lbs': libras})
+    if not creado:
+        renglon.bultos += cuantos
+        if libras is not None:
+            renglon.weight_lbs = (renglon.weight_lbs or Decimal('0')) + libras
+        # `save()` sin `update_fields` para que los kilos se recalculen.
+        renglon.save()
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+@login_required
+@require_POST
+def pedimento_quitar(request, pk):
+    """Sacar un renglon del reparto: los bultos vuelven a estar sin asignar."""
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+    renglon = get_object_or_404(PedimentoBundle, pk=request.POST.get('renglon'),
+                                pedimento=ped)
+    renglon.delete()
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+@login_required
+@require_POST
+def pedimento_borrar(request, pk):
+    """
+    Borrar un pedimento entero.
+
+    Solo mientras esta en borrador: uno que ya salio a revision es algo que el
+    cliente tiene delante, y hacerlo desaparecer de su pantalla sin mas no es
+    una correccion, es dejarle mirando un hueco.
+    """
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+    cliente_id = ped.customer_id
+    if ped.estado != Pedimento.BORRADOR:
+        return _panel_con_error(
+            request, cliente_id,
+            _('This pedimento already went to the customer; it cannot be deleted.'))
+    ped.delete()
+    return redirect(f"{reverse('pedimentos_panel')}?customer={cliente_id}")

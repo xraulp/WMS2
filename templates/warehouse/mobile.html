@@ -439,9 +439,22 @@ cuesta mas que en una pantalla grande.
         <label>DYS</label>
         <input type="text" name="ref_dys" class="form-input" placeholder="{% trans "DYS reference..." %}">
       </div>
+      {% comment %}
+      El pedimento deja de ser un campo de texto libre. Son quince digitos con
+      estructura -- el Anexo 22 dice cual -- y de los trece que se teclean
+      salen la aduana y la patente del agente aduanal, que son las que
+      sostienen el candado de que un camion no lleve dos agentes. El bloque
+      entero, con el ETA y la casilla de numeros de serie, vive en un partial
+      compartido con el tablero para que las dos pantallas no se separen.
+      {% endcomment %}
       <div class="form-row">
         <label>PEDIMENTO</label>
-        <input type="text" name="pedimento" class="form-input" placeholder="{% trans "Pedimento number..." %}">
+        {% include "warehouse/partials/campos_de_pedimento.html" %}
+      </div>
+
+      <div class="form-row">
+        <label>ETA</label>
+        <input type="date" name="eta" class="form-input">
       </div>
 
       <div class="form-row">
@@ -701,6 +714,14 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
   <button class="nav-btn" id="nav-database" onclick="mobShowTab('database')">
     <span class="icon">🗄️</span>{% trans "Operations" %}
   </button>
+  {% comment %}
+  Armar pedimentos es una pantalla aparte, la misma que en el tablero. Va en la
+  barra de abajo y no escondida en un menu porque quien reparte bultos lo hace
+  con el telefono en la mano, andando por la bodega.
+  {% endcomment %}
+  <a class="nav-btn" href="{% url 'pedimentos_panel' %}" style="text-decoration:none">
+    <span class="icon">📄</span>{% trans "Pedimentos" %}
+  </a>
   <button class="nav-btn" id="nav-catalog" onclick="mobShowTab('catalog')">
     <span class="icon">📚</span>{% trans "Catalog" %}
   </button>

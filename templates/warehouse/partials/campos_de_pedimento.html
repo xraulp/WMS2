@@ -1,0 +1,226 @@
+{% load i18n %}
+{% comment %}
+Los campos que el diseno de las tareas de cruce anade a la captura de una
+operacion: el numero de pedimento en tres casillas, el ETA y la casilla de
+numeros de serie.
+
+Va en un partial y no repetido en las dos plantillas a proposito. El tablero y
+el telefono son dos pantallas distintas con su propio JavaScript, y casi nada
+se hereda de una a la otra: lo que se arregla en una hay que arreglarlo tambien
+en la otra. Un bloque con este comportamiento -- tres casillas que se validan
+solas, saltan de una a otra y componen un numero debajo -- se habria separado a
+la tercera correccion. Aqui se escribe una vez.
+
+Por eso el bloque trae su propio CSS y su propio JavaScript, y no usa ninguna
+clase ni ningun `id` de las plantillas que lo incluyen: se puede meter en
+cualquier formulario sin mirar como esta hecho ese formulario.
+
+Parametros del include:
+  ninguno obligatorio.
+  `op`  -- opcional, una operacion, para rellenar los campos al editar.
+{% endcomment %}
+
+<style>
+/* Un solo `<style>` para las dos pantallas. Si el bloque se incluye dos veces
+   en la misma pagina el navegador se come el duplicado sin queja. */
+.pedbox            { display:flex; flex-direction:column; gap:10px; max-width:440px; }
+.pedbox-casillas   { display:flex; align-items:flex-start; gap:6px; }
+.pedbox-casilla    { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.pedbox-casilla input {
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  /* 16px o mas: por debajo de eso el navegador del telefono hace zoom solo al
+     tocar el campo y deja el formulario descuadrado. */
+  font-size:16px; letter-spacing:1px; text-align:center;
+  padding:9px 6px; border:1px solid var(--bdr); border-radius:var(--r);
+  background:var(--surface); color:var(--ink); width:100%;
+}
+.pedbox-c7 input { padding-left:4px; padding-right:4px; }
+.pedbox-casilla input:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+/* Los anchos son los de cada grupo del Anexo 22 y no caben mas digitos, asi que
+   cada casilla se dimensiona por lo que va a contener y no al reves. Van en el
+   contenedor y no en el `input`, porque el `input` lleva `width:100%` -- que es
+   una regla mas especifica -- y le ganaba a los anchos: las tres casillas
+   salian iguales de anchas, y una de dos digitos tan ancha como una de siete
+   no dice nada de lo que se espera dentro. */
+.pedbox-c2  { flex:0 0 48px; width:48px; }
+.pedbox-c4  { flex:0 0 66px; width:66px; }
+/* La ultima estira, pero con tope: en la pantalla del telefono abierta en una
+   computadora esta fila llega a mil pixeles de ancho para siete digitos. */
+.pedbox-c7  { flex:1 1 auto; min-width:86px; max-width:170px; }
+.pedbox-pie { font-size:10px; color:var(--soft); text-align:center; line-height:1.25; }
+.pedbox-sep { align-self:center; margin-top:6px; color:var(--soft); font-size:15px; }
+.pedbox-mal input { border-color:var(--red); }
+.pedbox-mal .pedbox-pie { color:var(--red); }
+/* El numero compuesto, en gris: no es un campo, es lo que va a quedar guardado. */
+.pedbox-armado {
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px; color:var(--soft); letter-spacing:1px; min-height:16px;
+}
+.pedbox-armado b { color:var(--ink); font-weight:600; }
+.pedbox-aviso { font-size:11px; color:var(--red); min-height:14px; }
+/* La pantalla del telefono uppercasea con `.form-row label`, que pesa mas que
+   una clase sola. Por eso estos tres selectores van calificados: no es un
+   capricho de estilo, es que en mayusculas la frase grita y la aclaracion de
+   debajo se vuelve ilegible. */
+.pedbox label.pedbox-series,
+.pedbox label.pedbox-series span,
+.pedbox label.pedbox-series small {
+  text-transform:none; letter-spacing:normal; font-weight:400;
+}
+.pedbox-series {
+  display:flex; align-items:center; gap:9px; cursor:pointer;
+  padding:10px 12px; border:1px solid var(--bdr); border-radius:var(--r);
+  background:var(--bg-sutil); font-size:13px; color:var(--ink);
+  /* La pantalla del telefono pone en mayusculas el texto de sus `label`, y
+     esto no es una etiqueta de campo: es una frase que se lee. En mayusculas
+     grita, y la aclaracion de debajo se vuelve ilegible. */
+  text-transform:none; letter-spacing:normal; font-weight:400; line-height:1.35;
+}
+.pedbox-series input { width:18px; height:18px; accent-color:var(--accent); flex:0 0 auto; }
+.pedbox-series small { display:block; color:var(--soft); font-size:11px; margin-top:2px;
+                       text-transform:none; letter-spacing:normal; font-weight:400; }
+</style>
+
+<div class="pedbox" data-pedbox>
+  <div>
+    <div class="pedbox-casillas">
+      <div class="pedbox-casilla pedbox-c2">
+        <input type="text" name="ped_aduana" data-ped="aduana"
+               maxlength="2" inputmode="numeric" autocomplete="off"
+               placeholder="24" value="{{ op.ped_aduana|default:'' }}">
+        <span class="pedbox-pie">{% trans "Customs" %}<br>{% trans "2 digits" %}</span>
+      </div>
+      <span class="pedbox-sep">·</span>
+      <div class="pedbox-casilla pedbox-c4">
+        <input type="text" name="ped_patente" data-ped="patente"
+               maxlength="4" inputmode="numeric" autocomplete="off"
+               placeholder="1780" value="{{ op.ped_patente|default:'' }}">
+        <span class="pedbox-pie">{% trans "Broker" %}<br>{% trans "4 digits" %}</span>
+      </div>
+      <span class="pedbox-sep">·</span>
+      <div class="pedbox-casilla pedbox-c7">
+        <input type="text" name="ped_consecutivo" data-ped="consecutivo"
+               maxlength="7" inputmode="numeric" autocomplete="off"
+               placeholder="6003555" value="{{ op.ped_consecutivo|default:'' }}">
+        <span class="pedbox-pie">{% trans "Year and sequence" %}<br>{% trans "7 digits" %}</span>
+      </div>
+    </div>
+    <div class="pedbox-armado" data-ped-armado></div>
+    <div class="pedbox-aviso" data-ped-aviso></div>
+  </div>
+
+  <label class="pedbox-series">
+    {% comment %}
+    El `_present` viaja siempre; el checkbox solo cuando esta marcado. Sin el,
+    una pantalla de edicion que no lleve esta casilla borraria la marca al
+    guardar, y ausencia no es lo mismo que "no tiene".
+    {% endcomment %}
+    <input type="hidden" name="has_serial_numbers_present" value="1">
+    <input type="checkbox" name="has_serial_numbers" value="1"
+           {% if op.has_serial_numbers %}checked{% endif %}>
+    <span>
+      {% trans "This merchandise has serial numbers" %}
+      <small>{% trans "Marking it makes the pedimento require serial-number photos before review." %}</small>
+    </span>
+  </label>
+</div>
+
+<script>
+/* Las tres casillas, con el numero componiendose debajo.
+   Se engancha a todos los bloques de la pagina, asi que da igual cuantos haya
+   y en que pantalla estemos. */
+(function(){
+  if (window.__pedbox) return;          /* si el partial entra dos veces */
+  window.__pedbox = true;
+
+  var LARGOS = {aduana:2, patente:4, consecutivo:7};
+  var ADUANAS = {'24':'{% trans "Nuevo Laredo" %}', '80':'{% trans "Colombia" %}'};
+
+  function pinta(grupo){
+    var partes = {}, malas = [];
+    ['aduana','patente','consecutivo'].forEach(function(k){
+      var campo = grupo.querySelector('[data-ped="'+k+'"]');
+      var v = (campo.value || '').replace(/\D/g,'').slice(0, LARGOS[k]);
+      if (campo.value !== v) campo.value = v;
+      partes[k] = v;
+      var casilla = campo.parentElement;
+      var mal = v.length > 0 && v.length < LARGOS[k];
+      casilla.classList.toggle('pedbox-mal', mal);
+      if (mal) malas.push(k);
+    });
+
+    var armado = grupo.querySelector('[data-ped-armado]');
+    var aviso  = grupo.querySelector('[data-ped-aviso]');
+    var lleno  = partes.aduana.length === 2 && partes.patente.length === 4
+              && partes.consecutivo.length === 7;
+    var vacio  = !partes.aduana && !partes.patente && !partes.consecutivo;
+
+    if (lleno) {
+      var nombre = ADUANAS[partes.aduana] ? ' · ' + ADUANAS[partes.aduana] : '';
+      armado.innerHTML = '{% trans "Number" %}: <b>' + partes.aduana + '-'
+                       + partes.patente + '-' + partes.consecutivo + '</b>' + nombre;
+    } else if (vacio) {
+      armado.textContent = '';
+    } else {
+      armado.textContent = '{% trans "Incomplete number — it will not be saved." %}';
+    }
+
+    /* El error que de verdad se cuela tecleando de prisa es un cero de mas en
+       el consecutivo, y por eso el aviso dice cuantos digitos hay y no solo
+       que faltan: verlo contado es lo que lo delata. */
+    if (partes.consecutivo.length > 0 && partes.consecutivo.length !== 7) {
+      aviso.textContent = '{% trans "The year and sequence take 7 digits — you typed" %} '
+                        + partes.consecutivo.length + '.';
+    } else if (malas.length) {
+      aviso.textContent = '{% trans "Some box is short of digits." %}';
+    } else {
+      aviso.textContent = '';
+    }
+  }
+
+  function engancha(grupo){
+    if (grupo.dataset.pedListo) return;
+    grupo.dataset.pedListo = '1';
+    ['aduana','patente','consecutivo'].forEach(function(k, i, todas){
+      var campo = grupo.querySelector('[data-ped="'+k+'"]');
+      campo.addEventListener('input', function(){
+        pinta(grupo);
+        /* Salta sola a la siguiente casilla al llenarla. Quien captura teclea
+           los trece digitos de corrido, como se los dictan, y no deberia tener
+           que tocar la pantalla dos veces en medio. */
+        if (campo.value.length === LARGOS[k] && i < todas.length - 1) {
+          var sig = grupo.querySelector('[data-ped="'+todas[i+1]+'"]');
+          if (sig && !sig.value) sig.focus();
+        }
+      });
+      campo.addEventListener('paste', function(){ setTimeout(function(){ reparte(grupo); }, 0); });
+      campo.addEventListener('blur', function(){ pinta(grupo); });
+    });
+    pinta(grupo);
+  }
+
+  /* Pegar el numero entero en cualquiera de las tres casillas lo reparte solo.
+     Es como llega de verdad: copiado del correo del agente aduanal, con
+     guiones o sin ellos, y a veces con el ano de validacion delante. */
+  function reparte(grupo){
+    var campos = ['aduana','patente','consecutivo'].map(function(k){
+      return grupo.querySelector('[data-ped="'+k+'"]');
+    });
+    var todo = campos.map(function(c){ return (c.value||'').replace(/\D/g,''); }).join('');
+    if (todo.length === 15) todo = todo.slice(2);   /* sobra el ano de delante */
+    if (todo.length === 13) {
+      campos[0].value = todo.slice(0,2);
+      campos[1].value = todo.slice(2,6);
+      campos[2].value = todo.slice(6);
+    }
+    pinta(grupo);
+  }
+
+  function barre(){ document.querySelectorAll('[data-pedbox]').forEach(engancha); }
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', barre);
+  else barre();
+  /* El formulario se repinta por htmx despues de guardar. */
+  document.addEventListener('htmx:afterSwap', barre);
+})();
+</script>

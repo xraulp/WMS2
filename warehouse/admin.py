@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
                      DeletionLog, DocumentSequence, NotificationLog,
-                     PlatformUser, Tenant)
+                     PlatformUser, Tenant, Pedimento, PedimentoBundle)
 
 
 @admin.register(UserProfile)
@@ -105,3 +105,41 @@ class PlatformUserAdmin(admin.ModelAdmin):
     list_filter   = ['role']
     search_fields = ['user__username']
     readonly_fields = ['created_at']
+
+
+class RepartoDeBultosInline(admin.TabularInline):
+    """
+    El reparto, dentro del pedimento que lo contiene.
+
+    Es donde se ve de un golpe lo que un campo de texto no podia representar:
+    que una operacion se parte entre dos pedimentos y que dos operaciones caen
+    en uno.
+    """
+    model = PedimentoBundle
+    extra = 1
+    autocomplete_fields = ['operation']
+
+
+@admin.register(Pedimento)
+class PedimentoAdmin(admin.ModelAdmin):
+    """
+    El pedimento mientras no existe su pantalla propia.
+
+    Sirve para trabajar con el desde ya y, sobre todo, para diagnosticar: la
+    columna del numero se compone de las tres casillas, asi que aqui se ve al
+    momento si un numero quedo mal capturado.
+    """
+    list_display  = ['etiqueta', 'customer', 'estado', 'total_bultos',
+                     'ped_aduana', 'ped_patente', 'created_at']
+    list_filter   = ['estado', 'tenant', 'ped_aduana', 'ped_patente']
+    search_fields = ['ped_patente', 'ped_consecutivo', 'customer__name']
+    readonly_fields = ['created_at', 'updated_at']
+    inlines = [RepartoDeBultosInline]
+
+    @admin.display(description='Pedimento')
+    def etiqueta(self, obj):
+        return obj.etiqueta
+
+    @admin.display(description='Bultos')
+    def total_bultos(self, obj):
+        return obj.total_bultos
