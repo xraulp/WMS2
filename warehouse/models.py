@@ -2641,3 +2641,309 @@ class RenglonDeImpuestos(models.Model):
         if not self.valor_mercancia:
             return None
         return self.calcular()['T_total_pedimento']
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  LA TAREA DE CRUCE
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# El cliente ve su mercancia guardada, marca lo que quiere cruzar, elige el dia
+# y crea la tarea. Es el numero con el que se habla del embarque de ahi en
+# adelante.
+#
+# La tarea **no** es donde nacen los pedimentos ni la estimacion de impuestos:
+# esos existen antes y a veces sin ella. La tarea aparece despues y hace otra
+# cosa -- juntar lo que ya esta listo y meterlo en un camion un dia concreto --,
+# y por eso se puede armar incompleta: con embarques que ya tienen pedimento y
+# con embarques que no, y con la factura comercial todavia sin llegar.
+#
+# El prefijo es `TC` y no `TD` porque `TD` ya esta ocupado: es el trasbordo, uno
+# de los cuatro tipos de operacion.
+
+
+class CrossingTask(models.Model):
+    """Un camion, un dia, y la mercancia que va dentro."""
+
+    PREFIJO = 'TC'
+
+    # Quien la creo. Lo correcto es que la cree el cliente, pero no falta quien
+    # llama por telefono, asi que crean los dos -- y la tarea lo enseña
+    # siempre. El dia que alguien reclame que se pidio cruzar, esa linea es la
+    # respuesta.
+    LA_CREO_EL_CLIENTE = 'CLIENTE'
+    LA_CREO_LA_CASA    = 'TENANT'
+    ORIGENES = [
+        (LA_CREO_EL_CLIENTE, _('Created by the customer')),
+        (LA_CREO_LA_CASA,    _('Created by the warehouse on their behalf')),
+    ]
+
+    ABIERTA   = 'ABIERTA'
+    CON_ORDEN = 'CON_ORDEN'
+    CARGADA   = 'CARGADA'
+    CRUZADA   = 'CRUZADA'
+    CANCELADA = 'CANCELADA'
+    ESTADOS = [
+        (ABIERTA,   _('Open')),
+        (CON_ORDEN, _('Load order issued')),
+        (CARGADA,   _('Loaded')),
+        (CRUZADA,   _('Crossed')),
+        (CANCELADA, _('Cancelled')),
+    ]
+
+    tenant    = models.ForeignKey('Tenant', on_delete=models.CASCADE,
+                                  related_name='cruces')
+    customer  = models.ForeignKey(Catalog, on_delete=models.PROTECT,
+                                  related_name='cruces',
+                                  limit_choices_to={'category': 'CUSTOMER'},
+                                  verbose_name='Cliente')
+    custom_id = models.CharField(max_length=20, unique=True, blank=True)
+
+    # El dia se elige libremente en un calendario, no entre dias fijos, y se
+    # puede cambiar: por tipo de cambio, porque quedo mal el transfer, porque
+    # no hay sistema en la aduana. Cada cambio queda en `CambioDeDiaDeCruce`.
+    fecha_de_cruce = models.DateField(verbose_name='Dia de cruce')
+
+    estado = models.CharField(max_length=12, choices=ESTADOS, default=ABIERTA)
+    origen = models.CharField(max_length=10, choices=ORIGENES,
+                              default=LA_CREO_EL_CLIENTE)
+
+    # Cuando la crea la casa por telefono, el cliente recibe un aviso de "esto
+    # es lo que entendimos, confirmalo". Un toque, no un tramite: es la
+    # instruccion telefonica puesta por escrito.
+    confirmada_por_el_cliente = models.BooleanField(default=False)
+    confirmada_en             = models.DateTimeField(null=True, blank=True)
+
+    notas      = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name='cruces_creados')
+
+    class Meta:
+        ordering = ['fecha_de_cruce', 'custom_id']
+        verbose_name = 'Tarea de cruce'
+        verbose_name_plural = 'Tareas de cruce'
+
+    def __str__(self):
+        return self.custom_id or f'TC-{self.pk}'
+
+    def generar_custom_id(self):
+        fecha = self.created_at.date() if self.created_at else timezone.localdate()
+        cuantas = CrossingTask.objects.filter(
+            tenant=self.tenant, created_at__date=fecha).exclude(pk=self.pk).count()
+        return f'{self.PREFIJO}{fecha.strftime("%y%m%d")}-{cuantas + 1:04d}'
+
+    def save(self, *args, **kwargs):
+        if not self.custom_id:
+            # El consecutivo necesita saber el dia, y el dia lo pone
+            # `auto_now_add` al guardar. Asi que se guarda primero sin numero y
+            # se numera despues: es feo, y es lo que hace que dos tareas del
+            # mismo dia no puedan repetir numero.
+            super().save(*args, **kwargs)
+            self.custom_id = self.generar_custom_id()
+            return super().save(update_fields=['custom_id'])
+        return super().save(*args, **kwargs)
+
+    # ── Quien la creo ────────────────────────────────────────────────────────
+
+    @property
+    def creada_por(self):
+        """La linea que se enseña siempre, en las palabras del diseno."""
+        quien = self.created_by.get_full_name() or self.created_by.username \
+            if self.created_by else '?'
+        if self.origen == self.LA_CREO_EL_CLIENTE:
+            return _('created by %(cliente)s') % {'cliente': self.customer.name}
+        return _('created by %(quien)s on behalf of %(cliente)s') % {
+            'quien': quien, 'cliente': self.customer.name}
+
+    @property
+    def espera_confirmacion(self):
+        """Si la creo la casa y el cliente todavia no ha dicho que si."""
+        return (self.origen == self.LA_CREO_LA_CASA
+                and not self.confirmada_por_el_cliente
+                and self.estado == self.ABIERTA)
+
+    # ── Lo que lleva dentro ──────────────────────────────────────────────────
+
+    @property
+    def operaciones(self):
+        return [r.operation for r in
+                self.renglones.select_related('operation').all()]
+
+    @property
+    def pedimentos(self):
+        """Los pedimentos en los que cayeron los bultos de esta tarea."""
+        vistos, salida = set(), []
+        for renglon in self.renglones.select_related('operation'):
+            for enlace in renglon.operation.renglones_de_pedimento.select_related(
+                    'pedimento'):
+                if enlace.pedimento_id not in vistos:
+                    vistos.add(enlace.pedimento_id)
+                    salida.append(enlace.pedimento)
+        return salida
+
+    @property
+    def numeros_de_pedimento(self):
+        return [p.numero for p in self.pedimentos if p.numero]
+
+    @property
+    def aduana(self):
+        """
+        La aduana del cruce, leida del primer pedimento que la traiga dentro.
+
+        No se elige en ningun sitio: viaja dentro del numero de pedimento, que
+        ya lo teclea alguien con cuidado porque es el numero que ampara la
+        mercancia. Un selector aparte seria un dato mas que puede contradecir
+        al pedimento.
+        """
+        for numero in self.numeros_de_pedimento:
+            from . import pedimentos as _ped
+            aduana = _ped.aduana_de(numero)
+            if aduana:
+                return aduana
+        return ''
+
+    @property
+    def patente(self):
+        """La patente del agente aduanal, leida igual que la aduana."""
+        for numero in self.numeros_de_pedimento:
+            from . import pedimentos as _ped
+            patente = _ped.patente_de(numero)
+            if patente:
+                return patente
+        return ''
+
+    @property
+    def operaciones_sin_factura(self):
+        """
+        Los embarques de la tarea a los que les falta la factura comercial.
+
+        Con tarea, la factura que falta deja de ser un renglon incomodo y pasa
+        a ser una cuenta atras: hay un camion un dia concreto.
+        """
+        faltan = []
+        for renglon in self.renglones.select_related('operation'):
+            op = renglon.operation
+            if not op.documents.filter(
+                    ranura=OperationDocument.RANURA_FACTURA_COMERCIAL).exists():
+                faltan.append(op)
+        return faltan
+
+    @property
+    def dias_para_el_cruce(self):
+        """Cuantos dias faltan. Negativo si ya paso."""
+        return (self.fecha_de_cruce - timezone.localdate()).days
+
+    # ── El candado ───────────────────────────────────────────────────────────
+
+    def choque_al_meter(self, op):
+        """
+        Si `op` no puede entrar en esta tarea -- y por que.
+
+        Un DODA solo puede llevar pedimentos de un mismo agente aduanal. Se
+        comprueba ya al meter el embarque en la tarea y no solo al armar el
+        camion, porque una tarea con dos patentes no podria subirse entera a
+        ningun camion y habria que partirla: mas vale avisar temprano que
+        cuando ya esta todo cargado.
+        """
+        from . import pedimentos as _ped
+        dentro = self.numeros_de_pedimento
+        suyos = [e.pedimento.numero for e in
+                 op.renglones_de_pedimento.select_related('pedimento')
+                 if e.pedimento.numero]
+        # El pedimento suelto de la operacion, para las que no pasaron por el
+        # reparto por bultos.
+        if not suyos and (op.pedimento or '').strip():
+            suyos = [op.pedimento.strip()]
+        for numero in suyos:
+            choca = _ped.choque(numero, dentro)
+            if choca:
+                return choca
+        return None
+
+
+class CrossingTaskItem(models.Model):
+    """
+    Un embarque dentro de una tarea de cruce.
+
+    Se guarda quien lo metio, cuando y desde donde. Los tres sitios desde los
+    que se puede meter -- la lista de operaciones, el renglon de la hoja de
+    impuestos y la propia tarea -- hacen lo mismo y dejan la misma linea
+    escrita: obligar a ir a un sitio concreto es lo que hace que se acabe
+    pidiendo por telefono, y entonces el cambio no queda escrito.
+    """
+
+    DESDE_OPERACIONES = 'OPERACIONES'
+    DESDE_IMPUESTOS   = 'IMPUESTOS'
+    DESDE_LA_TAREA    = 'TAREA'
+    ORIGENES = [
+        (DESDE_OPERACIONES, _('From the operations list')),
+        (DESDE_IMPUESTOS,   _('From the duty sheet')),
+        (DESDE_LA_TAREA,    _('From the crossing task')),
+    ]
+
+    task      = models.ForeignKey(CrossingTask, on_delete=models.CASCADE,
+                                  related_name='renglones')
+    operation = models.ForeignKey(WarehouseOperation, on_delete=models.CASCADE,
+                                  related_name='cruces')
+    desde     = models.CharField(max_length=12, choices=ORIGENES,
+                                 default=DESDE_LA_TAREA)
+    # A partir de que hay una orden de carga emitida, meter o sacar pide
+    # motivo. Antes no: la tarea todavia se esta armando.
+    motivo    = models.TextField(blank=True, default='')
+    added_at  = models.DateTimeField(auto_now_add=True)
+    added_by  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                  blank=True, related_name='embarques_metidos')
+
+    class Meta:
+        ordering = ['added_at']
+        verbose_name = 'Embarque de la tarea'
+        verbose_name_plural = 'Embarques de la tarea'
+        # Un embarque no puede ir en dos cruces a la vez ni dos veces en el
+        # mismo. Lo primero lo comprueba la vista; esto cierra lo segundo.
+        unique_together = [('task', 'operation')]
+
+    def __str__(self):
+        return f'{self.operation.custom_id} en {self.task.custom_id}'
+
+
+class CambioDeDiaDeCruce(models.Model):
+    """
+    Cada vez que se mueve el dia de un cruce, con su motivo.
+
+    La lista corta de motivos no es burocracia: en tres meses deja contestar
+    "por que se nos mueven tanto los cruces" con numeros en vez de con
+    recuerdos.
+    """
+
+    TIPO_DE_CAMBIO = 'TIPO_DE_CAMBIO'
+    TRANSPORTE     = 'TRANSPORTE'
+    ADUANA         = 'ADUANA'
+    CLIENTE        = 'CLIENTE'
+    OTRO           = 'OTRO'
+    MOTIVOS = [
+        (TIPO_DE_CAMBIO, _('Exchange rate')),
+        (TRANSPORTE,     _('Transport')),
+        (ADUANA,         _('Customs system down')),
+        (CLIENTE,        _('The customer asked')),
+        (OTRO,           _('Other')),
+    ]
+
+    task           = models.ForeignKey(CrossingTask, on_delete=models.CASCADE,
+                                       related_name='cambios_de_dia')
+    fecha_anterior = models.DateField()
+    fecha_nueva    = models.DateField()
+    motivo         = models.CharField(max_length=20, choices=MOTIVOS)
+    detalle        = models.TextField(blank=True, default='')
+    created_at     = models.DateTimeField(auto_now_add=True)
+    created_by     = models.ForeignKey(User, on_delete=models.SET_NULL,
+                                       null=True, blank=True,
+                                       related_name='cambios_de_dia')
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Cambio de dia de cruce'
+        verbose_name_plural = 'Cambios de dia de cruce'
+
+    def __str__(self):
+        return f'{self.task_id}: {self.fecha_anterior} -> {self.fecha_nueva}'

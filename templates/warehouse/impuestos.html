@@ -162,6 +162,7 @@
           <th>{% trans "Entry" %}</th>
           <th>{% trans "PO / Order" %}</th>
           <th>{% trans "Pedimento" %}</th>
+          <th>{% trans "Crossing" %}</th>
           <th class="num">{% trans "Invoice value USD" %}</th>
           <th class="num">{% trans "Approx. duty MXN" %}</th>
           {% if puede_editar %}<th></th>{% endif %}
@@ -207,6 +208,35 @@
           <td data-etq="{% trans "PO / Order" %}"><strong>{{ r.pedido|default:"—" }}</strong></td>
           <td data-etq="{% trans "Pedimento" %}" class="mono">
             {% if r.pedimento %}{{ r.pedimento.numero|default:r.pedimento.etiqueta }}{% else %}—{% endif %}
+          </td>
+          <td data-etq="{% trans "Crossing" %}">
+            {% comment %}
+            Meter un embarque a un cruce desde aqui. Es uno de los tres sitios
+            desde los que se puede hacer, y el que mas se va a usar: es donde se
+            esta mirando ese dia, en el mismo renglon donde se ve el impuesto
+            que va a costar. Obligar a ir a otra pantalla es lo que hace que se
+            acabe pidiendo por telefono.
+            {% endcomment %}
+            {% if r.cruce %}
+              <a class="mono" href="{% url 'cruces_panel' %}?customer={{ cliente.pk }}">{{ r.cruce.custom_id }}</a>
+              <span class="exacto">{{ r.cruce.fecha_de_cruce|date:"d/m" }}</span>
+            {% elif r.operation and r.cruces_posibles %}
+              <form method="post" action="" data-cruce style="margin:0;display:flex;gap:5px">
+                {% csrf_token %}
+                <input type="hidden" name="operation" value="{{ r.operation.pk }}">
+                <input type="hidden" name="desde" value="IMPUESTOS">
+                <input type="hidden" name="volver" value="impuestos">
+                <select name="__tarea" class="mono" style="max-width:118px"
+                        onchange="this.form.action='/cruces/'+this.value+'/add/'">
+                  {% for t in r.cruces_posibles %}
+                  <option value="{{ t.pk }}">{{ t.custom_id }} · {{ t.fecha_de_cruce|date:"d/m" }}</option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-sm" type="submit">+</button>
+              </form>
+            {% else %}
+              <span class="soft">—</span>
+            {% endif %}
           </td>
           <td data-etq="{% trans "Invoice value USD" %}" class="num">
             {% if puede_editar %}
@@ -284,12 +314,12 @@
           {% endif %}
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="soft">{% trans "No shipments in this sheet yet." %}</td></tr>
+        <tr><td colspan="9" class="soft">{% trans "No shipments in this sheet yet." %}</td></tr>
         {% endfor %}
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="6" data-etq="" style="text-align:right;font-weight:600">
+          <td colspan="7" data-etq="" style="text-align:right;font-weight:600">
             {% trans "ESTIMATED TOTAL" %}
           </td>
           <td class="num" data-etq="{% trans "ESTIMATED TOTAL" %}" style="font-weight:700">
@@ -336,6 +366,15 @@
    servidor, en `warehouse/impuestos.py`. Un calculo que solo vive en el
    navegador es un calculo que se pierde con el primer telefono viejo. */
 (function(){
+  /* El formulario de "anadir a un cruce" apunta a la tarea elegida. El destino
+     se arma al cambiar el desplegable, asi que hay que armarlo tambien al
+     cargar: sin esto, quien no toque el desplegable manda el formulario a
+     ninguna parte. */
+  document.querySelectorAll('form[data-cruce]').forEach(function(f){
+    var sel = f.querySelector('select');
+    if (sel) f.action = '/cruces/' + sel.value + '/add/';
+  });
+
   function pinta(campo){
     var salida = campo.parentElement.querySelector('[data-suma-resultado]');
     if (!salida) return;

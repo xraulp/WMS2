@@ -1,0 +1,336 @@
+{% load i18n %}
+{% get_current_language as idioma_actual %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Crossings" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    a{color:inherit}
+    .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
+        padding:12px 18px;background:var(--ink);color:var(--on-accent);flex-wrap:wrap}
+    .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
+    .tb a{color:var(--bdr);text-decoration:none;font-size:12px}
+    .wrap{max-width:1000px;margin:16px auto 60px;padding:0 14px}
+    .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
+          padding:16px;margin-bottom:14px}
+    .ct{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin:0 0 10px}
+    .mono{font-family:'IBM Plex Mono',monospace}
+    .soft{color:var(--soft)}
+    select,input[type=text],input[type=date],input[type=number],textarea{
+      font-family:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--bdr);
+      border-radius:var(--r);background:var(--surface);color:var(--ink);max-width:100%}
+    .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:var(--r);
+         padding:6px 12px;font-size:13px;font-family:inherit;cursor:pointer;color:var(--ink)}
+    .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+    .btn-sm{padding:3px 9px;font-size:12px}
+    .btn-d{border-color:var(--red);color:var(--red);background:var(--surface)}
+    .msg-error{background:var(--rsoft);color:var(--err-ink);padding:9px 12px;
+               border-radius:var(--r);font-size:13px;margin-bottom:10px}
+
+    .tarea{border:1px solid var(--bdr);border-radius:12px;margin-bottom:14px;
+           overflow:hidden;background:var(--surface)}
+    .tarea-hd{padding:13px 15px;background:var(--bg-sutil);
+              border-bottom:1px solid var(--bdr);display:flex;gap:12px;
+              flex-wrap:wrap;align-items:flex-start;justify-content:space-between}
+    .tarea-id{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600}
+    .tarea-sub{font-size:12px;color:var(--soft);margin-top:3px;line-height:1.5}
+
+    /* La cuenta atras. El dia de cruce es la fecha contra la que se mide todo
+       lo que falta, asi que se lee de un golpe y no leyendo una fecha. */
+    .cuenta{display:inline-block;padding:3px 10px;border-radius:99px;
+            font-size:12px;font-weight:600;white-space:nowrap}
+    .c-lejos{background:var(--ok-bg);color:var(--ok-ink-fuerte)}
+    .c-cerca{background:var(--rsoft);color:var(--err-ink-fuerte)}
+    .c-paso {background:var(--bg-sutil);color:var(--soft)}
+
+    .deducido{font-size:12px;color:var(--soft);padding:9px 15px;
+              border-bottom:1px solid var(--bdr)}
+    .deducido b{color:var(--ink);font-family:'IBM Plex Mono',monospace}
+
+    .aviso{padding:10px 15px;background:var(--rsoft);color:var(--err-ink);
+           font-size:12px;border-bottom:1px solid var(--err-bdr)}
+    .por-confirmar{padding:10px 15px;background:var(--info-bg);color:var(--info-ink);
+                   font-size:12px;border-bottom:1px solid var(--info-bdr);
+                   display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+                   justify-content:space-between}
+
+    table{width:100%;border-collapse:collapse}
+    th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
+       color:var(--soft);padding:7px 12px;border-bottom:1px solid var(--bdr);
+       background:var(--bg-sutil);white-space:nowrap}
+    td{padding:8px 12px;font-size:13px;border-bottom:1px solid var(--bg)}
+
+    .acciones{padding:11px 15px;border-top:1px solid var(--bdr);
+              display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+    .campo{display:flex;flex-direction:column;gap:3px}
+    .campo span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)}
+
+    .historial{padding:9px 15px;border-top:1px dashed var(--bdr);font-size:11px;
+               color:var(--soft);line-height:1.6}
+
+    @media (max-width:700px){
+      .wrap{padding:0 10px}
+      table, thead, tbody, tr, td{display:block;width:100%}
+      thead{display:none}
+      tr{border-bottom:1px solid var(--bdr);padding:7px 0}
+      td{border:none;display:flex;justify-content:space-between;gap:10px;padding:3px 14px}
+      td::before{content:attr(data-etq);font-size:10px;text-transform:uppercase;
+                 letter-spacing:.05em;color:var(--soft);flex:0 0 auto}
+      .acciones{flex-direction:column;align-items:stretch}
+      .campo, .acciones form{width:100%}
+    }
+  </style>
+</head>
+<body>
+
+<div class="tb">
+  <span class="tb-brand">WMS — {% trans "Crossings" %}</span>
+  <a href="{% url 'dashboard' %}">← {% trans "Back to the dashboard" %}</a>
+</div>
+
+<div class="wrap">
+
+  {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
+
+  {% if not es_cliente %}
+  <div class="card">
+    <p class="ct">{% trans "Customer" %}</p>
+    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select name="customer" onchange="this.form.submit()">
+        <option value="">— {% trans "Select a customer" %} —</option>
+        {% for c in clientes %}
+        <option value="{{ c.pk }}" {% if cliente and c.pk == cliente.pk %}selected{% endif %}>
+          {{ c.name }}{% if c.abbreviation %} · {{ c.abbreviation }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <noscript><button class="btn" type="submit">{% trans "Show" %}</button></noscript>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if not cliente %}
+  <div class="card">
+    <p class="soft" style="margin:0">{% trans "Pick a customer to see their crossings." %}</p>
+  </div>
+  {% else %}
+
+  {% for t in tareas %}
+  <div class="tarea">
+    <div class="tarea-hd">
+      <div>
+        <div class="tarea-id">{{ t.custom_id }}</div>
+        {% comment %}
+        Quien la creo se enseña siempre. El dia que alguien reclame que se pidio
+        cruzar, esta linea es la respuesta.
+        {% endcomment %}
+        <div class="tarea-sub">
+          {{ t.creada_por }} · {{ t.created_at|date:"d/m/y H:i" }}<br>
+          {% blocktrans count n=t.renglones.count %}{{ n }} shipment{% plural %}{{ n }} shipments{% endblocktrans %}
+          · {% trans "crosses" %} {{ t.fecha_de_cruce|date:"l j F" }}
+        </div>
+      </div>
+      <div style="text-align:right">
+        {% comment %}
+        Lo que manda no es el avance: es el paso contra el calendario. Por eso
+        arriba va la cuenta atras y no el estado.
+        {% endcomment %}
+        <span class="cuenta {% if t.dias < 0 %}c-paso{% elif t.dias <= 3 %}c-cerca{% else %}c-lejos{% endif %}">
+          {% if t.dias < 0 %}{% trans "already crossed" %}
+          {% elif t.dias == 0 %}{% trans "crosses today" %}
+          {% else %}{% blocktrans count n=t.dias %}{{ n }} day left{% plural %}{{ n }} days left{% endblocktrans %}{% endif %}
+        </span>
+        <div class="tarea-sub">{{ t.get_estado_display }}</div>
+      </div>
+    </div>
+
+    {% if t.espera_confirmacion %}
+    {% comment %}
+    La tarea que la casa creo por telefono. Un toque, no un tramite: es la
+    instruccion telefonica puesta por escrito, y convierte un "yo te dije otra
+    cosa" en algo que se puede mirar.
+    {% endcomment %}
+    <div class="por-confirmar">
+      <span>{% trans "This is what we understood over the phone. Is it right?" %}</span>
+      {% if es_cliente %}
+      <form method="post" action="{% url 'cruce_confirmar' t.pk %}" style="margin:0">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-p" type="submit">{% trans "Yes, that is it" %}</button>
+      </form>
+      {% else %}
+      <span class="soft">{% trans "waiting for the customer" %}</span>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if t.patente %}
+    <div class="deducido">
+      {% comment %}
+      Ni la aduana ni el agente se eligen: los dos viajan dentro del numero de
+      pedimento. Aqui son informacion, no un control.
+      {% endcomment %}
+      {% trans "Read from the pedimento numbers" %} ·
+      {% trans "Customs" %} <b>{{ t.aduana }}</b> ·
+      {% trans "Broker license" %} <b>{{ t.patente }}</b>
+    </div>
+    {% endif %}
+
+    {% if t.sin_factura %}
+    {% comment %}
+    Sin tarea, la factura que falta es un renglon incomodo. Con tarea hay un
+    camion un dia concreto, y por eso lleva cuenta atras.
+    {% endcomment %}
+    <div class="aviso">
+      {% blocktrans count n=t.sin_factura|length %}{{ n }} commercial invoice missing{% plural %}{{ n }} commercial invoices missing{% endblocktrans %}
+      {% if t.dias >= 0 %} · {% trans "crosses" %} {{ t.fecha_de_cruce|date:"l j" }}{% if t.dias > 0 %} · {% blocktrans count n=t.dias %}{{ n }} day left{% plural %}{{ n }} days left{% endblocktrans %}{% endif %}{% endif %}
+      —
+      {% for op in t.sin_factura %}<span class="mono">{{ op.custom_id }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+
+    <table>
+      <thead>
+        <tr>
+          <th>{% trans "Entry" %}</th>
+          <th>{% trans "PO / Order" %}</th>
+          <th>{% trans "Bundles" %}</th>
+          <th>{% trans "Pedimento" %}</th>
+          <th>{% trans "Added" %}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in t.renglones.all %}
+        <tr>
+          <td data-etq="{% trans "Entry" %}" class="mono">{{ r.operation.custom_id }}</td>
+          <td data-etq="{% trans "PO / Order" %}"><strong>{{ r.operation.po_order|default:"—" }}</strong></td>
+          <td data-etq="{% trans "Bundles" %}">{{ r.operation.bundle_qty|default:"—" }}</td>
+          <td data-etq="{% trans "Pedimento" %}" class="mono">{{ r.operation.pedimento|default:"—" }}</td>
+          <td data-etq="{% trans "Added" %}" class="soft" style="font-size:11px">
+            {{ r.added_by.username|default:"—" }} · {{ r.added_at|date:"d/m H:i" }}
+            {% if r.motivo %}<br>{{ r.motivo }}{% endif %}
+          </td>
+          <td data-etq="">
+            <form method="post" action="{% url 'cruce_sacar' t.pk %}" style="margin:0;display:flex;gap:6px">
+              {% csrf_token %}
+              <input type="hidden" name="renglon" value="{{ r.pk }}">
+              {% if t.estado != 'ABIERTA' %}
+              <input type="text" name="motivo" placeholder="{% trans "Why?" %}" required style="width:130px">
+              {% endif %}
+              <button class="btn btn-sm" type="submit">{% trans "Take out" %}</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="soft">{% trans "Nothing in this crossing yet." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if t.libres %}
+    <div class="acciones">
+      <form method="post" action="{% url 'cruce_meter' t.pk %}"
+            style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        {% csrf_token %}
+        <label class="campo">
+          <span>{% trans "Add a shipment" %}</span>
+          <select name="operation">
+            {% for op in t.libres %}
+            <option value="{{ op.pk }}">
+              {{ op.custom_id }}{% if op.po_order %} · {{ op.po_order }}{% endif %}
+              {% if op.bundle_qty %} — {{ op.bundle_qty }} {% trans "bundles" %}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+        {% if t.estado != 'ABIERTA' %}
+        <label class="campo">
+          <span>{% trans "Why?" %}</span>
+          <input type="text" name="motivo" required>
+        </label>
+        {% endif %}
+        <button class="btn btn-sm btn-p" type="submit">+ {% trans "Add" %}</button>
+      </form>
+    </div>
+    {% endif %}
+
+    <div class="acciones">
+      {% comment %}
+      El dia se puede cambiar, que era lo importante. El motivo sale de una
+      lista corta: en tres meses eso deja contestar "por que se nos mueven
+      tanto los cruces" con numeros en vez de con recuerdos.
+      {% endcomment %}
+      <form method="post" action="{% url 'cruce_cambiar_dia' t.pk %}"
+            style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        {% csrf_token %}
+        <label class="campo">
+          <span>{% trans "Move the crossing day to" %}</span>
+          <input type="date" name="fecha_de_cruce" value="{{ t.fecha_de_cruce|date:'Y-m-d' }}">
+        </label>
+        <label class="campo">
+          <span>{% trans "Why?" %}</span>
+          <select name="motivo">
+            {% for valor, etiqueta in motivos %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button class="btn btn-sm" type="submit">{% trans "Move it" %}</button>
+      </form>
+
+      {% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
+      <form method="post" action="{% url 'cruce_cancelar' t.pk %}" style="margin:0">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-d" type="submit">{% trans "Cancel this crossing" %}</button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% if t.cambios_de_dia.all %}
+    <div class="historial">
+      {% trans "The day moved:" %}
+      {% for c in t.cambios_de_dia.all %}
+      {{ c.fecha_anterior|date:"d/m" }} → {{ c.fecha_nueva|date:"d/m" }}
+      ({{ c.get_motivo_display }}{% if c.created_by %}, {{ c.created_by.username }}{% endif %}){% if not forloop.last %} · {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% empty %}
+  <div class="card">
+    <p class="soft" style="margin:0">{% trans "No crossings for this customer yet." %}</p>
+  </div>
+  {% endfor %}
+
+  <div class="card">
+    <p class="ct">{% trans "New crossing" %}</p>
+    <form method="post" action="{% url 'cruce_crear' %}"
+          style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      {% csrf_token %}
+      <input type="hidden" name="customer" value="{{ cliente.pk }}">
+      <label class="campo">
+        {% comment %}
+        El dia se elige libremente en un calendario, no entre dias fijos.
+        {% endcomment %}
+        <span>{% trans "Crossing day" %}</span>
+        <input type="date" name="fecha_de_cruce" required>
+      </label>
+      <button class="btn btn-p" type="submit">{% trans "Create the crossing" %}</button>
+    </form>
+    {% if not es_cliente %}
+    <p class="soft" style="font-size:11px;margin:8px 0 0">
+      {% trans "Created on their behalf: the customer will be asked to confirm it." %}
+    </p>
+    {% endif %}
+  </div>
+
+  {% endif %}
+</div>
+
+</body>
+</html>

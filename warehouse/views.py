@@ -29,7 +29,8 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
                      Conversation, ConversationRead, Message,
                      Warehouse, Location, Pedimento, PedimentoBundle,
                      PedimentoDocument, ParametrosDeImpuestos,
-                     RenglonDeImpuestos,
+                     RenglonDeImpuestos, CrossingTask, CrossingTaskItem,
+                     CambioDeDiaDeCruce,
                      LADO_TENANT, LADO_CLIENTE)
 from .utils import (generate_pdf_report, generate_label_pdf, generar_pdf_factura,
                     nombre_corto)
@@ -5158,10 +5159,25 @@ def impuestos_panel(request):
                      .select_related('operation', 'carrier', 'customer', 'tenant')
                      .order_by('-created_at'))
 
+    # Las tareas de cruce vivas del cliente, para el boton de "anadir a un
+    # cruce" que va en cada renglon. Se piden una vez y no una por renglon.
+    cruces_abiertos = list(CrossingTask.objects
+                           .filter(tenant=tenant, customer=cliente,
+                                   estado__in=(CrossingTask.ABIERTA,
+                                               CrossingTask.CON_ORDEN))
+                           .order_by('fecha_de_cruce'))
+    ya_en_cruce = {i.operation_id: i.task for i in
+                   CrossingTaskItem.objects
+                   .filter(task__tenant=tenant, task__customer=cliente)
+                   .exclude(task__estado=CrossingTask.CANCELADA)
+                   .select_related('task')}
+
     total = Decimal('0')
     sin_factura = 0
     esperando = 0
     for r in renglones:
+        r.cruce = ya_en_cruce.get(r.operation_id) if r.operation_id else None
+        r.cruces_posibles = [] if r.cruce else cruces_abiertos
         r.cuenta = r.calcular(parametros) if r.valor_mercancia else None
         r.estimado = r.impuesto_estimado
         if r.estimado:
@@ -5275,3 +5291,264 @@ def renglon_crear(request):
         eta=parse_date_or_none(request.POST.get('eta')),
         updated_by=request.user)
     return redirect(f"{reverse('impuestos_panel')}?customer={cliente.pk}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  LAS TAREAS DE CRUCE
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# La tarea junta lo que ya esta listo y lo mete en un camion un dia concreto.
+# Se puede armar incompleta -- con embarques sin pedimento y con la factura sin
+# llegar -- porque no bloquea nada por estarlo: lo que hace es enseñar una
+# cuenta atras y meter esa falta en la hoja de impuestos, que es donde el
+# cliente la lee todos los dias.
+
+
+def _cruce_del_tenant(request, pk):
+    """La tarea `pk` si es de esta empresa, y si quien mira puede verla."""
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    tarea = get_object_or_404(CrossingTask, pk=pk, tenant=tenant)
+    if profile.is_customer() and \
+       tarea.customer_id != getattr(profile.customer, 'pk', None):
+        raise Http404
+    return tarea
+
+
+def _contexto_de_cruces(request, cliente_pk=None, error=None):
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+
+    clientes = Catalog.objects.filter(
+        tenant=tenant, category='CUSTOMER', active=True).order_by('name')
+    if profile.is_customer():
+        clientes = clientes.filter(pk=getattr(profile.customer, 'pk', None))
+        cliente = clientes.first()
+    else:
+        pedido = cliente_pk if cliente_pk is not None else request.GET.get('customer')
+        cliente = clientes.filter(pk=pedido).first() if pedido else None
+
+    contexto = {
+        'clientes': clientes,
+        'cliente': cliente,
+        'profile': profile,
+        'es_cliente': profile.is_customer(),
+        'motivos': CambioDeDiaDeCruce.MOTIVOS,
+        'error': error,
+        'hoy': timezone.localdate(),
+    }
+    if cliente is None:
+        return contexto
+
+    tareas = list(CrossingTask.objects
+                  .filter(tenant=tenant, customer=cliente)
+                  .exclude(estado=CrossingTask.CANCELADA)
+                  .prefetch_related('renglones__operation',
+                                    'cambios_de_dia')
+                  .order_by('fecha_de_cruce'))
+
+    # Los embarques que se pueden meter: los del cliente que estan en bodega y
+    # no van ya en otra tarea viva. Un embarque no puede ir en dos camiones.
+    ya_comprometidos = set(CrossingTaskItem.objects
+                           .filter(task__tenant=tenant, task__customer=cliente)
+                           .exclude(task__estado=CrossingTask.CANCELADA)
+                           .values_list('operation_id', flat=True))
+    libres = [op for op in WarehouseOperation.objects
+              .filter(tenant=tenant, customer=cliente, operation_type='ENTRY')
+              .select_related('bundle_type', 'shipper')
+              .order_by('-date', '-created_at')
+              if op.status != 'Released Goods' and op.pk not in ya_comprometidos]
+
+    for tarea in tareas:
+        tarea.sin_factura = tarea.operaciones_sin_factura
+        tarea.dias = tarea.dias_para_el_cruce
+        tarea.libres = libres
+
+    contexto.update({'tareas': tareas, 'libres': libres})
+    return contexto
+
+
+@login_required
+def cruces_panel(request):
+    """Las tareas de cruce de un cliente."""
+    return render(request, 'warehouse/cruces.html',
+                  _contexto_de_cruces(request))
+
+
+def _cruces_con_error(request, cliente_pk, mensaje):
+    return render(request, 'warehouse/cruces.html',
+                  _contexto_de_cruces(request, cliente_pk, str(mensaje)),
+                  status=422)
+
+
+@login_required
+@require_POST
+def cruce_crear(request):
+    """
+    Una tarea nueva. La crean los dos: el cliente y la casa en su nombre.
+
+    Lo correcto es que la cree el cliente, pero no falta quien llama por
+    telefono. La tarea guarda quien la creo y lo enseña siempre, porque el dia
+    que alguien reclame que se pidio cruzar, esa linea es la respuesta.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+
+    if profile.is_customer():
+        cliente = get_object_or_404(Catalog, pk=getattr(profile.customer, 'pk', None),
+                                    tenant=tenant, category='CUSTOMER')
+        origen = CrossingTask.LA_CREO_EL_CLIENTE
+    else:
+        cliente = get_object_or_404(Catalog, pk=request.POST.get('customer'),
+                                    tenant=tenant, category='CUSTOMER')
+        origen = CrossingTask.LA_CREO_LA_CASA
+
+    dia = parse_date_or_none(request.POST.get('fecha_de_cruce'))
+    if not dia:
+        return _cruces_con_error(request, cliente.pk,
+                                 _('Pick the crossing day.'))
+
+    CrossingTask.objects.create(
+        tenant=tenant, customer=cliente, fecha_de_cruce=dia, origen=origen,
+        # Cuando la crea el cliente no hay nada que confirmar: la instruccion
+        # es suya.
+        confirmada_por_el_cliente=(origen == CrossingTask.LA_CREO_EL_CLIENTE),
+        confirmada_en=(timezone.now()
+                       if origen == CrossingTask.LA_CREO_EL_CLIENTE else None),
+        created_by=request.user)
+    return redirect(f"{reverse('cruces_panel')}?customer={cliente.pk}")
+
+
+@login_required
+@require_POST
+def cruce_confirmar(request, pk):
+    """
+    El cliente confirma una tarea que la casa creo por telefono.
+
+    Un toque, no un tramite: es la instruccion telefonica puesta por escrito, y
+    convierte un "yo te dije otra cosa" en algo que se puede mirar.
+    """
+    tarea = _cruce_del_tenant(request, pk)
+    if not tarea.confirmada_por_el_cliente:
+        tarea.confirmada_por_el_cliente = True
+        tarea.confirmada_en = timezone.now()
+        tarea.save(update_fields=['confirmada_por_el_cliente', 'confirmada_en',
+                                  'updated_at'])
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+
+@login_required
+@require_POST
+def cruce_meter(request, pk):
+    """
+    Meter un embarque en la tarea.
+
+    Aqui salta el candado del agente aduanal, y salta temprano: una tarea con
+    dos patentes no podria subirse entera a ningun camion y habria que
+    partirla. Avisar al meter el embarque cuesta un mensaje; avisar al armar el
+    cruce cuesta descargar un camion.
+    """
+    tenant = get_tenant_or_404(request)
+    tarea  = _cruce_del_tenant(request, pk)
+
+    op = get_object_or_404(WarehouseOperation, pk=request.POST.get('operation'),
+                           tenant=tenant, customer=tarea.customer)
+
+    if CrossingTaskItem.objects.filter(
+            task__tenant=tenant, operation=op).exclude(
+            task__estado=CrossingTask.CANCELADA).exists():
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('%(op)s is already in another crossing.') % {'op': op.custom_id})
+
+    choca = tarea.choque_al_meter(op)
+    if choca:
+        return _cruces_con_error(request, tarea.customer_id, choca['mensaje'])
+
+    # A partir de que hay una orden de carga emitida, meter o sacar pide
+    # motivo: el camion ya se esta preparando con una lista, y cambiarla sin
+    # decir por que es lo que hace que bodega y oficina dejen de cuadrar.
+    motivo = (request.POST.get('motivo') or '').strip()
+    if tarea.estado != CrossingTask.ABIERTA and not motivo:
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('The load order is already out: say why this shipment goes in.'))
+
+    CrossingTaskItem.objects.create(
+        task=tarea, operation=op, added_by=request.user, motivo=motivo,
+        desde=(request.POST.get('desde') or CrossingTaskItem.DESDE_LA_TAREA))
+
+    volver = request.POST.get('volver')
+    if volver == 'impuestos':
+        return redirect(f"{reverse('impuestos_panel')}?customer={tarea.customer_id}")
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+
+@login_required
+@require_POST
+def cruce_sacar(request, pk):
+    """Sacar un embarque. Vuelve a estar libre para el siguiente cruce."""
+    tarea = _cruce_del_tenant(request, pk)
+    renglon = get_object_or_404(CrossingTaskItem,
+                                pk=request.POST.get('renglon'), task=tarea)
+    motivo = (request.POST.get('motivo') or '').strip()
+    if tarea.estado != CrossingTask.ABIERTA and not motivo:
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('The load order is already out: say why this shipment comes out.'))
+    renglon.delete()
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+
+@login_required
+@require_POST
+def cruce_cambiar_dia(request, pk):
+    """
+    Mover el dia del cruce, con su motivo.
+
+    Se puede cambiar y eso era lo importante: por tipo de cambio, porque quedo
+    mal el transfer, porque no hay sistema en la aduana. El motivo sale de una
+    lista corta, y la lista corta no es burocracia: en tres meses deja
+    contestar "por que se nos mueven tanto los cruces" con numeros en vez de
+    con recuerdos.
+    """
+    tarea = _cruce_del_tenant(request, pk)
+
+    nuevo = parse_date_or_none(request.POST.get('fecha_de_cruce'))
+    motivo = request.POST.get('motivo') or ''
+    if not nuevo:
+        return _cruces_con_error(request, tarea.customer_id,
+                                 _('Pick the new crossing day.'))
+    if motivo not in dict(CambioDeDiaDeCruce.MOTIVOS):
+        return _cruces_con_error(request, tarea.customer_id,
+                                 _('Say why the day is moving.'))
+    if nuevo == tarea.fecha_de_cruce:
+        return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+    CambioDeDiaDeCruce.objects.create(
+        task=tarea, fecha_anterior=tarea.fecha_de_cruce, fecha_nueva=nuevo,
+        motivo=motivo, detalle=(request.POST.get('detalle') or '').strip(),
+        created_by=request.user)
+    tarea.fecha_de_cruce = nuevo
+    tarea.save(update_fields=['fecha_de_cruce', 'updated_at'])
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+
+@login_required
+@require_POST
+def cruce_cancelar(request, pk):
+    """
+    Cancelar una tarea. Sus embarques vuelven a estar libres.
+
+    No se borra: alguien pidio ese cruce y se hablo de el por su numero, asi
+    que el numero tiene que seguir contestando.
+    """
+    profile = get_profile(request.user)
+    tarea = _cruce_del_tenant(request, pk)
+    if tarea.estado not in (CrossingTask.ABIERTA, CrossingTask.CON_ORDEN):
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('This crossing is already on its way; it cannot be cancelled.'))
+    tarea.estado = CrossingTask.CANCELADA
+    tarea.save(update_fields=['estado', 'updated_at'])
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")

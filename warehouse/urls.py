@@ -122,4 +122,13 @@ urlpatterns = [
     path('impuestos/', views.impuestos_panel, name='impuestos_panel'),
     path('impuestos/new/', views.renglon_crear, name='renglon_crear'),
     path('impuestos/<int:pk>/save/', views.renglon_guardar, name='renglon_guardar'),
+
+    # Las tareas de cruce: un camion, un dia, y la mercancia que va dentro.
+    path('cruces/', views.cruces_panel, name='cruces_panel'),
+    path('cruces/new/', views.cruce_crear, name='cruce_crear'),
+    path('cruces/<int:pk>/confirm/', views.cruce_confirmar, name='cruce_confirmar'),
+    path('cruces/<int:pk>/add/', views.cruce_meter, name='cruce_meter'),
+    path('cruces/<int:pk>/remove/', views.cruce_sacar, name='cruce_sacar'),
+    path('cruces/<int:pk>/day/', views.cruce_cambiar_dia, name='cruce_cambiar_dia'),
+    path('cruces/<int:pk>/cancel/', views.cruce_cancelar, name='cruce_cancelar'),
 ]
