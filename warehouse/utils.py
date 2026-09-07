@@ -16,6 +16,8 @@ import os
 
 from django.conf import settings
 
+from . import bultos
+
 logger = logging.getLogger(__name__)
 
 
@@ -99,6 +101,51 @@ def operation_digital_url(operation, path='/'):
     """
     base = tenant_public_url(getattr(operation, 'tenant', None))
     return f"{base}{path}?tab=digital&q={operation.custom_id}"
+
+
+def codigo_de_barras(texto, ancho_mm=48, alto_mm=9):
+    """
+    Un Code 128 con el texto legible debajo.
+
+    Cuesta unas lineas y compra tres cosas: que sirvan las pistolas que ya hay
+    en la bodega sean del tipo que sean, que sirva cualquier lector barato que
+    se compre despues, y que el dia que falle todo alguien pueda leer el numero
+    con los ojos y teclearlo. Esa ultima es la que de verdad importa: un anden
+    a las seis de la manana con una pistola sin bateria no puede quedarse
+    parado.
+
+    Devuelve una tabla con el codigo arriba y el texto debajo. El codigo de
+    ReportLab es un flowable, no una figura, asi que se apila en vez de
+    dibujarse: da igual para el resultado y evita montar un lienzo.
+    """
+    from reportlab.graphics.barcode import code128
+    from reportlab.lib.units import mm
+
+    ancho, alto = ancho_mm * mm, alto_mm * mm
+    codigo = code128.Code128(texto, barHeight=alto, humanReadable=False,
+                             quiet=False)
+    # El ancho de barra se ajusta para que el codigo entre en el sitio que
+    # tiene: un codigo cortado no lo lee ninguna pistola.
+    if codigo.width > ancho:
+        codigo = code128.Code128(
+            texto, barHeight=alto, humanReadable=False, quiet=False,
+            barWidth=codigo.barWidth * (ancho / codigo.width))
+
+    fila = Table(
+        [[codigo],
+         [Paragraph(texto, ParagraphStyle(
+             'codigo_legible', parent=getSampleStyleSheet()['Normal'],
+             fontName='Helvetica', fontSize=7, leading=8,
+             textColor=colors.HexColor('#334155')))]],
+        colWidths=[ancho])
+    fila.setStyle(TableStyle([
+        ('LEFTPADDING',   (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 0),
+        ('TOPPADDING',    (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('ALIGN',         (0, 0), (-1, -1), 'LEFT'),
+    ]))
+    return fila
 
 
 ###agregado 0610262
@@ -657,10 +704,24 @@ def generate_label_pdf(operation):
         # ============================================
         # CONFIGURACIÓN DE ESPACIOS ALREDEDOR DE LA LÍNEA DE CORTE
         # ============================================
-        # ── CÓDIGO QR EN ETIQUETA ─────────────────────────────────────────────
-        # La etiqueta se escanea con el teléfono, así que apunta a /mobile/.
-        qr_url = operation_digital_url(operation, '/mobile/')
+        # ── CÓDIGOS DE LA ETIQUETA ────────────────────────────────────────────
+        # La etiqueta se escanea con el teléfono, así que el QR apunta a
+        # /mobile/. Lo nuevo es el `&b=`: hasta ahora las seis etiquetas de una
+        # entrada de seis pallets decían exactamente lo mismo, así que
+        # pistolear seis veces el mismo pallet daba el mismo resultado que
+        # pistolear los seis. Con el número de bulto dentro, el sistema no solo
+        # sabe que son 19: sabe cuáles 19.
+        qr_url = bultos.url_del_qr(
+            operation_digital_url(operation, '/mobile/'),
+            operation.custom_id, bundle_num)
         qr_image = generate_qr_code(qr_url, size=30)
+
+        # Y debajo, el mismo dato en un código de barras de rayas. No es un
+        # respaldo del QR: es lo que hace que sirvan las pistolas que ya hay en
+        # la bodega. Con ese nombre se venden dos aparatos distintos, y las 1D
+        # no leen un QR — hoy no leerían nada de lo que está pegado.
+        codigo_de_rayas = codigo_de_barras(
+            bultos.codigo(operation.custom_id, bundle_num))
 
         # Fila con footer + QR (reemplaza el footer simple)
         footer_qr_row = Table([
@@ -684,6 +745,7 @@ def generate_label_pdf(operation):
             [tabla_datos],                          # Datos
             [Spacer(1, -0.10*inch)],                # Espacio entre datos y footer
             [footer_qr_row],                        # ← Footer con QR (reemplaza el footer simple)
+            [codigo_de_rayas],                      # ← El mismo dato, en rayas
             [Spacer(1, ESPACIO_ANTES_CORTE)],       # Espacio entre footer y línea de corte
             [cut_line],                             # Línea de corte con tijera
         ], colWidths=[label_width])
