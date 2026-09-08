@@ -223,7 +223,10 @@
         <tr>
           <td data-etq="{% trans "Entry" %}" class="mono">{{ r.operation.custom_id }}</td>
           <td data-etq="{% trans "PO / Order" %}"><strong>{{ r.operation.po_order|default:"—" }}</strong></td>
-          <td data-etq="{% trans "Bundles" %}">{{ r.operation.bundle_qty|default:"—" }}</td>
+          <td data-etq="{% trans "Bundles" %}">
+            {{ r.bultos_que_van }}{% if r.es_parcial %}
+            <span class="soft">{% trans "of" %} {{ r.operation.bundle_qty }}</span>{% endif %}
+          </td>
           <td data-etq="{% trans "Pedimento" %}" class="mono">{{ r.operation.pedimento|default:"—" }}</td>
           <td data-etq="{% trans "Added" %}" class="soft" style="font-size:11px">
             {{ r.added_by.username|default:"—" }} · {{ r.added_at|date:"d/m H:i" }}
@@ -261,6 +264,15 @@
             </option>
             {% endfor %}
           </select>
+        </label>
+        {% comment %}
+        Cuantos bultos van en este cruce. Vacio significa todos, que es el caso
+        normal; el numero se teclea para el caso de los 19 de 20 -- el cliente
+        pide importar solo 19 pallets y el 20 se queda para el siguiente.
+        {% endcomment %}
+        <label class="campo">
+          <span>{% trans "Bundles (blank = all)" %}</span>
+          <input type="number" name="bultos" min="1" style="width:90px" placeholder="—">
         </label>
         {% if t.estado != 'ABIERTA' %}
         <label class="campo">
@@ -313,6 +325,20 @@
     no deberia tener.
     {% endcomment %}
     <div class="papeles">
+      {% comment %}
+      La lista de preparacion, que sale desde el minuto uno y no ampara nada.
+      Es lo que bodega usa para bajar y armar el embarque, que es justo lo que
+      hoy hace con la orden de carga adelantada.
+      {% endcomment %}
+      <div class="papel">
+        <h4>{% trans "Picking list" %}</h4>
+        <div class="soft" style="font-size:11px;margin-bottom:6px">
+          {% trans "It does not cover goods. Print it whenever you need it." %}
+        </div>
+        <a class="btn btn-sm" href="{% url 'lista_de_preparacion_pdf' t.pk %}"
+           target="_blank">↓ {% trans "Print" %}</a>
+      </div>
+
       <div class="papel">
         <h4>{% trans "Load order" %}</h4>
         {% if t.orden %}
@@ -326,8 +352,10 @@
             <br>{% blocktrans count n=t.orden.version %}version {{ n }}{% plural %}version {{ n }} — the earlier ones are obsolete{% endblocktrans %}
             {% endif %}
           </div>
+          <a class="btn btn-sm" style="margin-top:8px;display:inline-block"
+             href="{% url 'orden_de_carga_pdf' t.pk %}" target="_blank">↓ {% trans "Print" %}</a>
           {% if not es_cliente %}
-          <form method="post" action="{% url 'orden_emitir' t.pk %}" style="margin-top:8px">
+          <form method="post" action="{% url 'orden_emitir' t.pk %}" style="margin-top:6px">
             {% csrf_token %}
             <button class="btn btn-sm" type="submit">{% trans "Re-issue (new version)" %}</button>
           </form>
@@ -376,6 +404,8 @@
             <br><span class="mal">{% trans "ISSUED WITH A DIFFERENCE" %}</span>
             {% endif %}
           </div>
+          <a class="btn btn-sm" style="margin-top:8px;display:inline-block"
+             href="{% url 'remision_pdf' t.remision.pk %}" target="_blank">↓ {% trans "Print" %}</a>
         {% elif not t.orden %}
           <div class="soft" style="font-size:12px">{% trans "needs a load order first" %}</div>
         {% elif not es_cliente %}

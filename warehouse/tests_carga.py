@@ -278,7 +278,10 @@ class NadaSeCargaSinPistolearTests(BaseDeCarga):
         self.pistolear(self.op, 1)
         cuadre = self.orden.cuadre()
         self.assertFalse(cuadre['cuadra'])
-        self.assertEqual(cuadre['faltan'], ['ED260901-0001-2'])
+        # Se cuenta por operacion y no por bulto concreto: con un embarque
+        # parcial la orden dice cuantos van, no cuales, y el que se queda es
+        # sencillamente el que no se pistoleo.
+        self.assertEqual(cuadre['faltan'], ['ED260901-0001: 1 missing'])
 
     def test_sobra_uno(self):
         # Mercancia que se iba a ir sin amparar.
@@ -407,9 +410,9 @@ class LaRemisionTests(BaseDeCarga):
         self.assertEqual(rem.autorizada_por, self.jefa)
         self.assertEqual(rem.bultos_verificados, 1)
         self.assertEqual(rem.bultos_de_la_orden, 2)
-        # La diferencia exacta va escrita, para que salga impresa en el papel
-        # que lleva el chofer.
-        self.assertIn('ED260901-0001-2', rem.diferencia)
+        # La diferencia va escrita, para que salga impresa en el papel que
+        # lleva el chofer.
+        self.assertEqual(rem.diferencia, 'ED260901-0001: 1 missing')
 
     def test_si_la_tarea_cambia_la_remision_se_vuelve_a_bloquear(self):
         # Una remision pertenece a la version con la que se emitio, igual que
@@ -467,3 +470,213 @@ class LaPantallaDeEscaneoTests(BaseDeCarga):
                                             fecha_de_cruce=timezone.localdate())
         respuesta = self.client.get('/cruces/%d/verify/' % ajena.pk)
         self.assertEqual(respuesta.status_code, 404)
+
+
+class LosDiecinueveDeVeinteTests(BaseDeCarga):
+    """
+    El cliente pide importar solo 19 pallets y el numero 20 se queda.
+
+    Sin poder decirlo, la unica salida seria sacar la operacion entera de la
+    tarea -- que es falso, porque 19 de esos pallets si van -- y la orden de
+    carga no podria decir "3 de 5", que es como se ve en el papel.
+
+    Y el que se queda es sencillamente el que no se pistoleo: ese dato lo tiene
+    la bodega en la mano sin apuntarlo en ningun lado.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.op = self.operacion('ED260901-0010', 5)
+        # Solo tres bultos van a pedimento; los otros dos se quedan.
+        ped = Pedimento.objects.create(
+            tenant=self.tenant, customer=self.cliente, orden=1,
+            ped_aduana='24', ped_patente='1515', ped_consecutivo='6005000',
+            estado=Pedimento.PAGADO)
+        PedimentoBundle.objects.create(pedimento=ped, operation=self.op,
+                                       bultos=3)
+
+    def test_con_la_operacion_entera_la_orden_no_se_puede_emitir(self):
+        CrossingTaskItem.objects.create(task=self.tarea, operation=self.op)
+        faltan = [str(f) for f in LoadOrder.faltantes_para_emitir(self.tarea)]
+        self.assertTrue(any('ED260901-0010' in f for f in faltan), faltan)
+
+    def test_diciendo_que_van_tres_si(self):
+        CrossingTaskItem.objects.create(task=self.tarea, operation=self.op,
+                                        bultos=3)
+        self.assertEqual(LoadOrder.faltantes_para_emitir(self.tarea), [])
+
+    def test_la_orden_dice_tres_de_cinco(self):
+        CrossingTaskItem.objects.create(task=self.tarea, operation=self.op,
+                                        bultos=3)
+        orden = self.emitir()
+        renglon = orden.renglones.get()
+        self.assertEqual(renglon.bultos, 3)
+        self.assertEqual(orden.total_bultos, 3)
+
+    def test_el_escaneo_espera_tres_y_no_cinco(self):
+        CrossingTaskItem.objects.create(task=self.tarea, operation=self.op,
+                                        bultos=3)
+        orden = self.emitir()
+        for n in (1, 2, 4):          # los que se subieron, sean cuales sean
+            self.pistolear(self.op, n)
+        cuadre = orden.cuadre()
+        self.assertEqual(cuadre['esperados'], 3)
+        self.assertTrue(cuadre['cuadra'])
+
+    def test_pistolear_uno_de_mas_no_cuadra(self):
+        CrossingTaskItem.objects.create(task=self.tarea, operation=self.op,
+                                        bultos=3)
+        orden = self.emitir()
+        for n in (1, 2, 3, 4):
+            self.pistolear(self.op, n)
+        cuadre = orden.cuadre()
+        self.assertFalse(cuadre['cuadra'])
+        self.assertTrue(any('more than the order says' in s
+                            for s in cuadre['sobran']), cuadre['sobran'])
+
+    def test_un_numero_de_bulto_que_esa_operacion_no_tiene(self):
+        # Mercancia que se iba a ir sin amparar, o una etiqueta equivocada.
+        CrossingTaskItem.objects.create(task=self.tarea, operation=self.op,
+                                        bultos=3)
+        orden = self.emitir()
+        self.pistolear(self.op, 9)
+        self.assertIn('ED260901-0010-9', orden.cuadre()['sobran'])
+
+    def test_no_se_pueden_meter_mas_bultos_de_los_que_hay(self):
+        respuesta = self.client.post('/cruces/%d/add/' % self.tarea.pk,
+                                     {'operation': self.op.pk, 'bultos': '9'})
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertFalse(self.tarea.renglones.exists())
+
+
+class LosTresPapelesTests(BaseDeCarga):
+    """
+    Que los tres salen y que dicen lo que tienen que decir.
+
+    No se comprueba como se ven -- eso se mira imprimiendolos --, sino que cada
+    papel lleva lo que lo hace util: la banda de la lista de preparacion, el
+    aviso del QR en la orden, y la diferencia en rojo de la remision cuando
+    sale con una.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.op = self.tarea_lista()
+        self.orden = self.emitir()
+
+    def textos(self, datos):
+        """Los textos dibujados dentro del PDF, para poder buscarlos."""
+        import re
+        from warehouse import papeles
+        original = papeles._documento
+
+        def sin_comprimir(buffer, titulo):
+            doc = original(buffer, titulo)
+            doc.pageCompression = 0
+            return doc
+
+        papeles._documento = sin_comprimir
+        try:
+            crudo = datos()
+        finally:
+            papeles._documento = original
+        dibujado = re.compile(rb"\((?:[^()\\]|\\.)*\)\s*(?:Tj|TJ)")
+        trozos = []
+        for m in dibujado.finditer(crudo):
+            texto = m.group(0)
+            trozos.append(texto[texto.index(b'(') + 1:texto.rindex(b')')]
+                          .decode('latin-1'))
+        return ' '.join(trozos)
+
+    def test_la_lista_de_preparacion_dice_que_no_ampara_nada(self):
+        from warehouse import papeles
+        texto = self.textos(lambda: papeles.lista_de_preparacion(self.tarea))
+        self.assertIn('NOT A SHIPPING DOCUMENT', texto)
+        self.assertIn('It may have changed', texto)
+        self.assertIn(self.tarea.custom_id, texto)
+        # No lleva firmas ni totales aduanales.
+        self.assertNotIn('TOTALS', texto)
+
+    def test_la_orden_lleva_su_version_y_el_aviso_del_qr(self):
+        from warehouse import papeles
+        texto = self.textos(lambda: papeles.orden_de_carga(self.orden))
+        self.assertIn(self.orden.custom_id, texto)
+        self.assertIn('SCAN THIS CODE BEFORE PICKING', texto)
+        self.assertIn('TOTALS', texto)
+        self.assertIn(self.op.custom_id, texto)
+
+    def test_la_orden_ensena_el_pedimento_de_cada_renglon(self):
+        # Salia vacio porque leia el campo suelto de la operacion en vez del
+        # reparto por bultos, que es de donde sale desde que el pedimento es
+        # una entidad.
+        self.assertEqual(self.orden.renglones.get().pedimento,
+                         '24-1515-6005000')
+
+    def test_la_remision_dice_quien_conto_la_carga(self):
+        from warehouse import papeles
+        self.pistolear(self.op, 1)
+        self.pistolear(self.op, 2)
+        self.client.post('/cruces/%d/remision/' % self.tarea.pk,
+                         {'transfer_empresa': 'Transfers Rio Bravo',
+                          'transfer_chofer': 'Ramon Escobedo'})
+        rem = Remision.objects.get()
+        texto = self.textos(lambda: papeles.remision(rem))
+        self.assertIn(rem.custom_id, texto)
+        self.assertIn('Transfers Rio Bravo', texto)
+        # Los tres bloques de la cadena de custodia.
+        self.assertIn('TRANSFER CROSSING THE MERCHANDISE', texto)
+        self.assertIn('HAND OVER AT THE MEXICAN BORDER TO', texto)
+        self.assertIn('FINAL CONSIGNEE', texto)
+        # Y la frase que mas valor tiene del documento.
+        self.assertIn('verified one by one with a scanner', texto)
+        self.assertIn('Autotransportes del Bravo', texto)
+
+    def test_la_remision_con_diferencia_lo_grita(self):
+        # Va impreso en el papel que lleva el chofer, no escondido en una
+        # pantalla: si la excepcion no se ve, deja de ser una excepcion.
+        from warehouse import papeles
+        self.pistolear(self.op, 1)
+        self.client.post('/cruces/%d/remision/' % self.tarea.pk,
+                         {'transfer_empresa': 'X',
+                          'motivo': 'el cliente pidio dejar una caja'})
+        rem = Remision.objects.get()
+        texto = self.textos(lambda: papeles.remision(rem))
+        self.assertIn('ISSUED WITH A DIFFERENCE', texto)
+        self.assertIn('1 missing', texto)
+        self.assertIn('dejar una caja', texto)
+
+    def test_los_tres_se_sirven_por_su_url(self):
+        respuesta = self.client.get('/cruces/%d/picking.pdf' % self.tarea.pk)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta['Content-Type'], 'application/pdf')
+        self.assertTrue(respuesta.content.startswith(b'%PDF'))
+
+        respuesta = self.client.get('/cruces/%d/order.pdf' % self.tarea.pk)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(respuesta.content.startswith(b'%PDF'))
+
+    def test_se_puede_pedir_una_version_anterior_de_la_orden(self):
+        # Cuando alguien llama con una hoja vieja en la mano, lo que hace falta
+        # es mirar exactamente esa hoja.
+        otra = self.operacion('ED260901-0011', 1)
+        self.con_pedimento(otra, consecutivo='6005009')
+        self.client.post('/cruces/%d/add/' % self.tarea.pk,
+                         {'operation': otra.pk, 'motivo': 'x'})
+        respuesta = self.client.get('/cruces/%d/order.pdf?v=1' % self.tarea.pk)
+        self.assertEqual(respuesta.status_code, 200)
+
+    def test_sin_orden_no_hay_pdf_de_orden(self):
+        otra_tarea = CrossingTask.objects.create(
+            tenant=self.tenant, customer=self.cliente,
+            fecha_de_cruce=timezone.localdate())
+        respuesta = self.client.get('/cruces/%d/order.pdf' % otra_tarea.pk)
+        self.assertEqual(respuesta.status_code, 404)
+
+    def test_la_lista_de_preparacion_sale_desde_el_minuto_uno(self):
+        # Sin orden de carga y sin pedimentos pagados: es justo para lo que
+        # existe.
+        vacia = CrossingTask.objects.create(
+            tenant=self.tenant, customer=self.cliente,
+            fecha_de_cruce=timezone.localdate())
+        respuesta = self.client.get('/cruces/%d/picking.pdf' % vacia.pk)
+        self.assertEqual(respuesta.status_code, 200)

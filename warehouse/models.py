@@ -2926,6 +2926,19 @@ class CrossingTaskItem(models.Model):
                                   related_name='cruces')
     desde     = models.CharField(max_length=12, choices=ORIGENES,
                                  default=DESDE_LA_TAREA)
+
+    # Cuantos bultos de este embarque van en **este** cruce. Vacio significa
+    # todos, que es el caso normal y el que no hay que teclear.
+    #
+    # Existe por el caso de los 19 de 20: el cliente pide importar solo 19
+    # pallets y el numero 20 se queda en bodega para el siguiente cruce. Sin
+    # esto, la unica salida seria sacar la operacion entera de la tarea, que es
+    # falso -- 19 de esos pallets si van --, y la orden de carga no podria
+    # decir "3 de 5", que es como se ve en el papel.
+    bultos    = models.PositiveIntegerField(
+                    null=True, blank=True,
+                    verbose_name='Bultos que van en este cruce',
+                    help_text='Vacio = todos')
     # A partir de que hay una orden de carga emitida, meter o sacar pide
     # motivo. Antes no: la tarea todavia se esta armando.
     motivo    = models.TextField(blank=True, default='')
@@ -2940,6 +2953,16 @@ class CrossingTaskItem(models.Model):
         # Un embarque no puede ir en dos cruces a la vez ni dos veces en el
         # mismo. Lo primero lo comprueba la vista; esto cierra lo segundo.
         unique_together = [('task', 'operation')]
+
+    @property
+    def bultos_que_van(self):
+        """Los bultos que cruzan, con el numero completo si van todos."""
+        return self.bultos if self.bultos is not None else (
+            self.operation.bundle_qty or 0)
+
+    @property
+    def es_parcial(self):
+        return self.bultos_que_van < (self.operation.bundle_qty or 0)
 
     def __str__(self):
         return f'{self.operation.custom_id} en {self.task.custom_id}'
@@ -3103,7 +3126,10 @@ class LoadOrder(models.Model):
         for renglon in task.renglones.select_related('operation'):
             op = renglon.operation
             dentro = sum(e.bultos for e in op.renglones_de_pedimento.all())
-            if (op.bundle_qty or 0) - dentro > 0:
+            # Se comparan los que **cruzan**, no los que llegaron: en el caso
+            # de los 19 de 20, el pallet que se queda en bodega no necesita
+            # pedimento para este cruce.
+            if renglon.bultos_que_van - dentro > 0:
                 sueltos.append(op.custom_id)
         if sueltos:
             faltan.append(_('These shipments still have bundles without a '
@@ -3118,46 +3144,66 @@ class LoadOrder(models.Model):
         """
         Que dice el escaneo contra lo que dice esta orden.
 
-        Devuelve un diccionario con las tres cosas que pueden salir mal --
-        falta, sobra y repetido -- y con lo que va bien. `sobra` es el caso
-        grave: mercancia que se va sin amparar, y que aparece en la aduana.
+        Se compara **por operacion y por cuenta**, no bulto a bulto, porque un
+        embarque puede ir parcial: cuando van 3 de 5, la orden dice cuantos van
+        pero no cuales, y el pallet que se queda es sencillamente el que no se
+        pistoleo. Ese dato lo tiene la bodega en la mano sin apuntarlo en
+        ningun lado.
 
-        La condicion para la remision no es "ya se pistoleo todo": es que lo
-        escaneado sea **exactamente** lo que dice la orden vigente, ni mas ni
-        menos.
+        Lo que si se rechaza es un bulto que no pertenece a la orden -- de otra
+        operacion, o un numero que esa operacion no tiene --, que es el caso
+        grave: mercancia que se iba a ir sin amparar y que aparece en la
+        aduana.
+
+        Devuelve las tres cosas que pueden salir mal y lo que va bien.
         """
         from . import bultos as _bultos
 
         fase = fase or EscaneoDeBulto.CARGA
-        esperados = {}
+        # Lo que espera la orden: cuantos bultos de cada operacion, y cuantos
+        # tiene esa operacion en total -- para saber que numeros son suyos.
+        esperados, total_de = {}, {}
         for renglon in self.renglones.select_related('operation'):
-            for n in range(1, (renglon.bultos or 0) + 1):
-                esperados[(renglon.operation.custom_id, n)] = renglon
+            clave = renglon.operation.custom_id
+            esperados[clave] = esperados.get(clave, 0) + (renglon.bultos or 0)
+            total_de[clave] = renglon.operation.bundle_qty or renglon.bultos or 0
 
-        escaneados = {}
-        repetidos = []
+        escaneados, repetidos = {}, []
         for e in (self.task.escaneos.filter(fase=fase)
                   .select_related('operation').order_by('created_at')):
-            clave = (e.operation.custom_id, e.numero_de_bulto)
-            if clave in escaneados:
-                repetidos.append(e)
+            clave = e.operation.custom_id
+            vistos = escaneados.setdefault(clave, set())
+            if e.numero_de_bulto in vistos:
+                repetidos.append(_bultos.codigo(clave, e.numero_de_bulto))
             else:
-                escaneados[clave] = e
+                vistos.add(e.numero_de_bulto)
 
-        faltan = [_bultos.codigo(op, n) for (op, n) in esperados
-                  if (op, n) not in escaneados]
-        sobran = [_bultos.codigo(op, n) for (op, n) in escaneados
-                  if (op, n) not in esperados]
-        dentro = [k for k in escaneados if k in esperados]
+        faltan, sobran, verificados = [], [], 0
+        for clave, cuantos in esperados.items():
+            vistos = escaneados.get(clave, set())
+            # Los que no son de esta operacion: un numero que no existe.
+            buenos = {n for n in vistos if 1 <= n <= (total_de[clave] or 0)}
+            sobran += [_bultos.codigo(clave, n) for n in sorted(vistos - buenos)]
+            verificados += min(len(buenos), cuantos)
+            if len(buenos) < cuantos:
+                faltan.append(_('%(op)s: %(n)d missing')
+                              % {'op': clave, 'n': cuantos - len(buenos)})
+            elif len(buenos) > cuantos:
+                sobran.append(_('%(op)s: %(n)d more than the order says')
+                              % {'op': clave, 'n': len(buenos) - cuantos})
+
+        # Y lo pistoleado de operaciones que no van en esta orden.
+        for clave, vistos in escaneados.items():
+            if clave not in esperados:
+                sobran += [_bultos.codigo(clave, n) for n in sorted(vistos)]
 
         return {
-            'esperados':  len(esperados),
-            'verificados': len(dentro),
-            'faltan':     sorted(faltan),
-            'sobran':     sorted(sobran),
-            'repetidos':  [_bultos.codigo(e.operation.custom_id,
-                                          e.numero_de_bulto) for e in repetidos],
-            'cuadra':     (not faltan and not sobran and bool(esperados)),
+            'esperados':   sum(esperados.values()),
+            'verificados': verificados,
+            'faltan':      [str(f) for f in faltan],
+            'sobran':      [str(x) for x in sobran],
+            'repetidos':   repetidos,
+            'cuadra':      (not faltan and not sobran and bool(esperados)),
         }
 
     @property

@@ -142,4 +142,11 @@ urlpatterns = [
     # Lo que contesta el QR del pie de una hoja impresa.
     path('orden/<int:pk>/v<int:version>/', views.orden_vigencia,
          name='orden_vigencia'),
+
+    # Los tres papeles.
+    path('cruces/<int:pk>/picking.pdf', views.lista_de_preparacion_pdf,
+         name='lista_de_preparacion_pdf'),
+    path('cruces/<int:pk>/order.pdf', views.orden_de_carga_pdf,
+         name='orden_de_carga_pdf'),
+    path('remision/<int:pk>.pdf', views.remision_pdf, name='remision_pdf'),
 ]

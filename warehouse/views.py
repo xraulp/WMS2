@@ -36,7 +36,7 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
 from .utils import (generate_pdf_report, generate_label_pdf, generar_pdf_factura,
                     nombre_corto)
 from .almacen import url_firmada
-from . import notifications, pedimentos, impuestos, bultos
+from . import notifications, pedimentos, impuestos, bultos, papeles
 
 logger = logging.getLogger(__name__)
 
@@ -5495,8 +5495,21 @@ def cruce_meter(request, pk):
             request, tarea.customer_id,
             _('The load order is already out: say why this shipment goes in.'))
 
+    # Cuantos bultos van en este cruce. Vacio significa todos, que es el caso
+    # normal; el numero se teclea para el caso de los 19 de 20.
+    try:
+        cuantos = int(request.POST.get('bultos') or 0)
+    except (TypeError, ValueError):
+        cuantos = 0
+    tope = op.bundle_qty or 0
+    if cuantos and tope and cuantos > tope:
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('%(op)s only has %(n)d bundles.') % {'op': op.custom_id, 'n': tope})
+
     CrossingTaskItem.objects.create(
         task=tarea, operation=op, added_by=request.user, motivo=motivo,
+        bultos=(cuantos or None),
         desde=(request.POST.get('desde') or CrossingTaskItem.DESDE_LA_TAREA))
     _versionar_orden(tarea, request.user)
 
@@ -5617,7 +5630,7 @@ def _renglones_de_la_orden(orden, task):
         LoadOrderItem.objects.create(
             order=orden, operation=op,
             po_order=(op.po_order or '').strip(),
-            bultos=op.bundle_qty or 0,
+            bultos=renglon.bultos_que_van,
             bundle_type=op.get_bundle_type_display_name() or '',
             weight_lbs=op.weight_lbs, weight_kgs=op.weight_kgs,
             ubicacion=(op.location.code if op.location else ''),
@@ -5867,16 +5880,15 @@ def remision_emitir(request, pk):
 
     diferencia = ''
     if con_discrepancia:
-        partes = []
-        if cuadre['faltan']:
-            partes.append(_('missing %(n)d: %(cuales)s')
-                          % {'n': len(cuadre['faltan']),
-                             'cuales': ', '.join(cuadre['faltan'][:8])})
+        # El cuadre ya devuelve cada linea escrita -- "ED260901-0001: faltan 2"
+        # --, asi que aqui solo se juntan. Es lo que va a salir impreso en el
+        # papel que lleva el chofer, y tiene que leerse de un vistazo en un
+        # patio fiscal.
+        partes = list(cuadre['faltan'])
         if cuadre['sobran']:
-            partes.append(_('unlisted %(n)d: %(cuales)s')
-                          % {'n': len(cuadre['sobran']),
-                             'cuales': ', '.join(cuadre['sobran'][:8])})
-        diferencia = ' · '.join(str(p) for p in partes)
+            partes.append(str(_('not on the order: %(cuales)s')
+                              % {'cuales': ', '.join(cuadre['sobran'][:8])}))
+        diferencia = ' · '.join(partes)
 
     ultimo = tarea.escaneos.filter(fase=EscaneoDeBulto.CARGA).order_by(
         '-created_at').first()
@@ -5910,3 +5922,53 @@ def remision_emitir(request, pk):
     tarea.estado = CrossingTask.CARGADA
     tarea.save(update_fields=['estado', 'updated_at'])
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+
+# ── Los tres papeles ─────────────────────────────────────────────────────────
+
+def _pdf(datos, nombre):
+    resp = HttpResponse(datos, content_type='application/pdf')
+    # `inline` y no `attachment`: esto se abre para imprimirlo, y bajar un
+    # archivo para tener que abrirlo despues es un paso de mas en un anden.
+    resp['Content-Disposition'] = f'inline; filename="{nombre}"'
+    return resp
+
+
+@login_required
+@require_GET
+def lista_de_preparacion_pdf(request, pk):
+    """El papel con el que bodega baja y arma el embarque. Lo saca cualquiera."""
+    tarea = _cruce_del_tenant(request, pk)
+    return _pdf(papeles.lista_de_preparacion(tarea, request.user),
+                f'preparacion-{tarea.custom_id}.pdf')
+
+
+@login_required
+@require_GET
+def orden_de_carga_pdf(request, pk):
+    """
+    La orden de carga vigente, o la version que se pida.
+
+    Se puede pedir una version anterior a proposito: cuando alguien llama con
+    una hoja vieja en la mano, lo que hace falta es mirar exactamente esa hoja.
+    """
+    tarea = _cruce_del_tenant(request, pk)
+    version = request.GET.get('v')
+    orden = (tarea.ordenes.filter(version=version).first() if version
+             else tarea.ordenes.order_by('-version').first())
+    if orden is None:
+        raise Http404('La tarea no tiene orden de carga')
+    return _pdf(papeles.orden_de_carga(orden, request.user),
+                f'{orden.custom_id}-v{orden.version}.pdf')
+
+
+@login_required
+@require_GET
+def remision_pdf(request, pk):
+    """La remision, para el chofer."""
+    tenant = get_tenant_or_404(request)
+    rem = get_object_or_404(Remision, pk=pk, task__tenant=tenant)
+    profile = get_profile(request.user)
+    if profile.is_customer() and        rem.task.customer_id != getattr(profile.customer, 'pk', None):
+        raise Http404
+    return _pdf(papeles.remision(rem, request.user), f'{rem.custom_id}.pdf')
