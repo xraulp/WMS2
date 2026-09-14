@@ -36,6 +36,7 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
 from .utils import (generate_pdf_report, generate_label_pdf, generar_pdf_factura,
                     nombre_corto)
 from .almacen import url_firmada
+from .context_processors import es_telefono
 from . import notifications, pedimentos, impuestos, bultos, papeles
 
 logger = logging.getLogger(__name__)
@@ -137,7 +138,7 @@ def customer_can_access_op(user, op):
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
 
-def _destino_tras_entrar(user):
+def _destino_tras_entrar(user, request=None):
     """
     A donde va cada quien al entrar.
 
@@ -149,21 +150,26 @@ def _destino_tras_entrar(user):
     tiene_empresa = UserProfile.objects.filter(user=user, tenant__isnull=False).exists()
     if not tiene_empresa and platform_role(user):
         return 'platform_dashboard'
+    # Quien entra desde un telefono va al movil: es la pantalla con la
+    # barra de abajo, y en el tablero la salida se queda fuera de la
+    # pantalla.
+    if request is not None and es_telefono(request):
+        return 'mobile_dashboard'
     return 'dashboard'
 
 
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect(_destino_tras_entrar(request.user))
+        return redirect(_destino_tras_entrar(request.user, request))
     if request.method == 'POST':
         user = authenticate(request,
                             username=request.POST.get('username'),
                             password=request.POST.get('password'))
         if user:
             login(request, user)
-            destino = _destino_tras_entrar(user)
+            destino = _destino_tras_entrar(user, request)
             if request.headers.get('HX-Request'):
-                url = '/platform/' if destino == 'platform_dashboard' else '/dashboard/'
+                url = reverse(destino)
                 return HttpResponse(headers={'HX-Redirect': url})
             return redirect(destino)
         if request.headers.get('HX-Request'):
@@ -256,6 +262,17 @@ def inicio_panel(request):
 ####3.1. dashboard
 @login_required
 def dashboard(request):
+    # El telefono tiene su pantalla. Sin esto, quien abria /dashboard/ desde
+    # el telefono caia en el tablero: sin la barra de abajo y con la salida
+    # fuera de la pantalla. `?vista=escritorio` es la puerta para quien
+    # quiera el tablero de todos modos, y se recuerda durante la sesion.
+    if request.GET.get('vista') == 'escritorio':
+        request.session['vista'] = 'escritorio'
+    elif es_telefono(request):
+        destino = reverse('mobile_dashboard')
+        if request.GET:
+            destino += '?' + request.GET.urlencode()
+        return redirect(destino)
     tenant = get_tenant_or_404(request) #### 072526 12:40 Paso 3: Modificar las vistas de listado (filtro por tenant)
     profile = get_profile(request.user)
 
@@ -587,7 +604,30 @@ def operation_create(request):
     # Si la factura llego antes que la mercancia ya hay un renglon suelto con
     # ese pedido: se enlaza en vez de crear uno nuevo, para no partir en dos la
     # historia del mismo embarque.
-    enlazar_renglon_de_impuestos(op, request.user)
+    # El valor de mercancia se teclea en el mismo formulario, asi que la
+    # entrada puede nacer con su estimado hecho en vez de con un renglon vacio
+    # que hay que volver a abrir. Se admite una suma -- `500+700`, para el
+    # embarque con dos facturas -- y se guarda la cuenta, no solo el total.
+    #
+    # Un valor mal escrito no tumba la captura: la operacion ya esta guardada y
+    # el renglon existe igual. Se queda sin valor y se teclea despues, que es
+    # lo mismo que pasa cuando todavia no se sabe.
+    expresion_del_valor = (p.get('valor_mercancia') or '').strip()
+    valor_del_embarque = None
+    if expresion_del_valor:
+        try:
+            valor_del_embarque = impuestos.resolver_expresion(expresion_del_valor)
+        except impuestos.ExpresionInvalida:
+            expresion_del_valor = ''
+
+    # El check de «ya tenemos la factura». Se manda solo cuando el formulario
+    # lo lleva: asi una pantalla que no lo tenga no borra la marca.
+    factura_en_mano = (bool(p.get('tiene_factura'))
+                       if 'factura_present' in p else None)
+
+    enlazar_renglon_de_impuestos(op, request.user, valor=valor_del_embarque,
+                                 expresion=expresion_del_valor,
+                                 tiene_factura=factura_en_mano)
 
     def guess_type(name):
         ext = name.rsplit('.',1)[-1].lower() if '.' in name else ''
@@ -641,9 +681,25 @@ def operation_create(request):
     ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
         'customer','shipper','carrier','bundle_type')
     ops = customer_ops_filter(request.user, ops)[:200]
+    # Las lineas a mano de este cliente que siguen sin entrada. Si el renglon
+    # de esta operacion se engancho con una de ellas, no hay nada que avisar:
+    # el enlace ya ocurrio. Si no, y quedan sueltas, se enseñan -- puede que
+    # una sea este mismo embarque con el pedido escrito de otra forma.
+    lineas_sueltas = []
+    if op.operation_type == 'ENTRY' and op.customer_id:
+        enganchada = RenglonDeImpuestos.objects.filter(operation=op).exists()
+        if enganchada:
+            lineas_sueltas = list(
+                RenglonDeImpuestos.objects
+                .filter(tenant=tenant, customer=op.customer,
+                        operation__isnull=True, en_la_hoja=True)
+                .exclude(po_order='')
+                .order_by('-created_at')[:5])
+
     respuesta = render(request, 'warehouse/partials/operation_success.html', {
         'operation': op, 'operations': ops,
         'email_sent': email_sent, 'email_error': email_error,
+        'lineas_sueltas': lineas_sueltas,
         'has_whatsapp': bool(notifications.whatsapp_number(notifications.resolve_customer(op))),
     })
     # Una entrada nueva puede nacer ya vencida --se captura con fecha de hace un
@@ -2737,6 +2793,9 @@ def debug_catalog(request):
 
 @login_required
 def mobile_dashboard(request):
+    # La vuelta al movil desde el enlace de la cuenta del tablero.
+    if request.GET.get('vista') == 'movil':
+        request.session['vista'] = 'movil'
     tenant = get_tenant_or_404(request)
     profile = get_profile(request.user)
     ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
@@ -2911,6 +2970,45 @@ def operation_edit(request, pk):
             op.warehouse, op.location = ubicacion_del_post(p, tenant, op.operation_type)
             op.save()
 
+            # El valor de mercancia no vive en la operacion sino en su renglon
+            # de la hoja de impuestos, asi que se guarda alli. Se admite una
+            # suma -- `500+700`, para el embarque con dos facturas -- y se
+            # guarda la cuenta y no solo el total.
+            #
+            # Solo se toca si el formulario lo mando: hay pantallas de edicion
+            # que no lo llevan, y ausencia no es borrado. Una cadena vacia si
+            # es borrado, que es como se quita un valor puesto por error.
+            if 'valor_mercancia' in p or 'factura_present' in p:
+                renglon = RenglonDeImpuestos.objects.filter(operation=op).first()
+                if renglon is None:
+                    renglon = enlazar_renglon_de_impuestos(op, request.user)
+                if renglon is not None and 'factura_present' in p:
+                    # El check de «ya tenemos la factura». No sustituye al
+                    # archivo: si el expediente ya lo tiene, el archivo manda y
+                    # esto no cambia nada.
+                    renglon.factura_manual = bool(p.get('tiene_factura'))
+                    renglon.save(update_fields=['factura_manual', 'updated_at'])
+                if renglon is not None and 'valor_mercancia' in p:
+                    expresion = (p.get('valor_mercancia') or '').strip()
+                    try:
+                        valor = (impuestos.resolver_expresion(expresion)
+                                 if expresion else None)
+                    except impuestos.ExpresionInvalida:
+                        return HttpResponse(format_html(
+                            '<div class="msg-error">&#10007; {}</div>',
+                            _('"%(x)s" is not a sum. Type a number, or an '
+                              'addition like 500+700.') % {'x': expresion[:40]}),
+                            status=422)
+                    # Si el valor cambia se guarda el anterior: en tres meses
+                    # eso dice cuanto se despegan las proformas de la factura.
+                    if (valor is not None and renglon.valor_mercancia is not None
+                            and valor != renglon.valor_mercancia):
+                        renglon.valor_anterior = renglon.valor_mercancia
+                    renglon.valor_expresion = expresion
+                    renglon.valor_mercancia = valor
+                    renglon.updated_by = request.user
+                    renglon.save()
+
         if request.headers.get('HX-Request'):
             return HttpResponse(
                 '<script>'
@@ -2933,6 +3031,11 @@ def operation_edit(request, pk):
                 '}'
                 '</script>'
             )
+
+    # El valor de mercancia sale del renglon de la hoja de impuestos, que es
+    # donde vive. Solo se ofrece cuando hay renglon que tocar -- entradas con
+    # cliente --: en una salida no habria donde guardarlo.
+    renglon_de_impuestos = RenglonDeImpuestos.objects.filter(operation=op).first()
 
     edit_fields = [
         ('Date',             'date',             str(op.date)),
@@ -2963,6 +3066,16 @@ def operation_edit(request, pk):
         # cero de mas entra por la puerta de atras.
         ('PEDIMENTO',        '__pedimento__',    ''),
     ]
+    if op.operation_type == 'ENTRY' and op.customer_id:
+        edit_fields.insert(
+            7, (_('Goods value USD'), 'valor_mercancia',
+                renglon_de_impuestos.valor_expresion if renglon_de_impuestos else ''))
+        # El check va como marcador, igual que el pedimento: la plantilla lo
+        # reconoce por el nombre y pinta una casilla en vez de un campo.
+        edit_fields.insert(
+            8, (_('Invoice received'), '__factura__',
+                bool(renglon_de_impuestos.tiene_factura)
+                if renglon_de_impuestos else False))
     contexto = {
         'operation': op, 'edit_fields': edit_fields,
         'tipos_de_operacion': WarehouseOperation.TYPE_CHOICES,
@@ -4892,12 +5005,14 @@ def operacion_marcar_factura(request, pk):
     """
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
-    if profile.is_customer():
-        raise Http404
 
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
+    if profile.is_customer() and not customer_can_access_op(request.user, op):
+        raise Http404
+
     doc_id = request.POST.get('documento')
     volver = request.POST.get('customer') or (op.customer_id or '')
+    desde_la_hoja = request.POST.get('desde') == 'impuestos'
 
     # Una operacion tiene una factura comercial, no varias: marcar otra
     # sustituye a la anterior en vez de dejar dos candidatas.
@@ -4908,22 +5023,47 @@ def operacion_marcar_factura(request, pk):
         doc = get_object_or_404(OperationDocument, pk=doc_id, operation=op)
         doc.ranura = OperationDocument.RANURA_FACTURA_COMERCIAL
         doc.save(update_fields=['ranura'])
+
+    if desde_la_hoja or profile.is_customer():
+        if doc_id:
+            request.session['aviso_de_impuestos'] = str(
+                _('Invoice of %(id)s marked.') % {'id': op.custom_id})
+        return redirect(f"{reverse('impuestos_panel')}?customer={volver}")
     return redirect(f"{reverse('pedimentos_panel')}?customer={volver}")
 
 
 @login_required
 @require_POST
 def operacion_subir_factura(request, pk):
-    """Subir la factura comercial de un embarque desde esta pantalla."""
+    """
+    Subir la factura comercial de un embarque.
+
+    La sube tambien el cliente, y es lo normal: la factura es suya, se la manda
+    su proveedor, y el sitio donde lee que falta -- el NO de su hoja -- tiene
+    que ser el sitio donde la sube. Lo unico que se le acota es a cuales: solo
+    los embarques que ya puede ver.
+
+    Se vuelve a la pantalla desde la que se subio. Antes se terminaba siempre
+    en la de pedimentos, que un cliente ni siquiera abre.
+    """
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
-    if profile.is_customer():
-        raise Http404
 
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
+    if profile.is_customer() and not customer_can_access_op(request.user, op):
+        raise Http404
+
     volver = request.POST.get('customer') or (op.customer_id or '')
+    # De donde vino. La hoja de impuestos lo dice; la de pedimentos no manda
+    # nada y se queda con su comportamiento de siempre.
+    desde_la_hoja = request.POST.get('desde') == 'impuestos'
+    a_la_hoja = f"{reverse('impuestos_panel')}?customer={volver}"
+
     archivo = request.FILES.get('archivo')
     if not archivo:
+        if desde_la_hoja or profile.is_customer():
+            request.session['error_de_impuestos'] = str(_('Pick a file first.'))
+            return redirect(a_la_hoja)
         return _panel_con_error(request, volver, _('Pick a file first.'))
 
     op.documents.filter(
@@ -4934,6 +5074,11 @@ def operacion_subir_factura(request, pk):
         file_type=_guess_type(archivo.name), original_name=archivo.name,
         uploaded_by=request.user,
         ranura=OperationDocument.RANURA_FACTURA_COMERCIAL)
+
+    if desde_la_hoja or profile.is_customer():
+        request.session['aviso_de_impuestos'] = str(
+            _('Invoice of %(id)s uploaded.') % {'id': op.custom_id})
+        return redirect(a_la_hoja)
     return redirect(f"{reverse('pedimentos_panel')}?customer={volver}")
 
 
@@ -5096,7 +5241,8 @@ def pedimento_zip(request, pk):
 # De toda la tabla, la unica columna que se teclea es la del valor.
 
 
-def enlazar_renglon_de_impuestos(op, usuario=None):
+def enlazar_renglon_de_impuestos(op, usuario=None, valor=None,
+                                 expresion='', tiene_factura=None):
     """
     El renglon de la hoja que le toca a esta operacion.
 
@@ -5122,16 +5268,44 @@ def enlazar_renglon_de_impuestos(op, usuario=None):
     if suelto:
         suelto.operation = op
         suelto.updated_by = usuario
-        suelto.save(update_fields=['operation', 'updated_by', 'updated_at'])
+        campos = ['operation', 'updated_by', 'updated_at']
+        # El valor tecleado al capturar manda sobre el que trajera el renglon
+        # suelto: el de la entrada se escribio con el papel del embarque
+        # delante, y el suelto era una previsión.
+        if valor is not None:
+            suelto.valor_expresion = expresion or str(valor)
+            suelto.valor_mercancia = valor
+            campos += ['valor_expresion', 'valor_mercancia']
+        if tiene_factura is not None:
+            suelto.factura_manual = tiene_factura
+            campos.append('factura_manual')
+        suelto.save(update_fields=campos)
         return suelto
     return RenglonDeImpuestos.objects.create(
         tenant=op.tenant, customer=op.customer, operation=op,
-        po_order=pedido, updated_by=usuario)
+        po_order=pedido, updated_by=usuario,
+        valor_expresion=(expresion or '') if valor is not None else '',
+        valor_mercancia=valor,
+        factura_manual=tiene_factura)
 
 
 @login_required
 def impuestos_panel(request):
-    """La hoja de un cliente: sus embarques abiertos y lo que va a pagar."""
+    """
+    La hoja del cliente: sus embarques y lo que va a pagar por ellos.
+
+    Es la hoja que se lleva meses mandando por correo, columna por columna y en
+    su orden, y no se reorganiza: el cliente lleva meses leyendola asi. Lo que
+    cambia no es la forma, es de donde salen los datos -- el status, las
+    fechas, la entrada, el pedido y el pedimento ya estan en el sistema por
+    haber hecho el trabajo.
+
+    Aqui **no** viven los calculos. El valor de mercancia, los fletes, los
+    incrementables, la tasa de IGI, el DTA, el IVA y el colchon del tipo de
+    cambio son cosa del tenant y del agente aduanal, y tienen su pantalla
+    aparte. En esta sale el impuesto aproximado y nada mas, que es la cifra por
+    la que el cliente llama.
+    """
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
 
@@ -5144,42 +5318,45 @@ def impuestos_panel(request):
         pedido = request.GET.get('customer')
         cliente = clientes.filter(pk=pedido).first() if pedido else None
 
+    # Quien puede abrir la pantalla de los calculos. El cliente arma su hoja
+    # -- agrega embarques, quita renglones, sube facturas y mueve el tipo de
+    # cambio para ver que pasaria -- pero no ve de que se compone la cifra.
+    ve_los_calculos = not profile.is_customer()
+
+    # Quien puede tocar la hoja: agregar una linea a mano, quitar renglones y
+    # mandarla por correo. El cliente lee la suya y sube facturas; el resto lo
+    # hace la casa.
+    puede_escribir = not profile.is_customer()
+
     contexto = {
         'clientes': clientes,
         'cliente': cliente,
         'profile': profile,
-        'puede_editar': not profile.is_customer(),
+        've_los_calculos': ve_los_calculos,
+        'puede_escribir': puede_escribir,
+        'ahora': timezone.localtime(),
         'error': request.session.pop('error_de_impuestos', None),
+        'aviso': request.session.pop('aviso_de_impuestos', None),
     }
     if cliente is None:
         return render(request, 'warehouse/impuestos.html', contexto)
 
     parametros = ParametrosDeImpuestos.vigentes(tenant)
     renglones = list(RenglonDeImpuestos.objects
-                     .filter(tenant=tenant, customer=cliente)
+                     .filter(tenant=tenant, customer=cliente, en_la_hoja=True)
                      .select_related('operation', 'carrier', 'customer', 'tenant')
                      .order_by('-created_at'))
-
-    # Las tareas de cruce vivas del cliente, para el boton de "anadir a un
-    # cruce" que va en cada renglon. Se piden una vez y no una por renglon.
-    cruces_abiertos = list(CrossingTask.objects
-                           .filter(tenant=tenant, customer=cliente,
-                                   estado__in=(CrossingTask.ABIERTA,
-                                               CrossingTask.CON_ORDEN))
-                           .order_by('fecha_de_cruce'))
-    ya_en_cruce = {i.operation_id: i.task for i in
-                   CrossingTaskItem.objects
-                   .filter(task__tenant=tenant, task__customer=cliente)
-                   .exclude(task__estado=CrossingTask.CANCELADA)
-                   .select_related('task')}
+    renglones = _cerrar_los_que_ya_terminaron(renglones)
 
     total = Decimal('0')
     sin_factura = 0
     esperando = 0
     for r in renglones:
-        r.cruce = ya_en_cruce.get(r.operation_id) if r.operation_id else None
-        r.cruces_posibles = [] if r.cruce else cruces_abiertos
-        r.cuenta = r.calcular(parametros) if r.valor_mercancia else None
+        # Los archivos que ya tiene el embarque, para poder decir cual de ellos
+        # es la factura sin volver a subirla. Solo se piden cuando falta: si la
+        # factura ya esta, no hay nada que elegir.
+        r.del_expediente = ([] if r.tiene_factura or not r.operation_id
+                            else list(r.operation.documents.all()))
         r.estimado = r.impuesto_estimado
         if r.estimado:
             total += r.estimado
@@ -5197,17 +5374,442 @@ def impuestos_panel(request):
     renglones.sort(key=lambda r: (0 if not r.tiene_factura else 1,
                                   orden.get(r.status, 5)))
 
+    # Lo que se le manda al navegador para contestar "y si el tipo de cambio
+    # fuera otro": dos numeros por renglon y ninguna cifra del desglose.
+    #
+    # El total de un renglon es lineal en el tipo de cambio, asi que se puede
+    # partir en `coeficiente * tc + fijo`. El valor de mercancia, los fletes,
+    # los incrementables y la tasa de IGI se quedan en el servidor: son del
+    # tenant y del agente aduanal, y antes viajaban enteros en el codigo fuente
+    # de una pantalla que se cuida de no enseñarlos. El tipo de cambio de
+    # trabajo tampoco se manda, por lo mismo.
+    #
+    # `fijo` lleva la prevalidacion -- que no depende del tipo de cambio -- y el
+    # salto del redondeo de la casa, que se conserva al simular: si el estimado
+    # que se mando llevaba quinientos pesos de mas, con otro tipo de cambio los
+    # sigue llevando. El redondeo es una decision, no un efecto del cambio.
+    #
+    # Lo ya pagado no entra: su impuesto dejo de ser un estimado el dia que se
+    # pago, y moverlo con el tipo de cambio de una simulacion seria decirle al
+    # cliente que puede ahorrar en algo que ya salio de su cuenta. Se suma
+    # aparte, para que el total simulado siga siendo el total de la hoja.
+    para_simular = []
+    total_fijo = Decimal('0')
+    for r in renglones:
+        if r.status == RenglonDeImpuestos.PAGADO or not r.valor_mercancia:
+            if r.estimado:
+                total_fijo += r.estimado
+            continue
+        cuenta = r.calcular(parametros)
+        salto = ((r.impuesto_reportado - cuenta['T_total_pedimento'])
+                 if r.impuesto_reportado is not None else Decimal('0'))
+        suma_usd = ((r.valor_mercancia or 0) + (r.fletes or 0)
+                    + (r.incrementables or 0))
+        tasa = cuenta['tasa_dta_aplicada'] + (r.tasa_igi or 0)
+        coeficiente = suma_usd * (tasa * (1 + impuestos.TASA_DE_IVA)
+                                  + impuestos.TASA_DE_IVA)
+        para_simular.append({
+            'coef': str(coeficiente),
+            'fijo': str(parametros.prevalidacion + salto),
+        })
+
     contexto.update({
         'renglones': renglones,
         'parametros': parametros,
+        'total': total,
+        'para_simular': para_simular,
+        'total_fijo': total_fijo,
+        'quitados': RenglonDeImpuestos.objects.filter(
+            tenant=tenant, customer=cliente, en_la_hoja=False).count(),
         'resumen': {
             'abiertos':    len(renglones),
             'sin_factura': sin_factura,
             'esperando':   esperando,
-            'total':       total,
         },
     })
     return render(request, 'warehouse/impuestos.html', contexto)
+
+
+@login_required
+@require_POST
+def operaciones_a_impuestos(request):
+    """
+    Los embarques marcados en Operaciones, a la hoja de impuestos.
+
+    Una entrada capturada entra sola a la hoja, asi que esto no es la puerta
+    normal: es para las dos veces que hace falta a mano -- un embarque que se
+    quito de la hoja y hay que devolver, y los que son anteriores a que el
+    calculo existiera.
+
+    Solo entradas: una salida o un trasbordo no pagan pedimento, y meterlos en
+    la hoja seria enseñarle al cliente renglones que nunca van a tener cifra.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        return HttpResponse(msg_error(_('Permission denied.')), status=422)
+
+    pks = [p for p in request.POST.getlist('op_sel') if p.isdigit()]
+    if not pks:
+        return HttpResponse(msg_error(_('No shipments selected.')))
+
+    operaciones = (WarehouseOperation.objects
+                   .filter(pk__in=pks, tenant=tenant)
+                   .select_related('customer'))
+
+    puestos, devueltos, sin_cliente, no_entradas = 0, 0, 0, 0
+    for op in operaciones:
+        if op.operation_type != 'ENTRY':
+            no_entradas += 1
+            continue
+        if not op.customer_id:
+            sin_cliente += 1
+            continue
+        renglon = RenglonDeImpuestos.objects.filter(operation=op).first()
+        if renglon is None:
+            if enlazar_renglon_de_impuestos(op, request.user) is not None:
+                puestos += 1
+            continue
+        if not renglon.en_la_hoja:
+            renglon.en_la_hoja  = True
+            renglon.quitado_en  = None
+            renglon.quitado_por = None
+            renglon.save(update_fields=['en_la_hoja', 'quitado_en',
+                                        'quitado_por', 'updated_at'])
+            devueltos += 1
+
+    partes = []
+    if puestos:
+        partes.append(_('%(n)s added to the sheet') % {'n': puestos})
+    if devueltos:
+        partes.append(_('%(n)s put back') % {'n': devueltos})
+    if no_entradas:
+        partes.append(_('%(n)s skipped: only entries pay duties')
+                      % {'n': no_entradas})
+    if sin_cliente:
+        partes.append(_('%(n)s skipped: no customer') % {'n': sin_cliente})
+    if not partes:
+        return HttpResponse(msg_exito(_('They were already on the sheet.')))
+    return HttpResponse(msg_exito(' · '.join(str(p) for p in partes)))
+
+
+def _cerrar_los_que_ya_terminaron(renglones):
+    """
+    Saca de la hoja los embarques que ya cruzaron y estan pagados.
+
+    Se hace al leer la hoja y no al ocurrir el pago o el cruce porque asi no
+    depende de que alguien pase por la pantalla correcta: cualquiera que abra
+    la hoja la deja al dia, y un renglon que se quedo dentro por un camino que
+    no se contemplo se cierra en cuanto alguien la mira.
+
+    Devuelve los que siguen en la hoja.
+    """
+    ahora = timezone.now()
+    siguen = []
+    cerrados = []
+    for r in renglones:
+        if r.ya_termino:
+            r.en_la_hoja = False
+            r.cerrado_en = ahora
+            cerrados.append(r)
+        else:
+            siguen.append(r)
+    if cerrados:
+        RenglonDeImpuestos.objects.bulk_update(
+            cerrados, ['en_la_hoja', 'cerrado_en'])
+    return siguen
+
+
+def _renglones_de_la_hoja(tenant, cliente):
+    """
+    Los renglones de la hoja de un cliente, en el orden en que se leen.
+
+    Lo usan las tres salidas -- la pantalla, el PDF y el correo --, porque una
+    hoja que se imprime distinta de como se ve no es la misma hoja.
+    """
+    parametros = ParametrosDeImpuestos.vigentes(tenant)
+    renglones = list(RenglonDeImpuestos.objects
+                     .filter(tenant=tenant, customer=cliente, en_la_hoja=True)
+                     .select_related('operation', 'carrier', 'customer', 'tenant')
+                     .order_by('-created_at'))
+    renglones = _cerrar_los_que_ya_terminaron(renglones)
+
+    total = Decimal('0')
+    for r in renglones:
+        r.estimado = r.impuesto_estimado
+        if r.estimado:
+            total += r.estimado
+
+    orden = {RenglonDeImpuestos.NO_HA_LLEGADO: 3, RenglonDeImpuestos.ETA: 3,
+             RenglonDeImpuestos.ELAB_PED: 0, RenglonDeImpuestos.EN_REVISION: 1,
+             RenglonDeImpuestos.LISTO_PAGO: 2, RenglonDeImpuestos.PAGADO: 4}
+    renglones.sort(key=lambda r: (0 if not r.tiene_factura else 1,
+                                  orden.get(r.status, 5)))
+    return renglones, total, parametros
+
+
+def _cliente_de_la_hoja(request, tenant, profile, origen=None):
+    """El cliente cuya hoja se pide, comprobando que quien pide pueda verla."""
+    if profile.is_customer():
+        cliente = getattr(profile, 'customer', None)
+        if cliente is None or cliente.tenant_id != tenant.pk:
+            raise Http404
+        return cliente
+    datos = origen if origen is not None else request.GET
+    cliente = Catalog.objects.filter(pk=datos.get('customer'), tenant=tenant,
+                                     category='CUSTOMER').first()
+    if cliente is None:
+        raise Http404
+    return cliente
+
+
+@login_required
+def impuestos_pdf(request):
+    """
+    La hoja en papel, para imprimirla o guardarla.
+
+    Sale de los mismos renglones que la pantalla y en el mismo orden: una hoja
+    que se imprime distinta de como se ve no sirve para hablar por telefono
+    mirando los dos el mismo papel.
+    """
+    from .utils import generar_pdf_hoja_de_impuestos
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    cliente = _cliente_de_la_hoja(request, tenant, profile)
+
+    renglones, total, parametros = _renglones_de_la_hoja(tenant, cliente)
+    with notifications.en_el_idioma_de(cliente):
+        pdf = generar_pdf_hoja_de_impuestos(tenant, cliente, renglones, total,
+                                            parametros)
+
+    respuesta = HttpResponse(pdf, content_type='application/pdf')
+    nombre = 'impuestos-%s-%s.pdf' % (
+        slugify(cliente.name) or 'cliente',
+        timezone.localdate().strftime('%Y%m%d'))
+    respuesta['Content-Disposition'] = 'attachment; filename="%s"' % nombre
+    return respuesta
+
+
+@login_required
+@require_POST
+def impuestos_email(request):
+    """
+    La hoja al correo del cliente, con el PDF adjunto.
+
+    Es lo que hoy se hace copiando el Excel a un correo. El destinatario se
+    propone del catalogo pero se puede cambiar antes de mandar, porque quien
+    pregunta por los impuestos no siempre es quien recibe los avisos.
+    """
+    from .utils import generar_pdf_hoja_de_impuestos
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    cliente = _cliente_de_la_hoja(request, tenant, profile, origen=request.POST)
+
+    destinos = []
+    for parte in (request.POST.get('para') or '').replace(';', ',').split(','):
+        parte = parte.strip()
+        if parte and parte not in destinos:
+            destinos.append(parte)
+    volver = f"{reverse('impuestos_panel')}?customer={cliente.pk}"
+    if not destinos:
+        request.session['error_de_impuestos'] = str(
+            _('Type at least one address to send it to.'))
+        return redirect(volver)
+
+    renglones, total, parametros = _renglones_de_la_hoja(tenant, cliente)
+    if not renglones:
+        request.session['error_de_impuestos'] = str(
+            _('There is nothing to send: the sheet is empty.'))
+        return redirect(volver)
+
+    # El documento y el correo van en el idioma del cliente, que es quien los
+    # lee, y no en el de quien pulsa el boton.
+    try:
+        with notifications.en_el_idioma_de(cliente):
+            pdf = generar_pdf_hoja_de_impuestos(tenant, cliente, renglones,
+                                                total, parametros)
+            asunto = _('Shipment report and duty estimate') + ' · ' + cliente.name
+            cuerpo = _('Attached is your shipment report with the estimated '
+                       'duties.') + '\n\n'
+            cuerpo += _('Shipments included: %(n)s') % {'n': len(renglones)} + '\n'
+            cuerpo += _('Estimate at working exchange rate %(tc)s. It is not a '
+                        'settlement.') % {'tc': parametros.tipo_de_cambio} + '\n\n'
+            cuerpo += _('Kind regards,') + '\n' + tenant.name
+        correo = EmailMessage(subject=asunto, body=cuerpo, to=destinos,
+                              cc=_get_cc_emails(tenant))
+        correo.attach('impuestos.pdf', pdf, 'application/pdf')
+        correo.send()
+        request.session['aviso_de_impuestos'] = str(
+            _('Sheet sent to %(quien)s.') % {'quien': ', '.join(destinos)})
+    except Exception as e:
+        request.session['error_de_impuestos'] = str(
+            _('Could not send: %(error)s') % {'error': e})
+    return redirect(volver)
+
+
+@login_required
+@require_POST
+def renglon_manual(request):
+    """
+    Una linea tecleada a mano, para el embarque que todavia no ha llegado.
+
+    Los demas renglones entran solos: se captura la entrada y el renglon
+    aparece. Este no puede, porque no hay nada que capturar todavia -- la
+    mercancia viene en camino --, asi que el pedido y el impuesto se escriben
+    aqui. El impuesto va tal cual se teclea y no se calcula: sin factura y sin
+    proforma no hay valor del que sacarlo.
+
+    Cuando la mercancia llegue y se capture la entrada, el renglon se enlaza
+    solo con ella por el numero de pedido y deja de estar suelto.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    cliente = _cliente_de_la_hoja(request, tenant, profile, origen=request.POST)
+
+    pedido = (request.POST.get('po_order') or '').strip()
+    volver = f"{reverse('impuestos_panel')}?customer={cliente.pk}"
+    if not pedido:
+        request.session['error_de_impuestos'] = str(
+            _('The line needs an order number.'))
+        return redirect(volver)
+
+    crudo = (request.POST.get('impuesto') or '').strip()
+    try:
+        impuesto = Decimal(crudo) if crudo else None
+    except InvalidOperation:
+        request.session['error_de_impuestos'] = str(
+            _('"%(x)s" is not an amount.') % {'x': crudo[:20]})
+        return redirect(volver)
+
+    # La factura viene puesta en SI en el formulario: si se esta dando de alta
+    # la linea es porque el cliente ya mando la factura. Aun asi se lee lo que
+    # llega, que para eso es una casilla y no un supuesto.
+    factura = (request.POST.get('factura') or '').strip().lower()
+
+    RenglonDeImpuestos.objects.create(
+        tenant=tenant, customer=cliente,
+        po_order=pedido,
+        status_manual=(request.POST.get('status') or '').strip(),
+        factura_manual=(factura == 'si') if factura else None,
+        pedimento_manual=(request.POST.get('pedimento') or '').strip(),
+        impuesto_reportado=impuesto,
+        updated_by=request.user)
+    return redirect(volver)
+
+
+@login_required
+def renglon_calculo(request, pk):
+    """
+    De que se compone la cifra. La pantalla del tenant y del agente aduanal.
+
+    Aqui esta la cadena entera del Excel -- lo que se teclea arriba y lo que
+    sale abajo -- y el recuadro que mide el colchon del tipo de cambio. El
+    cliente no entra: el colchon es una decision de la casa, y enseñarselo
+    seria enseñarle de cuanto se le esta pidiendo de mas.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+    renglon = get_object_or_404(
+        RenglonDeImpuestos.objects.select_related('operation', 'customer',
+                                                  'tenant'),
+        pk=pk, tenant=tenant)
+
+    parametros = ParametrosDeImpuestos.vigentes(tenant, renglon.fecha_reportado)
+    cuenta = renglon.calcular(parametros) if renglon.valor_mercancia else None
+
+    return render(request, 'warehouse/impuestos_calculo.html', {
+        'renglon': renglon,
+        'cliente': renglon.customer,
+        'profile': profile,
+        'parametros': parametros,
+        'cuenta': cuenta,
+        'error': request.session.pop('error_de_impuestos', None),
+    })
+
+
+@login_required
+@require_POST
+def renglon_quitar(request, pk):
+    """
+    Sacar un renglon de la hoja, que no es borrarlo.
+
+    El embarque sigue en bodega, en operaciones y en su pedimento. Lo unico que
+    pasa es que deja de aparecer en la hoja. Por eso lo puede hacer tambien el
+    cliente: la hoja es suya, y equivocarse ordenandola no puede costar una
+    entrada capturada.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    renglon = get_object_or_404(RenglonDeImpuestos, pk=pk, tenant=tenant)
+    if profile.is_customer() and \
+       renglon.customer_id != getattr(profile.customer, 'pk', None):
+        raise Http404
+
+    renglon.en_la_hoja  = False
+    renglon.quitado_en  = timezone.now()
+    renglon.quitado_por = request.user
+    renglon.save(update_fields=['en_la_hoja', 'quitado_en', 'quitado_por',
+                                'updated_at'])
+    return redirect(f"{reverse('impuestos_panel')}?customer={renglon.customer_id}")
+
+
+@login_required
+@require_POST
+def renglon_devolver(request, pk):
+    """Volver a poner en la hoja un renglon que se habia quitado."""
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    renglon = get_object_or_404(RenglonDeImpuestos, pk=pk, tenant=tenant)
+    if profile.is_customer() and \
+       renglon.customer_id != getattr(profile.customer, 'pk', None):
+        raise Http404
+
+    renglon.en_la_hoja  = True
+    renglon.quitado_en  = None
+    renglon.quitado_por = None
+    # Tambien la marca de cierre: sin esto, el renglon vuelve a la hoja y el
+    # siguiente que la abra lo cierra otra vez, y el boton parece roto.
+    renglon.cerrado_en  = None
+    renglon.save(update_fields=['en_la_hoja', 'quitado_en', 'quitado_por',
+                                'cerrado_en', 'updated_at'])
+    return redirect(f"{reverse('impuestos_panel')}?customer={renglon.customer_id}")
+
+
+@login_required
+def impuestos_quitados(request):
+    """Los renglones que se sacaron de la hoja, para volver a ponerlos."""
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+
+    if profile.is_customer():
+        cliente = getattr(profile, 'customer', None)
+    else:
+        cliente = Catalog.objects.filter(pk=request.GET.get('customer'),
+                                         tenant=tenant,
+                                         category='CUSTOMER').first()
+    if cliente is None:
+        raise Http404
+
+    # Por la fecha en que salieron, sea quien sea quien los sacara: los que
+    # se cerraron solos no tienen `quitado_en`, y ordenar solo por ese campo
+    # los mandaba todos juntos a un extremo de la lista.
+    from django.db.models.functions import Coalesce
+    renglones = (RenglonDeImpuestos.objects
+                 .filter(tenant=tenant, customer=cliente, en_la_hoja=False)
+                 .select_related('operation', 'quitado_por')
+                 .annotate(salio_en=Coalesce('quitado_en', 'cerrado_en'))
+                 .order_by('-salio_en'))
+    return render(request, 'warehouse/impuestos_quitados.html', {
+        'cliente': cliente,
+        'profile': profile,
+        'renglones': renglones,
+    })
 
 
 @login_required
@@ -5266,32 +5868,6 @@ def renglon_guardar(request, pk):
     renglon.updated_by = request.user
     renglon.save()
     return redirect(f"{reverse('impuestos_panel')}?customer={renglon.customer_id}")
-
-
-@login_required
-@require_POST
-def renglon_crear(request):
-    """
-    Un renglon para un embarque que todavia no ha llegado.
-
-    Es el caso de la factura que se adelanta a la mercancia: ya hay algo que
-    reportar -- un pedido, un valor, un ETA -- y no existe ninguna entrada. Al
-    capturarla, el renglon se enlaza solo con ella por el numero de pedido.
-    """
-    tenant  = get_tenant_or_404(request)
-    profile = get_profile(request.user)
-    if profile.is_customer():
-        raise Http404
-
-    cliente = get_object_or_404(Catalog, pk=request.POST.get('customer'),
-                                tenant=tenant, category='CUSTOMER')
-    RenglonDeImpuestos.objects.create(
-        tenant=tenant, customer=cliente,
-        po_order=(request.POST.get('po_order') or '').strip(),
-        guia=(request.POST.get('guia') or '').strip(),
-        eta=parse_date_or_none(request.POST.get('eta')),
-        updated_by=request.user)
-    return redirect(f"{reverse('impuestos_panel')}?customer={cliente.pk}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

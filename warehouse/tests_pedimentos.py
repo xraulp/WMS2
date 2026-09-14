@@ -616,19 +616,40 @@ class ExpedienteDelPedimentoTests(BaseDeAlmacen):
     def test_recien_creado_falta_de_todo(self):
         faltan = [str(f) for f in self.ped.faltantes_para_revision]
         self.assertIn('The pedimento number', faltan)
-        self.assertTrue(any('ED260901-0001' in f for f in faltan))
         self.assertIn('COVE', faltan)
 
-    def test_el_numero_apuntado_no_es_la_factura_cargada(self):
-        # Tener escrito el numero de factura en la operacion no basta: lo que
-        # el cliente compara es el archivo.
-        self.entrada.invoice = 'FAC-993'
-        self.entrada.save()
+    def test_la_factura_no_detiene_la_revision(self):
+        """
+        Sin la factura cargada el pedimento sale igual a revision.
+
+        Pedirla aqui era pedir dos pruebas del mismo hecho: el COVE, que si se
+        exige, es la transmision del valor de esa factura a la Ventanilla Unica
+        y no se puede generar sin tenerla delante.
+        """
         self.poner_numero()
         self.completar_expediente()
-        faltan = [str(f) for f in self.ped.faltantes_para_revision]
-        self.assertTrue(any('ED260901-0001' in f for f in faltan))
-        self.assertFalse(self.ped.puede_enviarse_a_revision)
+        self.assertEqual(self.ped.faltantes_para_revision, [])
+        self.assertTrue(self.ped.puede_enviarse_a_revision)
+
+    def test_pero_se_sigue_sabiendo_cual_falta(self):
+        """
+        Que no detenga no es que se olvide: el archivo hace falta para el
+        expediente, y la pantalla lo enseña para que alguien lo suba.
+        """
+        self.poner_numero()
+        self.completar_expediente()
+        self.assertEqual([op.custom_id for op in self.ped.operaciones_sin_factura],
+                         ['ED260901-0001'])
+        self.poner_factura()
+        self.assertEqual(self.ped.operaciones_sin_factura, [])
+
+    def test_el_numero_apuntado_no_es_la_factura_cargada(self):
+        # Tener escrito el numero de factura en la operacion no basta: para el
+        # expediente lo que cuenta es el archivo.
+        self.entrada.invoice = 'FAC-993'
+        self.entrada.save()
+        self.assertEqual([op.custom_id for op in self.ped.operaciones_sin_factura],
+                         ['ED260901-0001'])
 
     def test_con_todo_puesto_el_boton_se_enciende(self):
         self.poner_numero()

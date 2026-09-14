@@ -1,0 +1,116 @@
+{% load i18n wms_filters %}
+{% comment %}
+La barra de abajo del telefono.
+
+Vivia dentro de `mobile.html`, y pedimentos, cruces e impuestos son pantallas
+aparte: al abrir una la barra desaparecia, y su "volver" llevaba al tablero de
+escritorio, que tampoco la tiene. Por eso "a veces estaba y a veces no". Ahora
+es una sola, y la pintan el movil y esas tres pantallas cuando quien mira esta
+en un telefono.
+
+Las pestanas del movil son enlaces de verdad a `/mobile/?tab=...`. Dentro del
+movil `mobIrA` las cambia sin recargar, como hacian los botones; desde las
+otras pantallas el enlace se sigue y el movil abre en esa pestana.
+
+`activa` marca la de la pantalla en la que se esta: 'pedimentos', 'cruces' o
+'impuestos'. En el movil no hace falta, la marca `mobShowTab`.
+{% endcomment %}
+{% trans "Sign out?" as t_salir %}
+<style>
+body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--bdr);
+            display:flex;z-index:100;box-shadow:0 -2px 12px rgba(0,0,0,.08);overflow-x:auto;
+            padding-bottom:env(safe-area-inset-bottom)}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;
+         background:none;border:none;cursor:pointer;font-family:'IBM Plex Sans','Segoe UI',sans-serif;
+         font-size:10px;font-weight:500;color:var(--faint);transition:color .15s;gap:2px;min-width:55px;
+         text-decoration:none}
+.nav-btn.on{color:var(--accent)}
+.nav-btn .icon{font-size:20px;line-height:1}
+.nav-logout{flex:0 0 50px;display:flex;align-items:center;justify-content:center;background:none;border:none;
+            border-left:1px solid var(--bdr);cursor:pointer;font-size:11px;color:var(--faint);
+            font-family:inherit;padding:8px;text-decoration:none}
+.nav-logout:hover{color:var(--red)}
+</style>
+
+<nav class="bottom-nav" aria-label="{% trans "Main menu" %}">
+  <a class="nav-btn" id="nav-inicio" href="{% url 'mobile_dashboard' %}?tab=inicio"
+     onclick="return mobIrA('inicio')">
+    <span class="icon">🏠</span>{% trans "Home" %}
+  </a>
+  {% if profile|can_see_tab:'form' %}
+  <a class="nav-btn" id="nav-new" href="{% url 'mobile_dashboard' %}?tab=new"
+     onclick="return mobIrA('new')">
+    <span class="icon">📦</span>{% trans "New Op" %}
+  </a>
+  {% endif %}
+  <a class="nav-btn" id="nav-database" href="{% url 'mobile_dashboard' %}?tab=database"
+     onclick="return mobIrA('database')">
+    <span class="icon">🗄️</span>{% trans "Operations" %}
+  </a>
+  {% comment %}
+  Armar pedimentos, los cruces y la hoja de impuestos son pantallas aparte, las
+  mismas que en el tablero. Van en la barra y no escondidas en un menu porque
+  quien reparte bultos lo hace con el telefono en la mano, andando por la bodega.
+  {% endcomment %}
+  <a class="nav-btn{% if activa == 'pedimentos' %} on{% endif %}" href="{% url 'pedimentos_panel' %}">
+    <span class="icon">📄</span>{% trans "Pedimentos" %}
+  </a>
+  <a class="nav-btn{% if activa == 'cruces' %} on{% endif %}" href="{% url 'cruces_panel' %}">
+    <span class="icon">🚛</span>{% trans "Crossings" %}
+  </a>
+  <a class="nav-btn{% if activa == 'impuestos' %} on{% endif %}" href="{% url 'impuestos_panel' %}">
+    <span class="icon">💰</span>{% trans "Duties" %}
+  </a>
+  <a class="nav-btn" id="nav-catalog" href="{% url 'mobile_dashboard' %}?tab=catalog"
+     onclick="return mobIrA('catalog')">
+    <span class="icon">📚</span>{% trans "Catalog" %}
+  </a>
+  <a class="nav-btn" id="nav-digital" href="{% url 'mobile_dashboard' %}?tab=digital"
+     onclick="return mobIrA('digital')">
+    <span class="icon">📁</span>{% trans "Digital" %}
+  </a>
+  {% if not profile.is_customer %}
+  <a class="nav-btn" id="nav-locations" href="{% url 'mobile_dashboard' %}?tab=locations"
+     onclick="return mobIrA('locations')">
+    <span class="icon">🗺</span>{% trans "Locations" %}
+  </a>
+  {% endif %}
+  <a class="nav-btn" id="nav-reports" href="{% url 'mobile_dashboard' %}?tab=reports"
+     onclick="return mobIrA('reports')">
+    <span class="icon">📊</span>{% trans "Reports" %}
+  </a>
+  {% if profile.can_see_deletion_log %}
+  <a class="nav-btn" id="nav-deletions" href="{% url 'mobile_dashboard' %}?tab=deletions"
+     onclick="return mobIrA('deletions')">
+    <span class="icon">🗑</span>{% trans "Trash" %}
+  </a>
+  {% endif %}
+  <a href="{% url 'logout' %}" class="nav-logout" onclick="return mobSalir()"
+     aria-label="{% trans "Sign out" %}">
+    <span style="font-size:20px">🚪</span>
+  </a>
+</nav>
+
+<script>
+// Dentro del movil, cambiar de pestana sin recargar; fuera, dejar que el
+// enlace lleve al movil con la pestana en la direccion.
+function mobIrA(t) {
+  if (typeof mobShowTab === 'function' && document.getElementById('panel-' + t)) {
+    mobShowTab(t);
+    return false;
+  }
+  return true;
+}
+
+function mobSalir() {
+  return confirm('{{ t_salir|escapejs }}');
+}
+
+// La barra no cabe entera y se desplaza de lado: la pestana en la que se esta
+// tiene que quedar a la vista, o parece que no hay ninguna marcada.
+(function () {
+  const activa = document.querySelector('.bottom-nav .nav-btn.on');
+  if (activa) activa.scrollIntoView({inline: 'center', block: 'nearest'});
+})();
+</script>

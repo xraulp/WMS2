@@ -43,7 +43,23 @@ vista.
     <button type="submit" class="btn btn-g btn-sm" style="color:var(--green);border-color:var(--green)">⬆ {% trans "Import" %}</button>
   </form>
   <a href="{% url 'operations_layout' %}" class="btn btn-g btn-sm" style="color:var(--accent);border-color:var(--accent)">⬇ {% trans "Download Layout" %}</a>
+
+  {% comment %}
+  Mandar embarques a la hoja de impuestos. Una entrada capturada entra sola,
+  asi que esto es para las dos veces que hace falta a mano: un embarque que se
+  quito de la hoja y hay que devolver, y los que son anteriores a que el
+  calculo existiera.
+  {% endcomment %}
+  <form hx-post="{% url 'operaciones_a_impuestos' %}" hx-target="#aviso-impuestos"
+        hx-swap="innerHTML" hx-include="[name='op_sel']"
+        style="display:flex;gap:6px;align-items:center;margin-left:auto">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-g btn-sm"
+            style="color:var(--hoja-ink,#8d1a1e);border-color:#b53034">
+      &#8594; {% trans "Add selection to the duty sheet" %}</button>
+  </form>
 </div>
+<div id="aviso-impuestos"></div>
 {% endif %}
 
 {% if operations %}
@@ -101,7 +117,12 @@ vista.
       <tbody>
         {% for op in operations %}
         <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %};">
-          <td style="color:var(--faint); font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">{{ op.pk }}</td>
+          <td style="color:var(--faint); font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">
+            {% if profile and not profile.is_customer %}
+            <input type="checkbox" name="op_sel" value="{{ op.pk }}"
+                   title="{% trans "Select" %}" style="vertical-align:middle">
+            {% endif %}
+            {{ op.pk }}</td>
           <td style="white-space:nowrap; text-align:center;">
             {% comment %}
             El boton existe en todas las filas, oculto mientras no haya hilo, y

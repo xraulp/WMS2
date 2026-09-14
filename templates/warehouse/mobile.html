@@ -50,12 +50,6 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink
 .brand-dot{width:8px;height:8px;background:var(--accent);border-radius:50%}
 .topbar-right{font-size:12px;color:var(--faint)}
 .topbar-right strong{color:var(--on-accent)}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--bdr);display:flex;z-index:100;box-shadow:0 -2px 12px rgba(0,0,0,.08);overflow-x:auto}
-.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;background:none;border:none;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:500;color:var(--faint);transition:color .15s;gap:2px;min-width:55px}
-.nav-btn.on{color:var(--accent)}
-.nav-btn .icon{font-size:20px;line-height:1}
-.nav-logout{flex:0 0 50px;display:flex;align-items:center;justify-content:center;background:none;border:none;border-left:1px solid var(--bdr);cursor:pointer;font-size:11px;color:var(--faint);font-family:inherit;padding:8px}
-.nav-logout:hover{color:var(--red)}
 .pg{padding:14px}
 
 /*
@@ -191,11 +185,9 @@ tbody td:has(button), tbody td:has(.btn-action) {
 <body>
 
 <div class="topbar">
-  <div class="brand"><span class="brand-dot"></span>WMS{% if tenant %} - {{ tenant.name|upper }}{% endif %}</div>
+  <div class="brand"><span class="brand-dot"></span>WMS{% if tenant %} · {{ tenant.sigla }}{% endif %}</div>
   <div class="topbar-right">
-    <strong>{{ request.user.username }}</strong>
-    <span style="font-size:10px;opacity:.7"> [{{ profile.role|upper }}]</span>
-    {% include "warehouse/partials/preferencias.html" %}
+    {% include "warehouse/partials/cuenta.html" with siempre_menu=True vista_alterna='escritorio' %}
   </div>
 </div>
 
@@ -221,8 +213,6 @@ usa el tablero.
 
 <div class="pg">
 
-{% if profile|can_see_tab:'form' %}
-<!-- ══════ NEW OPERATION ══════ -->
 {% comment %}
 Inicio. Las cifras de la empresa, que es lo primero que se ve al entrar.
 
@@ -230,6 +220,11 @@ Se caia directo en el formulario de captura. Para quien captura todo el dia eso
 esta bien, pero deja sin contestar la pregunta con la que se abre la aplicacion
 --que hay pendiente-- y en un telefono recorrer seis pestanas para saberlo
 cuesta mas que en una pantalla grande.
+
+Va fuera del bloque de la captura: lo ve todo el mundo, el cliente tambien.
+Dentro de ese bloque al cliente -- que no captura -- no le llegaba el
+contenedor, htmx no encontraba donde pintar las cifras y las pegaba en el
+<body>, borrando la pantalla entera.
 {% endcomment %}
 <div class="panel on" id="panel-inicio">
   <div class="card">
@@ -240,6 +235,8 @@ cuesta mas que en una pantalla grande.
   </div>
 </div>
 
+{% if profile|can_see_tab:'form' %}
+<!-- ══════ NEW OPERATION ══════ -->
 <div class="panel" id="panel-new">
   <div class="card">
     <div class="card-title">{% trans "New Operation" %}</div>
@@ -341,6 +338,32 @@ cuesta mas que en una pantalla grande.
       <div class="form-row">
         <label>{% trans "PO / Order" %}</label>
         <input type="text" name="po_order" id="mob-po-order" class="form-input" placeholder="{% trans "PO / ORD..." %}">
+      </div>
+
+      {% comment %}
+      El valor de la mercancia, el mismo campo que en el tablero. Aqui importa
+      mas: esta pantalla es la que se usa andando por la bodega, con la factura
+      del embarque en la mano, y es el momento en que el dato esta delante.
+      {% endcomment %}
+      <div class="form-row">
+        <label>{% trans "Goods value USD" %}</label>
+        <input type="text" name="valor_mercancia" id="mob-valor-mercancia"
+               class="form-input" inputmode="decimal"
+               placeholder="{% trans "For the duty estimate. A sum is allowed: 500+700" %}">
+      </div>
+
+      {% comment %}
+      El mismo check que en el tablero. Aqui importa mas: quien captura anda por
+      la bodega con los papeles del embarque en la mano, que es cuando se sabe
+      de verdad si la factura llego.
+      {% endcomment %}
+      <div class="form-row">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="hidden" name="factura_present" value="1">
+          <input type="checkbox" name="tiene_factura" value="1"
+                 id="mob-tiene-factura" style="width:auto;transform:scale(1.3)">
+          {% trans "We already have the commercial invoice" %}
+        </label>
       </div>
 
       {% comment %}
@@ -701,56 +724,7 @@ tiene a mano cuando uno acaba de subir la foto equivocada en el anden.
 
 </div><!-- /pg -->
 
-<!-- BOTTOM NAV — tabs shown based on role (#23) -->
-<div class="bottom-nav">
-  <button class="nav-btn on" id="nav-inicio" onclick="mobShowTab('inicio')">
-    <span class="icon">🏠</span>{% trans "Home" %}
-  </button>
-  {% if profile|can_see_tab:'form' %}
-  <button class="nav-btn" id="nav-new" onclick="mobShowTab('new')">
-    <span class="icon">📦</span>{% trans "New Op" %}
-  </button>
-  {% endif %}
-  <button class="nav-btn" id="nav-database" onclick="mobShowTab('database')">
-    <span class="icon">🗄️</span>{% trans "Operations" %}
-  </button>
-  {% comment %}
-  Armar pedimentos es una pantalla aparte, la misma que en el tablero. Va en la
-  barra de abajo y no escondida en un menu porque quien reparte bultos lo hace
-  con el telefono en la mano, andando por la bodega.
-  {% endcomment %}
-  <a class="nav-btn" href="{% url 'pedimentos_panel' %}" style="text-decoration:none">
-    <span class="icon">📄</span>{% trans "Pedimentos" %}
-  </a>
-  <a class="nav-btn" href="{% url 'cruces_panel' %}" style="text-decoration:none">
-    <span class="icon">🚛</span>{% trans "Crossings" %}
-  </a>
-  <a class="nav-btn" href="{% url 'impuestos_panel' %}" style="text-decoration:none">
-    <span class="icon">💰</span>{% trans "Duties" %}
-  </a>
-  <button class="nav-btn" id="nav-catalog" onclick="mobShowTab('catalog')">
-    <span class="icon">📚</span>{% trans "Catalog" %}
-  </button>
-  <button class="nav-btn" id="nav-digital" onclick="mobShowTab('digital')">
-    <span class="icon">📁</span>{% trans "Digital" %}
-  </button>
-  {% if not profile.is_customer %}
-  <button class="nav-btn" id="nav-locations" onclick="mobShowTab('locations')">
-    <span class="icon">🗺</span>{% trans "Locations" %}
-  </button>
-  {% endif %}
-  <button class="nav-btn" id="nav-reports" onclick="mobShowTab('reports')">
-    <span class="icon">📊</span>{% trans "Reports" %}
-  </button>
-  {% if profile.can_see_deletion_log %}
-  <button class="nav-btn" id="nav-deletions" onclick="mobShowTab('deletions')">
-    <span class="icon">🗑</span>{% trans "Trash" %}
-  </button>
-  {% endif %}
-  <a href="#" class="nav-logout" onclick="confirmLogout(event)">
-    <span style="font-size:20px">🚪</span>
-  </a>
-</div>
+{% include "warehouse/partials/barra_inferior.html" %}
 
 
 {% comment %}
@@ -798,6 +772,15 @@ fetch(MOB_URL.catalogo).then(r=>r.json()).then(d=>{
 // Tab names for all panels
 const MOB_PANELS = ['inicio','new','database','catalog','digital','locations','reports','deletions'];
 
+// Pide un panel y lo pinta en su contenedor, si el contenedor existe.
+// htmx, cuando no encuentra el destino, pega la respuesta en el <body>:
+// asi se borraba la pantalla del cliente, que no tenia el contenedor de
+// Inicio. Un panel que no esta no se pide.
+function mobCargar(url, destino) {
+  if (!document.querySelector(destino)) return;
+  htmx.ajax('GET', url, {target: destino, swap: 'innerHTML'});
+}
+
 function mobShowTab(t) {
   // La pestaña activa, para volver a ella si la pantalla se recarga. Ver
   // `initMobileTab`: es sessionStorage y no localStorage a propósito.
@@ -824,21 +807,19 @@ function mobShowTab(t) {
   // cargar: es justo la pantalla a la que se vuelve despues de capturar algo,
   // y ensenar el numero de antes seria peor que no ensenarlo.
   if (t === 'inicio') {
-    htmx.ajax('GET', '{% url "inicio_panel" %}?movil=1',
-              {target:'#mob-inicio-content', swap:'innerHTML'});
+    mobCargar('{% url "inicio_panel" %}?movil=1', '#mob-inicio-content');
   }
   if (t === 'locations') {
-    htmx.ajax('GET', '{% url "locations_panel" %}?movil=1',
-              {target:'#mob-locations-content', swap:'innerHTML'});
+    mobCargar('{% url "locations_panel" %}?movil=1', '#mob-locations-content');
   }
   if (t === 'reports') {
-    htmx.ajax('GET', '{% url "report_generator" %}', {target:'#report-content', swap:'innerHTML'});
+    mobCargar('{% url "report_generator" %}', '#report-content');
   }
   if (t === 'deletions') {
-    htmx.ajax('GET', '{% url "deletion_log" %}', {target:'#deletions-content', swap:'innerHTML'});
+    mobCargar('{% url "deletion_log" %}', '#deletions-content');
   }
   if (t === 'catalog') {
-    htmx.ajax('GET', '{% url "catalog_list" %}?scope=operational', {target:'#catalog-table', swap:'innerHTML'});
+    mobCargar('{% url "catalog_list" %}?scope=operational', '#catalog-table');
   }
 }
 
@@ -851,6 +832,17 @@ function initMobileTab() {
     if (tabFromUrl === 'digital' && qFromUrl) {
         console.log("Mobile: Viene de QR - no cambiar pestaña");
         return;
+    }
+
+    // Una pestana pedida en la direccion. La usa la barra de abajo de las
+    // pantallas aparte -- pedimentos, cruces, impuestos -- para volver a una
+    // pestana concreta de esta. Se quita de la direccion en seguida, o un F5
+    // devolveria siempre ahi en vez de a donde se estaba.
+    if (tabFromUrl && tabFromUrl !== 'digital' && document.getElementById('nav-' + tabFromUrl)) {
+        sessionStorage.setItem('mobileActiveTab', tabFromUrl);
+        urlParams.delete('tab');
+        const resto = urlParams.toString();
+        history.replaceState(null, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
     }
 
     // Si no viene de QR, la pestaña por defecto es Inicio, para todos.
@@ -1189,17 +1181,8 @@ Los textos que pinta el guion se sacan aqui y pasan por `escapejs`: una
 traduccion con apostrofe dentro de una cadena de JavaScript cierra la comilla y
 deja la pantalla sin funcionar.
 {% endcomment %}
-{% trans "Sign out?" as t_salir %}
 {% trans "Loading..." as t_cargando %}
 {% trans "Could not load" as t_no_cargo %}
-// Confirmar logout antes de salir
-function confirmLogout(event) {
-    event.preventDefault();
-    if (confirm('{{ t_salir|escapejs }}')) {
-        window.location.href = "{% url 'logout' %}";
-    }
-    return false;
-}
 
 // ── Funciones para móvil con modal ─────────────────────────────────────────────
 

@@ -2105,3 +2105,428 @@ msgid "%(total)s location, %(ocupadas)s with goods"
 msgid_plural "%(total)s locations, %(ocupadas)s with goods"
 msgstr[0] "%(total)s posición, %(ocupadas)s con mercancía"
 msgstr[1] "%(total)s posiciones, %(ocupadas)s con mercancía"
+
+msgid "Account menu"
+msgstr "Menú de la cuenta"
+
+msgid "Mobile view"
+msgstr "Vista móvil"
+
+msgid "Desktop view"
+msgstr "Vista de escritorio"
+
+msgid "Main menu"
+msgstr "Menú principal"
+
+msgid "8 per thousand of the customs value"
+msgstr "ocho al millar sobre el valor en aduana"
+
+msgid "A fraction, not a percentage: 0.15 and not 15."
+msgstr "Una fracción, no un porcentaje: 0.15 y no 15."
+
+msgid "A shipment that has not arrived yet"
+msgstr "Un embarque que todavía no llega"
+
+msgid "A sum is allowed: 500+700 for a shipment with two invoices."
+msgstr "Se admite una suma: 500+700 para un embarque con dos facturas."
+
+msgid "Add to the sheet"
+msgstr "Agregar a la hoja"
+
+msgid "Additions USD"
+msgstr "Incrementables USD"
+
+msgid "Adjustment factor"
+msgstr "Factor de ajuste"
+
+msgid "Approx. duty"
+msgstr "Impuesto aprox"
+
+msgid "Back to the dashboard"
+msgstr "Volver al tablero"
+
+msgid "Back to the sheet"
+msgstr "Volver a la hoja"
+
+msgid "Breakdown"
+msgstr "Desglose"
+
+msgid "Choose a customer"
+msgstr "Elige un cliente"
+
+msgid "Compare against rate"
+msgstr "Comparar contra el tipo de cambio"
+
+msgid "Customs value MXN"
+msgstr "Valor en aduana MXN"
+
+msgid "DTA"
+msgstr "DTA"
+
+msgid "Date reported"
+msgstr "Fecha reportado"
+
+msgid "Date sent to review and VM"
+msgstr "Fecha enviado a rev y MV"
+
+msgid "Duties"
+msgstr "Impuestos"
+
+msgid "Duty breakdown"
+msgstr "Desglose del impuesto"
+
+msgid "Duty sent, MXN"
+msgstr "Impuesto reportado, MXN"
+
+msgid "Entry number"
+msgstr "Número de entrada"
+
+msgid "Estimate at working exchange rate %(tc)s · this is not a settlement"
+msgstr "Estimado con tipo de cambio de trabajo %(tc)s · no es una liquidación"
+
+msgid "Exchange rate"
+msgstr "Tipo de cambio"
+
+msgid "Freight and packing USD"
+msgstr "Fletes y embalajes USD"
+
+msgid "Generated"
+msgstr "Generado"
+
+msgid "Global sum USD"
+msgstr "Suma global USD"
+
+msgid "Goods value USD"
+msgstr "Valor de mercancía USD"
+
+msgid "How much cushion this estimate carries"
+msgstr "Cuánto colchón lleva este estimado"
+
+msgid "How this figure is made up"
+msgstr "De qué se compone esta cifra"
+
+msgid "IGI"
+msgstr "IGI"
+
+msgid "IGI rate"
+msgstr "Tasa de IGI"
+
+msgid "Invoice missing — upload"
+msgstr "Falta la factura — subir"
+
+msgid "It is typed by hand and deliberately high. It never comes from the DOF."
+msgstr "Se teclea a mano y va alto a propósito. Nunca sale del DOF."
+
+msgid "Leave it empty and the exact figure above is the one that shows."
+msgstr "Déjalo vacío y la que sale es la cifra exacta de arriba."
+
+msgid "Move the rate and the sheet recalculates itself. Nothing is saved: it is a question, not a change."
+msgstr "Mueve el tipo de cambio y la hoja se recalcula sola. No se guarda nada: es una pregunta, no un cambio."
+
+msgid "NO"
+msgstr "NO"
+
+msgid "No shipments in this sheet yet."
+msgstr "Todavía no hay embarques en esta hoja."
+
+msgid "Nothing has been removed from this sheet."
+msgstr "No se ha quitado nada de esta hoja."
+
+msgid "Nothing here was deleted: these shipments are still in the warehouse and in their pedimento. They only stopped showing on the sheet."
+msgstr "Aquí no se borró nada: estos embarques siguen en la bodega y en su pedimento. Solo dejaron de salir en la hoja."
+
+msgid "Order number"
+msgstr "Número de pedido"
+
+msgid "Origin MX / USA / CAN. It waives the processing fee, not the IGI."
+msgstr "Origen MX / EUA / CAN. Descuenta el derecho de trámite, no el IGI."
+
+msgid "Pedimento"
+msgstr "Pedimento"
+
+msgid "Pedimento total MXN"
+msgstr "Total del pedimento MXN"
+
+msgid "Pre-validation"
+msgstr "Prevalidación"
+
+msgid "Pre-validation MXN"
+msgstr "Prevalidación MXN"
+
+msgid "Put it back"
+msgstr "Volver a ponerlo"
+
+msgid "Remove from the sheet"
+msgstr "Quitar de la hoja"
+
+msgid "Remove this shipment from the sheet? It is not deleted: the shipment stays in the warehouse and can be put back."
+msgstr "¿Quitar este embarque de la hoja? No se borra: el embarque sigue en la bodega y se puede volver a poner."
+
+msgid "Removed"
+msgstr "Quitado"
+
+msgid "Removed from the sheet"
+msgstr "Quitados de la hoja"
+
+msgid "Sent to review"
+msgstr "Enviado a revisión"
+
+msgid "Shipment report and duty estimate"
+msgstr "Reporte de embarques y estimado de impuestos"
+
+msgid "Show"
+msgstr "Ver"
+
+msgid "T-MEC applies"
+msgstr "Aplica el T-MEC"
+
+msgid "TOTAL"
+msgstr "TOTAL"
+
+msgid "That is the working rate itself: no difference to measure."
+msgstr "Ese es el tipo de cambio de trabajo: no hay diferencia que medir."
+
+msgid "The rounding is the house's: always upwards and to a round number. The system proposes, it never decides."
+msgstr "El redondeo es de la casa: siempre hacia arriba y a número cerrado. El sistema propone, nunca decide."
+
+msgid "The same chain as the spreadsheet, column by column."
+msgstr "La misma cadena del Excel, columna por columna."
+
+msgid "The value comes from the commercial invoice, which is already on file."
+msgstr "El valor sale de la factura comercial, que ya está cargada."
+
+msgid "The value is provisional: it comes from the proforma, and is corrected when the invoice arrives."
+msgstr "El valor es provisional: sale de la proforma, y se corrige cuando llega la factura."
+
+msgid "The working rate is high on purpose. This measures by how much, against any rate you want to compare with."
+msgstr "El tipo de cambio de trabajo va alto a propósito. Esto mide de cuánto, contra el tipo de cambio que quieras comparar."
+
+msgid "This box never appears on the customer's sheet or on their phone."
+msgstr "Este recuadro no aparece nunca en la hoja del cliente ni en su teléfono."
+
+msgid "To split the customs value between invoices of the same item."
+msgstr "Para repartir el valor en aduana entre las facturas de una misma partida."
+
+msgid "Type a rate to compare with."
+msgstr "Teclea un tipo de cambio para comparar."
+
+msgid "VAT 16%"
+msgstr "IVA 16%"
+
+msgid "Waybill"
+msgstr "Guía"
+
+msgid "What comes out"
+msgstr "Lo que sale"
+
+msgid "What if the exchange rate were another one"
+msgstr "Qué pasaría con otro tipo de cambio"
+
+msgid "What is sent to the customer"
+msgstr "Lo que se le manda al cliente"
+
+msgid "What is typed in"
+msgstr "Lo que se teclea"
+
+msgid "When the goods arrive and the entry is captured, the row links itself by the order number."
+msgstr "Cuando llegue la mercancía y se capture la entrada, el renglón se enlaza solo por el número de pedido."
+
+msgid "With"
+msgstr "Con"
+
+msgid "With today's working rate, %(tc)s."
+msgstr "Con el tipo de cambio de trabajo de hoy, %(tc)s."
+
+msgid "With today's working rate."
+msgstr "Con el tipo de cambio de trabajo de hoy."
+
+msgid "Working exchange rate"
+msgstr "Tipo de cambio de trabajo"
+
+msgid "YES"
+msgstr "SI"
+
+msgid "less than with that rate, which is a"
+msgstr "menos que con ese tipo de cambio, que es un"
+
+msgid "more than with that rate, which is a"
+msgstr "más que con ese tipo de cambio, que es un"
+
+msgid "more than with today's rate"
+msgstr "más que con el tipo de cambio de hoy"
+
+msgid "saved against today's rate"
+msgstr "de ahorro contra el tipo de cambio de hoy"
+
+msgid "the pedimento would come to"
+msgstr "el pedimento saldría en"
+
+msgid "zero: T-MEC applies"
+msgstr "cero: aplica el T-MEC"
+
+msgid "%(n)s shipment"
+msgid_plural "%(n)s shipments"
+msgstr[0] "%(n)s embarque"
+msgstr[1] "%(n)s embarques"
+
+msgid "%(n)s without invoice"
+msgid_plural "%(n)s without invoice"
+msgstr[0] "%(n)s sin factura"
+msgstr[1] "%(n)s sin factura"
+
+msgid "%(n)s shipment removed from this sheet"
+msgid_plural "%(n)s shipments removed from this sheet"
+msgstr[0] "%(n)s embarque quitado de esta hoja"
+msgstr[1] "%(n)s embarques quitados de esta hoja"
+
+msgid "VAT"
+msgstr "IVA"
+
+msgid "Simulation at rate"
+msgstr "Simulación con tipo de cambio"
+
+msgid "the sheet itself goes at"
+msgstr "la hoja va con"
+
+msgid "\"%(x)s\" is not an amount."
+msgstr "«%(x)s» no es un importe."
+
+msgid "Add a line by hand"
+msgstr "Agregar línea a mano"
+
+msgid "Attached is your shipment report with the estimated duties."
+msgstr "Adjunto va tu reporte de embarques con el estimado de impuestos."
+
+msgid "Difference"
+msgstr "Diferencia"
+
+msgid "ETA"
+msgstr "ETA"
+
+msgid "Estimate at working exchange rate %(tc)s. It is not a settlement."
+msgstr "Estimado con tipo de cambio de trabajo %(tc)s. No es una liquidación."
+
+msgid "For a shipment that has not arrived yet: there is no entry to read it from, so the duty is typed in."
+msgstr "Para un embarque que todavía no llega: no hay entrada de donde leerlo, así que el impuesto se teclea."
+
+msgid "Save line"
+msgstr "Guardar línea"
+
+msgid "Send to the customer"
+msgstr "Mandar al cliente"
+
+msgid "Separate several addresses with commas"
+msgstr "Separa varias direcciones con comas"
+
+msgid "Sheet sent to %(quien)s."
+msgstr "Hoja mandada a %(quien)s."
+
+msgid "Shipments included: %(n)s"
+msgstr "Embarques incluidos: %(n)s"
+
+msgid "The line needs an order number."
+msgstr "La línea necesita un número de pedido."
+
+msgid "The sheet keeps its figures, which go at %(tc)s. Nothing is saved: it is a question, not a change."
+msgstr "La hoja se queda con sus cifras, que van con %(tc)s. No se guarda nada: es una pregunta, no un cambio."
+
+msgid "The sheet would come to"
+msgstr "La hoja saldría en"
+
+msgid "There is nothing to send: the sheet is empty."
+msgstr "No hay nada que mandar: la hoja está vacía."
+
+msgid "To"
+msgstr "Para"
+
+msgid "Type at least one address to send it to."
+msgstr "Teclea al menos una dirección a la que mandarla."
+
+msgid "With another exchange rate"
+msgstr "Con otro tipo de cambio"
+
+msgid "less"
+msgstr "menos"
+
+msgid "more"
+msgstr "más"
+
+msgid "%(n)s added to the sheet"
+msgstr "%(n)s agregados a la hoja"
+
+msgid "%(n)s put back"
+msgstr "%(n)s devueltos a la hoja"
+
+msgid "%(n)s skipped: no customer"
+msgstr "%(n)s omitidos: sin cliente"
+
+msgid "%(n)s skipped: only entries pay duties"
+msgstr "%(n)s omitidos: solo las entradas pagan impuestos"
+
+msgid "Add selection to the duty sheet"
+msgstr "Agregar selección a la hoja de impuestos"
+
+msgid "For the duty estimate. A sum is allowed: 500+700"
+msgstr "Para el estimado de impuestos. Se admite una suma: 500+700"
+
+msgid "No shipments selected."
+msgstr "No hay embarques seleccionados."
+
+msgid "Select"
+msgstr "Seleccionar"
+
+msgid "They were already on the sheet."
+msgstr "Ya estaban en la hoja."
+
+msgid "This is an estimate, not a settlement."
+msgstr "Esto es un estimado, no una liquidación."
+
+msgid "Type a rate and it says what the sheet would come to with it. The sheet keeps its own figures: nothing is saved."
+msgstr "Teclea un tipo de cambio y dice en cuánto saldría la hoja con él. La hoja se queda con sus cifras: no se guarda nada."
+
+msgid "Copied"
+msgstr "Copiada"
+
+msgid "Copy"
+msgstr "Copiar"
+
+msgid "NOT ARRIVED / ETA 15-09"
+msgstr "NO HA LLEGADO / ETA 15-09"
+
+msgid "NOT ARRIVED YET"
+msgstr "NO HA LLEGADO"
+
+msgid "Use this figure"
+msgstr "Usar esta cifra"
+
+msgid "Closed on its own: it crossed and was paid"
+msgstr "Se cerró solo: cruzó y se pagó"
+
+msgid "If one of them is this same shipment, correct the order number so they do not show twice."
+msgstr "Si alguna es este mismo embarque, corrige el número de pedido para que no salga dos veces."
+
+msgid "There is %(n)s hand-typed line on this customer's duty sheet still waiting for its entry:"
+msgid_plural "There are %(n)s hand-typed lines on this customer's duty sheet still waiting for their entry:"
+msgstr[0] "Hay %(n)s línea escrita a mano en la hoja de impuestos de este cliente esperando su entrada:"
+msgstr[1] "Hay %(n)s líneas escritas a mano en la hoja de impuestos de este cliente esperando su entrada:"
+
+msgid "no invoice"
+msgstr "sin factura"
+
+msgid "Invoice received"
+msgstr "Factura recibida"
+
+msgid "We already have the commercial invoice"
+msgstr "Ya tenemos la factura comercial"
+
+msgid "Invoice of %(id)s uploaded."
+msgstr "Factura de %(id)s cargada."
+
+msgid "or pick one on file"
+msgstr "o marca una del expediente"
+
+msgid "Invoice of %(id)s marked."
+msgstr "Factura de %(id)s marcada."
+
+msgid "on file…"
+msgstr "del expediente…"

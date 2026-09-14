@@ -31,3 +31,28 @@ def preferencias(request):
         'idiomas': idiomas,
         'idiomas_del_cliente': idiomas_del_cliente,
     }
+
+
+def es_telefono(request):
+    """
+    Si quien mira esta en un telefono.
+
+    Manda lo que la persona haya elegido en esta sesion con el enlace de la
+    cuenta ("vista de escritorio" / "vista movil"); si no eligio nada, el
+    navegador. "Mobi" es la marca que recomienda MDN: la llevan Chrome y Safari
+    de telefono y no la de una tableta, que tiene sitio para el tablero.
+    """
+    sesion = getattr(request, 'session', None)
+    elegida = sesion.get('vista') if sesion is not None else None
+    if elegida == 'escritorio':
+        return False
+    if elegida == 'movil':
+        return True
+    agente = request.META.get('HTTP_USER_AGENT', '')
+    return 'Mobi' in agente or 'iPhone' in agente
+
+
+def vista(request):
+    # Lo usan las pantallas aparte -- pedimentos, cruces, impuestos -- para
+    # saber si pintan la barra de abajo y a donde lleva su "volver".
+    return {'es_telefono': es_telefono(request)}

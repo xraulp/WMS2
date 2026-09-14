@@ -32,6 +32,9 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink
 .tb-right strong{color:var(--on-accent)}
 .btn-lo{background:none;border:1px solid var(--tb-bdr);color:var(--faint);padding:3px 10px;border-radius:var(--r);cursor:pointer;font-size:11px;font-family:inherit}
 .btn-lo:hover{border-color:var(--red);color:var(--red)}
+/* Donde no cabe la razon social, las siglas de la empresa. */
+.marca-corta{display:none}
+@media (max-width:760px){.marca-larga{display:none}.marca-corta{display:inline}.tb{padding:0 12px}}
 
 .tabs{background:var(--surface);border-bottom:1px solid var(--bdr);display:flex;padding:0 18px;position:fixed;top:44px;left:0;right:0;z-index:199;overflow-x:auto}
 .tab{background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:500;color:var(--soft);padding:9px 14px;transition:all .15s;white-space:nowrap}
@@ -163,13 +166,11 @@ tbody td:has(.btn-action) {
 <div class="tb">
   <div class="tb-brand">
     <span class="tb-dot"></span>
-    <span style="font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600;">WMS{% if tenant %} - {{ tenant.name|upper }}{% endif %}</span>
+    <span class="marca-larga" style="font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600;">WMS{% if tenant %} - {{ tenant.name|upper }}{% endif %}</span>
+    <span class="marca-corta" style="font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600;">WMS{% if tenant %} · {{ tenant.sigla }}{% endif %}</span>
   </div>
   <div class="tb-right">
-    {% trans "Welcome," %} <strong>{{ request.user.username }}</strong>
-    <span style="font-size:11px;color:var(--tb-faint)">[{{ profile.role|upper }}]</span>
-    {% include "warehouse/partials/preferencias.html" %}
-    <a href="{% url 'logout' %}" class="btn-lo">{% trans "Sign out" %}</a>
+    {% include "warehouse/partials/cuenta.html" with vista_alterna='movil' %}
   </div>
 </div>
 
@@ -249,7 +250,12 @@ tbody td:has(.btn-action) {
 
 <div class="pg">
 
-{% if profile|can_see_tab:'form' %}
+{% comment %}
+Inicio va fuera del bloque de la captura: lo ve todo el mundo, el cliente
+tambien. Dentro de ese bloque al cliente -- que no captura -- no le llegaba el
+contenedor, htmx no encontraba donde pintar las cifras y las pegaba en el
+<body>, borrando la barra y las pestanas.
+{% endcomment %}
 <div class="panel on" id="panel-inicio">
   <div class="card">
     <div class="ct">{% trans "Home" %}</div>
@@ -257,6 +263,7 @@ tbody td:has(.btn-action) {
   </div>
 </div>
 
+{% if profile|can_see_tab:'form' %}
 <div class="panel" id="panel-form">
   <div class="card">
     <div class="ct">{% trans "Register Operation" %}</div>
@@ -363,6 +370,37 @@ tbody td:has(.btn-action) {
 
           <div class="fl">{% trans "PO / Order" %}</div>
           <div class="fi"><input type="text" name="po_order" id="id_po_order" placeholder="{% trans "PO / ORD..." %}"></div>
+
+          {% comment %}
+          El valor de la mercancia. Con el, la entrada nace con su estimado de
+          impuestos hecho en vez de con un renglon vacio que hay que volver a
+          abrir. Se admite una suma -- 500+700 -- porque un embarque puede
+          traer dos facturas, y se guarda la cuenta y no solo el total.
+
+          Vacio no estorba: el renglon se crea igual y el valor se teclea
+          despues, cuando llegue la factura.
+          {% endcomment %}
+          <div class="fl">{% trans "Goods value USD" %}</div>
+          <div class="fi"><input type="text" name="valor_mercancia"
+                                 id="id_valor_mercancia"
+                                 placeholder="{% trans "For the duty estimate. A sum is allowed: 500+700" %}"></div>
+
+          {% comment %}
+          Si el cliente ya mando la factura. Es lo que la hoja de impuestos
+          contesta en su columna, y marcarlo quita el «provisional» del valor.
+
+          No sustituye a subir el archivo: el expediente lo sigue pidiendo, y
+          la pantalla de pedimentos y la tarea de cruce siguen avisando de la
+          que falta por cargar.
+          {% endcomment %}
+          <div class="fl">{% trans "Invoice" %}</div>
+          <div class="fi">
+            <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer">
+              <input type="hidden" name="factura_present" value="1">
+              <input type="checkbox" name="tiene_factura" value="1" style="width:auto">
+              {% trans "We already have the commercial invoice" %}
+            </label>
+          </div>
 
           <div class="fl">{% trans "Seal" %}</div>
           <div class="fi"><input type="text" name="seal" placeholder="{% trans "Seal #..." %}"></div>
@@ -1002,6 +1040,15 @@ function loadCatalog() {
 }
 loadCatalog();
 
+// Pide un panel y lo pinta en su contenedor, si el contenedor existe.
+// htmx, cuando no encuentra el destino, pega la respuesta en el <body>:
+// asi desaparecian la barra y las pestanas del cliente, que no tenia el
+// contenedor de Inicio. Un panel que no esta no se pide.
+function cargarPanel(url, destino) {
+  if (!document.querySelector(destino)) return;
+  htmx.ajax('GET', url, {target: destino, swap: 'innerHTML'});
+}
+
 function showTab(t) {
   const tabs = ['inicio','form','database','catalog','customers','locations','digital','reports','users','deletions','platform'];
   tabs.forEach(n=>{
@@ -1013,12 +1060,12 @@ function showTab(t) {
   // Las cifras se piden cada vez que se abre la pestana, no una sola vez al
   // cargar: es justo la pantalla a la que se vuelve despues de capturar algo,
   // y ensenar el numero de antes seria peor que no ensenarlo.
-  if (t === 'inicio') htmx.ajax('GET','{% url "inicio_panel" %}',{target:'#inicio-content',swap:'innerHTML'});
-  if (t === 'users') htmx.ajax('GET','{% url "user_management" %}',{target:'#users-content',swap:'innerHTML'});
-  if (t === 'locations') htmx.ajax('GET','{% url "locations_panel" %}',{target:'#locations-content',swap:'innerHTML'});
-  if (t === 'platform') htmx.ajax('GET','{% url "platform_tenant_list" %}',{target:'#platform-content',swap:'innerHTML'});
-  if (t === 'reports') htmx.ajax('GET','{% url "report_generator" %}',{target:'#report-content',swap:'innerHTML'});
-  if (t === 'deletions') htmx.ajax('GET','{% url "deletion_log" %}',{target:'#deletions-content',swap:'innerHTML'});
+  if (t === 'inicio') cargarPanel('{% url "inicio_panel" %}','#inicio-content');
+  if (t === 'users') cargarPanel('{% url "user_management" %}','#users-content');
+  if (t === 'locations') cargarPanel('{% url "locations_panel" %}','#locations-content');
+  if (t === 'platform') cargarPanel('{% url "platform_tenant_list" %}','#platform-content');
+  if (t === 'reports') cargarPanel('{% url "report_generator" %}','#report-content');
+  if (t === 'deletions') cargarPanel('{% url "deletion_log" %}','#deletions-content');
   if (t !== 'digital') {
     const dq = document.getElementById('digital-q');
     if (dq) dq.value = '';

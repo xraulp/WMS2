@@ -267,7 +267,7 @@ class LaHojaEnPantallaTests(BaseDeAlmacen):
             valor_mercancia=Decimal('1000'))
         respuesta = self.hoja()
         esperado = (self.r.impuesto_estimado + segundo.impuesto_estimado)
-        self.assertEqual(respuesta.context['resumen']['total'], esperado)
+        self.assertEqual(respuesta.context['total'], esperado)
 
     def test_un_renglon_de_otra_empresa_no_existe(self):
         otro = Tenant.objects.create(name='Bodegas del Sur', type='organization',

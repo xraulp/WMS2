@@ -18,6 +18,21 @@
 </div>
 {% endif %}
 
+{% if lineas_sueltas %}
+{% comment %}
+Las lineas de la hoja de impuestos que se anotaron a mano y siguen sin entrada.
+Se avisan aqui porque este es el momento barato de arreglarlo: recien capturada
+la entrada y con el papel todavia en la mano. Si una de ellas es este mismo
+embarque con el pedido escrito de otra forma, el cliente acabaria viendo el
+embarque dos veces en su hoja.
+{% endcomment %}
+<div class="msg-warn" style="margin-bottom:8px;background:var(--warn-bg-suave);border:1px solid var(--warn-bdr);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--warn-ink)">
+  ⚠ {% blocktrans count n=lineas_sueltas|length %}There is {{ n }} hand-typed line on this customer's duty sheet still waiting for its entry:{% plural %}There are {{ n }} hand-typed lines on this customer's duty sheet still waiting for their entry:{% endblocktrans %}
+  <strong>{% for l in lineas_sueltas %}{{ l.pedido }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong>.
+  {% trans "If one of them is this same shipment, correct the order number so they do not show twice." %}
+</div>
+{% endif %}
+
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
   <a href="{% url 'operation_pdf' operation.pk %}" target="_blank" class="btn btn-g btn-sm">📄 {% trans "Full Report PDF" %}</a>
   <a href="{% url 'operation_label' operation.pk %}" target="_blank" class="btn btn-p btn-sm">🏷 {% trans "Print Labels" %}</a>

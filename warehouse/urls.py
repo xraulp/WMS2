@@ -120,8 +120,25 @@ urlpatterns = [
     # La hoja de impuestos. Una por cliente, viva siempre: no se abre al llegar
     # a un paso, se mira tres veces al dia.
     path('impuestos/', views.impuestos_panel, name='impuestos_panel'),
-    path('impuestos/new/', views.renglon_crear, name='renglon_crear'),
+    # La linea que se teclea, para el embarque que todavia no llega y por eso
+    # no existe como operacion. Los demas entran solos al capturar la entrada.
+    path('impuestos/line/', views.renglon_manual, name='renglon_manual'),
+    # La hoja en papel y la hoja al correo del cliente.
+    # Los embarques marcados en la pestana Operaciones.
+    path('impuestos/from-operations/', views.operaciones_a_impuestos,
+         name='operaciones_a_impuestos'),
+    path('impuestos/pdf/', views.impuestos_pdf, name='impuestos_pdf'),
+    path('impuestos/email/', views.impuestos_email, name='impuestos_email'),
     path('impuestos/<int:pk>/save/', views.renglon_guardar, name='renglon_guardar'),
+    # De que se compone la cifra. Pantalla aparte, y no un desplegable dentro
+    # de la hoja, porque el cliente no entra aqui: el desglose y el colchon del
+    # tipo de cambio son del tenant y del agente aduanal.
+    path('impuestos/<int:pk>/calculo/', views.renglon_calculo, name='renglon_calculo'),
+    # Quitar un renglon de la hoja no es borrarlo: el embarque sigue donde
+    # estaba y se puede volver a poner.
+    path('impuestos/<int:pk>/remove/', views.renglon_quitar, name='renglon_quitar'),
+    path('impuestos/<int:pk>/restore/', views.renglon_devolver, name='renglon_devolver'),
+    path('impuestos/removed/', views.impuestos_quitados, name='impuestos_quitados'),
 
     # Las tareas de cruce: un camion, un dia, y la mercancia que va dentro.
     path('cruces/', views.cruces_panel, name='cruces_panel'),

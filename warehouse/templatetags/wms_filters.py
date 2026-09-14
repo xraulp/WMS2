@@ -59,3 +59,24 @@ CLASE_DE_ALERTA = {'vencida': 'aging-vencida', 'urgente': 'aging-urgente'}
 def clase_de_alerta(nivel):
     """Usage: <span class="{{ op.alerta_permanencia|clase_de_alerta }}">"""
     return CLASE_DE_ALERTA.get(nivel, '')
+
+
+# Los importes de la hoja de impuestos. `345500` se lee de un vistazo y
+# `345,500.00` no: la hoja contesta "cuanto voy a pagar", que es una cifra que
+# se dice por telefono. Los centavos salen solo cuando los hay -- un estimado
+# exacto los trae, y un estimado redondeado por la casa no.
+@register.filter
+def pesos(valor):
+    """Usage: {{ r.estimado|pesos }} -> 345,500 / 51,263.87"""
+    from decimal import Decimal, InvalidOperation
+    if valor is None or valor == '':
+        return ''
+    try:
+        n = Decimal(str(valor))
+    except (InvalidOperation, ValueError):
+        return valor
+    n = n.quantize(Decimal('0.01'))
+    entero = n.to_integral_value()
+    if n == entero:
+        return f'{int(entero):,}'
+    return f'{n:,.2f}'

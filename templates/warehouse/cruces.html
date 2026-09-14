@@ -104,7 +104,7 @@
 
 <div class="tb">
   <span class="tb-brand">WMS — {% trans "Crossings" %}</span>
-  <a href="{% url 'dashboard' %}">← {% trans "Back to the dashboard" %}</a>
+  <a href="{% if es_telefono %}{% url 'mobile_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}">← {% trans "Back to the dashboard" %}</a>
 </div>
 
 <div class="wrap">
@@ -487,5 +487,8 @@
   {% endif %}
 </div>
 
+{% if es_telefono %}
+{% include "warehouse/partials/barra_inferior.html" with activa='cruces' %}
+{% endif %}
 </body>
 </html>

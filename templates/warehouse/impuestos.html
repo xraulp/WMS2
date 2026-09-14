@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n l10n wms_filters %}
 {% get_current_language as idioma_actual %}
 <!DOCTYPE html>
 <html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
@@ -7,82 +7,213 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% trans "Duties" %} — WMS</title>
   {% include "warehouse/partials/tema.html" %}
+  {% comment %}
+  La hoja del cliente, y nada mas que la hoja.
+
+  Es el Excel que se le manda por correo desde hace meses, columna por columna
+  y en su orden. No se reorganiza a proposito: el cliente lleva meses leyendola
+  asi, y el dia que el sistema empiece a mandarla no es el dia de cambiarle el
+  sitio a las cosas. Lo que cambia no es la forma, es de donde salen los datos.
+
+  Lo que esta pantalla **no** tiene son los calculos. El valor de mercancia,
+  los fletes, los incrementables, la tasa de IGI, el DTA, el IVA y el colchon
+  del tipo de cambio viven en `impuestos_calculo.html`, que solo abren el
+  tenant y el agente aduanal.
+
+  Lo que si tiene, y el Excel no puede: cada NO de la columna de factura es un
+  boton que la sube; los embarques se agregan y se quitan; y el tipo de cambio
+  se puede mover para ver que pasaria -- sin guardar nada y sin tocar la hoja
+  de nadie mas.
+  {% endcomment %}
   <style>
     *{box-sizing:border-box}
+    /* El atributo `hidden` lo pone el navegador como `display:none`, que
+       cualquier clase con `display:flex` le gana. Estas pantallas esconden
+       cosas con `hidden` -- la linea que se teclea, la caja del correo --, asi
+       que aqui se le devuelve la ultima palabra. */
+    [hidden]{display:none!important}
     body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
     a{color:inherit}
+
+    /* Los colores de la hoja. Son los del papel que el cliente ya conoce --
+       el vino de la cabecera y el durazno de los renglones-- y por eso no
+       salen de los tokens de la casa, que son azules. Van con nombre propio
+       para que el tema oscuro los apague en un solo sitio. */
+    :root{
+      --hoja-fuerte:#9c1f23; --hoja-media:#b53034; --hoja-ink:#8d1a1e;
+      --hoja-fila:#fbe3d7; --hoja-fila-alt:#fdefe8; --hoja-linea:#ffffff;
+      --hoja-sobre:#f7d2c2; --hoja-on:#ffffff;
+    }
+    @media (prefers-color-scheme: dark){
+      :root:not([data-theme="light"]){
+        --hoja-fuerte:#7a2226; --hoja-media:#8d2a2e; --hoja-ink:#f0b8b4;
+        --hoja-fila:#2b1a1b; --hoja-fila-alt:#231516; --hoja-linea:#3d2426;
+        --hoja-sobre:#3a2122; --hoja-on:#ffffff;
+      }
+    }
+    :root[data-theme="dark"]{
+      --hoja-fuerte:#7a2226; --hoja-media:#8d2a2e; --hoja-ink:#f0b8b4;
+      --hoja-fila:#2b1a1b; --hoja-fila-alt:#231516; --hoja-linea:#3d2426;
+      --hoja-sobre:#3a2122; --hoja-on:#ffffff;
+    }
+
     .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
-        padding:12px 18px;background:var(--ink);color:var(--on-accent);flex-wrap:wrap}
+        padding:12px 18px;background:var(--tb-bg);color:var(--on-accent);flex-wrap:wrap}
     .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
-    .tb a{color:var(--bdr);text-decoration:none;font-size:12px}
-    .wrap{max-width:1200px;margin:16px auto 60px;padding:0 14px}
+    .tb a{color:var(--tb-bdr);text-decoration:none;font-size:12px}
+    .wrap{max-width:1180px;margin:16px auto 60px;padding:0 14px}
     .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
           padding:16px;margin-bottom:14px}
     .ct{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin:0 0 10px}
-    .mono{font-family:'IBM Plex Mono',monospace}
     .soft{color:var(--soft)}
     select,input[type=text],input[type=number],input[type=date]{
       font-family:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--bdr);
       border-radius:var(--r);background:var(--surface);color:var(--ink);max-width:100%}
     .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:var(--r);
-         padding:6px 12px;font-size:13px;font-family:inherit;cursor:pointer;color:var(--ink)}
+         padding:6px 12px;font-size:13px;font-family:inherit;cursor:pointer;color:var(--ink);
+         text-decoration:none;display:inline-block}
     .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
     .btn-sm{padding:3px 8px;font-size:12px}
     .msg-error{background:var(--rsoft);color:var(--err-ink);padding:9px 12px;
                border-radius:var(--r);font-size:13px;margin-bottom:10px}
 
-    .vistazo{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-    .cuadro{flex:1 1 130px;min-width:120px;border:1px solid var(--bdr);border-radius:10px;
-            padding:10px 12px;background:var(--surface)}
-    .cuadro b{display:block;font-family:'IBM Plex Mono',monospace;font-size:19px;line-height:1.1}
-    .cuadro span{display:block;font-size:11px;color:var(--soft);margin-top:3px}
-    .c-ok{background:var(--ok-bg);border-color:var(--ok-ink)}
-    .c-ok b{color:var(--ok-ink-fuerte)}
-    .c-mal{background:var(--rsoft);border-color:var(--red)}
-    .c-mal b{color:var(--err-ink-fuerte)}
+    /* ── El membrete ───────────────────────────────────────────────────────
+       Lo que hoy va en el cuerpo del correo: de quien es la hoja, cuantos
+       embarques trae y a que hora se genero. */
+    .hoja-caja{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
+               overflow:hidden;margin-bottom:14px}
+    .membrete{padding:14px 16px;border-bottom:3px solid var(--hoja-fuerte)}
+    .membrete h1{margin:0;font-size:15px;letter-spacing:.06em;text-transform:uppercase;
+                 color:var(--hoja-ink)}
+    .membrete .quien{margin:4px 0 0;font-size:13px;color:var(--soft)}
+    .membrete .cuando{margin:8px 0 0;font-size:12px;color:var(--faint);
+                      font-family:'IBM Plex Mono',monospace}
+    .membrete-alto{display:flex;gap:14px;justify-content:space-between;
+                   align-items:flex-start;flex-wrap:wrap}
+    .membrete-quien{display:flex;gap:12px;align-items:flex-start;min-width:0}
+    .membrete-logo{height:38px;width:auto;max-width:120px;object-fit:contain;
+                   flex:0 0 auto}
+    /* Las casillas de la linea que se teclea: van dentro de la celda, sin
+       marco propio, para que la fila siga leyendose como una fila. */
+    .en-celda{width:100%;font-size:12.5px;padding:4px 6px;
+              font-family:'IBM Plex Mono',monospace;
+              border:1px solid var(--bdr-fuerte);border-radius:var(--r);
+              background:var(--surface);color:var(--ink)}
+    .en-celda.num{text-align:right}
+    #linea-manual td{padding:5px 6px}
+    .membrete-botones{display:flex;gap:6px;flex-wrap:wrap}
+    .correo{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+            margin-top:12px;padding-top:12px;border-top:1px solid var(--bdr)}
+    .correo label{font-size:12px}
+    .msg-ok{background:var(--ok-bg);color:var(--ok-ink-fuerte);padding:9px 12px;
+            border-radius:var(--r);font-size:13px;margin-bottom:10px}
 
-    .hoja{width:100%;border-collapse:collapse;background:var(--surface)}
-    .hoja th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
-             color:var(--soft);padding:8px 9px;border-bottom:1px solid var(--bdr);
-             background:var(--bg-sutil);white-space:nowrap}
-    .hoja td{padding:8px 9px;font-size:13px;border-bottom:1px solid var(--bg);
-             vertical-align:middle}
-    .hoja .num{text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap}
-    .hoja tr.falta{background:var(--rsoft)}
+    /* ── La hoja ─────────────────────────────────────────────────────────── */
+    .rejilla{width:100%;border-collapse:collapse}
+    .rejilla th{background:var(--hoja-fuerte);color:var(--hoja-on);font-size:11px;
+                letter-spacing:.04em;text-transform:uppercase;padding:9px 8px;
+                text-align:center;border-right:1px solid var(--hoja-linea);
+                line-height:1.25}
+    .rejilla th:last-child{border-right:none}
+    .rejilla td{padding:9px 8px;font-size:13px;text-align:center;
+                border-right:1px solid var(--hoja-linea);
+                border-bottom:1px solid var(--hoja-linea)}
+    .rejilla td:last-child{border-right:none}
+    .rejilla tbody tr{background:var(--hoja-fila-alt)}
+    .rejilla tbody tr:nth-child(even){background:var(--hoja-fila)}
+    .rejilla tbody tr:hover{background:var(--hoja-sobre)}
+    .col-n{width:38px;color:var(--soft);font-family:'IBM Plex Mono',monospace}
+    .col-status{color:var(--hoja-ink);font-weight:600;font-size:12px}
+    .mono{font-family:'IBM Plex Mono',monospace}
+    .importe{text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap;
+             font-weight:600}
+    .importe .signo{float:left;color:var(--soft);font-weight:400}
+    .vacio{color:var(--faint)}
+    /* El pedido de lo que no tiene factura: es lo que hay que perseguir. */
+    .falta{font-weight:700}
+    .si{color:var(--ok-ink-fuerte);font-weight:600}
+    .no-falta{color:var(--err-ink-fuerte);font-weight:600}
 
-    /* El status no es un adorno: contesta de quien es la pelota. Verde cuando
-       ya no pide nada, ambar cuando la pelota es de la casa, azul cuando es
-       del cliente. */
-    .st{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;
-        font-weight:600;white-space:nowrap}
-    .st-nada  {background:var(--bg-sutil);color:var(--soft)}
-    .st-casa  {background:var(--rsoft);color:var(--err-ink)}
-    .st-cliente{background:var(--asoft);color:var(--accent-ink)}
-    .st-listo {background:var(--ok-bg);color:var(--ok-ink-fuerte)}
+    .rejilla tfoot td{background:var(--hoja-fila);font-weight:700;
+                      border-top:2px solid var(--hoja-fuerte);font-size:14px}
+    .rejilla tfoot .etq{text-align:right;letter-spacing:.05em}
 
-    .provisional{font-size:10px;text-transform:uppercase;letter-spacing:.04em;
-                 color:var(--err-ink);display:block}
-    .exacto{font-size:11px;color:var(--soft);display:block}
-    .valor-casilla{width:110px;font-family:'IBM Plex Mono',monospace}
-    .desglose{font-size:11px;color:var(--soft);line-height:1.5}
-    .desglose b{color:var(--ink)}
+    .pie-hoja{padding:10px 16px;font-size:11px;color:var(--soft);
+              border-top:1px solid var(--bdr);display:flex;gap:10px;
+              justify-content:space-between;flex-wrap:wrap}
 
-    .scroll{overflow-x:auto}
+    /* Los botones de cada renglon. Discretos: la hoja es para leerse, no para
+       llenarse de controles. */
+    .acciones{display:flex;gap:2px;justify-content:center;align-items:center;
+              flex-wrap:nowrap}
+    .mini{border:1px solid transparent;background:none;color:var(--soft);cursor:pointer;
+          font-size:13px;line-height:1;padding:3px 6px;border-radius:var(--r);
+          font-family:inherit;text-decoration:none}
+    .mini:hover{background:var(--hoja-sobre);color:var(--hoja-ink)}
+    .subir{border:1px solid var(--err-bdr);color:var(--err-ink-fuerte);background:none;
+           border-radius:var(--r);padding:2px 8px;font-size:11px;cursor:pointer;
+           font-family:inherit;font-weight:600}
+    /* El desplegable de «esa es la factura». Discreto: aparece poco y no puede
+       competir con las cifras de la hoja. */
+    .del-expediente{font-size:11px;padding:2px 4px;max-width:150px;
+                    color:var(--soft);border-color:var(--bdr)}
 
-    @media (max-width:760px){
+    /* La linea que se teclea, y la barra que la abre. */
+    .manual{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 10px}
+    .manual input{font-size:13px}
+    .bajo-tabla{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+                padding:10px 16px;border-top:1px solid var(--bdr);font-size:12px}
+
+    /* ── El simulador del tipo de cambio ─────────────────────────────────── */
+    .sim{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+    .sim input[type=number]{width:120px;font-family:'IBM Plex Mono',monospace;
+                            font-size:18px;font-weight:700;color:var(--hoja-ink);
+                            text-align:right}
+    .sim-bloque{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .sim-etq{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+             color:var(--soft)}
+    .sim-cifra{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:700;
+               line-height:1.2;white-space:nowrap}
+    .baja .sim-cifra{color:var(--ok-ink-fuerte)}
+    .sube .sim-cifra{color:var(--err-ink-fuerte)}
+    .sim-nota{font-size:11px;color:var(--soft);margin-top:2px}
+
+    /* ── El telefono ──────────────────────────────────────────────────────
+       La hoja no se encoge: cada renglon pasa a ser una ficha. Y las fichas
+       no llevan tabla dentro -- la tabla en el telefono fue justo lo que se
+       salia de la pantalla. */
+    .fichas{display:none}
+    @media (max-width:820px){
       .wrap{padding:0 10px}
-      /* En el telefono la hoja no se encoge: cada renglon pasa a ser una ficha
-         con sus etiquetas delante. Es la misma informacion, apilada. */
-      .hoja, .hoja thead, .hoja tbody, .hoja tr, .hoja td{display:block;width:100%}
-      .hoja thead{display:none}
-      .hoja tr{border:1px solid var(--bdr);border-radius:10px;margin-bottom:10px;
-               padding:6px 0;background:var(--surface)}
-      .hoja td{border:none;display:flex;justify-content:space-between;gap:10px;
-               padding:4px 12px}
-      .hoja td::before{content:attr(data-etq);font-size:10px;text-transform:uppercase;
-                       letter-spacing:.05em;color:var(--soft);flex:0 0 auto}
-      .hoja .num{text-align:right}
-      .hoja tfoot tr{background:var(--bg-sutil)}
+      .solo-ancho{display:none}
+      .fichas{display:block}
+      .ficha{border-bottom:1px solid var(--hoja-linea);padding:12px 14px;
+             background:var(--hoja-fila-alt)}
+      .ficha:nth-child(even){background:var(--hoja-fila)}
+      /* Las tres lineas de la ficha. La primera es la que se lee de lejos. */
+      .ficha-l1{display:flex;justify-content:space-between;align-items:baseline;
+                gap:10px}
+      .ficha-pedido{font-family:'IBM Plex Mono',monospace;font-size:17px;
+                    font-weight:500;color:var(--hoja-ink);overflow-wrap:anywhere}
+      .ficha-pedido.falta{font-weight:800}
+      .ficha-importe{font-family:'IBM Plex Mono',monospace;font-size:17px;
+                     font-weight:700;white-space:nowrap}
+      .ficha-l2{margin-top:5px;font-size:12px;color:var(--soft);line-height:1.4}
+      .falta-factura{color:var(--err-ink-fuerte);cursor:pointer;
+                     text-decoration:underline dotted}
+      .ficha-l3{display:flex;justify-content:space-between;align-items:center;
+                gap:10px;margin-top:7px}
+      .ficha-entrada{font-family:'IBM Plex Mono',monospace;font-size:12.5px;
+                     color:var(--soft)}
+      .ficha-total{display:flex;justify-content:space-between;align-items:baseline;
+                   padding:14px;background:var(--hoja-fila);
+                   border-top:2px solid var(--hoja-fuerte);font-weight:700}
+      /* Arriba la raya va debajo, que es donde empieza la lista. */
+      .ficha-total-alto{border-top:none;border-bottom:2px solid var(--hoja-fuerte)}
+      .ficha-total .cifra{font-family:'IBM Plex Mono',monospace;font-size:17px}
+      #linea-manual-movil{display:none}
+      #linea-manual-movil:target{display:flex}
+      .sim-cifra{font-size:21px}
     }
   </style>
 </head>
@@ -90,319 +221,552 @@
 
 <div class="tb">
   <span class="tb-brand">WMS — {% trans "Duties" %}</span>
-  <a href="{% url 'dashboard' %}">← {% trans "Back to the dashboard" %}</a>
+  <a href="{% if es_telefono %}{% url 'mobile_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}">← {% trans "Back to the dashboard" %}</a>
 </div>
 
 <div class="wrap">
 
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
+  {% if aviso %}<div class="msg-ok">&#10003; {{ aviso }}</div>{% endif %}
 
+  {% if clientes|length > 1 or not cliente %}
   <div class="card">
     <p class="ct">{% trans "Customer" %}</p>
     <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <select name="customer" onchange="this.form.submit()">
-        <option value="">— {% trans "Select a customer" %} —</option>
+        <option value="">— {% trans "Choose a customer" %} —</option>
         {% for c in clientes %}
-        <option value="{{ c.pk }}" {% if cliente and c.pk == cliente.pk %}selected{% endif %}>
-          {{ c.name }}{% if c.abbreviation %} · {{ c.abbreviation }}{% endif %}
-        </option>
+        <option value="{{ c.pk }}" {% if cliente and c.pk == cliente.pk %}selected{% endif %}>{{ c.name }}</option>
         {% endfor %}
       </select>
-      <noscript><button class="btn" type="submit">{% trans "Show" %}</button></noscript>
+      <noscript><button class="btn btn-sm" type="submit">{% trans "Show" %}</button></noscript>
     </form>
-  </div>
-
-  {% if not cliente %}
-  <div class="card">
-    <p class="soft" style="margin:0">
-      {% trans "Pick a customer to see their duty sheet." %}
-    </p>
-  </div>
-  {% else %}
-
-  <div class="vistazo">
-    <div class="cuadro">
-      <b>{{ resumen.abiertos }}</b><span>{% trans "Open shipments" %}</span>
-    </div>
-    <div class="cuadro {% if resumen.sin_factura %}c-mal{% else %}c-ok{% endif %}">
-      <b>{{ resumen.sin_factura }}</b><span>{% trans "Without commercial invoice" %}</span>
-    </div>
-    <div class="cuadro">
-      <b>{{ resumen.esperando }}</b><span>{% trans "Waiting for their review" %}</span>
-    </div>
-    <div class="cuadro">
-      <b>{{ resumen.total|floatformat:0 }}</b><span>{% trans "Estimated duties MXN" %}</span>
-    </div>
-  </div>
-
-  {% comment %}
-  El tipo de cambio de trabajo se enseña aqui y no en la fila de contadores,
-  como se pidio. Va alto a proposito: mas vale que sobre dinero en la cuenta a
-  que falte y se pierda el dia de cruce. Lo ven la casa y el agente aduanal,
-  nunca el cliente.
-  {% endcomment %}
-  {% if puede_editar %}
-  <div class="card" style="padding:10px 16px">
-    <span class="soft" style="font-size:12px">
-      {% trans "Working exchange rate" %}
-      <b class="mono" style="color:var(--ink)">{{ parametros.tipo_de_cambio }}</b>
-      · {% trans "pre-validation" %}
-      <b class="mono" style="color:var(--ink)">{{ parametros.prevalidacion }}</b>
-      · {% trans "in force since" %} {{ parametros.vigente_desde|date:"d/m/Y" }}
-    </span>
   </div>
   {% endif %}
 
-  <div class="card scroll" style="padding:0;overflow:hidden">
-    <table class="hoja">
+  {% if cliente %}
+
+  <div class="hoja-caja">
+    <div class="membrete">
+      <div class="membrete-alto">
+        <div class="membrete-quien">
+          {% comment %}
+          El logotipo de la empresa, pequeno. La hoja se imprime y se manda, y
+          un papel con cifras de dinero sin membrete no se sabe de quien es.
+          Sin logo cargado no se pinta nada: el nombre ya va debajo.
+          {% endcomment %}
+          {% if cliente.tenant.logo %}
+          <img class="membrete-logo" src="{{ cliente.tenant.logo.url }}"
+               alt="{{ cliente.tenant.name }}">
+          {% endif %}
+          <div>
+          <h1>{% trans "Shipment report and duty estimate" %}</h1>
+          <p class="quien">{{ cliente.name }} · {{ cliente.tenant.short_name|default:cliente.tenant.name }}</p>
+          <p class="cuando">{{ ahora|date:"d/m/Y" }} · {{ ahora|date:"H:i" }} ·
+            {% blocktrans count n=resumen.abiertos %}{{ n }} shipment{% plural %}{{ n }} shipments{% endblocktrans %}
+            {% if resumen.sin_factura %} · <span class="no-falta">{% blocktrans count n=resumen.sin_factura %}{{ n }} without invoice{% plural %}{{ n }} without invoice{% endblocktrans %}</span>{% endif %}
+          </p>
+          </div>
+        </div>
+        {% comment %}
+        La hoja se imprime y se manda. Son las dos cosas que hoy se hacen
+        copiando el Excel a un correo, y las dos salen del mismo sitio que la
+        pantalla, asi que no pueden despegarse de ella.
+        {% endcomment %}
+        {% if renglones %}
+        <div class="membrete-botones">
+          <a class="btn btn-sm" href="{% url 'impuestos_pdf' %}?customer={{ cliente.pk }}">
+            &#8681; {% trans "PDF" %}</a>
+          {% if puede_escribir %}
+          <button class="btn btn-sm" type="button" onclick="abrirCorreo(true)">
+            &#9993; {% trans "Send to the customer" %}</button>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      {% if puede_escribir and renglones %}
+      <form method="post" action="{% url 'impuestos_email' %}" class="correo" id="caja-correo" hidden>
+        {% csrf_token %}
+        <input type="hidden" name="customer" value="{{ cliente.pk }}">
+        <label class="soft" for="correo-a">{% trans "To" %}</label>
+        <input type="text" name="para" id="correo-a" style="flex:1 1 240px"
+               value="{{ cliente.contact_email|default:'' }}"
+               placeholder="{% trans "Separate several addresses with commas" %}">
+        <button class="btn btn-p btn-sm" type="submit">{% trans "Send" %}</button>
+        <button class="btn btn-sm" type="button" onclick="abrirCorreo(false)">{% trans "Cancel" %}</button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% comment %}
+    La hoja en la computadora. En el telefono se esconde entera y la sustituyen
+    las fichas de mas abajo, que son los mismos datos sin tabla.
+    {% endcomment %}
+    <table class="rejilla solo-ancho">
       <thead>
         <tr>
+          <th class="col-n">#</th>
           <th>{% trans "Status" %}</th>
           <th>{% trans "Invoice" %}</th>
-          <th>{% trans "Entry" %}</th>
-          <th>{% trans "PO / Order" %}</th>
+          <th>{% trans "Entry number" %}</th>
+          <th>{% trans "Date sent to review and VM" %}</th>
+          <th>{% trans "Date reported" %}</th>
+          <th>{% trans "Order number" %}</th>
           <th>{% trans "Pedimento" %}</th>
-          <th>{% trans "Crossing" %}</th>
-          <th class="num">{% trans "Invoice value USD" %}</th>
-          <th class="num">{% trans "Approx. duty MXN" %}</th>
-          {% if puede_editar %}<th></th>{% endif %}
+          <th>{% trans "Approx. duty" %}</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
         {% for r in renglones %}
-        <tr class="{% if not r.tiene_factura %}falta{% endif %}">
-          <td data-etq="{% trans "Status" %}">
-            {% comment %}
-            El status se escribe solo: sale de lo que ya paso en el sistema.
-            Ninguno se teclea, y por eso no hay ningun desplegable aqui.
-            {% endcomment %}
-            <span class="st
-              {% if r.status == 'PAGADO' %}st-listo
-              {% elif r.status == 'EN_REVISION' or r.status == 'LISTO_PAGO' %}st-cliente
-              {% elif r.status == 'ELAB_PED' %}st-casa
-              {% else %}st-nada{% endif %}">{{ r.status_texto }}</span>
-          </td>
-          <td data-etq="{% trans "Invoice" %}">
+        <tr>
+          <td class="col-n">{{ forloop.counter }}</td>
+          <td class="col-status">{{ r.status_texto }}</td>
+          <td>
             {% if r.tiene_factura %}
-              <span class="soft">{% trans "YES" %}</span>
+              <span class="si">{% trans "YES" %}</span>
             {% elif r.operation %}
               {% comment %}
-              Cada NO es un boton: se sube el archivo aqui mismo, sin buscar el
+              Cada NO es un boton: la factura se sube aqui mismo, sin buscar el
               correo en el que se pidio.
               {% endcomment %}
               <form method="post" enctype="multipart/form-data" style="margin:0"
                     action="{% url 'operacion_subir_factura' r.operation.pk %}">
                 {% csrf_token %}
                 <input type="hidden" name="customer" value="{{ cliente.pk }}">
-                <label class="btn btn-sm" style="cursor:pointer">
-                  {% trans "NO — upload" %}
+                <input type="hidden" name="desde" value="impuestos">
+                <label class="subir" style="cursor:pointer">{% trans "NO" %}
                   <input type="file" name="archivo" style="display:none"
-                         onchange="this.form.submit()">
-                </label>
+                         onchange="this.form.submit()"></label>
               </form>
-            {% else %}
-              <span class="soft">{% trans "NO" %}</span>
-            {% endif %}
-          </td>
-          <td data-etq="{% trans "Entry" %}" class="mono">{{ r.entrada|default:"—" }}</td>
-          <td data-etq="{% trans "PO / Order" %}"><strong>{{ r.pedido|default:"—" }}</strong></td>
-          <td data-etq="{% trans "Pedimento" %}" class="mono">
-            {% if r.pedimento %}{{ r.pedimento.numero|default:r.pedimento.etiqueta }}{% else %}—{% endif %}
-          </td>
-          <td data-etq="{% trans "Crossing" %}">
-            {% comment %}
-            Meter un embarque a un cruce desde aqui. Es uno de los tres sitios
-            desde los que se puede hacer, y el que mas se va a usar: es donde se
-            esta mirando ese dia, en el mismo renglon donde se ve el impuesto
-            que va a costar. Obligar a ir a otra pantalla es lo que hace que se
-            acabe pidiendo por telefono.
-            {% endcomment %}
-            {% if r.cruce %}
-              <a class="mono" href="{% url 'cruces_panel' %}?customer={{ cliente.pk }}">{{ r.cruce.custom_id }}</a>
-              <span class="exacto">{{ r.cruce.fecha_de_cruce|date:"d/m" }}</span>
-            {% elif r.operation and r.cruces_posibles %}
-              <form method="post" action="" data-cruce style="margin:0;display:flex;gap:5px">
+              {% comment %}
+              La factura puede haber llegado ya por otro camino -- el hilo del
+              chat, o adjunta al capturar --: esta en el expediente pero nadie
+              ha dicho que es ella. Esto lo dice, sin volver a subirla.
+              {% endcomment %}
+              {% if r.del_expediente %}
+              <form method="post" style="margin:4px 0 0"
+                    action="{% url 'operacion_marcar_factura' r.operation.pk %}">
                 {% csrf_token %}
-                <input type="hidden" name="operation" value="{{ r.operation.pk }}">
-                <input type="hidden" name="desde" value="IMPUESTOS">
-                <input type="hidden" name="volver" value="impuestos">
-                <select name="__tarea" class="mono" style="max-width:118px"
-                        onchange="this.form.action='/cruces/'+this.value+'/add/'">
-                  {% for t in r.cruces_posibles %}
-                  <option value="{{ t.pk }}">{{ t.custom_id }} · {{ t.fecha_de_cruce|date:"d/m" }}</option>
+                <input type="hidden" name="customer" value="{{ cliente.pk }}">
+                <input type="hidden" name="desde" value="impuestos">
+                <select name="documento" class="del-expediente"
+                        onchange="this.form.submit()">
+                  <option value="">{% trans "on file…" %}</option>
+                  {% for d in r.del_expediente %}
+                  <option value="{{ d.pk }}">{{ d.original_name|default:d.pk|truncatechars:26 }}</option>
                   {% endfor %}
                 </select>
-                <button class="btn btn-sm" type="submit">+</button>
               </form>
-            {% else %}
-              <span class="soft">—</span>
-            {% endif %}
-          </td>
-          <td data-etq="{% trans "Invoice value USD" %}" class="num">
-            {% if puede_editar %}
-            <form method="post" action="{% url 'renglon_guardar' r.pk %}" style="margin:0">
-              {% csrf_token %}
-              {% comment %}
-              Se guarda lo que se tecleo y no solo el resultado: quien vuelva en
-              octubre tiene que ver `500+700` y no un `1,200` huerfano.
-              {% endcomment %}
-              <input type="text" name="valor" class="valor-casilla" data-suma
-                     value="{{ r.valor_expresion }}" placeholder="500+700"
-                     title="{% trans "Accepts an addition: 500+700" %}"
-                     onchange="this.form.submit()">
-              <span class="exacto" data-suma-resultado></span>
-            </form>
-            {% else %}
-              {{ r.valor_mercancia|default:"—" }}
-            {% endif %}
-            {% if r.valor_es_provisional %}
-            <span class="provisional">{% trans "provisional · from the proforma" %}</span>
-            {% endif %}
-            {% if r.valor_anterior %}
-            <span class="exacto">{% trans "was" %} {{ r.valor_anterior }}</span>
-            {% endif %}
-          </td>
-          <td data-etq="{% trans "Approx. duty MXN" %}" class="num">
-            {% if r.estimado %}
-              <strong>{{ r.estimado|floatformat:2 }}</strong>
-              {% comment %}
-              La cifra exacta al lado, en gris, cuando alguien redondeo: el
-              redondeo es de la casa, y esto es para que se vea de cuanto fue el
-              salto que se dio.
-              {% endcomment %}
-              {% if r.impuesto_reportado and r.cuenta %}
-              <span class="exacto">{% trans "exact" %} {{ r.cuenta.T_total_pedimento }}</span>
               {% endif %}
             {% else %}
-              <span class="soft">—</span>
+              <span class="no-falta">{% trans "NO" %}</span>
             {% endif %}
           </td>
-          {% if puede_editar %}
-          <td data-etq="">
-            <details>
-              <summary class="btn btn-sm" style="display:inline-block">{% trans "Detail" %}</summary>
-              <form method="post" action="{% url 'renglon_guardar' r.pk %}"
-                    style="margin-top:8px;display:grid;gap:6px;min-width:230px;text-align:left">
-                {% csrf_token %}
-                <input type="hidden" name="valor" value="{{ r.valor_expresion }}">
-                <label class="desglose">{% trans "Freight and packing USD" %}
-                  <input type="number" step="0.01" name="fletes" value="{{ r.fletes|default_if_none:'' }}" style="width:100%"></label>
-                <label class="desglose">{% trans "Additions USD" %}
-                  <input type="number" step="0.01" name="incrementables" value="{{ r.incrementables|default_if_none:'' }}" style="width:100%"></label>
-                <label class="desglose">{% trans "IGI rate (0.15 = 15%)" %}
-                  <input type="number" step="0.0001" name="tasa_igi" value="{{ r.tasa_igi }}" style="width:100%"></label>
-                <label class="desglose" style="display:flex;gap:6px;align-items:center">
-                  <input type="hidden" name="tmec_present" value="1">
-                  <input type="checkbox" name="aplica_tmec" value="1" {% if r.aplica_tmec %}checked{% endif %}>
-                  {% trans "T-MEC applies (origin MX / USA / CAN)" %}</label>
-                <label class="desglose">{% trans "Duty sent to the customer (rounded)" %}
-                  <input type="number" step="0.01" name="impuesto_reportado"
-                         value="{{ r.impuesto_reportado|default_if_none:'' }}" style="width:100%"></label>
-                {% if r.cuenta %}
-                <div class="desglose">
-                  {% trans "Customs value" %} <b>{{ r.cuenta.I_valor_en_aduana }}</b> ·
-                  DTA <b>{{ r.cuenta.K_dta }}</b> ·
-                  IGI <b>{{ r.cuenta.M_igi }}</b> ·
-                  IVA <b>{{ r.cuenta.Q_iva }}</b><br>
-                  {% trans "Adjustment factor" %} <b>{{ r.cuenta.G_factor_ajuste }}</b>
-                </div>
-                {% endif %}
-                <button class="btn btn-sm btn-p" type="submit">{% trans "Save" %}</button>
-              </form>
-            </details>
+          <td class="mono">{{ r.entrada|default:"" }}</td>
+          <td class="mono">{% if r.fecha_enviado_a_rev_y_mv %}{{ r.fecha_enviado_a_rev_y_mv|date:"d-M" }}{% endif %}</td>
+          <td class="mono">{% if r.fecha_reportado %}{{ r.fecha_reportado|date:"d-M" }}{% endif %}</td>
+          <td class="mono{% if not r.tiene_factura %} falta{% endif %}">{{ r.pedido|default:"" }}</td>
+          <td class="mono">{{ r.pedimento_texto }}</td>
+          <td class="importe">
+            {% if r.estimado %}<span class="signo">$</span>{{ r.estimado|pesos }}
+            {% else %}<span class="vacio">—</span>{% endif %}
           </td>
-          {% endif %}
+          <td>
+            <div class="acciones">
+              {% if ve_los_calculos %}
+              <a class="mini" href="{% url 'renglon_calculo' r.pk %}"
+                 title="{% trans "How this figure is made up" %}">&#8942;</a>
+              {% endif %}
+              <form method="post" action="{% url 'renglon_quitar' r.pk %}" style="margin:0"
+                    onsubmit="return confirm('{% trans "Remove this shipment from the sheet? It is not deleted: the shipment stays in the warehouse and can be put back." %}')">
+                {% csrf_token %}
+                <button class="mini" type="submit" title="{% trans "Remove from the sheet" %}">&#10005;</button>
+              </form>
+            </div>
+          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="9" class="soft">{% trans "No shipments in this sheet yet." %}</td></tr>
+        <tr><td colspan="10" class="vacio" style="padding:22px">{% trans "No shipments in this sheet yet." %}</td></tr>
         {% endfor %}
+        {% comment %}
+        La linea que se teclea. Empieza escondida y la abre el boton de abajo:
+        la hoja es para leerse, y un formulario abierto de mas en medio de la
+        tabla la ensucia todos los dias para el caso que ocurre pocas veces.
+        {% endcomment %}
+        {% if puede_escribir %}
+        {% comment %}
+        La linea que se teclea, con una casilla debajo de cada columna a la que
+        se le puede dar un dato.
+
+        Tres columnas van sin casilla a proposito -- la entrada y las dos
+        fechas de tramite --: salen de la entrada capturada y del pedimento, y
+        una linea a mano existe justo porque ninguno de los dos ha ocurrido
+        todavia. Ofrecer ahi una casilla seria invitar a teclear un dato que el
+        sistema va a sobrescribir en cuanto llegue la mercancia.
+
+        Arranca escondida y la abre el boton de abajo: la hoja es para leerse,
+        y un formulario abierto de mas en medio de la tabla la ensucia todos
+        los dias para el caso que ocurre pocas veces.
+        {% endcomment %}
+        <tr id="linea-manual" hidden>
+          <form method="post" action="{% url 'renglon_manual' %}" id="form-linea">
+            {% csrf_token %}
+            <input type="hidden" name="customer" value="{{ cliente.pk }}">
+          </form>
+          <td class="col-n">+</td>
+          <td>
+            {% comment %}
+            Captura libre con los de siempre a un clic. Va como `datalist` y no
+            como desplegable cerrado porque el status de una linea a mano no
+            siempre es uno de la lista: a veces es la fecha de llegada.
+            {% endcomment %}
+            <input type="text" name="status" form="form-linea" class="en-celda"
+                   list="status-de-siempre" autocomplete="off"
+                   placeholder="{% trans "NOT ARRIVED / ETA 15-09" %}">
+            <datalist id="status-de-siempre">
+              <option value="{% trans "NOT ARRIVED YET" %}"></option>
+              <option value="{% trans "ETA" %} "></option>
+            </datalist>
+          </td>
+          <td>
+            {% comment %}
+            Por lo regular SI: si se esta dando de alta la linea es porque el
+            cliente ya mando la factura. Por eso viene puesto en SI.
+            {% endcomment %}
+            <select name="factura" form="form-linea" class="en-celda">
+              <option value="si" selected>{% trans "YES" %}</option>
+              <option value="no">{% trans "NO" %}</option>
+            </select>
+          </td>
+          <td class="vacio">—</td>
+          <td class="vacio">—</td>
+          <td class="vacio">—</td>
+          <td>
+            <input type="text" name="po_order" form="form-linea" class="en-celda"
+                   placeholder="{% trans "Order number" %}" required>
+          </td>
+          <td>
+            <input type="text" name="pedimento" form="form-linea" class="en-celda"
+                   placeholder="{% trans "optional" %}">
+          </td>
+          <td>
+            <input type="number" name="impuesto" step="0.01" min="0"
+                   form="form-linea" class="en-celda num" placeholder="0.00">
+          </td>
+          <td>
+            <div class="acciones">
+              <button class="btn btn-p btn-sm" type="submit" form="form-linea"
+                      title="{% trans "Save line" %}">&#10003;</button>
+              <button class="mini" type="button" onclick="lineaManual(false)"
+                      title="{% trans "Cancel" %}">&#10005;</button>
+            </div>
+          </td>
+        </tr>
+        {% endif %}
       </tbody>
+      {% if renglones %}
       <tfoot>
         <tr>
-          <td colspan="7" data-etq="" style="text-align:right;font-weight:600">
-            {% trans "ESTIMATED TOTAL" %}
-          </td>
-          <td class="num" data-etq="{% trans "ESTIMATED TOTAL" %}" style="font-weight:700">
-            {{ resumen.total|floatformat:2 }}
-          </td>
-          {% if puede_editar %}<td></td>{% endif %}
+          <td colspan="8" class="etq">{% trans "TOTAL" %}</td>
+          <td class="importe"><span class="signo">$</span>{{ total|pesos }}</td>
+          <td></td>
         </tr>
       </tfoot>
+      {% endif %}
     </table>
+
+    {% if puede_escribir %}
+    <div class="bajo-tabla solo-ancho">
+      <button class="btn btn-sm" type="button" id="btn-linea"
+              onclick="lineaManual(true)">+ {% trans "Add a line by hand" %}</button>
+    </div>
+    {% endif %}
+
+    {% comment %}
+    La misma hoja en el telefono, en tres lineas por embarque.
+
+    Arriba, grande, lo que se viene a ver: con que pedido y cuanto. Debajo, en
+    chico, de quien es la pelota y si falta la factura. Y al final la entrada,
+    que es con lo que se busca el bulto en la bodega, con el boton de quitar
+    enfrente.
+
+    Sin fechas y sin desglose: las fechas son de tramite y se leen sentado, y
+    el desglose vive en la pantalla del calculo, que es del tenant.
+    {% endcomment %}
+    <div class="fichas">
+      {% if renglones %}
+      {% comment %}
+      El total, antes de las fichas. Es la cifra por la que se abre la
+      pantalla; al final de la lista obligaba a recorrerla entera para verla.
+      {% endcomment %}
+      <div class="ficha-total ficha-total-alto">
+        <span>{% trans "TOTAL" %}</span>
+        <span class="cifra">${{ total|pesos }}</span>
+      </div>
+      {% endif %}
+      {% for r in renglones %}
+      <div class="ficha">
+        <div class="ficha-l1">
+          {% comment %}
+          El pedido de un embarque sin factura va marcado: es el que hay que
+          perseguir, y asi se ve cual es sin leer la ficha entera.
+          {% endcomment %}
+          <span class="ficha-pedido{% if not r.tiene_factura %} falta{% endif %}">{{ forloop.counter }}. {{ r.pedido|default:"—" }}</span>
+          <span class="ficha-importe">
+            {% if r.estimado %}${{ r.estimado|pesos }}{% else %}<span class="vacio">—</span>{% endif %}
+          </span>
+        </div>
+
+        <div class="ficha-l2">
+          <span>{{ r.status_texto }}</span>
+          {% comment %}
+          Lo que falta se dice aqui y no en una linea propia. Y si hay entrada,
+          «sin factura» **es** el boton que la sube: el sitio donde se lee que
+          falta es el sitio donde se arregla.
+          {% endcomment %}
+          {% if not r.tiene_factura %}
+            {% if r.operation %}
+              <form method="post" enctype="multipart/form-data" style="display:inline"
+                    action="{% url 'operacion_subir_factura' r.operation.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="customer" value="{{ cliente.pk }}">
+                <input type="hidden" name="desde" value="impuestos">
+                · <label class="falta-factura">{% trans "no invoice" %}
+                  <input type="file" name="archivo" style="display:none"
+                         onchange="this.form.submit()"></label>
+              </form>
+              {% if r.del_expediente %}
+              {% comment %}
+              La factura ya subida por otro camino. En el telefono es el caso
+              mas probable: se manda por el hilo del chat desde el propio
+              telefono y se queda ahi, sin que nadie diga que es ella.
+              {% endcomment %}
+              <form method="post" style="display:inline"
+                    action="{% url 'operacion_marcar_factura' r.operation.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="customer" value="{{ cliente.pk }}">
+                <input type="hidden" name="desde" value="impuestos">
+                <select name="documento" class="del-expediente"
+                        onchange="this.form.submit()">
+                  <option value="">{% trans "on file…" %}</option>
+                  {% for d in r.del_expediente %}
+                  <option value="{{ d.pk }}">{{ d.original_name|default:d.pk|truncatechars:22 }}</option>
+                  {% endfor %}
+                </select>
+              </form>
+              {% endif %}
+            {% else %}
+              · <span class="falta-factura">{% trans "no invoice" %}</span>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        <div class="ficha-l3">
+          <span class="ficha-entrada">{{ r.entrada|default:"—" }}</span>
+          <form method="post" action="{% url 'renglon_quitar' r.pk %}" style="margin:0"
+                onsubmit="return confirm('{% trans "Remove this shipment from the sheet? It is not deleted: the shipment stays in the warehouse and can be put back." %}')">
+            {% csrf_token %}
+            <button class="mini" type="submit">&#10005; {% trans "Remove" %}</button>
+          </form>
+        </div>
+      </div>
+      {% empty %}
+      <div class="ficha"><span class="vacio">{% trans "No shipments in this sheet yet." %}</span></div>
+      {% endfor %}
+      {% if puede_escribir %}
+      <div class="bajo-tabla">
+        <a class="btn btn-sm" href="#linea-manual-movil">+ {% trans "Add a line by hand" %}</a>
+      </div>
+      <form method="post" action="{% url 'renglon_manual' %}" class="manual"
+            id="linea-manual-movil">
+        {% csrf_token %}
+        <input type="hidden" name="customer" value="{{ cliente.pk }}">
+        <input type="text" name="po_order" required
+               placeholder="{% trans "Order number" %}" style="flex:1 1 130px">
+        <input type="text" name="status" list="status-de-siempre-movil"
+               autocomplete="off" style="flex:1 1 130px"
+               placeholder="{% trans "NOT ARRIVED / ETA 15-09" %}">
+        <datalist id="status-de-siempre-movil">
+          <option value="{% trans "NOT ARRIVED YET" %}"></option>
+          <option value="{% trans "ETA" %} "></option>
+        </datalist>
+        <select name="factura" style="flex:0 1 110px">
+          <option value="si" selected>{% trans "Invoice" %}: {% trans "YES" %}</option>
+          <option value="no">{% trans "Invoice" %}: {% trans "NO" %}</option>
+        </select>
+        <input type="text" name="pedimento" style="flex:1 1 110px"
+               placeholder="{% trans "Pedimento" %}">
+        <input type="number" name="impuesto" step="0.01" min="0"
+               placeholder="{% trans "Approx. duty" %}" style="flex:1 1 110px">
+        <button class="btn btn-p btn-sm" type="submit">{% trans "Save line" %}</button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% comment %}
+    El pie no dice con que tipo de cambio esta hecho el calculo. El tipo de
+    cambio de trabajo va alto a proposito y es una decision de la casa:
+    escribirlo aqui seria dejar que se mida el colchon desde la hoja del
+    cliente, que es justo lo que no se quiere.
+    {% endcomment %}
+    <div class="pie-hoja">
+      <span>{% trans "This is an estimate, not a settlement." %}</span>
+      <span class="mono">{% trans "Generated" %} {{ ahora|date:"d/m/y H:i" }}</span>
+    </div>
   </div>
 
-  {% if puede_editar %}
   {% comment %}
-  El renglon de la factura que se adelanta a la mercancia. Ya hay algo que
-  reportar -- un pedido, un valor, un ETA -- y todavia no existe ninguna
-  entrada. Al capturarla, el renglon se enlaza solo por el numero de pedido.
+  Lo que el Excel no puede. Tres cosas, y ninguna agrega una columna a la hoja:
+  simular el tipo de cambio, agregar un embarque que aun no llega y recuperar
+  uno que se quito.
   {% endcomment %}
+
+  {% if renglones %}
   <div class="card">
-    <p class="ct">{% trans "A shipment that has not arrived yet" %}</p>
-    <form method="post" action="{% url 'renglon_crear' %}"
-          style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      {% csrf_token %}
-      <input type="hidden" name="customer" value="{{ cliente.pk }}">
-      <input type="text" name="po_order" placeholder="{% trans "PO / Order" %}" required>
-      <input type="text" name="guia" placeholder="{% trans "Waybill" %}">
-      <input type="date" name="eta" title="ETA">
-      <button class="btn" type="submit">+ {% trans "Add row" %}</button>
-    </form>
-    <p class="soft" style="font-size:11px;margin:8px 0 0">
-      {% trans "With a waybill and a carrier the row shows an ETA instead of “not arrived”." %}
+    <p class="ct">{% trans "With another exchange rate" %}</p>
+    {% comment %}
+    Una linea y tres cosas: el tipo de cambio que se teclea, lo que sumaria la
+    hoja con el, y la diferencia contra el que lleva la hoja.
+
+    La tabla **no** se toca. La hoja es lo que se le manda al cliente, con el
+    tipo de cambio de trabajo, y una pregunta no la cambia: si las cifras de
+    arriba se movieran, la hoja que se lee y la que se manda dejarian de ser la
+    misma sin que nadie lo hubiera decidido.
+    {% endcomment %}
+    <div class="sim">
+      <label class="sim-etq" for="sim-tc">{% trans "Exchange rate" %}</label>
+      {% comment %}
+      Vacia, no con el tipo de cambio de trabajo puesto: llenarla seria enseñar
+      el numero que no se quiere enseñar. Quien quiera preguntar teclea el suyo.
+      {% endcomment %}
+      <input type="number" id="sim-tc" step="0.0001" min="0" placeholder="00.0000"
+             oninput="simular()">
+      <div class="sim-bloque">
+        <span class="sim-etq">{% trans "The sheet would come to" %}</span>
+        <span class="sim-cifra" id="sim-total">—</span>
+      </div>
+      <div class="sim-bloque sim-dif" id="sim-dif">
+        <span class="sim-etq">{% trans "Difference" %}</span>
+        <span class="sim-cifra soft">—</span>
+      </div>
+      <button class="btn btn-sm" type="button" onclick="simLimpiar()">{% trans "Clear" %}</button>
+    </div>
+    <p class="soft" style="font-size:12px;margin:12px 0 0;line-height:1.5">
+      {% trans "Type a rate and it says what the sheet would come to with it. The sheet keeps its own figures: nothing is saved." %}
     </p>
   </div>
   {% endif %}
 
+  {% if quitados %}
+  <p style="font-size:12px;text-align:center">
+    <a href="{% url 'impuestos_quitados' %}?customer={{ cliente.pk }}" class="soft">
+      {% comment %}
+      "Fuera de la hoja" y no "quitados": ahi caen tanto los que alguien saco a
+      mano como los que se cerraron solos por haber cruzado y estar pagados.
+      {% endcomment %}
+      {% blocktrans count n=quitados %}{{ n }} shipment out of this sheet{% plural %}{{ n }} shipments out of this sheet{% endblocktrans %} →
+    </a>
+  </p>
   {% endif %}
+
+  {% endif %}{# cliente #}
 </div>
 
+{% if es_telefono %}{% include "warehouse/partials/barra_inferior.html" with activa='impuestos' %}{% endif %}
+
+{% if renglones %}
+{{ para_simular|json_script:"datos-sim" }}
 <script>
-/* La casilla que suma, como en Excel. Mientras se escribe, el resultado
-   aparece debajo en gris; lo que se guarda es la cuenta entera, no el total,
-   asi que quien vuelva en octubre ve de donde salio el numero.
+// El tipo de cambio de la pregunta: "y si fuera otro, cuanto seria".
+//
+// Escribe el resultado **solo en su propia linea**. La tabla no se toca: la
+// hoja es lo que se le manda al cliente, y una pregunta no cambia lo que se
+// manda.
+//
+// De cada renglon llegan dos numeros y ninguna cifra del desglose: el
+// coeficiente que multiplica al tipo de cambio y lo que no depende de el. El
+// valor de mercancia, los fletes, los incrementables, la tasa de IGI y el tipo
+// de cambio de trabajo se quedan en el servidor.
+const SIM = JSON.parse(document.getElementById('datos-sim').textContent);
+// Los pedimentos ya pagados no se mueven: su impuesto dejo de ser un estimado
+// el dia que se pago.
+const TOTAL_FIJO = {{ total_fijo|stringformat:"s" }};
+const TOTAL_HOY  = {{ total|stringformat:"s" }};
 
-   Esto es solo la ayuda visual: quien resuelve de verdad la cuenta es el
-   servidor, en `warehouse/impuestos.py`. Un calculo que solo vive en el
-   navegador es un calculo que se pierde con el primer telefono viejo. */
-(function(){
-  /* El formulario de "anadir a un cruce" apunta a la tarea elegida. El destino
-     se arma al cambiar el desplegable, asi que hay que armarlo tambien al
-     cargar: sin esto, quien no toque el desplegable manda el formulario a
-     ninguna parte. */
-  document.querySelectorAll('form[data-cruce]').forEach(function(f){
-    var sel = f.querySelector('select');
-    if (sel) f.action = '/cruces/' + sel.value + '/add/';
+const T_MAS   = "{% trans "more" %}";
+const T_MENOS = "{% trans "less" %}";
+
+function comoPesos(n) {
+  const redondeado = Math.round(n * 100) / 100;
+  const conCentavos = redondeado % 1 !== 0;
+  return redondeado.toLocaleString('en-US', {
+    minimumFractionDigits: conCentavos ? 2 : 0,
+    maximumFractionDigits: conCentavos ? 2 : 0
   });
+}
 
-  function pinta(campo){
-    var salida = campo.parentElement.querySelector('[data-suma-resultado]');
-    if (!salida) return;
-    var texto = (campo.value || '').trim();
-    if (!texto || /^[0-9.,\s]+$/.test(texto)) { salida.textContent = ''; return; }
-    if (!/^[0-9+\-*/().,\s]+$/.test(texto) || texto.indexOf('**') >= 0) {
-      salida.textContent = '?'; return;
-    }
-    try {
-      var n = Function('"use strict";return (' + texto.replace(/,/g, '') + ')')();
-      salida.textContent = (typeof n === 'number' && isFinite(n))
-        ? '= ' + n.toLocaleString(undefined, {minimumFractionDigits: 2,
-                                              maximumFractionDigits: 2})
-        : '?';
-    } catch (e) { salida.textContent = '?'; }
+function simular() {
+  const tc = parseFloat(document.getElementById('sim-tc').value);
+  const cifra = document.getElementById('sim-total');
+  const dif = document.getElementById('sim-dif');
+  const difCifra = dif.querySelector('.sim-cifra');
+
+  dif.classList.remove('sube', 'baja');
+  if (!tc || tc <= 0) {
+    cifra.textContent = '—';
+    difCifra.textContent = '—';
+    return;
   }
-  function barre(){
-    document.querySelectorAll('[data-suma]').forEach(function(campo){
-      if (campo.dataset.listo) return;
-      campo.dataset.listo = '1';
-      campo.addEventListener('input', function(){ pinta(campo); });
-      pinta(campo);
-    });
+
+  // Cada renglon se redondea a centavos antes de sumar, igual que el servidor:
+  // sumando los crudos, la misma hoja salia un centavo distinta.
+  let total = TOTAL_FIJO;
+  SIM.forEach(function (r) {
+    total += Math.round((parseFloat(r.coef) * tc + parseFloat(r.fijo)) * 100) / 100;
+  });
+  cifra.textContent = '$' + comoPesos(total);
+
+  const delta = total - TOTAL_HOY;
+  if (Math.abs(delta) < 0.005) {
+    difCifra.textContent = '—';
+  } else if (delta > 0) {
+    dif.classList.add('sube');
+    difCifra.textContent = '+$' + comoPesos(delta) + ' ' + T_MAS;
+  } else {
+    dif.classList.add('baja');
+    difCifra.textContent = '−$' + comoPesos(-delta) + ' ' + T_MENOS;
   }
-  if (document.readyState === 'loading')
-    document.addEventListener('DOMContentLoaded', barre);
-  else barre();
-})();
+}
+
+function simLimpiar() {
+  document.getElementById('sim-tc').value = '';
+  simular();
+}
 </script>
+{% endif %}
+
+<script>
+// Las dos cajas que se abren desde la hoja: la linea que se teclea y el
+// destinatario del correo. Se esconden con `hidden` y no con `display`, para
+// que el que no tenga JavaScript las vea en vez de quedarse sin ellas.
+function lineaManual(abrir) {
+  const fila = document.getElementById('linea-manual');
+  const boton = document.getElementById('btn-linea');
+  if (!fila) return;
+  fila.hidden = !abrir;
+  if (boton) boton.hidden = abrir;
+  if (abrir) fila.querySelector('input[name="po_order"]').focus();
+}
+
+function abrirCorreo(abrir) {
+  const caja = document.getElementById('caja-correo');
+  if (!caja) return;
+  caja.hidden = !abrir;
+  if (abrir) document.getElementById('correo-a').focus();
+}
+</script>
+
 </body>
 </html>

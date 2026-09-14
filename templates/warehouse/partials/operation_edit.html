@@ -24,7 +24,19 @@
     {% for label, fname, value in edit_fields %}
     <div{% if fname == '__pedimento__' %} style="grid-column:1/-1"{% endif %}>
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--soft);display:block;margin-bottom:3px">{{ label }}</label>
-      {% if fname == '__pedimento__' %}
+      {% if fname == '__factura__' %}
+        {% comment %}
+        La casilla de «ya tenemos la factura». El valor que llega dice si esta
+        marcada, y viene de `tiene_factura`, asi que una factura ya cargada en
+        el expediente se ve aqui marcada tambien.
+        {% endcomment %}
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer">
+          <input type="hidden" name="factura_present" value="1">
+          <input type="checkbox" name="tiene_factura" value="1"
+                 {% if value %}checked{% endif %}>
+          {% trans "We already have the commercial invoice" %}
+        </label>
+      {% elif fname == '__pedimento__' %}
         {% comment %}
         El mismo bloque que la captura, para que corregir un numero pase por la
         misma comprobacion que teclearlo la primera vez. `op` es el nombre que

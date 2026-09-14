@@ -1221,3 +1221,170 @@ def generar_pdf_factura(factura):
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  LA HOJA DE IMPUESTOS EN PAPEL
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# El mismo documento que se ve en pantalla, con las mismas columnas y en el
+# mismo orden. Se imprime y se manda adjunto, que son las dos cosas que hoy se
+# hacen copiando el Excel a un correo.
+#
+# Los colores no son los de la casa: son los del papel que el cliente lleva
+# meses leyendo -- el vino de la cabecera y el durazno de los renglones --,
+# porque el dia que el sistema empiece a mandar esta hoja no es el dia de
+# cambiarle el aspecto.
+
+HOJA_FUERTE = colors.HexColor('#9c1f23')
+HOJA_FILA   = colors.HexColor('#fbe3d7')
+HOJA_ALT    = colors.HexColor('#fdefe8')
+HOJA_INK    = colors.HexColor('#8d1a1e')
+
+
+def _importe_de_hoja(valor):
+    """`345500` y no `345,500.00`: los centavos salen solo cuando los hay."""
+    if valor is None:
+        return ''
+    from decimal import Decimal
+    n = Decimal(str(valor)).quantize(Decimal('0.01'))
+    entero = n.to_integral_value()
+    if n == entero:
+        return '{:,}'.format(int(entero))
+    return '{:,.2f}'.format(n)
+
+
+def generar_pdf_hoja_de_impuestos(tenant, cliente, renglones, total, parametros):
+    """
+    La hoja de un cliente en PDF. Devuelve los bytes.
+
+    `renglones` llega ya ordenado por la vista, y con `estimado` puesto: el
+    papel y la pantalla salen de la misma lista a proposito, para que no puedan
+    decir cosas distintas.
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter),
+                            rightMargin=0.4 * inch, leftMargin=0.4 * inch,
+                            topMargin=0.35 * inch, bottomMargin=0.45 * inch,
+                            title=_('Shipment report and duty estimate'))
+    SS = getSampleStyleSheet()
+
+    def S(nombre, **kw):
+        return ParagraphStyle(nombre, parent=SS['Normal'], **kw)
+
+    story = []
+
+    # ── El membrete ─────────────────────────────────────────────────────────
+    titulo = Paragraph(_('Shipment report and duty estimate'),
+                       S('t', fontName='Helvetica-Bold', fontSize=14,
+                         textColor=HOJA_INK, alignment=TA_LEFT))
+    quien = Paragraph(
+        '%s &nbsp;·&nbsp; %s' % (cliente.name,
+                                 (tenant.short_name or tenant.name)),
+        S('q', fontName='Helvetica', fontSize=9.5, textColor=MID,
+          alignment=TA_LEFT, spaceBefore=3))
+
+    ahora = timezone.localtime(timezone.now())
+    cuantos = _('%(n)s shipments') % {'n': len(renglones)}
+    sello = Paragraph(
+        '%s<br/>%s<br/>%s' % (ahora.strftime('%d/%m/%Y'),
+                              ahora.strftime('%H:%M'), cuantos),
+        S('s', fontName='Helvetica', fontSize=9, textColor=MID,
+          alignment=TA_RIGHT, leading=12))
+
+    logo = logo_de(tenant, ancho=1.1 * inch, alto=0.6 * inch)
+    ancho = landscape(letter)[0] - doc.leftMargin - doc.rightMargin
+    izquierda = [titulo, quien]
+    if logo:
+        cabecera = Table([[logo, izquierda, sello]],
+                         colWidths=[1.3 * inch, ancho - 3.1 * inch, 1.8 * inch])
+    else:
+        cabecera = Table([[izquierda, sello]],
+                         colWidths=[ancho - 1.8 * inch, 1.8 * inch])
+    cabecera.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    story.append(cabecera)
+    story.append(HRFlowable(width='100%', thickness=2, color=HOJA_FUERTE,
+                            spaceBefore=2, spaceAfter=10))
+
+    # ── La tabla, columna por columna y en su orden ─────────────────────────
+    cab = S('th', fontName='Helvetica-Bold', fontSize=7.5, textColor=colors.white,
+            alignment=TA_CENTER, leading=9)
+    celda = S('td', fontName='Helvetica', fontSize=8, alignment=TA_CENTER,
+              leading=10)
+    celda_st = S('st', fontName='Helvetica-Bold', fontSize=8,
+                 textColor=HOJA_INK, alignment=TA_CENTER, leading=10)
+    celda_num = S('num', fontName='Helvetica-Bold', fontSize=8.5,
+                  alignment=TA_RIGHT, leading=10)
+
+    filas = [[Paragraph(t, cab) for t in (
+        '#', _('Status'), _('Invoice'), _('Entry number'),
+        _('Date sent to review and VM'), _('Date reported'),
+        _('Order number'), _('Pedimento'), _('Approx. duty'))]]
+
+    for i, r in enumerate(renglones, 1):
+        enviado = r.fecha_enviado_a_rev_y_mv
+        reportado = r.fecha_reportado
+        pedimento = r.pedimento
+        filas.append([
+            Paragraph(str(i), celda),
+            Paragraph(r.status_texto, celda_st),
+            Paragraph(_('YES') if r.tiene_factura else _('NO'), celda),
+            Paragraph(r.entrada or '', celda),
+            Paragraph(enviado.strftime('%d-%b') if enviado else '', celda),
+            Paragraph(reportado.strftime('%d-%b') if reportado else '', celda),
+            Paragraph(r.pedido or '', celda),
+            Paragraph((pedimento.ped_consecutivo or pedimento.etiqueta)
+                      if pedimento else '', celda),
+            Paragraph('$ %s' % _importe_de_hoja(r.estimado)
+                      if r.estimado else '—', celda_num),
+        ])
+
+    filas.append([
+        Paragraph('', celda), Paragraph('', celda), Paragraph('', celda),
+        Paragraph('', celda), Paragraph('', celda), Paragraph('', celda),
+        Paragraph('', celda),
+        Paragraph(_('TOTAL'), S('tot', fontName='Helvetica-Bold', fontSize=9,
+                                alignment=TA_RIGHT)),
+        Paragraph('$ %s' % _importe_de_hoja(total),
+                  S('totn', fontName='Helvetica-Bold', fontSize=10,
+                    alignment=TA_RIGHT)),
+    ])
+
+    anchos = [0.35, 2.05, 0.7, 1.25, 1.35, 1.0, 1.25, 1.05, 1.2]
+    escala = ancho / (sum(anchos) * inch)
+    tabla = Table(filas, colWidths=[a * inch * escala for a in anchos],
+                  repeatRows=1)
+
+    estilo = [
+        ('BACKGROUND', (0, 0), (-1, 0), HOJA_FUERTE),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -2), 0.75, colors.white),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        # La fila del total: sin rejilla y con la raya de arriba, como el papel.
+        ('BACKGROUND', (0, -1), (-1, -1), HOJA_FILA),
+        ('LINEABOVE', (0, -1), (-1, -1), 1.5, HOJA_FUERTE),
+    ]
+    for i in range(1, len(filas) - 1):
+        estilo.append(('BACKGROUND', (0, i), (-1, i),
+                       HOJA_ALT if i % 2 else HOJA_FILA))
+    tabla.setStyle(TableStyle(estilo))
+    story.append(tabla)
+
+    # ── El pie, que dice que esto no es una liquidacion ─────────────────────
+    story.append(Spacer(1, 0.12 * inch))
+    story.append(Paragraph(
+        _('Estimate at working exchange rate %(tc)s · this is not a settlement')
+        % {'tc': parametros.tipo_de_cambio},
+        S('pie', fontName='Helvetica', fontSize=7.5, textColor=MID,
+          alignment=TA_LEFT)))
+
+    doc.build(story)
+    pdf = buffer.getvalue()
+    buffer.close()
+    return pdf

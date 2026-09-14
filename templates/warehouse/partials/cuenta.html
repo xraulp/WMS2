@@ -1,0 +1,122 @@
+{% load i18n %}
+{% comment %}
+La esquina de la cuenta: quien entro, con que papel, el tema, el idioma y la
+salida.
+
+En el escritorio cabe todo a la vista. En un telefono no: el nombre de la
+empresa, el "Bienvenido", el rol y los dos controles empujaban "Cerrar sesion"
+fuera de la pantalla, y de el solo se veia la "C". La guia de Material para la
+barra de arriba pide lo mismo que se vio en la bodega: en la barra, el titulo y
+una o dos acciones; la cuenta y la salida, recogidas en un menu.
+
+Asi que el mismo marcado sirve para las dos cosas. En una pantalla ancha va en
+linea, como siempre; en una estrecha -- o donde se pida con `siempre_menu`, que
+es el movil -- se recoge detras de un circulo con la inicial de quien entro.
+Es un solo marcado y no dos porque `preferencias.html` lleva ids y su guion, y
+no puede pintarse dos veces en la misma pagina.
+
+`vista_alterna` ofrece la otra pantalla: 'movil' en el tablero y 'escritorio'
+en el movil. El telefono entra solo al movil; esta es la puerta para quien
+quiera ver el tablero de todos modos.
+{% endcomment %}
+<style>
+.cuenta{position:relative;display:flex;align-items:center}
+.cuenta-btn{display:none;align-items:center;justify-content:center;width:34px;height:34px;
+            padding:0;border-radius:50%;border:2px solid var(--tb-bdr);background:var(--accent);
+            color:var(--on-accent);font-family:'IBM Plex Mono',monospace;font-size:15px;
+            font-weight:600;cursor:pointer}
+.cuenta-panel{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--faint)}
+.cuenta-quien{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.cuenta-quien strong{color:var(--on-accent)}
+.cuenta-rol-corto{font-size:11px;color:var(--tb-faint)}
+.cuenta-rol-largo,.cuenta-empresa,.cuenta-vista{display:none}
+.cuenta-prefs{display:flex;align-items:center;gap:8px}
+.cuenta-salir{border:1px solid var(--tb-bdr);color:var(--faint);padding:3px 10px;border-radius:6px;
+              font-size:11px;text-decoration:none;white-space:nowrap}
+.cuenta-salir:hover{border-color:var(--red);color:var(--red)}
+
+/* Recogido detras del circulo. */
+.cuenta.en-menu .cuenta-btn{display:flex}
+.cuenta.en-menu .cuenta-panel{display:none;position:absolute;top:calc(100% + 8px);right:0;z-index:500;
+            width:max-content;min-width:220px;max-width:calc(100vw - 24px);
+            flex-direction:column;align-items:stretch;gap:0;padding:4px 0;
+            background:var(--surface);color:var(--ink);border:1px solid var(--bdr);
+            border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.22);font-size:14px}
+.cuenta.en-menu.abierta .cuenta-panel{display:flex}
+.cuenta.en-menu .cuenta-panel > *{padding:11px 14px;border-bottom:1px solid var(--bdr)}
+.cuenta.en-menu .cuenta-panel > *:last-child{border-bottom:none}
+.cuenta.en-menu .cuenta-quien{flex-direction:column;align-items:flex-start;gap:2px;white-space:normal}
+.cuenta.en-menu .cuenta-quien strong{color:var(--ink);font-size:15px}
+.cuenta.en-menu .cuenta-hola,.cuenta.en-menu .cuenta-rol-corto{display:none}
+.cuenta.en-menu .cuenta-rol-largo{display:block;font-size:12px;color:var(--soft)}
+.cuenta.en-menu .cuenta-empresa{display:block;font-size:12px;color:var(--faint)}
+.cuenta.en-menu .cuenta-prefs{color:var(--ink)}
+/* Los dos controles traen el borde de la barra oscura puesto a mano; sobre el
+   fondo claro del menu casi no se ve, y a dedo hacen falta mas grandes. */
+.cuenta.en-menu .cuenta-prefs button,
+.cuenta.en-menu .cuenta-prefs select{border-color:var(--bdr) !important;font-size:14px !important;
+            padding:7px 11px !important}
+.cuenta.en-menu .cuenta-vista{display:block;color:var(--ink);text-decoration:none}
+.cuenta.en-menu .cuenta-salir{border:none;border-radius:0;color:var(--red);font-size:14px;font-weight:600}
+</style>
+
+<div class="cuenta" id="cuenta"{% if siempre_menu %} data-siempre="1"{% endif %}>
+  <button type="button" class="cuenta-btn" id="cuenta-btn"
+          aria-haspopup="true" aria-expanded="false" aria-controls="cuenta-panel"
+          aria-label="{% trans "Account menu" %}" title="{{ request.user.username }}"
+          onclick="alternarCuenta(event)">{{ request.user.username|slice:":1"|upper }}</button>
+  <div class="cuenta-panel" id="cuenta-panel">
+    <div class="cuenta-quien">
+      <span class="cuenta-hola">{% trans "Welcome," %}</span>
+      <strong>{{ request.user.username }}</strong>
+      <span class="cuenta-rol-corto">[{{ profile.role|upper }}]</span>
+      <span class="cuenta-rol-largo">{{ profile.get_role_display }}</span>
+      {% if tenant %}<span class="cuenta-empresa">{{ tenant.name }}</span>{% endif %}
+    </div>
+    <div class="cuenta-prefs">{% include "warehouse/partials/preferencias.html" %}</div>
+    {% if vista_alterna == 'movil' %}
+    <a class="cuenta-vista" href="{% url 'mobile_dashboard' %}?vista=movil">&#128241; {% trans "Mobile view" %}</a>
+    {% elif vista_alterna == 'escritorio' %}
+    <a class="cuenta-vista" href="{% url 'dashboard' %}?vista=escritorio">&#128421; {% trans "Desktop view" %}</a>
+    {% endif %}
+    <a class="cuenta-salir" href="{% url 'logout' %}">{% trans "Sign out" %}</a>
+  </div>
+</div>
+
+<script>
+{% comment %}
+Va justo detras del marcado y no en `load`: asi se recoge antes de que el
+navegador pinte, y en un telefono no se ve un instante la fila entera saliendose
+de la pantalla.
+{% endcomment %}
+(function () {
+  const caja  = document.getElementById('cuenta');
+  const boton = document.getElementById('cuenta-btn');
+  const estrecha = window.matchMedia('(max-width: 760px)');
+
+  function cerrar() {
+    caja.classList.remove('abierta');
+    boton.setAttribute('aria-expanded', 'false');
+  }
+  function acomodar() {
+    const enMenu = caja.dataset.siempre === '1' || estrecha.matches;
+    caja.classList.toggle('en-menu', enMenu);
+    if (!enMenu) cerrar();
+  }
+
+  window.alternarCuenta = function (e) {
+    e.stopPropagation();
+    const abierta = caja.classList.toggle('abierta');
+    boton.setAttribute('aria-expanded', abierta ? 'true' : 'false');
+  };
+  document.addEventListener('click', function (e) {
+    if (!caja.contains(e.target)) cerrar();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') cerrar();
+  });
+  if (estrecha.addEventListener) estrecha.addEventListener('change', acomodar);
+  else estrecha.addListener(acomodar);
+  acomodar();
+})();
+</script>

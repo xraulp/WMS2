@@ -444,8 +444,12 @@ class MarcaDeLaBarraSuperiorTests(DosTenantsTestBase):
         self.assertNotIn('DYSER', html)
 
     def test_la_version_movil_tambien(self):
+        # En el telefono la razon social no cabe en la barra: va la sigla, y el
+        # nombre entero en el menu de la cuenta. Las dos de la empresa propia.
         self.client.force_login(self.manager_dos)
 
         html = self.client.get('/mobile/').content.decode()
 
-        self.assertIn('WAREHOUSE DOS', html)
+        self.assertIn('WMS · WD', html)
+        self.assertIn('Warehouse Dos', html)
+        self.assertNotIn('Warehouse Uno', html)

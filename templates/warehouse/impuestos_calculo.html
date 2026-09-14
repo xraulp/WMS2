@@ -1,0 +1,362 @@
+{% load i18n l10n wms_filters %}
+{% get_current_language as idioma_actual %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Duty breakdown" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  {% comment %}
+  De que se compone la cifra. La pantalla del tenant y del agente aduanal.
+
+  Aqui esta la cadena entera del Excel: arriba lo que se teclea, abajo lo que
+  sale solo, y al final el recuadro que mide el colchon del tipo de cambio.
+
+  El cliente no entra aqui, y la vista lo impide. El colchon es una decision de
+  la casa -- el tipo de cambio va alto a proposito, para que sobre dinero en la
+  cuenta y no se pierda el dia de cruce -- y enseñarselo al cliente en su hoja
+  seria enseñarle de cuanto se le esta pidiendo de mas.
+  {% endcomment %}
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    a{color:inherit}
+    .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
+        padding:12px 18px;background:var(--tb-bg);color:var(--on-accent);flex-wrap:wrap}
+    .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
+    .tb a{color:var(--tb-bdr);text-decoration:none;font-size:12px}
+    .wrap{max-width:760px;margin:16px auto 60px;padding:0 14px}
+    .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
+          padding:16px;margin-bottom:14px}
+    .ct{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin:0 0 4px}
+    .ct-sub{font-size:12px;color:var(--soft);margin:0 0 14px}
+    .soft{color:var(--soft)}
+    .mono{font-family:'IBM Plex Mono',monospace}
+    input[type=text],input[type=number]{font-family:'IBM Plex Mono',monospace;font-size:14px;
+      padding:6px 8px;border:1px solid var(--bdr);border-radius:var(--r);
+      background:var(--surface);color:var(--ink);width:100%;text-align:right}
+    .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:var(--r);
+         padding:7px 14px;font-size:13px;font-family:inherit;cursor:pointer;color:var(--ink);
+         text-decoration:none;display:inline-block}
+    .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+    .msg-error{background:var(--rsoft);color:var(--err-ink);padding:9px 12px;
+               border-radius:var(--r);font-size:13px;margin-bottom:10px}
+
+    .quien{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;
+           font-size:13px;margin-bottom:14px;color:var(--soft)}
+    .quien b{color:var(--ink);font-family:'IBM Plex Mono',monospace}
+
+    /* Las dos listas. La misma forma para lo que se teclea y para lo que sale,
+       porque en el Excel son la misma tabla leida de arriba abajo. */
+    .lista{display:grid;grid-template-columns:1fr auto;gap:9px 14px;align-items:center}
+    .lista .etq{font-size:13px;line-height:1.35}
+    .lista .etq small{display:block;color:var(--faint);font-size:11px}
+    .lista .val{font-family:'IBM Plex Mono',monospace;font-size:14px;text-align:right;
+                white-space:nowrap}
+    .lista .campo{width:150px}
+    .raya{grid-column:1/-1;height:1px;background:var(--bdr);margin:3px 0}
+    .total{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;
+           gap:12px;border-top:2px solid var(--ink);margin-top:6px;padding-top:10px}
+    .total .cifra{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700}
+    .total .derecha{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+    .botones-cifra{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+    .destacada{animation:destello 1.2s ease-out}
+    @keyframes destello{
+      0%{background:var(--warn-bg)}
+      100%{background:transparent}
+    }
+    .letra{color:var(--faint);font-size:10px;font-family:'IBM Plex Mono',monospace}
+
+    /* El colchon. No es un adorno: es el numero que se le enseña al cliente
+       cuando pregunta por que se le pidio de mas. */
+    .colchon{background:var(--warn-bg-suave);border:1px solid var(--warn-bdr);
+             border-radius:10px;padding:14px 16px}
+    .colchon .cifra{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:700;
+                    color:var(--warn-ink-fuerte)}
+    .colchon p{margin:8px 0 0;font-size:13px;line-height:1.55}
+    .solo-casa{font-size:11px;color:var(--warn-ink);margin-top:10px;
+               display:block;font-style:italic}
+
+    @media (max-width:620px){
+      .lista{grid-template-columns:1fr}
+      .lista .val,.lista .campo{text-align:left;width:100%}
+      .lista .val{text-align:right}
+    }
+  </style>
+</head>
+<body>
+
+<div class="tb">
+  <span class="tb-brand">WMS — {% trans "Duty breakdown" %}</span>
+  <a href="{% url 'impuestos_panel' %}?customer={{ cliente.pk }}">← {% trans "Back to the sheet" %}</a>
+</div>
+
+<div class="wrap">
+
+  {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
+
+  <div class="quien">
+    <b>{{ renglon.pedido|default:"—" }}</b> ·
+    {{ cliente.name }}
+    {% if renglon.entrada %}· <b>{{ renglon.entrada }}</b>{% endif %}
+    {% if renglon.pedimento %}· {% trans "Pedimento" %} <b>{{ renglon.pedimento.numero|default:renglon.pedimento.etiqueta }}</b>{% endif %}
+    · {{ renglon.status_texto }}
+  </div>
+
+  <form method="post" action="{% url 'renglon_guardar' renglon.pk %}">
+    {% csrf_token %}
+
+    <div class="card">
+      <p class="ct">{% trans "What is typed in" %}</p>
+      <p class="ct-sub">
+        {% if renglon.tiene_factura %}
+          {% trans "The value comes from the commercial invoice, which is already on file." %}
+        {% else %}
+          {% trans "The value is provisional: it comes from the proforma, and is corrected when the invoice arrives." %}
+        {% endif %}
+      </p>
+      {% comment %}
+      Sin localizar: en espanol un decimal se escribe `510,00`, y un
+      <input type="number"> con coma es invalido para el navegador, que deja la
+      casilla vacia aunque el dato este guardado.
+      {% endcomment %}
+      {% localize off %}
+      <div class="lista">
+        <label class="etq" for="valor">{% trans "Goods value USD" %}
+          <small>{% trans "A sum is allowed: 500+700 for a shipment with two invoices." %}</small></label>
+        <input class="campo" type="text" id="valor" name="valor" value="{{ renglon.valor_expresion }}"
+               placeholder="0.00">
+
+        <label class="etq" for="fletes">{% trans "Freight and packing USD" %}</label>
+        <input class="campo" type="number" step="0.01" id="fletes" name="fletes"
+               value="{{ renglon.fletes|default_if_none:'' }}">
+
+        <label class="etq" for="incrementables">{% trans "Additions USD" %}</label>
+        <input class="campo" type="number" step="0.01" id="incrementables" name="incrementables"
+               value="{{ renglon.incrementables|default_if_none:'' }}">
+
+        <label class="etq" for="tasa_igi">{% trans "IGI rate" %}
+          <small>{% trans "A fraction, not a percentage: 0.15 and not 15." %}</small></label>
+        <input class="campo" type="number" step="0.0001" id="tasa_igi" name="tasa_igi"
+               value="{{ renglon.tasa_igi }}">
+
+        <label class="etq" for="aplica_tmec">{% trans "T-MEC applies" %}
+          <small>{% trans "Origin MX / USA / CAN. It waives the processing fee, not the IGI." %}</small></label>
+        <span class="val">
+          <input type="hidden" name="tmec_present" value="1">
+          <input type="checkbox" id="aplica_tmec" name="aplica_tmec" value="1"
+                 style="width:auto" {% if renglon.aplica_tmec %}checked{% endif %}>
+        </span>
+
+        <div class="raya"></div>
+
+        <span class="etq soft">{% trans "Working exchange rate" %}
+          <small>{% trans "It is typed by hand and deliberately high. It never comes from the DOF." %}</small></span>
+        <span class="val">{{ parametros.tipo_de_cambio|floatformat:4 }}</span>
+
+        <span class="etq soft">{% trans "Pre-validation MXN" %}</span>
+        <span class="val">{{ parametros.prevalidacion|pesos }}</span>
+      </div>
+      {% endlocalize %}
+    </div>
+
+    {% if cuenta %}
+    <div class="card">
+      <p class="ct">{% trans "What comes out" %}</p>
+      <p class="ct-sub">{% trans "The same chain as the spreadsheet, column by column." %}</p>
+      <div class="lista">
+        <span class="etq">{% trans "Global sum USD" %} <span class="letra">E</span></span>
+        <span class="val">{{ cuenta.E_suma_global|pesos }}</span>
+
+        <span class="etq">{% trans "Customs value MXN" %} <span class="letra">I</span></span>
+        <span class="val">{{ cuenta.I_valor_en_aduana|pesos }}</span>
+
+        <span class="etq">{% trans "DTA" %} <span class="letra">K</span>
+          <small>{% if cuenta.J_aplica_tmec %}{% trans "zero: T-MEC applies" %}{% else %}{% trans "8 per thousand of the customs value" %}{% endif %}</small></span>
+        <span class="val">{{ cuenta.K_dta|pesos }}</span>
+
+        <span class="etq">{% trans "IGI" %} <span class="letra">M</span></span>
+        <span class="val">{{ cuenta.M_igi|pesos }}</span>
+
+        {% comment %}
+        El 16% va fuera del {% trans %}: al traducir, Django duplica los `%`
+        del texto para poder formatearlo despues, asi que busca en el catalogo
+        "VAT 16%%" y una entrada "VAT 16%" no se encuentra nunca. Se queda en
+        ingles sin avisar. Con el numero fuera no hay nada que escapar.
+        {% endcomment %}
+        <span class="etq">{% trans "VAT" %} 16% <span class="letra">Q</span></span>
+        <span class="val">{{ cuenta.Q_iva|pesos }}</span>
+
+        <span class="etq">{% trans "Pre-validation" %} <span class="letra">S</span></span>
+        <span class="val">{{ cuenta.S_prevalidacion|pesos }}</span>
+
+        <div class="total">
+          <span>{% trans "Pedimento total MXN" %} <span class="letra">T</span></span>
+          <span class="derecha">
+            <span class="cifra" id="exacto"
+                  data-exacto="{% localize off %}{{ cuenta.T_total_pedimento }}{% endlocalize %}">{{ cuenta.T_total_pedimento|pesos }}</span>
+            {% comment %}
+            Pasar la cifra a la casilla de abajo, que es la que sale en la hoja
+            del cliente. Se pasa la exacta: el redondeo lo da la casa despues,
+            sobre el numero ya puesto, y sigue siendo una decision suya.
+            {% endcomment %}
+            <span class="botones-cifra">
+              <button class="btn btn-sm" type="button" onclick="pasarALaHoja()">
+                &#8595; {% trans "Use this figure" %}</button>
+              <button class="btn btn-sm" type="button" onclick="copiarCifra(this)">
+                {% trans "Copy" %}</button>
+            </span>
+          </span>
+        </div>
+
+        <div class="raya"></div>
+        <span class="etq soft">{% trans "Adjustment factor" %} <span class="letra">G</span>
+          <small>{% trans "To split the customs value between invoices of the same item." %}</small></span>
+        <span class="val soft">{{ cuenta.G_factor_ajuste }}</span>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <p class="ct">{% trans "What is sent to the customer" %}</p>
+      <p class="ct-sub">{% trans "The rounding is the house's: always upwards and to a round number. The system proposes, it never decides." %}</p>
+      <div class="lista">
+        <label class="etq" for="impuesto_reportado">{% trans "Duty sent, MXN" %}
+          <small>{% trans "Leave it empty and the exact figure above is the one that shows." %}</small></label>
+        <input class="campo" type="number" step="0.01" id="impuesto_reportado"
+               name="impuesto_reportado"
+               value="{% localize off %}{{ renglon.impuesto_reportado|default_if_none:'' }}{% endlocalize %}">
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-p" type="submit">{% trans "Save" %}</button>
+        <a class="btn" href="{% url 'impuestos_panel' %}?customer={{ cliente.pk }}">{% trans "Cancel" %}</a>
+      </div>
+    </div>
+  </form>
+
+  {% if cuenta %}
+  <div class="card">
+    <p class="ct">{% trans "How much cushion this estimate carries" %}</p>
+    <p class="ct-sub">{% trans "The working rate is high on purpose. This measures by how much, against any rate you want to compare with." %}</p>
+    <div class="colchon">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <label class="soft" style="font-size:12.5px" for="tc-ref">{% trans "Compare against rate" %}</label>
+        <input type="number" step="0.0001" id="tc-ref" style="width:120px"
+               value="{% localize off %}{{ parametros.tipo_de_cambio }}{% endlocalize %}"
+               oninput="medirColchon()">
+      </div>
+      <p id="colchon-texto" class="soft">{% trans "Type a rate to compare with." %}</p>
+      <span class="solo-casa">{% trans "This box never appears on the customer's sheet or on their phone." %}</span>
+    </div>
+  </div>
+
+  <script>
+  // El colchon: la misma cuenta con otro tipo de cambio, y la resta.
+  //
+  // El tipo de cambio de referencia se teclea y no se guarda. No se trae del
+  // DOF a proposito: el tipo de cambio de trabajo es una decision de la casa y
+  // el sistema no la corrige, solo la mide.
+  const C_VALOR = {{ cuenta.B_valor_mercancia|stringformat:"s" }};
+  const C_FLET  = {{ cuenta.C_fletes|stringformat:"s" }};
+  const C_INCR  = {{ cuenta.D_incrementables|stringformat:"s" }};
+  const C_IGI   = {{ cuenta.L_tasa_igi|stringformat:"s" }};
+  const C_DTA   = {{ cuenta.tasa_dta_aplicada|stringformat:"s" }};
+  const C_PREV  = {{ cuenta.S_prevalidacion|stringformat:"s" }};
+  const C_TC    = {{ cuenta.F_tipo_de_cambio|stringformat:"s" }};
+  const C_TOTAL = {{ cuenta.T_total_pedimento|stringformat:"s" }};
+
+  const T_PIDE = "{% trans "more than with that rate, which is a" %}";
+  const T_MENOS = "{% trans "less than with that rate, which is a" %}";
+  const T_CON = "{% trans "With" %}";
+  const T_SALDRIA = "{% trans "the pedimento would come to" %}";
+  const T_IGUALES = "{% trans "That is the working rate itself: no difference to measure." %}";
+  const T_TECLEA = "{% trans "Type a rate to compare with." %}";
+
+  function totalCon(tc) {
+    const I = (C_VALOR + C_FLET + C_INCR) * tc;
+    const N = I * C_DTA + I * C_IGI;
+    return N + (I + N) * 0.16 + C_PREV;
+  }
+
+  function comoPesos(n) {
+    return (Math.round(n * 100) / 100).toLocaleString('en-US',
+      {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
+  // Al abrir, la casilla trae el tipo de cambio de trabajo, asi que el
+  // recuadro arranca diciendo que no hay nada que medir todavia -- y no con
+  // una instruccion que parece que algo fallo.
+  document.addEventListener('DOMContentLoaded', medirColchon);
+
+  function medirColchon() {
+    const caja = document.getElementById('colchon-texto');
+    const tc = parseFloat(document.getElementById('tc-ref').value);
+    if (!tc || tc <= 0) { caja.textContent = T_TECLEA; return; }
+    if (Math.abs(tc - C_TC) < 0.00005) { caja.textContent = T_IGUALES; return; }
+
+    const otro = totalCon(tc);
+    const dif  = C_TOTAL - otro;
+    const pct  = otro ? (dif / otro) * 100 : 0;
+    const verbo = dif >= 0 ? T_PIDE : T_MENOS;
+    caja.innerHTML = T_CON + ' <b>' + tc.toFixed(4) + '</b> ' + T_SALDRIA +
+      ' <b>' + comoPesos(otro) + '</b>. ' +
+      '<span class="cifra">' + comoPesos(Math.abs(dif)) + '</span> ' + verbo +
+      ' <b>' + Math.abs(pct).toFixed(1) + '%</b>.';
+  }
+  </script>
+  {% endif %}
+
+<script>
+// Llevar el estimado a la casilla de lo que se le manda al cliente.
+//
+// Se pasa la cifra exacta y no una redondeada: el redondeo es de la casa,
+// siempre hacia arriba y a numero cerrado, y se hace sobre el numero ya puesto.
+// El sistema propone, nunca decide.
+function pasarALaHoja() {
+  const exacto = document.getElementById('exacto');
+  const casilla = document.getElementById('impuesto_reportado');
+  if (!exacto || !casilla) return;
+  casilla.value = exacto.dataset.exacto;
+  casilla.classList.remove('destacada');
+  // Reiniciar la animacion: sin esto, el segundo clic no destella y parece
+  // que el boton no hizo nada.
+  void casilla.offsetWidth;
+  casilla.classList.add('destacada');
+  casilla.focus();
+  casilla.select();
+}
+
+// Y al portapapeles, para pegarla en un correo o en el sistema del agente.
+function copiarCifra(boton) {
+  const exacto = document.getElementById('exacto');
+  if (!exacto) return;
+  const texto = exacto.dataset.exacto;
+  const decir = function () {
+    const antes = boton.textContent;
+    boton.textContent = '{% trans "Copied" %}';
+    setTimeout(function () { boton.textContent = antes; }, 1400);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(decir, function () {});
+    return;
+  }
+  // Navegador sin portapapeles moderno, o pagina servida sin https: se copia
+  // con el camino de siempre en vez de dejar el boton muerto.
+  const caja = document.createElement('textarea');
+  caja.value = texto;
+  caja.style.position = 'fixed';
+  caja.style.opacity = '0';
+  document.body.appendChild(caja);
+  caja.select();
+  try { document.execCommand('copy'); decir(); } catch (e) {}
+  document.body.removeChild(caja);
+}
+</script>
+
+</div>
+
+{% if es_telefono %}{% include "warehouse/partials/barra_inferior.html" with activa='impuestos' %}{% endif %}
+
+</body>
+</html>

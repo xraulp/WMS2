@@ -108,6 +108,9 @@ TEMPLATES = [
                 # base de las tres pantallas, asi que no puede depender de que
                 # cada vista se acuerde de pasarlos.
                 'warehouse.context_processors.preferencias',
+                # Si quien mira esta en un telefono: decide la barra de
+                # abajo en las pantallas que no son el movil.
+                'warehouse.context_processors.vista',
             ],
         },
     },

@@ -1250,6 +1250,28 @@ class Tenant(models.Model):
         verbose_name_plural = "Tenants"
         ordering = ['name']
 
+    # Las formas juridicas no distinguen a ninguna empresa: todas son LLC o
+    # SA de CV. Fuera de las siglas.
+    FORMAS_JURIDICAS = {'LLC', 'INC', 'LTD', 'CORP', 'CO', 'SA', 'DE', 'CV',
+                        'RL', 'SAPI', 'SC', 'S', 'A', 'C', 'V'}
+
+    @property
+    def sigla(self):
+        """
+        Como se nombra la empresa donde no cabe la razon social: la barra de
+        arriba del telefono, donde el nombre entero empujaba la salida fuera de
+        la pantalla.
+
+        Manda el nombre corto, que es una palabra elegida. Sin el, las
+        iniciales de la razon social: "Logistics Laredo LLC" da "LL".
+        """
+        if (self.short_name or '').strip():
+            return self.short_name.strip().upper()
+        # Sin puntos: "S.A.P.I." es una forma juridica y no cuatro palabras.
+        palabras = [p for p in re.split(r'[\s,]+', (self.name or '').upper().replace('.', ''))
+                    if p and p not in self.FORMAS_JURIDICAS]
+        return ''.join(p[0] for p in palabras[:4]) or (self.name or '')[:6].upper()
+
     def __str__(self):
         return f"{self.name} ({self.get_type_display()})"
 
@@ -2109,10 +2131,13 @@ class Pedimento(models.Model):
             faltan.append(_('No goods assigned yet'))
         if not self.tiene_numero:
             faltan.append(_('The pedimento number'))
-        sin_factura = self.operaciones_sin_factura
-        if sin_factura:
-            faltan.append(_('The commercial invoice of %(ops)s')
-                          % {'ops': ', '.join(op.custom_id for op in sin_factura)})
+
+        # La factura comercial **no** esta en esta lista, y no es un olvido.
+        # Pedirla aqui era pedir dos pruebas del mismo hecho: el COVE, que si
+        # se exige, es la transmision del valor de esa factura a la Ventanilla
+        # Unica y no se puede generar sin tenerla. El archivo se sigue pidiendo
+        # para el expediente -- lo enseña `operaciones_sin_factura`, que la
+        # pantalla usa para avisar --, pero ya no frena la revision.
 
         cajones = self.documentos_por_ranura()
         etiquetas = dict(PedimentoDocument.RANURAS)
@@ -2481,6 +2506,35 @@ class RenglonDeImpuestos(models.Model):
                                          null=True, blank=True)
 
     notas       = models.TextField(blank=True, default='')
+
+    # ── Lo que solo se teclea en una linea a mano ────────────────────────────
+    # Valen mientras el renglon no tenga operacion. Cuando la mercancia llega y
+    # se enlaza con su entrada, el sistema vuelve a mandar: a partir de ahi hay
+    # de donde leer el status, la factura y el pedimento.
+    status_manual    = models.CharField(max_length=60, blank=True, default='',
+                                        verbose_name='Status tecleado')
+    factura_manual   = models.BooleanField(null=True, blank=True,
+                                           verbose_name='Factura, tecleada')
+    pedimento_manual = models.CharField(max_length=30, blank=True, default='',
+                                        verbose_name='Pedimento tecleado')
+
+    # Quitar un renglon de la hoja no borra nada. El embarque sigue en bodega,
+    # en operaciones y en su pedimento; lo unico que deja de pasar es que
+    # aparezca en la hoja del cliente. Se hace asi porque la hoja la arma
+    # tambien el cliente, y equivocarse al ordenarla no puede costar una
+    # entrada capturada. Volver a ponerlo es un clic.
+    en_la_hoja  = models.BooleanField(default=True,
+                                      verbose_name='Aparece en la hoja')
+    quitado_en  = models.DateTimeField(null=True, blank=True)
+    quitado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                    blank=True, related_name='renglones_quitados')
+
+    # Cuando salio solo, por haber cruzado y estar pagado. Va aparte de
+    # `quitado_por` para que la pantalla de retirados pueda decir por que se
+    # fue, en vez de enseñar un hueco donde deberia ir un nombre.
+    cerrado_en  = models.DateTimeField(null=True, blank=True,
+                                       verbose_name='Cerrado por el sistema')
+
     created_at  = models.DateTimeField(auto_now_add=True)
     updated_at  = models.DateTimeField(auto_now=True)
     updated_by  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
@@ -2531,6 +2585,17 @@ class RenglonDeImpuestos(models.Model):
         return self.operation.date if self.operation else None
 
     @property
+    def fecha_enviado_a_rev_y_mv(self):
+        """
+        El dia que el pedimento salio a revision del cliente.
+
+        Es la columna que Diego teclea hoy en su Excel, y sale sola: la escribe
+        el boton de "enviar a revision" del pedimento, no quien arma la hoja.
+        """
+        ped = self.pedimento
+        return ped.enviado_a_revision_en if ped else None
+
+    @property
     def pedimento(self):
         """El pedimento en el que cayeron los bultos de este embarque."""
         if not self.operation:
@@ -2538,6 +2603,20 @@ class RenglonDeImpuestos(models.Model):
         renglon = self.operation.renglones_de_pedimento.select_related(
             'pedimento').first()
         return renglon.pedimento if renglon else None
+
+    @property
+    def pedimento_texto(self):
+        """
+        El numero de pedimento como sale en la hoja.
+
+        Del pedimento de verdad cuando lo hay, y del que se tecleo cuando la
+        linea es a mano. Existe para que la plantilla no tenga que preguntar
+        dos veces ni saber cual de los dos mira.
+        """
+        ped = self.pedimento
+        if ped is not None:
+            return ped.ped_consecutivo or ped.etiqueta
+        return (self.pedimento_manual or '').strip()
 
     # ── La factura, que decide si el valor es firme ──────────────────────────
 
@@ -2551,7 +2630,23 @@ class RenglonDeImpuestos(models.Model):
 
     @property
     def tiene_factura(self):
-        return self.factura_comercial is not None
+        """
+        Si el cliente ya mando la factura de este embarque.
+
+        Manda el archivo cuando esta: un documento cargado no admite discusion.
+        Cuando no esta, vale lo que se marco al capturar -- el check de «ya
+        tenemos la factura» --, porque el papel puede estar en la mano de quien
+        captura sin que nadie lo haya escaneado todavia.
+
+        Esto contesta «la tenemos», no «esta en el expediente». Las dos
+        preguntas son distintas y ahora se responden por separado: para el
+        expediente esta `operaciones_sin_factura`, que mira solo el archivo.
+        """
+        if self.factura_comercial is not None:
+            return True
+        if self.factura_manual is not None:
+            return self.factura_manual
+        return False
 
     @property
     def estado_del_valor(self):
@@ -2605,6 +2700,14 @@ class RenglonDeImpuestos(models.Model):
         del tenant de su nombre corto.
         """
         from .utils import nombre_corto
+
+        # Una linea a mano puede traer el status escrito -- 'NO HA LLEGADO',
+        # 'ETA 15/09', lo que haga falta --, porque no hay nada en el sistema
+        # de donde deducirlo. Se respeta tal cual y sin abreviacion pegada: lo
+        # que se tecleo es lo que se quiso decir.
+        if self.operation_id is None and (self.status_manual or '').strip():
+            return self.status_manual.strip()
+
         clave = self.status
 
         # Las dos abreviaciones que van al final del status. Ninguna se teclea
@@ -2634,6 +2737,21 @@ class RenglonDeImpuestos(models.Model):
         if clave == self.LISTO_PAGO:
             return con('LISTO PARA VALIDACION Y PAGO', suyo)
         return 'VALIDADOS Y PAGADOS'
+
+    @property
+    def ya_termino(self):
+        """
+        Si este embarque ya no tiene nada que hacer en la hoja.
+
+        Las dos cosas a la vez: el pedimento pagado y la mercancia cruzada. Con
+        una sola no basta -- un pedimento pagado cuya mercancia sigue en bodega
+        es justo lo que el cliente quiere ver --, y por eso se comprueban las
+        dos.
+        """
+        if self.status != self.PAGADO or self.operation_id is None:
+            return False
+        return self.operation.cruces.filter(
+            task__estado=CrossingTask.CRUZADA).exists()
 
     @property
     def la_pelota_es_del_cliente(self):
