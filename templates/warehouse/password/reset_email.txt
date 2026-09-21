@@ -1,0 +1,7 @@
+{% load i18n %}{% blocktrans %}Somebody asked to set a new password for the WMS account "{{ user }}".{% endblocktrans %}
+
+{% trans "Open this link to choose it:" %}
+{{ protocol }}://{{ domain }}{% url 'password_reset_confirm' uidb64=uid token=token %}
+
+{% trans "The link works once and expires in a few hours." %}
+{% trans "If it was not you, ignore this message: nothing changes until somebody opens the link." %}

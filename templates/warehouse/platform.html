@@ -50,6 +50,14 @@
     {% if tiene_empresa %}
     <a href="{% url 'dashboard' %}" class="btn-lo">← {% trans "My company" %}</a>
     {% endif %}
+    {% comment %}
+      Esta barra no usa el parcial de la cuenta --la plataforma no tiene tenant
+      ni perfil que pintar-- asi que el enlace se repite aqui. Sin el, el
+      administrador del SaaS seria el unico que no puede cambiar su propia
+      contrasena, que es justo al reves de lo que conviene: por encima de el no
+      hay nadie que se la reasigne.
+    {% endcomment %}
+    <a href="{% url 'mi_cuenta' %}" class="btn-lo">{% trans "My account" %}</a>
     <a href="{% url 'logout' %}" class="btn-lo">{% trans "Sign out" %}</a>
   </div>
 </div>

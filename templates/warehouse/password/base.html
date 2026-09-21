@@ -1,0 +1,64 @@
+{% load i18n %}
+{% get_current_language as idioma_actual %}
+{% comment %}
+El marco de las cuatro pantallas de la recuperacion.
+
+Se parecen al login a proposito, y no al tablero: quien las mira no ha entrado
+--o esta a punto de volver a entrar-- y la pantalla que reconoce es aquella.
+Repetir el fondo oscuro, la tarjeta y el logotipo evita la sensacion de haber
+sido mandado a otro sitio, que en una pantalla donde se escribe una contrasena
+es justo lo que hace desconfiar.
+
+No usa los colores del tema porque el login tampoco: sin sesion no hay perfil
+donde guardar la eleccion, asi que esta pantalla se ve igual para todos.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block titulo %}{% trans "Password" %}{% endblock %} — WMS</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'IBM Plex Sans',sans-serif;background:#0f172a;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .pw-wrap{width:100%;max-width:400px}
+    .pw-logo{text-align:center;margin-bottom:28px}
+    .pw-logo h1{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:600;color:#fff;letter-spacing:.06em}
+    .pw-logo h1 span{color:#0ea5e9}
+    .pw-card{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:30px}
+    .pw-card h2{font-size:17px;font-weight:600;color:#f1f5f9;margin-bottom:8px}
+    .pw-card p.lead{font-size:13px;line-height:1.6;color:#94a3b8;margin-bottom:20px}
+    .form-group{margin-bottom:18px}
+    .form-group label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:6px}
+    .form-input{width:100%;padding:10px 14px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#f1f5f9;font-family:'IBM Plex Sans',sans-serif;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s}
+    .form-input:focus{border-color:#0ea5e9;box-shadow:0 0 0 3px rgba(14,165,233,.15)}
+    .form-input::placeholder{color:#475569}
+    .btn-pw{width:100%;padding:11px;background:#0ea5e9;color:#fff;border:none;border-radius:8px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;margin-top:4px;transition:background .15s}
+    .btn-pw:hover{background:#0284c7}
+    .msg-err{background:#450a0a;border:1px solid #7f1d1d;color:#fca5a5;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;line-height:1.5}
+    .msg-ok{background:#052e1a;border:1px solid #166534;color:#86efac;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;line-height:1.5}
+    .pw-pistas{font-size:12px;line-height:1.7;color:#64748b;margin-top:14px;padding-left:18px}
+    .pw-volver{display:block;text-align:center;margin-top:20px;font-size:13px;color:#64748b;text-decoration:none}
+    .pw-volver:hover{color:#94a3b8}
+  </style>
+</head>
+<body>
+  <div class="pw-wrap">
+    <div class="pw-logo">
+      <h1>W<span>M</span>S</h1>
+    </div>
+    <div class="pw-card">
+      {% block contenido %}{% endblock %}
+    </div>
+    {% comment %}
+      La salida de abajo la quita la pantalla que ya ofrece entrar con su
+      propio boton: dos enlaces al mismo sitio, uno encima del otro, hacen
+      dudar de si llevan a cosas distintas.
+    {% endcomment %}
+    {% block volver %}
+    <a class="pw-volver" href="{% url 'login' %}">&#8592; {% trans "Back to sign in" %}</a>
+    {% endblock %}
+  </div>
+</body>
+</html>

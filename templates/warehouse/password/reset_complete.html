@@ -1,0 +1,17 @@
+{% extends "warehouse/password/base.html" %}
+{% load i18n %}
+
+{% block titulo %}{% trans "Password changed" %}{% endblock %}
+
+{% block contenido %}
+  <h2>{% trans "Your password is changed" %}</h2>
+  <p class="lead">
+    {% blocktrans %}It is not stored anywhere — the only copy is the one you remember. Sign in with it now.{% endblocktrans %}
+  </p>
+  <a href="{% url 'login' %}" class="btn-pw"
+     style="display:block;text-align:center;text-decoration:none;line-height:1.4">
+    {% trans "Sign In" %}
+  </a>
+{% endblock %}
+
+{% block volver %}{% endblock %}

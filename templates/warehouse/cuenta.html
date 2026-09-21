@@ -1,0 +1,142 @@
+{% load i18n %}
+{% get_current_language as idioma_actual %}
+{% comment %}
+La cuenta de quien entro: su contrasena y su correo de recuperacion.
+
+Pantalla propia y no un panel del tablero, por dos razones. La primera es que
+el administrador de plataforma no tiene tablero --no pertenece a ninguna
+empresa-- y tambien tiene contrasena que cambiar. La segunda es el telefono:
+en el movil no hay sitio para una pestana mas, y esto no se usa a diario;
+se llega desde el menu de la cuenta, que es donde se busca.
+
+Los campos son grandes a proposito. Se escriben a dedo, dos veces, sin ver lo
+que se escribe: es justo el formulario donde un campo estrecho se paga con un
+intento fallido. Los 16px del tipo tambien son a proposito -- por debajo, Safari
+de iPhone hace zoom al entrar en el campo y descoloca la pantalla.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "My account" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+    .barra{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--tb-bg);color:var(--on-accent)}
+    .barra a{color:var(--bdr-fuerte);text-decoration:none;font-size:20px;line-height:1;padding:4px 6px;border-radius:6px}
+    .barra a:hover{background:rgba(255,255,255,.08);color:var(--on-accent)}
+    .barra h1{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;letter-spacing:.04em}
+    .envoltura{max-width:520px;margin:0 auto;padding:16px 16px 40px}
+    .quien{background:var(--surface);border:1px solid var(--bdr);border-radius:var(--rL);
+           padding:14px 16px;margin-bottom:14px}
+    .quien strong{font-size:16px}
+    .quien div{font-size:12px;color:var(--soft);margin-top:3px}
+    .tarjeta{background:var(--surface);border:1px solid var(--bdr);border-radius:var(--rL);
+             padding:18px 16px;margin-bottom:14px}
+    .tarjeta h2{font-size:14px;font-weight:600;margin-bottom:4px}
+    .tarjeta p.pie{font-size:12px;line-height:1.6;color:var(--soft);margin-bottom:16px}
+    label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;
+          letter-spacing:.06em;color:var(--soft);margin-bottom:6px}
+    .campo{margin-bottom:14px}
+    input[type=password],input[type=email]{width:100%;padding:11px 12px;font-size:16px;
+          font-family:'IBM Plex Sans',sans-serif;color:var(--ink);background:var(--bg-sutil);
+          border:1px solid var(--bdr-fuerte);border-radius:var(--r);outline:none}
+    input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--asoft)}
+    button{width:100%;padding:12px;background:var(--accent);color:var(--on-accent);border:none;
+           border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:15px;
+           font-weight:500;cursor:pointer}
+    button:hover{background:var(--adark)}
+    .aviso{padding:11px 14px;border-radius:var(--r);font-size:13px;line-height:1.5;margin-bottom:14px}
+    .aviso.ok{background:var(--ok-bg);color:var(--ok-ink-fuerte);border:1px solid var(--green)}
+    .aviso.mal{background:var(--err-bg);color:var(--err-ink);border:1px solid var(--err-bdr)}
+    .nota{font-size:12px;line-height:1.6;color:var(--soft);margin-top:12px}
+    .nota.alerta{background:var(--warn-bg-suave);border:1px solid var(--warn-bdr);
+                 color:var(--warn-ink);border-radius:var(--r);padding:10px 12px}
+  </style>
+</head>
+<body>
+
+<div class="barra">
+  <a href="{% url volver_a %}" title="{% trans "Back" %}" aria-label="{% trans "Back" %}">&#8592;</a>
+  <h1>{% trans "MY ACCOUNT" %}</h1>
+</div>
+
+<div class="envoltura">
+
+  <div class="quien">
+    <strong>{{ request.user.username }}</strong>
+    <div>
+      {% if perfil %}{{ perfil.get_role_display }}{% if tenant %} · {{ tenant.name }}{% endif %}
+      {% elif rol_de_plataforma %}{% trans "Platform" %} · {{ rol_de_plataforma.get_role_display }}{% endif %}
+    </div>
+  </div>
+
+  {% if msg %}<div class="aviso {% if msg_error %}mal{% else %}ok{% endif %}">{{ msg }}</div>{% endif %}
+
+  <div class="tarjeta">
+    <h2>{% trans "Change my password" %}</h2>
+    <p class="pie">
+      {% blocktrans %}Nobody else can read it, not even an administrator: the only copy is the one you remember.{% endblocktrans %}
+    </p>
+    <form method="post" autocomplete="off">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="password">
+      <div class="campo">
+        <label for="current_password">{% trans "Current password" %}</label>
+        <input id="current_password" name="current_password" type="password"
+               autocomplete="current-password" required>
+      </div>
+      <div class="campo">
+        <label for="new_password">{% trans "New password" %}</label>
+        <input id="new_password" name="new_password" type="password"
+               autocomplete="new-password" required>
+      </div>
+      <div class="campo">
+        <label for="new_password2">{% trans "Repeat the new password" %}</label>
+        <input id="new_password2" name="new_password2" type="password"
+               autocomplete="new-password" required>
+      </div>
+      <button type="submit">{% trans "Change my password" %}</button>
+    </form>
+  </div>
+
+  <div class="tarjeta">
+    <h2>{% trans "Recovery email" %}</h2>
+    <p class="pie">
+      {% blocktrans %}The address where a link to set a new password would be sent if you forget it. It is used for nothing else.{% endblocktrans %}
+    </p>
+    {% if not request.user.email %}
+      {% comment %}
+        El aviso solo aparece cuando falta, que es el caso que importa: casi
+        todas las cuentas se dieron de alta con un nombre y una contrasena, sin
+        correo, y de eso nadie se entera hasta el dia que la pierde.
+      {% endcomment %}
+      <div class="nota alerta" style="margin-top:0;margin-bottom:14px">
+        {% blocktrans %}You have no email saved, so today you cannot recover your password on your own: an administrator would have to reset it for you.{% endblocktrans %}
+      </div>
+    {% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="email">
+      <div class="campo">
+        <label for="email">{% trans "Email" %}</label>
+        <input id="email" name="email" type="email" autocomplete="email"
+               value="{{ request.user.email }}"
+               placeholder="{% trans "you@yourcompany.com" %}">
+      </div>
+      <button type="submit">{% trans "Save email" %}</button>
+    </form>
+    {% if not correo_del_sistema %}
+    <p class="nota">
+      {% blocktrans %}Note: this installation has no outgoing email configured yet, so recovery messages cannot be sent until it is.{% endblocktrans %}
+    </p>
+    {% endif %}
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -34,6 +34,9 @@ quiera ver el tablero de todos modos.
 .cuenta-salir{border:1px solid var(--tb-bdr);color:var(--faint);padding:3px 10px;border-radius:6px;
               font-size:11px;text-decoration:none;white-space:nowrap}
 .cuenta-salir:hover{border-color:var(--red);color:var(--red)}
+.cuenta-mia{border:1px solid var(--tb-bdr);color:var(--faint);padding:3px 10px;border-radius:6px;
+            font-size:11px;text-decoration:none;white-space:nowrap}
+.cuenta-mia:hover{border-color:var(--accent);color:var(--accent)}
 
 /* Recogido detras del circulo. */
 .cuenta.en-menu .cuenta-btn{display:flex}
@@ -58,6 +61,7 @@ quiera ver el tablero de todos modos.
             padding:7px 11px !important}
 .cuenta.en-menu .cuenta-vista{display:block;color:var(--ink);text-decoration:none}
 .cuenta.en-menu .cuenta-salir{border:none;border-radius:0;color:var(--red);font-size:14px;font-weight:600}
+.cuenta.en-menu .cuenta-mia{border:none;border-radius:0;color:var(--ink);font-size:14px}
 </style>
 
 <div class="cuenta" id="cuenta"{% if siempre_menu %} data-siempre="1"{% endif %}>
@@ -79,6 +83,14 @@ quiera ver el tablero de todos modos.
     {% elif vista_alterna == 'escritorio' %}
     <a class="cuenta-vista" href="{% url 'dashboard' %}?vista=escritorio">&#128421; {% trans "Desktop view" %}</a>
     {% endif %}
+    {% comment %}
+      La contrasena propia se cambia desde aqui y no desde la pestana de
+      usuarios: esa pantalla es la de administrar a los demas, no la ve un
+      operador ni un cliente, y la contrasena de uno mismo es justo lo que
+      todos tienen. Al estar en este parcial aparece igual en el tablero y en
+      el movil, que es donde de verdad se usa.
+    {% endcomment %}
+    <a class="cuenta-mia" href="{% url 'mi_cuenta' %}">{% trans "My account" %}</a>
     <a class="cuenta-salir" href="{% url 'logout' %}">{% trans "Sign out" %}</a>
   </div>
 </div>

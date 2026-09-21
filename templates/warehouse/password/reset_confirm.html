@@ -1,0 +1,55 @@
+{% extends "warehouse/password/base.html" %}
+{% load i18n %}
+
+{% block titulo %}{% trans "New password" %}{% endblock %}
+
+{% block contenido %}
+{% if validlink %}
+  <h2>{% trans "Choose a new password" %}</h2>
+  <p class="lead">
+    {% blocktrans %}Type it twice. Nobody else can read it afterwards, not even an administrator.{% endblocktrans %}
+  </p>
+
+  {% comment %}
+    Los errores salen del `SetPasswordForm` de Django -- las dos copias no
+    coinciden, la contrasena es demasiado corta, demasiado comun o se parece al
+    nombre de usuario -- y vienen ya traducidos. Se pintan juntos porque el
+    formulario tiene dos campos y el motivo casi siempre habla de los dos.
+  {% endcomment %}
+  {% if form.errors %}
+    <div class="msg-err">
+      {% for campo in form %}{% for e in campo.errors %}{{ e }} {% endfor %}{% endfor %}
+      {% for e in form.non_field_errors %}{{ e }} {% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-group">
+      <label for="id_new_password1">{% trans "New password" %}</label>
+      <input id="id_new_password1" name="new_password1" type="password" class="form-input"
+             placeholder="••••••••" autocomplete="new-password" required>
+    </div>
+    <div class="form-group">
+      <label for="id_new_password2">{% trans "Repeat the new password" %}</label>
+      <input id="id_new_password2" name="new_password2" type="password" class="form-input"
+             placeholder="••••••••" autocomplete="new-password" required>
+    </div>
+    <button type="submit" class="btn-pw">{% trans "Save the new password" %}</button>
+  </form>
+{% else %}
+  <h2>{% trans "This link no longer works" %}</h2>
+  {% comment %}
+    Un enlace caduca, y tambien deja de valer en cuanto se usa una vez o en
+    cuanto la contrasena cambia por otro camino. Los tres casos llegan aqui, y
+    los tres se arreglan igual: pedir otro.
+  {% endcomment %}
+  <p class="lead">
+    {% blocktrans %}Password links expire, and they stop working once they have been used. Ask for a new one.{% endblocktrans %}
+  </p>
+  <a href="{% url 'password_reset' %}" class="btn-pw"
+     style="display:block;text-align:center;text-decoration:none;line-height:1.4">
+    {% trans "Ask for a new link" %}
+  </a>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "warehouse/password/base.html" %}
+{% load i18n %}
+
+{% block titulo %}{% trans "Link sent" %}{% endblock %}
+
+{% block contenido %}
+  <h2>{% trans "Check your inbox" %}</h2>
+  {% comment %}
+    Django no dice si esa direccion existe, y la pantalla tampoco: contestar
+    "ese correo no esta registrado" le confirma a cualquiera quien tiene cuenta
+    aqui. Por eso el mensaje se escribe en condicional.
+  {% endcomment %}
+  <p class="lead">
+    {% blocktrans %}If there is an account with that email address, a message with a link to set a new password is on its way. The link works once and expires in a few hours.{% endblocktrans %}
+  </p>
+  <p class="lead" style="margin-bottom:0">
+    {% blocktrans %}If nothing arrives, check the spam folder — and remember that accounts created without an email address cannot receive it.{% endblocktrans %}
+  </p>
+{% endblock %}

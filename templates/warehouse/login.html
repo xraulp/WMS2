@@ -29,6 +29,9 @@
     .btn-login:hover{background:#0284c7}
     .error-msg{background:#450a0a;border:1px solid #7f1d1d;color:#fca5a5;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
     #login-error{min-height:0}
+    .login-olvido{text-align:center;margin-top:16px}
+    .login-olvido a{font-size:12px;color:#64748b;text-decoration:none}
+    .login-olvido a:hover{color:#94a3b8;text-decoration:underline}
     /* El idioma se elige antes de entrar, asi que su sitio esta fuera de la
        tarjeta: no es una credencial mas, es como se lee lo demas. */
     .login-idioma{text-align:center;margin-top:20px}
@@ -74,6 +77,14 @@
         </div>
         <button type="submit" class="btn-login">{% trans "Sign In" %}</button>
       </form>
+      {% comment %}
+        Debajo del boton y en letra pequena: es la salida de emergencia, no una
+        opcion mas. Dentro de la tarjeta porque es parte de entrar; el selector
+        de idioma, que no lo es, se queda fuera.
+      {% endcomment %}
+      <div class="login-olvido">
+        <a href="{% url 'password_reset' %}">{% trans "Forgot your password?" %}</a>
+      </div>
     </div>
     {% comment %}
       El selector de idioma de las demas pantallas vive en la barra de arriba,

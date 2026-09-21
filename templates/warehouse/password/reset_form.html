@@ -1,0 +1,38 @@
+{% extends "warehouse/password/base.html" %}
+{% load i18n %}
+
+{% block titulo %}{% trans "Recover password" %}{% endblock %}
+
+{% block contenido %}
+  <h2>{% trans "Recover your password" %}</h2>
+  <p class="lead">
+    {% blocktrans %}Type the email address of your account. We will send you a link to set a new password.{% endblocktrans %}
+  </p>
+
+  {% if error_de_envio %}<div class="msg-err">{{ error_de_envio }}</div>{% endif %}
+  {% if form.errors %}
+    <div class="msg-err">{% trans "That does not look like an email address." %}</div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-group">
+      <label for="id_email">{% trans "Email" %}</label>
+      <input id="id_email" name="email" type="email" class="form-input"
+             placeholder="{% trans "you@yourcompany.com" %}"
+             autocomplete="email" required>
+    </div>
+    <button type="submit" class="btn-pw">{% trans "Send the link" %}</button>
+  </form>
+
+  {% comment %}
+    El aviso de que hace falta tener correo puesto va aqui y no solo despues:
+    la mayoria de las cuentas se creo sin correo --se da de alta con un nombre y
+    una contrasena-- y quien no lo tenga no recibira nada por mucho que escriba
+    la direccion correcta. Decirselo antes le ahorra esperar un mensaje que no
+    va a llegar.
+  {% endcomment %}
+  <p style="font-size:12px;color:#64748b;line-height:1.6;margin-top:16px">
+    {% blocktrans %}This only works if your account has that email saved. If you never set one, ask an administrator of your company to reset your password.{% endblocktrans %}
+  </p>
+{% endblock %}

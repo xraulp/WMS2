@@ -39,10 +39,17 @@ python manage.py migrate
 
 ### 4. Create the admin user
 ```bash
-python setup_admin.py
+python manage.py createsuperuser
 ```
-Default credentials: **username:** `admin` / **password:** `admin123`
-> ⚠️ Change this password after first login via `/admin/`
+This asks for the username and password interactively, so no password is
+written down anywhere. The `setup_admin.py` script that used to live here
+created `admin` with a password printed in this file, so anybody who read the
+repository knew how to sign in; it was removed.
+
+Once signed in, every user can change their own password from **My account**,
+in the menu behind their initial, and recover it from the *Forgot your
+password?* link on the sign-in screen — that one needs an email address saved
+in the account.
 
 ### 5. Configure your SMTP email settings
 
@@ -83,7 +90,6 @@ Open your browser at: **http://127.0.0.1:8000**
 warehouse_system/
 │
 ├── manage.py                   ← Django entry point
-├── setup_admin.py              ← One-time admin user creator
 ├── requirements.txt
 │
 ├── warehouse_system/           ← Django project config
@@ -158,11 +164,11 @@ warehouse_system/
 
 ## Adding Users
 
-Additional users can be created via the Django admin panel:
+Additional users are created from the **Users** screen of each company, and
+platform administrators with:
+```bash
+python manage.py create_platform_user <name> --role admin
 ```
-http://127.0.0.1:8000/admin/
-```
-Login with: `admin` / `admin123`
 
 ---
 

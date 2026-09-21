@@ -2530,3 +2530,160 @@ msgstr "Factura de %(id)s marcada."
 
 msgid "on file…"
 msgstr "del expediente…"
+
+# La contrasena propia y la recuperacion por correo.
+msgid "The current password is not correct."
+msgstr "La contraseña actual no es correcta."
+
+msgid "Type the new password."
+msgstr "Escribe la contraseña nueva."
+
+msgid "The two copies of the new password do not match."
+msgstr "Las dos copias de la contraseña nueva no coinciden."
+
+msgid "The new password is the same as the current one."
+msgstr "La contraseña nueva es la misma que la actual."
+
+msgid "That does not look like an email address."
+msgstr "Eso no parece una dirección de correo."
+
+msgid "Another account already uses that email address."
+msgstr "Otra cuenta ya usa esa dirección de correo."
+
+msgid "Password changed. It is not stored anywhere — the only copy is the one you remember."
+msgstr "Contraseña cambiada. No queda guardada en ninguna parte: la única copia es la que recuerdas."
+
+msgid "Recovery email saved."
+msgstr "Correo de recuperación guardado."
+
+msgid "Recovery email removed. Without one, only an administrator can reset your password."
+msgstr "Correo de recuperación quitado. Sin él, solo un administrador puede reasignarte la contraseña."
+
+msgid "The recovery email could not be sent right now. Try again in a few minutes, or ask an administrator to reset your password."
+msgstr "El correo de recuperación no pudo enviarse ahora mismo. Inténtalo en unos minutos o pide a un administrador que te reasigne la contraseña."
+
+msgid "My account"
+msgstr "Mi cuenta"
+
+msgid "MY ACCOUNT"
+msgstr "MI CUENTA"
+
+msgid "Back"
+msgstr "Volver"
+
+msgid "Change my password"
+msgstr "Cambiar mi contraseña"
+
+msgid "Nobody else can read it, not even an administrator: the only copy is the one you remember."
+msgstr "Nadie más puede leerla, ni siquiera un administrador: la única copia es la que recuerdas."
+
+msgid "Current password"
+msgstr "Contraseña actual"
+
+msgid "New password"
+msgstr "Contraseña nueva"
+
+msgid "Repeat the new password"
+msgstr "Repite la contraseña nueva"
+
+msgid "Recovery email"
+msgstr "Correo de recuperación"
+
+msgid "The address where a link to set a new password would be sent if you forget it. It is used for nothing else."
+msgstr "La dirección a la que se enviaría un enlace para poner una contraseña nueva si la olvidas. No se usa para nada más."
+
+msgid "You have no email saved, so today you cannot recover your password on your own: an administrator would have to reset it for you."
+msgstr "No tienes ningún correo guardado, así que hoy no puedes recuperar tu contraseña por tu cuenta: tendría que reasignártela un administrador."
+
+msgid "you@yourcompany.com"
+msgstr "tu@tuempresa.com"
+
+msgid "Save email"
+msgstr "Guardar el correo"
+
+msgid "Note: this installation has no outgoing email configured yet, so recovery messages cannot be sent until it is."
+msgstr "Nota: esta instalación todavía no tiene configurada la salida de correo, así que los mensajes de recuperación no pueden enviarse hasta que la tenga."
+
+msgid "Back to sign in"
+msgstr "Volver a entrar"
+
+msgid "Recover password"
+msgstr "Recuperar la contraseña"
+
+msgid "Recover your password"
+msgstr "Recupera tu contraseña"
+
+msgid "Type the email address of your account. We will send you a link to set a new password."
+msgstr "Escribe la dirección de correo de tu cuenta. Te enviaremos un enlace para poner una contraseña nueva."
+
+msgid "Send the link"
+msgstr "Enviar el enlace"
+
+msgid "This only works if your account has that email saved. If you never set one, ask an administrator of your company to reset your password."
+msgstr "Esto solo funciona si tu cuenta tiene ese correo guardado. Si nunca pusiste ninguno, pide a un administrador de tu empresa que te reasigne la contraseña."
+
+msgid "Link sent"
+msgstr "Enlace enviado"
+
+msgid "Check your inbox"
+msgstr "Revisa tu correo"
+
+msgid "If there is an account with that email address, a message with a link to set a new password is on its way. The link works once and expires in a few hours."
+msgstr "Si hay una cuenta con esa dirección, va en camino un mensaje con un enlace para poner una contraseña nueva. El enlace sirve una sola vez y caduca en unas horas."
+
+msgid "If nothing arrives, check the spam folder — and remember that accounts created without an email address cannot receive it."
+msgstr "Si no llega nada, revisa la carpeta de correo no deseado, y ten en cuenta que las cuentas creadas sin dirección de correo no pueden recibirlo."
+
+msgid "Choose a new password"
+msgstr "Elige una contraseña nueva"
+
+msgid "Type it twice. Nobody else can read it afterwards, not even an administrator."
+msgstr "Escríbela dos veces. Después nadie más puede leerla, ni siquiera un administrador."
+
+msgid "Save the new password"
+msgstr "Guardar la contraseña nueva"
+
+msgid "This link no longer works"
+msgstr "Este enlace ya no sirve"
+
+msgid "Password links expire, and they stop working once they have been used. Ask for a new one."
+msgstr "Los enlaces de contraseña caducan, y dejan de servir en cuanto se usan una vez. Pide otro."
+
+msgid "Ask for a new link"
+msgstr "Pedir un enlace nuevo"
+
+msgid "Password changed"
+msgstr "Contraseña cambiada"
+
+msgid "Your password is changed"
+msgstr "Tu contraseña está cambiada"
+
+msgid "It is not stored anywhere — the only copy is the one you remember. Sign in with it now."
+msgstr "No queda guardada en ninguna parte: la única copia es la que recuerdas. Entra con ella."
+
+msgid "Set a new WMS password"
+msgstr "Pon una contraseña nueva del WMS"
+
+msgid "Password recovery"
+msgstr "Recuperación de contraseña"
+
+msgid "Somebody asked to set a new password for the WMS account \"%(user)s\"."
+msgstr "Alguien pidió poner una contraseña nueva para la cuenta del WMS «%(user)s»."
+
+msgid "Somebody asked to set a new password for the account <b>%(user)s</b>."
+msgstr "Alguien pidió poner una contraseña nueva para la cuenta <b>%(user)s</b>."
+
+msgid "Open this link to choose it:"
+msgstr "Abre este enlace para elegirla:"
+
+msgid "Or copy this address into your browser:"
+msgstr "O copia esta dirección en tu navegador:"
+
+msgid "The link works once and expires in a few hours."
+msgstr "El enlace sirve una sola vez y caduca en unas horas."
+
+msgid "If it was not you, ignore this message: nothing changes until somebody opens the link."
+msgstr "Si no fuiste tú, ignora este mensaje: nada cambia hasta que alguien abra el enlace."
+
+msgid "Forgot your password?"
+msgstr "¿Olvidaste tu contraseña?"

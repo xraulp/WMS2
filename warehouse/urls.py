@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, cuenta
 
 urlpatterns = [
     path('', views.login_view, name='login'),
@@ -70,6 +70,21 @@ urlpatterns = [
     path('catalog/autocomplete/', views.catalog_autocomplete, name='catalog_autocomplete'),
     # Users
     # Bodegas y posiciones
+    # La cuenta de quien entro: su contrasena y su correo de recuperacion.
+    # No cuelga de `users/` porque esa pantalla es la de administrar a los
+    # demas, y a esta llega cualquiera -- incluido el administrador de
+    # plataforma, que no pertenece a ninguna empresa.
+    path('cuenta/', cuenta.mi_cuenta, name='mi_cuenta'),
+
+    # La recuperacion por correo, que se pide sin haber entrado.
+    path('password/reset/', cuenta.PedirElEnlace.as_view(), name='password_reset'),
+    path('password/reset/sent/', cuenta.EnlaceEnviado.as_view(),
+         name='password_reset_done'),
+    path('password/reset/<uidb64>/<token>/', cuenta.EscribirLaNueva.as_view(),
+         name='password_reset_confirm'),
+    path('password/reset/done/', cuenta.YaEstaCambiada.as_view(),
+         name='password_reset_complete'),
+
     # Como quiere ver la pantalla cada quien.
     path('preferencias/tema/', views.cambiar_tema, name='cambiar_tema'),
     path('preferencias/idioma/', views.cambiar_idioma, name='cambiar_idioma'),
