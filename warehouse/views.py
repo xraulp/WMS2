@@ -5328,12 +5328,18 @@ def impuestos_panel(request):
     # hace la casa.
     puede_escribir = not profile.is_customer()
 
+    # El renglon cuyo calculo se estaba mirando antes de guardar. Se reabre solo
+    # al cargar la hoja: sin esto, cada guardado costaria volver a buscar la
+    # fila en una hoja de cuarenta embarques.
+    abierto = request.GET.get('abierto', '')
+
     contexto = {
         'clientes': clientes,
         'cliente': cliente,
         'profile': profile,
         've_los_calculos': ve_los_calculos,
         'puede_escribir': puede_escribir,
+        'abierto': abierto if (abierto.isdigit() and ve_los_calculos) else '',
         'ahora': timezone.localtime(),
         'error': request.session.pop('error_de_impuestos', None),
         'aviso': request.session.pop('aviso_de_impuestos', None),
@@ -5704,12 +5710,19 @@ def renglon_manual(request):
 @login_required
 def renglon_calculo(request, pk):
     """
-    De que se compone la cifra. La pantalla del tenant y del agente aduanal.
+    De que se compone la cifra. Lo del tenant y el agente aduanal.
 
     Aqui esta la cadena entera del Excel -- lo que se teclea arriba y lo que
     sale abajo -- y el recuadro que mide el colchon del tipo de cambio. El
     cliente no entra: el colchon es una decision de la casa, y enseñarselo
     seria enseñarle de cuanto se le esta pidiendo de mas.
+
+    Contesta de dos maneras con el mismo contenido. A la hoja le devuelve solo
+    el cajon, que es el camino normal: se despliega bajo el renglon y la hoja
+    no se mueve. A quien abra la direccion en el navegador le devuelve la
+    pantalla completa, que envuelve ese mismo cajon -- asi el enlace de siempre
+    sigue llevando a alguna parte y no hay dos versiones del formulario que
+    mantener.
     """
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
@@ -5723,14 +5736,21 @@ def renglon_calculo(request, pk):
     parametros = ParametrosDeImpuestos.vigentes(tenant, renglon.fecha_reportado)
     cuenta = renglon.calcular(parametros) if renglon.valor_mercancia else None
 
-    return render(request, 'warehouse/impuestos_calculo.html', {
+    # Lo pide el guion de la hoja, no el navegador: entonces va el cajon solo.
+    en_la_hoja = request.headers.get('X-Requested-With') == 'fetch'
+
+    contexto = {
         'renglon': renglon,
         'cliente': renglon.customer,
         'profile': profile,
         'parametros': parametros,
         'cuenta': cuenta,
-        'error': request.session.pop('error_de_impuestos', None),
-    })
+        'desde': 'cajon' if en_la_hoja else 'pantalla',
+    }
+    if en_la_hoja:
+        return render(request, 'warehouse/partials/calculo.html', contexto)
+    contexto['error'] = request.session.pop('error_de_impuestos', None)
+    return render(request, 'warehouse/impuestos_calculo.html', contexto)
 
 
 @login_required
@@ -5814,6 +5834,20 @@ def impuestos_quitados(request):
 
 @login_required
 @require_POST
+def _de_vuelta_a_la_hoja(request, renglon):
+    """
+    La hoja del cliente, con el cajon de este renglon abierto si venia de el.
+
+    El `abierto` lo lee el guion de la hoja al cargar. Va en la direccion y no
+    en la sesion para que sea un sitio al que se puede volver: recargar la
+    pagina, o abrirla en otra pestaña, enseña lo mismo.
+    """
+    destino = f"{reverse('impuestos_panel')}?customer={renglon.customer_id}"
+    if request.POST.get('desde') == 'cajon':
+        destino += f'&abierto={renglon.pk}'
+    return destino
+
+
 def renglon_guardar(request, pk):
     """
     Guardar lo que se tecleo en un renglon de la hoja.
@@ -5821,6 +5855,12 @@ def renglon_guardar(request, pk):
     La casilla del valor acepta una cuenta -- `500+700`, para el embarque que
     trae dos facturas -- y se guarda **la cuenta**, no solo el total: quien
     vuelva en octubre tiene que ver de donde salio el numero.
+
+    Se vuelve siempre a la hoja, y cuando el formulario venia del cajon se
+    vuelve con el cajon abierto en el mismo renglon. Recargar la hoja entera no
+    es pereza: al guardar cambian tres cosas a la vez -- la cifra del renglon,
+    el total de abajo y el simulador del tipo de cambio -- y refrescarlas por
+    separado es la manera de que alguna se quede diciendo lo que ya no es.
     """
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
@@ -5835,7 +5875,7 @@ def renglon_guardar(request, pk):
         request.session['error_de_impuestos'] = str(
             _('"%(x)s" is not a sum. Type a number, or an addition like 500+700.')
             % {'x': expresion[:40]})
-        return redirect(f"{reverse('impuestos_panel')}?customer={renglon.customer_id}")
+        return redirect(_de_vuelta_a_la_hoja(request, renglon))
 
     # Si el valor cambia se guarda el anterior: en tres meses eso dice cuanto
     # se despegan las proformas de cada proveedor de la factura de verdad.
@@ -5867,7 +5907,7 @@ def renglon_guardar(request, pk):
 
     renglon.updated_by = request.user
     renglon.save()
-    return redirect(f"{reverse('impuestos_panel')}?customer={renglon.customer_id}")
+    return redirect(_de_vuelta_a_la_hoja(request, renglon))
 
 
 # ═══════════════════════════════════════════════════════════════════════════

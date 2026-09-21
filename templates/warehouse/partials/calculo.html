@@ -1,0 +1,214 @@
+{% load i18n l10n wms_filters %}
+{% comment %}
+De que se compone la cifra: el cajon que se abre debajo del renglon.
+
+Era una pantalla aparte. Dejo de serlo porque el viaje no lo pagaba quien
+calcula una vez, sino quien revisa la hoja entera: abrir, mirar, volver,
+abrir el siguiente. En el telefono era peor todavia -- otra pantalla, y la
+hoja perdida detras. Ahora se despliega bajo el renglon y la hoja no se mueve.
+
+Lo que **no** cambia es quien lo ve. El cliente entra a la hoja y no a esto:
+la vista le responde 404 y la hoja ni siquiera le pinta el boton. Aqui estan
+la tasa de IGI, los fletes y el colchon del tipo de cambio, y el colchon es
+justo lo que no se le enseña -- es de cuanto se le esta pidiendo de mas.
+
+El mismo parcial sirve a la pantalla completa, que sigue existiendo para quien
+abra la direccion directa. Por eso no da nada por supuesto del sitio donde se
+pinta, y su guion vive aparte, en `calculo_js.html`: el cajon se inyecta con
+`innerHTML` y un <script> ahi dentro no se ejecutaria.
+
+Guardar recarga la hoja y vuelve a abrir este cajon (`?abierto=`). No es una
+concesion: al guardar cambian la cifra del renglon, el total de la hoja y el
+simulador del tipo de cambio, y actualizar tres sitios a mano es la forma de
+que alguno se quede diciendo lo que ya no es verdad.
+{% endcomment %}
+<div class="cj" data-cajon="{{ renglon.pk }}">
+
+  <div class="cj-cab">
+    <b>{{ renglon.pedido|default:"—" }}</b>
+    {% if renglon.entrada %}· <b>{{ renglon.entrada }}</b>{% endif %}
+    {% if renglon.pedimento_texto %}· {% trans "Pedimento" %} <b>{{ renglon.pedimento_texto }}</b>{% endif %}
+    · {{ renglon.status_texto }}
+    {% if renglon.tiene_factura %}
+      <span class="cj-firme">{% trans "Invoice on file" %}</span>
+    {% elif renglon.valor_mercancia %}
+      <span class="cj-prov">{% trans "Provisional: proforma" %}</span>
+    {% endif %}
+  </div>
+
+  <form method="post" action="{% url 'renglon_guardar' renglon.pk %}">
+    {% csrf_token %}
+    {% comment %}
+    De donde salio el formulario, para saber a donde volver: al cajon abierto
+    en la hoja, o a la pantalla completa si se entro por la direccion directa.
+    {% endcomment %}
+    <input type="hidden" name="desde" value="{{ desde|default:'cajon' }}">
+
+    <div class="cj-cajas">
+
+      {% comment %}
+      Lo que se teclea. Sin localizar: en espanol un decimal se escribe
+      `510,00`, y un <input type="number"> con coma es invalido para el
+      navegador, que deja la casilla vacia aunque el dato este guardado.
+      {% endcomment %}
+      {% localize off %}
+      <div class="cj-caja">
+        <p class="cj-t">{% trans "What is typed in" %}</p>
+        <p class="cj-sub">
+          {% if renglon.tiene_factura %}
+            {% trans "The value comes from the commercial invoice, which is already on file." %}
+          {% else %}
+            {% trans "The value is provisional: it comes from the proforma, and is corrected when the invoice arrives." %}
+          {% endif %}
+        </p>
+        <div class="cj-lista">
+          <label class="cj-etq" for="cj-valor-{{ renglon.pk }}">{% trans "Goods value USD" %}
+            <small>{% trans "A sum is allowed: 500+700 for a shipment with two invoices." %}</small></label>
+          <input type="text" id="cj-valor-{{ renglon.pk }}" name="valor"
+                 value="{{ renglon.valor_expresion }}" placeholder="0.00" inputmode="decimal">
+
+          <label class="cj-etq" for="cj-fletes-{{ renglon.pk }}">{% trans "Freight and packing USD" %}</label>
+          <input type="number" step="0.01" id="cj-fletes-{{ renglon.pk }}" name="fletes"
+                 value="{{ renglon.fletes|default_if_none:'' }}">
+
+          <label class="cj-etq" for="cj-incr-{{ renglon.pk }}">{% trans "Additions USD" %}</label>
+          <input type="number" step="0.01" id="cj-incr-{{ renglon.pk }}" name="incrementables"
+                 value="{{ renglon.incrementables|default_if_none:'' }}">
+
+          <label class="cj-etq" for="cj-igi-{{ renglon.pk }}">{% trans "IGI rate" %}
+            <small>{% trans "A fraction, not a percentage: 0.15 and not 15." %}</small></label>
+          <input type="number" step="0.0001" id="cj-igi-{{ renglon.pk }}" name="tasa_igi"
+                 value="{{ renglon.tasa_igi }}">
+
+          <label class="cj-etq" for="cj-tmec-{{ renglon.pk }}">{% trans "T-MEC applies" %}
+            <small>{% trans "Origin MX / USA / CAN. It waives the processing fee, not the IGI." %}</small></label>
+          <span class="cj-val">
+            <input type="hidden" name="tmec_present" value="1">
+            <input type="checkbox" class="cj-check" id="cj-tmec-{{ renglon.pk }}"
+                   name="aplica_tmec" value="1" {% if renglon.aplica_tmec %}checked{% endif %}>
+          </span>
+
+          <div class="cj-raya"></div>
+
+          <span class="cj-etq cj-soft">{% trans "Working exchange rate" %}
+            <small>{% trans "It is typed by hand and deliberately high. It never comes from the DOF." %}</small></span>
+          <span class="cj-val">{{ parametros.tipo_de_cambio|floatformat:4 }}</span>
+
+          <span class="cj-etq cj-soft">{% trans "Pre-validation MXN" %}</span>
+          <span class="cj-val">{{ parametros.prevalidacion|pesos }}</span>
+        </div>
+      </div>
+      {% endlocalize %}
+
+      {% comment %}
+      Lo que sale. Cuando todavia no hay valor no se pinta una columna de
+      ceros: se dice que falta el dato, que es lo unico cierto.
+      {% endcomment %}
+      <div class="cj-caja">
+        <p class="cj-t">{% trans "What comes out" %}</p>
+        {% if cuenta %}
+        <p class="cj-sub">{% trans "The same chain as the spreadsheet, column by column." %}</p>
+        <div class="cj-lista">
+          <span class="cj-etq">{% trans "Global sum USD" %} <span class="cj-letra">E</span></span>
+          <span class="cj-val">{{ cuenta.E_suma_global|pesos }}</span>
+
+          <span class="cj-etq">{% trans "Customs value MXN" %} <span class="cj-letra">I</span></span>
+          <span class="cj-val">{{ cuenta.I_valor_en_aduana|pesos }}</span>
+
+          <span class="cj-etq">{% trans "DTA" %} <span class="cj-letra">K</span>
+            <small>{% if cuenta.J_aplica_tmec %}{% trans "zero: T-MEC applies" %}{% else %}{% trans "8 per thousand of the customs value" %}{% endif %}</small></span>
+          <span class="cj-val">{{ cuenta.K_dta|pesos }}</span>
+
+          <span class="cj-etq">{% trans "IGI" %} <span class="cj-letra">M</span></span>
+          <span class="cj-val">{{ cuenta.M_igi|pesos }}</span>
+
+          {% comment %}
+          El 16% va fuera del {% trans %}: al traducir, Django duplica los `%`
+          del texto para poder formatearlo despues, asi que buscaria en el
+          catalogo "VAT 16%%" y no encontraria nunca la entrada "VAT 16%".
+          {% endcomment %}
+          <span class="cj-etq">{% trans "VAT" %} 16% <span class="cj-letra">Q</span></span>
+          <span class="cj-val">{{ cuenta.Q_iva|pesos }}</span>
+
+          <span class="cj-etq">{% trans "Pre-validation" %} <span class="cj-letra">S</span></span>
+          <span class="cj-val">{{ cuenta.S_prevalidacion|pesos }}</span>
+
+          <div class="cj-total">
+            <span>{% trans "Pedimento total MXN" %} <span class="cj-letra">T</span></span>
+            <span class="cj-derecha">
+              <span class="cj-cifra" data-exacto="{% localize off %}{{ cuenta.T_total_pedimento }}{% endlocalize %}">{{ cuenta.T_total_pedimento|pesos }}</span>
+              {% comment %}
+              Pasar la cifra a la casilla de al lado, que es la que sale en la
+              hoja del cliente. Se pasa la exacta: el redondeo lo da la casa
+              despues, sobre el numero ya puesto, y sigue siendo suyo.
+              {% endcomment %}
+              <span class="cj-botones">
+                <button class="cj-btn" type="button" data-accion="usar">
+                  &#8595; {% trans "Use this figure" %}</button>
+                <button class="cj-btn" type="button" data-accion="copiar">
+                  {% trans "Copy" %}</button>
+              </span>
+            </span>
+          </div>
+
+          <div class="cj-raya"></div>
+          <span class="cj-etq cj-soft">{% trans "Adjustment factor" %} <span class="cj-letra">G</span>
+            <small>{% trans "To split the customs value between invoices of the same item." %}</small></span>
+          <span class="cj-val cj-soft">{{ cuenta.G_factor_ajuste }}</span>
+        </div>
+        {% else %}
+        <p class="cj-sin-valor">
+          {% blocktrans %}There is no goods value yet, so there is no figure to give. Type it on the left — from the proforma if the invoice has not arrived — and the whole chain comes out.{% endblocktrans %}
+        </p>
+        {% endif %}
+      </div>
+
+      {% comment %}
+      Lo que se le manda al cliente, y el colchon debajo. Van juntos porque son
+      la misma decision: cuanto se pide, y cuanto de eso es margen.
+      {% endcomment %}
+      <div class="cj-caja">
+        <p class="cj-t">{% trans "What is sent to the customer" %}</p>
+        <p class="cj-sub">{% trans "The rounding is the house's: always upwards and to a round number. The system proposes, it never decides." %}</p>
+        <div class="cj-lista">
+          <label class="cj-etq" for="cj-reportado-{{ renglon.pk }}">{% trans "Duty sent, MXN" %}
+            <small>{% trans "Leave it empty and the exact figure above is the one that shows." %}</small></label>
+          <input type="number" step="0.01" id="cj-reportado-{{ renglon.pk }}"
+                 name="impuesto_reportado" data-papel="reportado"
+                 value="{% localize off %}{{ renglon.impuesto_reportado|default_if_none:'' }}{% endlocalize %}">
+        </div>
+
+        {% if cuenta %}
+        <div class="cj-colchon"
+             data-valor="{{ cuenta.B_valor_mercancia|stringformat:'s' }}"
+             data-fletes="{{ cuenta.C_fletes|stringformat:'s' }}"
+             data-incrementables="{{ cuenta.D_incrementables|stringformat:'s' }}"
+             data-igi="{{ cuenta.L_tasa_igi|stringformat:'s' }}"
+             data-dta="{{ cuenta.tasa_dta_aplicada|stringformat:'s' }}"
+             data-prevalidacion="{{ cuenta.S_prevalidacion|stringformat:'s' }}"
+             data-tc="{{ cuenta.F_tipo_de_cambio|stringformat:'s' }}"
+             data-total="{{ cuenta.T_total_pedimento|stringformat:'s' }}">
+          <p class="cj-t" style="margin-bottom:8px">{% trans "How much cushion this estimate carries" %}</p>
+          <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+            <label class="cj-soft" style="font-size:12px" for="cj-tcref-{{ renglon.pk }}">{% trans "Compare against rate" %}</label>
+            <input type="number" step="0.0001" id="cj-tcref-{{ renglon.pk }}" data-papel="tc-ref"
+                   value="{% localize off %}{{ parametros.tipo_de_cambio }}{% endlocalize %}">
+          </div>
+          <p data-papel="colchon-texto" class="cj-soft">{% trans "Type a rate to compare with." %}</p>
+          <span class="cj-solo-casa">{% trans "This box never appears on the customer's sheet or on their phone." %}</span>
+        </div>
+        {% endif %}
+
+        <div class="cj-acciones">
+          <button class="cj-btn cj-btn-p" type="submit">{% trans "Save" %}</button>
+          {% if desde != 'pantalla' %}
+          <button class="cj-btn" type="button" data-accion="cerrar">{% trans "Close" %}</button>
+          {% else %}
+          <a class="cj-btn" href="{% url 'impuestos_panel' %}?customer={{ cliente.pk }}">{% trans "Back to the sheet" %}</a>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </form>
+</div>

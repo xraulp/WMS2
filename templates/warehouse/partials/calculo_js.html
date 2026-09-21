@@ -1,0 +1,233 @@
+{% load i18n %}
+{% comment %}
+El guion del cajon del calculo.
+
+Vive fuera del cajon a proposito: el cajon se trae con `fetch` y se mete con
+`innerHTML`, y un <script> inyectado asi no se ejecuta. Estando fuera se carga
+una vez, funciona para todos los cajones de la pagina y no se duplica cada vez
+que se abre uno.
+
+Todo va por delegacion, desde `document`, y cada accion busca su cajon con
+`closest('.cj')`. Es lo que permite que la hoja tenga un cajon por renglon --
+la tabla del escritorio y las fichas del telefono, cada una con el suyo -- sin
+que los identificadores choquen ni haya que numerar funciones.
+{% endcomment %}
+<script>
+(function () {
+  const T_TECLEA   = "{% trans "Type a rate to compare with." %}";
+  const T_IGUALES  = "{% trans "That is the working rate itself: no difference to measure." %}";
+  const T_CON      = "{% trans "With" %}";
+  const T_SALDRIA  = "{% trans "the pedimento would come to" %}";
+  const T_PIDE     = "{% trans "more than with that rate, which is a" %}";
+  const T_MENOS    = "{% trans "less than with that rate, which is a" %}";
+  const T_COPIADO  = "{% trans "Copied" %}";
+  const T_NO_ABRE  = "{% trans "The breakdown could not be loaded. Try again." %}";
+
+  function comoPesos(n) {
+    return (Math.round(n * 100) / 100).toLocaleString('en-US',
+      {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
+  // ── Abrir y cerrar ────────────────────────────────────────────────────────
+  //
+  // Solo un cajon abierto a la vez. Con dos abiertos la hoja deja de leerse de
+  // un vistazo, que es justo lo que se gano al traer el calculo aqui dentro.
+
+  // Donde se escribe el cajon. En la tabla del escritorio el contenedor es un
+  // <tr> -- es lo unico que se puede esconder sin dejar un hueco en la fila --
+  // y el HTML tiene que ir dentro de su celda: metido en el <tr> a secas, el
+  // navegador lo saca de la tabla y el cajon aparece flotando arriba.
+  function dentroDe(caja) {
+    return caja.tagName === 'TR' ? caja.firstElementChild : caja;
+  }
+
+  function cerrarTodos(menos) {
+    document.querySelectorAll('[data-cajon-de]').forEach(function (caja) {
+      if (caja === menos) return;
+      caja.hidden = true;
+      dentroDe(caja).innerHTML = '';
+      caja.dataset.cargado = '';
+    });
+    document.querySelectorAll('.cj-abierto').forEach(function (b) {
+      b.classList.remove('cj-abierto');
+      b.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function botonesDe(pk) {
+    return document.querySelectorAll('[data-abre-cajon="' + pk + '"]');
+  }
+
+  // La hoja lleva dos cajones por renglon -- el de la tabla del escritorio y
+  // el de la ficha del telefono --, y solo uno de los dos esta en pantalla:
+  // el otro lo esconde el CSS segun el ancho. Se trabaja siempre con el
+  // visible, porque cargar el escondido seria pedir el calculo para no
+  // enseñarlo.
+  function seVe(elemento) {
+    return !!(elemento && (elemento.offsetWidth || elemento.offsetHeight ||
+                           elemento.getClientRects().length));
+  }
+
+  function cajaDe(pk) {
+    const cajas = document.querySelectorAll('[data-cajon-de="' + pk + '"]');
+    // No se le pregunta al cajon -- esta cerrado, asi que ninguno se ve --
+    // sino al bloque que lo contiene: la tabla o la lista de fichas, que es
+    // lo que el CSS enciende y apaga segun el ancho.
+    for (const caja of cajas) {
+      const bloque = caja.closest('table, .fichas');
+      if (!bloque || seVe(bloque)) return caja;
+    }
+    return cajas[0] || null;
+  }
+
+  function abrir(pk) {
+    const caja = cajaDe(pk);
+    if (!caja) return;
+    cerrarTodos(caja);
+    caja.hidden = false;
+    botonesDe(pk).forEach(function (b) {
+      b.classList.add('cj-abierto');
+      b.setAttribute('aria-expanded', 'true');
+    });
+    if (caja.dataset.cargado === '1') return;
+
+    fetch(caja.dataset.url, {headers: {'X-Requested-With': 'fetch'}})
+      .then(function (r) {
+        if (!r.ok) throw new Error(r.status);
+        return r.text();
+      })
+      .then(function (html) {
+        dentroDe(caja).innerHTML = html;
+        caja.dataset.cargado = '1';
+        const colchon = caja.querySelector('[data-papel="tc-ref"]');
+        if (colchon) medirColchon(colchon);
+        const primera = caja.querySelector('input[name="valor"]');
+        if (primera) primera.focus();
+      })
+      .catch(function () {
+        dentroDe(caja).innerHTML =
+          '<div class="cj"><p class="cj-sin-valor">' + T_NO_ABRE + '</p></div>';
+      });
+  }
+
+  function cerrar(pk) {
+    const caja = cajaDe(pk);
+    if (caja) caja.hidden = true;
+    botonesDe(pk).forEach(function (b) {
+      b.classList.remove('cj-abierto');
+      b.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  // ── El colchon ────────────────────────────────────────────────────────────
+  //
+  // La misma cuenta con otro tipo de cambio, y la resta. El de referencia se
+  // teclea y no se guarda, y no se trae del DOF a proposito: el tipo de cambio
+  // de trabajo es una decision de la casa y el sistema no la corrige, la mide.
+
+  function medirColchon(casilla) {
+    const caja = casilla.closest('.cj-colchon');
+    if (!caja) return;
+    const texto = caja.querySelector('[data-papel="colchon-texto"]');
+    const d = caja.dataset;
+    const tcTrabajo = parseFloat(d.tc);
+    const tc = parseFloat(casilla.value);
+
+    if (!tc || tc <= 0) { texto.textContent = T_TECLEA; return; }
+    if (Math.abs(tc - tcTrabajo) < 0.00005) { texto.textContent = T_IGUALES; return; }
+
+    const I = (parseFloat(d.valor) + parseFloat(d.fletes) +
+               parseFloat(d.incrementables)) * tc;
+    const N = I * parseFloat(d.dta) + I * parseFloat(d.igi);
+    const otro = N + (I + N) * 0.16 + parseFloat(d.prevalidacion);
+
+    const total = parseFloat(d.total);
+    const dif = total - otro;
+    const pct = otro ? (dif / otro) * 100 : 0;
+    texto.innerHTML = T_CON + ' <b>' + tc.toFixed(4) + '</b> ' + T_SALDRIA +
+      ' <b>' + comoPesos(otro) + '</b>. ' +
+      '<span class="cj-cifra">' + comoPesos(Math.abs(dif)) + '</span> ' +
+      (dif >= 0 ? T_PIDE : T_MENOS) + ' <b>' + Math.abs(pct).toFixed(1) + '%</b>.';
+  }
+
+  // ── La cifra: a la casilla de abajo o al portapapeles ─────────────────────
+
+  function cifraDe(boton) {
+    const caja = boton.closest('.cj');
+    const exacto = caja ? caja.querySelector('[data-exacto]') : null;
+    return exacto ? exacto.dataset.exacto : null;
+  }
+
+  function usarLaCifra(boton) {
+    const caja = boton.closest('.cj');
+    const valor = cifraDe(boton);
+    const casilla = caja ? caja.querySelector('[data-papel="reportado"]') : null;
+    if (!casilla || valor === null) return;
+    casilla.value = valor;
+    // Reiniciar la animacion: sin esto el segundo clic no destella y parece
+    // que el boton no hizo nada.
+    casilla.classList.remove('cj-destacada');
+    void casilla.offsetWidth;
+    casilla.classList.add('cj-destacada');
+    casilla.focus();
+    casilla.select();
+  }
+
+  function copiarLaCifra(boton) {
+    const valor = cifraDe(boton);
+    if (valor === null) return;
+    const decir = function () {
+      const antes = boton.textContent;
+      boton.textContent = T_COPIADO;
+      setTimeout(function () { boton.textContent = antes; }, 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(valor).then(decir, function () {});
+      return;
+    }
+    // Navegador sin portapapeles moderno, o pagina servida sin https: se copia
+    // por el camino de siempre en vez de dejar el boton muerto.
+    const auxiliar = document.createElement('textarea');
+    auxiliar.value = valor;
+    auxiliar.style.position = 'fixed';
+    auxiliar.style.opacity = '0';
+    document.body.appendChild(auxiliar);
+    auxiliar.select();
+    try { document.execCommand('copy'); decir(); } catch (e) {}
+    document.body.removeChild(auxiliar);
+  }
+
+  // ── Los enganches ─────────────────────────────────────────────────────────
+
+  document.addEventListener('click', function (e) {
+    const abre = e.target.closest('[data-abre-cajon]');
+    if (abre) {
+      e.preventDefault();
+      const pk = abre.dataset.abreCajon;
+      const caja = cajaDe(pk);
+      if (caja && !caja.hidden) cerrar(pk); else abrir(pk);
+      return;
+    }
+    const accion = e.target.closest('[data-accion]');
+    if (!accion) return;
+    if (accion.dataset.accion === 'usar')   usarLaCifra(accion);
+    if (accion.dataset.accion === 'copiar') copiarLaCifra(accion);
+    if (accion.dataset.accion === 'cerrar') {
+      const caja = accion.closest('[data-cajon-de]');
+      if (caja) cerrar(caja.dataset.cajonDe);
+    }
+  });
+
+  document.addEventListener('input', function (e) {
+    if (e.target.dataset && e.target.dataset.papel === 'tc-ref') medirColchon(e.target);
+  });
+
+  // Al volver de guardar, la hoja se pinta de nuevo y el cajon se abre solo en
+  // el renglon en el que se estaba: sin esto, cada guardado costaria volver a
+  // buscar la fila.
+  document.addEventListener('DOMContentLoaded', function () {
+    const abierto = document.body.dataset.cajonAbierto;
+    if (abierto) abrir(abierto);
+  });
+})();
+</script>

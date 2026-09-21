@@ -859,3 +859,168 @@ class ElClienteSubeSuFacturaTests(BaseDeLaHoja):
             {'archivo': self.archivo(), 'customer': self.cliente.pk})
         self.assertEqual(respuesta.status_code, 302)
         self.assertIn('/pedimentos/', respuesta['Location'])
+
+
+class ElCalculoEsUnCajonDeLaHojaTests(BaseDeLaHoja):
+    """
+    El desglose dejo de ser una pantalla aparte.
+
+    Se despliega debajo del renglon, dentro de la hoja. El viaje de ida y
+    vuelta no lo pagaba quien calcula una vez, sino quien revisa la hoja
+    entera: abrir, mirar, volver, abrir el siguiente -- y en el telefono,
+    ademas, volver dejaba la hoja al principio.
+
+    Lo que no cambia es quien lo ve, y eso es lo que mas se cuida aqui: al
+    cliente no se le pinta el boton ni se le contesta la direccion.
+    """
+
+    def _pedir_el_cajon(self):
+        return self.client.get(f'/impuestos/{self.r.pk}/calculo/',
+                               headers={'x-requested-with': 'fetch'})
+
+    def test_la_hoja_trae_el_boton_del_cajon(self):
+        self.client.force_login(self.jefa)
+
+        respuesta = self.client.get(f'/impuestos/?customer={self.cliente.pk}')
+
+        self.assertContains(respuesta, 'data-abre-cajon="%s"' % self.r.pk)
+
+    def test_al_cliente_no_se_le_pinta_el_boton(self):
+        self.client.force_login(self.comprador)
+
+        respuesta = self.client.get('/impuestos/')
+
+        self.assertNotContains(respuesta, 'data-abre-cajon')
+
+    def test_el_cajon_llega_sin_pagina_alrededor(self):
+        """
+        Se inyecta dentro de la hoja con `innerHTML`: si viniera con `<html>`
+        y su cabecera, el navegador se la comeria y el cajon apareceria
+        descolocado, sin estilos y con la hoja rota debajo.
+        """
+        self.client.force_login(self.jefa)
+
+        respuesta = self._pedir_el_cajon()
+        cuerpo = respuesta.content.decode()
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertNotIn('<html', cuerpo)
+        self.assertIn('data-cajon="%s"' % self.r.pk, cuerpo)
+
+    def test_el_cajon_trae_lo_que_se_teclea_y_lo_que_sale(self):
+        self.client.force_login(self.jefa)
+
+        cuerpo = self._pedir_el_cajon().content.decode()
+
+        for casilla in ('name="valor"', 'name="fletes"', 'name="incrementables"',
+                        'name="tasa_igi"', 'name="aplica_tmec"',
+                        'name="impuesto_reportado"'):
+            self.assertIn(casilla, cuerpo)
+        # Y el colchon, que es lo que nunca sale de este lado.
+        self.assertIn('cj-colchon', cuerpo)
+
+    def test_la_direccion_directa_sigue_dando_la_pantalla_entera(self):
+        """
+        El cajon es el camino normal, no el unico. Un enlace guardado o pegado
+        en un correo tiene que seguir llevando a alguna parte.
+        """
+        self.client.force_login(self.jefa)
+
+        respuesta = self.client.get(f'/impuestos/{self.r.pk}/calculo/')
+        cuerpo = respuesta.content.decode()
+
+        self.assertIn('<html', cuerpo)
+        self.assertIn('name="tasa_igi"', cuerpo)
+
+    def test_el_cliente_tampoco_alcanza_el_cajon(self):
+        self.client.force_login(self.comprador)
+
+        self.assertEqual(self._pedir_el_cajon().status_code, 404)
+
+
+class GuardarDevuelveAlCajonTests(BaseDeLaHoja):
+    """
+    Al guardar se recarga la hoja, y el cajon se reabre donde se estaba.
+
+    Recargar entera no es pereza: al guardar cambian tres cosas a la vez -- la
+    cifra del renglon, el total del pie y el simulador del tipo de cambio -- y
+    refrescarlas por separado es la manera de que alguna se quede diciendo lo
+    que ya no es verdad. Lo que no puede costar es perder el sitio.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.jefa)
+
+    def test_guardando_desde_el_cajon_se_vuelve_con_el_abierto(self):
+        respuesta = self.client.post(f'/impuestos/{self.r.pk}/save/', {
+            'desde': 'cajon', 'valor': '10395', 'tasa_igi': '0.15'})
+
+        self.assertIn(f'abierto={self.r.pk}', respuesta.url)
+
+    def test_guardando_desde_la_pantalla_se_vuelve_a_la_hoja_sin_mas(self):
+        respuesta = self.client.post(f'/impuestos/{self.r.pk}/save/', {
+            'desde': 'pantalla', 'valor': '10395'})
+
+        self.assertNotIn('abierto=', respuesta.url)
+
+    def test_un_valor_mal_escrito_tambien_vuelve_al_cajon(self):
+        """El sitio donde se corrige el dedazo es el sitio donde se cometio."""
+        respuesta = self.client.post(f'/impuestos/{self.r.pk}/save/', {
+            'desde': 'cajon', 'valor': '500++'})
+
+        self.assertIn(f'abierto={self.r.pk}', respuesta.url)
+
+    def test_lo_tecleado_se_guarda(self):
+        self.client.post(f'/impuestos/{self.r.pk}/save/', {
+            'desde': 'cajon', 'valor': '500+700', 'tasa_igi': '0.15',
+            'fletes': '80', 'tmec_present': '1', 'aplica_tmec': '1'})
+
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.valor_expresion, '500+700')
+        self.assertEqual(self.r.valor_mercancia, Decimal('1200.00'))
+        self.assertEqual(self.r.tasa_igi, Decimal('0.15'))
+        self.assertEqual(self.r.fletes, Decimal('80'))
+        self.assertTrue(self.r.aplica_tmec)
+
+    def test_la_hoja_marca_cual_reabrir(self):
+        respuesta = self.client.get(
+            f'/impuestos/?customer={self.cliente.pk}&abierto={self.r.pk}')
+
+        self.assertContains(respuesta, 'data-cajon-abierto="%s"' % self.r.pk)
+
+    def test_una_hoja_sin_abierto_no_marca_ninguno(self):
+        respuesta = self.client.get(f'/impuestos/?customer={self.cliente.pk}')
+
+        self.assertNotContains(respuesta, 'data-cajon-abierto')
+
+    def test_al_cliente_no_se_le_reabre_nada(self):
+        """
+        Aunque le pasen la direccion con el parametro puesto: el cajon no es
+        suyo, y la hoja no puede abrirle uno por venir escrito en la URL.
+        """
+        self.client.force_login(self.comprador)
+
+        respuesta = self.client.get(f'/impuestos/?abierto={self.r.pk}')
+
+        self.assertNotContains(respuesta, 'data-cajon-abierto')
+
+
+class SinJavaScriptSigueHabiendoCaminoTests(BaseDeLaHoja):
+    """
+    El boton del cajon es un enlace, no un <button>.
+
+    Con JavaScript se queda en la hoja y despliega el cajon; sin el -- un
+    navegador viejo, una extension que lo corta, el guion que no cargo -- lleva
+    a la pantalla completa, que por eso sigue existiendo. Un <button> se
+    quedaria muerto y el desglose seria inalcanzable.
+    """
+
+    def test_el_boton_lleva_a_la_pantalla_completa(self):
+        self.client.force_login(self.jefa)
+
+        respuesta = self.client.get(f'/impuestos/?customer={self.cliente.pk}')
+
+        self.assertContains(
+            respuesta,
+            'href="/impuestos/%s/calculo/"' % self.r.pk)

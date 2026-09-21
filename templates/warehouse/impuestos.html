@@ -15,10 +15,11 @@
   asi, y el dia que el sistema empiece a mandarla no es el dia de cambiarle el
   sitio a las cosas. Lo que cambia no es la forma, es de donde salen los datos.
 
-  Lo que esta pantalla **no** tiene son los calculos. El valor de mercancia,
-  los fletes, los incrementables, la tasa de IGI, el DTA, el IVA y el colchon
-  del tipo de cambio viven en `impuestos_calculo.html`, que solo abren el
-  tenant y el agente aduanal.
+  Los calculos no estan en la hoja, pero si debajo de ella: cada renglon abre
+  un cajon -- `partials/calculo.html` -- con el valor de mercancia, los fletes,
+  los incrementables, la tasa de IGI, el DTA, el IVA y el colchon del tipo de
+  cambio. El cajon lo abren el tenant y el agente aduanal; al cliente ni
+  siquiera se le pinta el boton, y la vista le responde 404 si lo pide.
 
   Lo que si tiene, y el Excel no puede: cada NO de la columna de factura es un
   boton que la sube; los embarques se agregan y se quitan; y el tipo de cambio
@@ -216,8 +217,13 @@
       .sim-cifra{font-size:21px}
     }
   </style>
+  {% if ve_los_calculos %}{% include "warehouse/partials/calculo_estilos.html" %}{% endif %}
 </head>
-<body>
+{% comment %}
+`data-cajon-abierto` lo pone el guardado: al volver de guardar se reabre el
+cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
+{% endcomment %}
+<body{% if abierto %} data-cajon-abierto="{{ abierto }}"{% endif %}>
 
 <div class="tb">
   <span class="tb-brand">WMS — {% trans "Duties" %}</span>
@@ -376,7 +382,14 @@
           <td>
             <div class="acciones">
               {% if ve_los_calculos %}
+              {% comment %}
+              El calculo se abre aqui mismo, en una fila que se despliega
+              debajo. Antes llevaba a otra pantalla, y el viaje no lo pagaba
+              quien calcula una vez sino quien revisa la hoja entera.
+              {% endcomment %}
               <a class="mini" href="{% url 'renglon_calculo' r.pk %}"
+                 data-abre-cajon="{{ r.pk }}" aria-expanded="false"
+                 aria-controls="cajon-t-{{ r.pk }}"
                  title="{% trans "How this figure is made up" %}">&#8942;</a>
               {% endif %}
               <form method="post" action="{% url 'renglon_quitar' r.pk %}" style="margin:0"
@@ -387,6 +400,12 @@
             </div>
           </td>
         </tr>
+        {% if ve_los_calculos %}
+        <tr hidden id="cajon-t-{{ r.pk }}" data-cajon-de="{{ r.pk }}"
+            data-url="{% url 'renglon_calculo' r.pk %}">
+          <td colspan="10" style="padding:0"></td>
+        </tr>
+        {% endif %}
         {% empty %}
         <tr><td colspan="10" class="vacio" style="padding:22px">{% trans "No shipments in this sheet yet." %}</td></tr>
         {% endfor %}
@@ -565,12 +584,29 @@
 
         <div class="ficha-l3">
           <span class="ficha-entrada">{{ r.entrada|default:"—" }}</span>
-          <form method="post" action="{% url 'renglon_quitar' r.pk %}" style="margin:0"
-                onsubmit="return confirm('{% trans "Remove this shipment from the sheet? It is not deleted: the shipment stays in the warehouse and can be put back." %}')">
-            {% csrf_token %}
-            <button class="mini" type="submit">&#10005; {% trans "Remove" %}</button>
-          </form>
+          <span style="display:flex;gap:8px;align-items:center">
+            {% if ve_los_calculos %}
+            {% comment %}
+            En el telefono el calculo era otra pantalla, y volver de ella
+            dejaba la hoja al principio. Aqui se despliega bajo la ficha.
+            {% endcomment %}
+            <a class="mini" href="{% url 'renglon_calculo' r.pk %}"
+               data-abre-cajon="{{ r.pk }}" aria-expanded="false"
+               aria-controls="cajon-f-{{ r.pk }}">
+              &#8942; {% trans "Breakdown" %}</a>
+            {% endif %}
+            <form method="post" action="{% url 'renglon_quitar' r.pk %}" style="margin:0"
+                  onsubmit="return confirm('{% trans "Remove this shipment from the sheet? It is not deleted: the shipment stays in the warehouse and can be put back." %}')">
+              {% csrf_token %}
+              <button class="mini" type="submit">&#10005; {% trans "Remove" %}</button>
+            </form>
+          </span>
         </div>
+        {% if ve_los_calculos %}
+        <div hidden id="cajon-f-{{ r.pk }}" data-cajon-de="{{ r.pk }}"
+             data-url="{% url 'renglon_calculo' r.pk %}"
+             style="margin:10px -14px -12px"></div>
+        {% endif %}
       </div>
       {% empty %}
       <div class="ficha"><span class="vacio">{% trans "No shipments in this sheet yet." %}</span></div>
@@ -767,6 +803,8 @@ function abrirCorreo(abrir) {
   if (abrir) document.getElementById('correo-a').focus();
 }
 </script>
+
+{% if ve_los_calculos %}{% include "warehouse/partials/calculo_js.html" %}{% endif %}
 
 </body>
 </html>

@@ -2687,3 +2687,16 @@ msgstr "Si no fuiste tú, ignora este mensaje: nada cambia hasta que alguien abr
 
 msgid "Forgot your password?"
 msgstr "¿Olvidaste tu contraseña?"
+
+# El cajon del calculo, dentro de la hoja.
+msgid "Invoice on file"
+msgstr "Factura en el expediente"
+
+msgid "Provisional: proforma"
+msgstr "Provisional: proforma"
+
+msgid "The breakdown could not be loaded. Try again."
+msgstr "No se pudo abrir el desglose. Inténtalo otra vez."
+
+msgid "There is no goods value yet, so there is no figure to give. Type it on the left — from the proforma if the invoice has not arrived — and the whole chain comes out."
+msgstr "Todavía no hay valor de mercancía, así que no hay cifra que dar. Tecléalo a la izquierda —de la proforma si la factura no ha llegado— y sale la cadena entera."
