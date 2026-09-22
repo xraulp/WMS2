@@ -29,6 +29,12 @@
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:170px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
+             title="{% trans "Where the 'I forgot my password' link is sent." %} {% trans "There is no level above a platform administrator: without it, a forgotten password can only be reset from the server." %}">{% trans "Recovery email" %}</label>
+      <input type="email" name="email" placeholder="{% trans "optional" %}"
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:170px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Level" %}</label>
       <select name="role" style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-family:inherit;font-size:12px">
         {% for valor, etiqueta in roles %}

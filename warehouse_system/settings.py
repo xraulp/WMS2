@@ -340,6 +340,31 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 
+# Tres remitentes, no uno. Los tres son direcciones del mismo dominio verificado
+# -- lo que Resend verifica es el dominio, no la dirección, así que separarlas no
+# cuesta nada -- y cada una dice de qué va el correo antes de abrirlo:
+#
+#   DEFAULT_FROM_EMAIL        recuperación de contraseña y todo lo que no tenga
+#                             remitente propio. Ej: no-reply@…
+#   BILLING_FROM_EMAIL        las facturas que la plataforma le cobra a una
+#                             empresa. Ej: billing@…
+#   NOTIFICATIONS_FROM_EMAIL  lo que una empresa manda a sus clientes: avisos de
+#                             operaciones, informes y la hoja de impuestos.
+#                             Ej: reportes@…
+#
+# Sin definir, las tres caen en `DEFAULT_FROM_EMAIL`, que es como funcionaba
+# antes: una instalación que no quiera separarlas no tiene que hacer nada.
+#
+# Lo que NO se hace aquí es mandar desde el dominio de cada empresa. Para eso
+# hay que verificar su DNS uno por uno, y sobre todo el correo de recuperación
+# no debe salir nunca de ahí: lleva un enlace a esta plataforma, y un dominio
+# ajeno avalando un enlace que no controla es la forma exacta de un fraude. La
+# marca de la empresa viaja en el nombre visible y en el Reply-To, que no
+# necesitan DNS de nadie.
+BILLING_FROM_EMAIL = os.getenv('BILLING_FROM_EMAIL') or DEFAULT_FROM_EMAIL
+NOTIFICATIONS_FROM_EMAIL = (os.getenv('NOTIFICATIONS_FROM_EMAIL')
+                            or DEFAULT_FROM_EMAIL)
+
 # Segundos de espera para conectar con el servidor de correo. Sin esto, un
 # servidor que no contesta deja la petición colgada hasta que gunicorn mata al
 # worker por timeout, y el operador ve un "Internal Server Error" en vez del

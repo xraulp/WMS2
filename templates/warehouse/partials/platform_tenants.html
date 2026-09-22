@@ -47,6 +47,12 @@
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
+             title="{% trans "Where this company's customers reply when they get one of its notices. Its emails go out from the platform's domain, so without this a reply lands in a mailbox nobody reads." %}">{% trans "Reply-To Email" %}</label>
+      <input type="email" name="reply_to_email" placeholder="operaciones@empresa.com"
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:180px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
              title="{% trans "It appears on the reports and labels this company sends to its customers" %}">{% trans "Logo (optional)" %}</label>
       <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif"
              style="height:28px;padding:3px;border:1px solid var(--bdr);border-radius:6px;font-size:11px;width:200px">
@@ -63,6 +69,12 @@
       <input type="text" name="admin_password" placeholder="{% trans "Visible for reference" %}"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
     </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
+             title="{% trans "Where the 'I forgot my password' link is sent. It is not the billing email: one is read by accounting, the other opens an account." %}">{% trans "Admin Recovery Email" %}</label>
+      <input type="email" name="admin_email" placeholder="{% trans "optional" %}"
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:180px">
+    </div>
     <button type="submit" class="btn btn-p" style="height:28px">+ {% trans "Create Tenant" %}</button>
   </form>
 </div>
@@ -76,7 +88,7 @@
       <th>{% trans "Name" %}</th>
       <th>{% trans "Subdomain" %}</th>
       <th>{% trans "Plan" %}</th>
-      <th>{% trans "Billing Email" %}</th>
+      <th>{% trans "Billing" %} / {% trans "Reply-To" %}</th>
       <th>{% trans "Logo" %}</th>
       {% comment %}
       Las cantidades de cada empresa. Contar no es ver: el nivel de plataforma
@@ -101,7 +113,25 @@
       <td><strong>{{ t.name }}</strong></td>
       <td class="mono" style="font-size:11px;color:var(--soft)">{{ t.subdomain }}</td>
       <td><span class="badge b-sent">{{ t.plan }}</span></td>
-      <td style="font-size:12px">{{ t.billing_email|default:"—" }}</td>
+      {% comment %}
+        Los dos correos de la empresa, uno debajo del otro: arriba a donde se
+        le manda la factura, abajo a donde contestan sus clientes. Son cosas
+        distintas -- una la lee contabilidad y la otra quien atiende el
+        mostrador -- pero se consultan a la vez, y darle a cada una su columna
+        dejaba los botones del final fuera de la pantalla.
+      {% endcomment %}
+      <td style="font-size:12px;line-height:1.4">
+        <div>{{ t.billing_email|default:"—" }}</div>
+        <div style="font-size:11px">
+          {% if t.reply_to_email %}
+          <span style="color:var(--faint)" title="{% trans "Reply-To" %}">↩</span>
+          <span style="color:var(--soft)">{{ t.reply_to_email }}</span>
+          {% else %}
+          <span style="color:var(--warn-ink)"
+                title="{% trans "Replies from this company's customers go nowhere" %}">↩ —</span>
+          {% endif %}
+        </div>
+      </td>
       {% comment %}
         No se enseña el logo en si: el bucket es privado desde que los archivos
         se sirven por la aplicacion, asi que una etiqueta <img> apuntando ahi no
@@ -125,11 +155,12 @@
       </td>
       <td style="color:var(--faint);font-size:11px">{{ t.created_at|date:"Y-m-d" }}</td>
       {% if is_platform_admin %}
-      <td>
+      <td style="white-space:nowrap">
         <button class="btn btn-g btn-sm" onclick="abrirEdicionDeEmpresa(this)"
                 data-t-id="{{ t.pk }}" data-t-name="{{ t.name }}"
                 data-t-sub="{{ t.subdomain }}" data-t-plan="{{ t.plan }}"
-                data-t-mail="{{ t.billing_email|default:'' }}">{% trans "Edit" %}</button>
+                data-t-mail="{{ t.billing_email|default:'' }}"
+                data-t-reply="{{ t.reply_to_email|default:'' }}">{% trans "Edit" %}</button>
         <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML"
               hx-encoding="multipart/form-data" style="display:inline">
           {% csrf_token %}
@@ -225,7 +256,16 @@ Uno por fila repetiria los mismos id tantas veces como empresas haya.
                     letter-spacing:.05em;color:var(--soft);margin-bottom:3px">{% trans "Billing Email" %}</label>
       <input type="email" name="billing_email" id="tenant-edit-mail"
              style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
-                    font-size:13px;margin-bottom:16px">
+                    font-size:13px;margin-bottom:12px">
+
+      <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">{% trans "Reply-To Email" %}</label>
+      <input type="email" name="reply_to_email" id="tenant-edit-reply"
+             style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
+                    font-size:13px;margin-bottom:6px">
+      <div style="font-size:11px;color:var(--faint);margin-bottom:16px">
+        {% blocktrans %}Where this company's customers reply. Its notices go out from the platform's domain with the company's name showing, so without this a reply lands in a mailbox nobody reads.{% endblocktrans %}
+      </div>
 
       <div style="display:flex;gap:10px">
         <button type="submit" class="btn btn-p" style="flex:1">{% trans "Save" %}</button>
@@ -244,6 +284,7 @@ function abrirEdicionDeEmpresa(boton){
   document.getElementById('tenant-edit-sub').value   = d.tSub;
   document.getElementById('tenant-edit-plan').value  = d.tPlan;
   document.getElementById('tenant-edit-mail').value  = d.tMail;
+  document.getElementById('tenant-edit-reply').value = d.tReply;
   document.getElementById('tenant-edit-title').textContent = d.tName;
   document.getElementById('tenant-edit-modal').style.display = 'flex';
 }

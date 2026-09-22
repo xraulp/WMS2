@@ -12,6 +12,7 @@ import functools
 import logging
 import threading
 from datetime import timedelta
+from email.utils import formataddr
 
 from django import db
 from django.conf import settings
@@ -153,6 +154,36 @@ def email_recipients(customer):
 
 def whatsapp_number(customer):
     return (customer.whatsapp or '').strip() if customer else ''
+
+
+def remitente_de(tenant):
+    """
+    El `from` y el `reply_to` de un correo que una empresa manda a su cliente.
+
+    Devuelve la pareja. El correo sale del dominio de la plataforma -- es el
+    unico verificado, y verificar el de cada empresa es un tramite de DNS con
+    su gente de sistemas -- pero lo que el cliente lee en la bandeja es el
+    nombre de su proveedor, no el nuestro: el nombre visible es texto libre y
+    no necesita verificar nada.
+
+    El Reply-To es la otra mitad y la que mas se nota: sin el, un cliente que
+    conteste un aviso le escribe a un buzon que nadie abre. Con el, le escribe
+    a su proveedor. Sale de `Tenant.reply_to_email`, que se captura en la ficha
+    de la empresa.
+
+    Sin empresa -- o antes de que nadie configure nada -- queda el remitente de
+    siempre y ningun Reply-To, que es como funcionaba esto hasta ahora.
+    """
+    direccion = getattr(settings, 'NOTIFICATIONS_FROM_EMAIL', None)         or settings.DEFAULT_FROM_EMAIL
+    if tenant is None:
+        return direccion, []
+    # Sin direccion configurada no hay nada que adornar: Django pondra el
+    # remitente por defecto y anteponerle un nombre aqui seria inventarse una
+    # cabecera a medias.
+    if direccion:
+        direccion = formataddr((tenant.name, direccion))
+    responder = (tenant.reply_to_email or '').strip()
+    return direccion, ([responder] if responder else [])
 
 
 def get_cc_emails(tenant):
@@ -329,12 +360,16 @@ def _deliver_email(operation, customer, event, recipients, subject, html_body,
         return False, 'no_email'
 
     joined = ', '.join(recipients)
+    tenant = operation.tenant if operation else None
+    de, responder = remitente_de(tenant)
     try:
         email = EmailMessage(
             subject=subject,
             body=html_body,
             to=recipients,
-            cc=get_cc_emails(operation.tenant) if operation else [],
+            cc=get_cc_emails(tenant) if operation else [],
+            from_email=de,
+            reply_to=responder,
         )
         email.content_subtype = 'html'
         if pdf is not None:
@@ -645,7 +680,15 @@ def enviar_factura(factura, triggered_by=None):
     })
 
     try:
-        correo = EmailMessage(subject=asunto, body=cuerpo, to=[destino])
+        # Este no lo manda una empresa sino la plataforma, asi que no lleva
+        # ni el nombre ni el Reply-To del tenant: lo firma quien cobra, y se
+        # contesta a quien cobra.
+        correo = EmailMessage(
+            subject=asunto, body=cuerpo, to=[destino],
+            from_email=(getattr(settings, 'BILLING_FROM_EMAIL', None)
+                        or settings.DEFAULT_FROM_EMAIL),
+            reply_to=([settings.PLATFORM_BILLING_EMAIL]
+                      if getattr(settings, 'PLATFORM_BILLING_EMAIL', '') else []))
         correo.content_subtype = 'html'
         correo.attach('%s.pdf' % factura.numero,
                       generar_pdf_factura(factura), 'application/pdf')

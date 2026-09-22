@@ -2700,3 +2700,59 @@ msgstr "No se pudo abrir el desglose. Inténtalo otra vez."
 
 msgid "There is no goods value yet, so there is no figure to give. Type it on the left — from the proforma if the invoice has not arrived — and the whole chain comes out."
 msgstr "Todavía no hay valor de mercancía, así que no hay cifra que dar. Tecléalo a la izquierda —de la proforma si la factura no ha llegado— y sale la cadena entera."
+
+# El correo de recuperacion pedido desde las cuatro pantallas de alta.
+msgid "Where the 'I forgot my password' link is sent."
+msgstr "A donde se manda el enlace de «olvidé mi contraseña»."
+
+msgid "Where the 'I forgot my password' link is sent. Without it, only you can reset their password."
+msgstr "A donde se manda el enlace de «olvidé mi contraseña». Sin él, solo tú puedes reasignarle la contraseña."
+
+msgid "Where the 'I forgot my password' link is sent. It is not the billing email: one is read by accounting, the other opens an account."
+msgstr "A donde se manda el enlace de «olvidé mi contraseña». No es el correo de facturación: uno lo lee contabilidad y el otro abre una cuenta."
+
+msgid "There is no level above a platform administrator: without it, a forgotten password can only be reset from the server."
+msgstr "Por encima de un administrador de plataforma no hay nadie: sin él, una contraseña olvidada solo se reasigna desde el servidor."
+
+msgid "Admin Recovery Email"
+msgstr "Correo de recuperación del admin"
+
+msgid "The recovery email is what lets them get back in on their own; it is taken from the customer record when it is free."
+msgstr "El correo de recuperación es lo que les permite volver a entrar por su cuenta; se propone el de la ficha del cliente cuando está libre."
+
+msgid "Without a recovery email, only you can reset their password."
+msgstr "Sin correo de recuperación, solo tú puedes reasignarle la contraseña."
+
+msgid "Without a recovery email, they cannot reset it themselves."
+msgstr "Sin correo de recuperación, no podrá cambiarla por su cuenta."
+
+msgid "Without a recovery email, only you can reset it."
+msgstr "Sin correo de recuperación, solo tú puedes reasignarla."
+
+msgid "Without a recovery email, nobody can reset this password: there is no level above it."
+msgstr "Sin correo de recuperación, nadie puede reasignar esta contraseña: por encima no hay ningún nivel."
+
+# La pantalla de clientes: su texto de cabecera estaba en ingles y mandaba a la
+# pestana equivocada.
+msgid "A customer decides who gets notified and who can be given access, so only an administrator maintains this list. To give somebody a login on behalf of a customer, use the users button on its row."
+msgstr "Un cliente decide a quién se le avisa y a quién se le puede dar acceso, así que esta lista la mantiene solo un administrador. Para dar una entrada al sistema en nombre de un cliente, usa el botón de usuarios de su renglón."
+
+msgid "Read only: only an administrator of this company can add or edit customers."
+msgstr "Solo lectura: únicamente un administrador de esta empresa puede añadir o editar clientes."
+
+# El correo de respuesta de cada empresa.
+msgid "Reply-To Email"
+msgstr "Correo de respuesta"
+
+msgid "Reply-To"
+msgstr "Respuesta"
+
+msgid "Where this company's customers reply when they get one of its notices. Its emails go out from the platform's domain, so without this a reply lands in a mailbox nobody reads."
+msgstr "A donde contestan los clientes de esta empresa cuando reciben un aviso suyo. Sus correos salen del dominio de la plataforma, así que sin esto una respuesta cae en un buzón que nadie lee."
+
+msgid "Where this company's customers reply. Its notices go out from the platform's domain with the company's name showing, so without this a reply lands in a mailbox nobody reads."
+msgstr "A donde contestan los clientes de esta empresa. Sus avisos salen del dominio de la plataforma con el nombre de la empresa a la vista, así que sin esto una respuesta cae en un buzón que nadie lee."
+
+msgid "Replies from this company's customers go nowhere"
+msgstr "Las respuestas de los clientes de esta empresa no llegan a ninguna parte"
+

@@ -83,7 +83,7 @@ def _revisar_la_nueva(usuario, actual, nueva, repetida):
     return None
 
 
-def _revisar_el_correo(usuario, correo):
+def revisar_el_correo(correo, usuario=None):
     """
     Devuelve el motivo por el que el correo no sirve, o None.
 
@@ -91,6 +91,11 @@ def _revisar_el_correo(usuario, correo):
     permite repetirlo -- pero el olvido si: pedir la recuperacion con un correo
     compartido manda un mensaje por cada cuenta, y quien lo recibe no sabe cual
     de los dos enlaces es el suyo.
+
+    `usuario` es quien ya tiene ese correo puesto y por tanto no compite
+    consigo mismo. Va vacio cuando se esta dando de alta a alguien, que es el
+    otro sitio desde donde se llama: las pantallas de alta lo piden para que
+    nadie nazca sin forma de recuperar su contrasena.
     """
     if not correo:
         # Vaciarlo es legitimo: es renunciar a la recuperacion, no un error.
@@ -99,7 +104,10 @@ def _revisar_el_correo(usuario, correo):
         validate_email(correo)
     except ValidationError:
         return _('That does not look like an email address.')
-    if User.objects.filter(email__iexact=correo).exclude(pk=usuario.pk).exists():
+    repetido = User.objects.filter(email__iexact=correo)
+    if usuario is not None:
+        repetido = repetido.exclude(pk=usuario.pk)
+    if repetido.exists():
         return _('Another account already uses that email address.')
     return None
 
@@ -147,7 +155,7 @@ def mi_cuenta(request):
         elif accion == 'email':
             seccion = 'email'
             correo   = request.POST.get('email', '').strip()
-            problema = _revisar_el_correo(usuario, correo)
+            problema = revisar_el_correo(correo, usuario)
             if problema:
                 msg, msg_error = problema, True
             else:

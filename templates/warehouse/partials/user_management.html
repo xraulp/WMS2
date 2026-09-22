@@ -43,6 +43,12 @@
       </select>
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
+             title="{% trans "Where the 'I forgot my password' link is sent." %}">{% trans "Recovery email" %}</label>
+      <input type="email" name="email" placeholder="{% trans "optional" %}"
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:160px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Delete Password" %}</label>
       <input type="password" name="delete_password" placeholder="{% trans "To be able to delete" %}"
              autocomplete="new-password"

@@ -57,7 +57,10 @@ En el servicio web, *Environment*:
 |---|---|
 | `EMAIL_PROVIDER` | `resend` |
 | `RESEND_API_KEY` | `re_...` |
-| `DEFAULT_FROM_EMAIL` | una dirección del dominio verificado, p. ej. `avisos@dysergroup.com` |
+| `DEFAULT_FROM_EMAIL` | una dirección del dominio verificado, p. ej. `no-reply@dysergroup.com` |
+| `BILLING_FROM_EMAIL` | opcional: de dónde salen las facturas, p. ej. `billing@dysergroup.com` |
+| `NOTIFICATIONS_FROM_EMAIL` | opcional: de dónde salen los avisos a los clientes, p. ej. `reportes@dysergroup.com` |
+| `PLATFORM_BILLING_EMAIL` | el contacto de cobranza: sale impreso en el PDF y va como Reply-To de la factura |
 
 Las variables `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER` y
 `EMAIL_HOST_PASSWORD` pueden quedarse: con `EMAIL_PROVIDER=resend` no se usan.
@@ -84,6 +87,48 @@ Después, registrar una operación de un cliente con correo y revisar
 - **Fallida** — el motivo va en `detail` con el código HTTP de la API.
 - **Omitida** — no se intentó; el motivo va en `detail` (`preference_off`,
   `no_recipient`, `customer_not_in_catalog`, `already_notified`).
+
+## Quién firma cada correo
+
+Lo que Resend verifica es el **dominio**, no la dirección, así que tener varias
+direcciones del mismo dominio no cuesta nada ni requiere más DNS. El sistema
+usa tres, y cada una dice de qué va el correo antes de abrirlo:
+
+| Clase de correo | Sale de | Contesta a |
+|---|---|---|
+| Recuperación de contraseña, en los tres niveles | `DEFAULT_FROM_EMAIL` | nadie |
+| Factura de la plataforma a una empresa | `BILLING_FROM_EMAIL` | `PLATFORM_BILLING_EMAIL` |
+| Avisos, informes y hoja de impuestos que una empresa manda a sus clientes | `NOTIFICATIONS_FROM_EMAIL`, con el nombre de la empresa a la vista | `Tenant.reply_to_email` |
+
+Las dos últimas caen en `DEFAULT_FROM_EMAIL` si no se definen, así que una
+instalación que no quiera separarlas no tiene que tocar nada.
+
+### Por qué no se manda desde el dominio de cada empresa
+
+Es lo primero que se pide —que el cliente de un almacén reciba el correo de
+`reportes@sualmacen.com`— y para los avisos tendría sentido. Pero:
+
+* Un `From:` de un dominio ajeno **no sale** sin verificar antes su SPF y su
+  DKIM. Resend responde 403 y el motivo queda en la bitácora. O sea: no es una
+  casilla en el alta, es un trámite de DNS con la gente de sistemas de cada
+  empresa.
+* En el correo de **recuperación de contraseña** sería además peligroso. Lleva
+  un enlace a esta plataforma, y un dominio que no controla ese enlace
+  avalándolo es exactamente la forma de un fraude; los filtros lo tratan como
+  tal. Y una empresa recién dada de alta se quedaría sin recuperación hasta
+  terminar el trámite, justo la semana en que más gente se equivoca al entrar.
+
+Lo que sí viaja por empresa son dos cabeceras que no necesitan DNS de nadie: el
+**nombre visible** del remitente —el cliente lee «Almacenes del Norte», no el
+dominio— y el **Reply-To**, que hace que una respuesta llegue a su proveedor y
+no a un buzón de la plataforma que nadie abre. Se captura en la ficha de la
+empresa, en el panel de plataforma, y la tabla marca en ámbar a las que no lo
+tienen.
+
+Si algún día hace falta el dominio propio de verdad, el sitio es un campo más
+en la ficha de la empresa que solo afecte a los **avisos** —nunca a la
+recuperación ni a las facturas— y el plan de Resend correspondiente: el
+gratuito admite tres dominios, el Pro diez, y hay un complemento de cien.
 
 ## Qué falta verificar cuando el correo salga
 

@@ -741,12 +741,16 @@ capturar, se pintaban dos a la vez hasta que corria el guion.
   <div class="card">
     <div class="ct">{% trans "Customers" %}</div>
     <p style="font-size:11px;color:var(--faint);margin:-6px 0 10px">
+      {% comment %}
+      Estaba sin {% trans %} -- el unico texto en ingles de una pantalla en
+      espanol -- y ademas mandaba al sitio equivocado: el acceso dejo de
+      repartirse desde la pestana Usuarios cuando se mudo a la ficha del
+      cliente, que es donde se ve quien no tiene a nadie.
+      {% endcomment %}
       {% if can_edit_customers %}
-      A customer decides who gets notified and who can be given access, so only
-      an administrator maintains this list. To give a customer a login, use the
-      Users tab.
+      {% trans "A customer decides who gets notified and who can be given access, so only an administrator maintains this list. To give somebody a login on behalf of a customer, use the users button on its row." %}
       {% else %}
-      Read only: only an administrator of this company can add or edit customers.
+      {% trans "Read only: only an administrator of this company can add or edit customers." %}
       {% endif %}
     </p>
     {% if can_edit_customers %}

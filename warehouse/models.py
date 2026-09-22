@@ -1209,6 +1209,20 @@ class Tenant(models.Model):
     # Facturación (solo para organizations)
     billing_email = models.EmailField(blank=True, null=True, verbose_name="Email de Facturación")
 
+    # A donde contesta un cliente que recibe un aviso de esta empresa.
+    #
+    # Los correos salen del dominio de la plataforma -- es el único verificado --
+    # así que sin esto una respuesta llegaría a un buzón que nadie lee. El
+    # Reply-To es lo que hace que el cliente le escriba a su proveedor y no al
+    # vacío, y no cuesta ningún trámite de DNS: es una cabecera, no un dominio.
+    #
+    # No es el de facturación: aquel lo lee contabilidad y es de la plataforma
+    # hacia la empresa; este lo lee quien atiende a los clientes de la empresa.
+    reply_to_email = models.EmailField(
+        blank=True, null=True, verbose_name="Correo de respuesta",
+        help_text="A donde contestan los clientes de esta empresa. "
+                  "Vacio = las respuestas se pierden.")
+
     # Como se nombra la empresa en los papeles que lee el cliente: en la hoja
     # de impuestos el status se escribe "ELAB PED · DYSER". Recortar la razon
     # social no sirve -- "DYSER Group LLC" daria "DYSER GROUP" -- porque lo que

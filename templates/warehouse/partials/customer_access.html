@@ -62,9 +62,17 @@ la que se abrio este panel. Elegirlos a mano fue lo que permitio crear usuarios
     <input type="text" name="password" required placeholder="{% trans "Write it down" %}"
            style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
   </div>
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
+           title="{% trans "Where the 'I forgot my password' link is sent. Without it, only you can reset their password." %}">{% trans "Recovery email" %}</label>
+    <input type="email" name="email" value="{{ correo_sugerido }}"
+           placeholder="{% trans "optional" %}"
+           style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:180px">
+  </div>
   <button type="submit" class="btn btn-p" style="height:28px">{% trans "+ Give access" %}</button>
 </form>
 
 <div style="font-size:11px;color:var(--faint);margin-top:9px">
   {% trans "The password is not stored anywhere: write it down now, or set a new one later from the Users tab." %}
+  {% trans "The recovery email is what lets them get back in on their own; it is taken from the customer record when it is free." %}
 </div>

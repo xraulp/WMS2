@@ -23,6 +23,7 @@ from django.utils.text import slugify
 import os, json, zipfile, re, logging
 
 from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
+                     ROLE_CHOICES,
                      DeletionLog, DocumentSequence, Tenant, Subscription,
                      NotificationLog, PlatformUser, PLATFORM_ROLE_CHOICES,
                      CATALOG_SCOPES, catalog_scope_of, Invoice,
@@ -36,6 +37,7 @@ from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile
 from .utils import (generate_pdf_report, generate_label_pdf, generar_pdf_factura,
                     nombre_corto)
 from .almacen import url_firmada
+from .cuenta import revisar_el_correo
 from .context_processors import es_telefono
 from . import notifications, pedimentos, impuestos, bultos, papeles
 
@@ -2273,11 +2275,14 @@ def report_generator_email(request):
             cuerpo += _('Records included: %(n)s') % {'n': len(ops_list)} + '\n'
             cuerpo += _('Generated on: %(fecha)s (Central Time)') % {'fecha': generado} + '\n\n'
             cuerpo += _('Kind regards,') + '\n' + tenant.name
+        de, responder = notifications.remitente_de(tenant)
         email = EmailMessage(
             subject=titulo,
             body=cuerpo,
             to=recipients,
             cc=_get_cc_emails(tenant),
+            from_email=de,
+            reply_to=responder,
         )
         email.attach('report.pdf', pdf, 'application/pdf')
         email.send()
@@ -2494,6 +2499,22 @@ def catalog_list(request):
     ##})
 
 
+def _correo_de_la_ficha(cliente):
+    """
+    El correo de la ficha del cliente, para proponerlo en el alta de su usuario.
+
+    La ficha admite varias direcciones separadas por comas -- los avisos de
+    operaciones van a todas -- pero un correo de recuperacion es de una
+    persona, asi que se propone solo la primera. Y solo si esta libre: el
+    correo de recuperacion no se repite entre cuentas, de modo que proponer
+    el mismo al segundo usuario del cliente seria proponerle un error.
+    """
+    primero = (cliente.contact_email or '').split(',')[0].strip()
+    if not primero or User.objects.filter(email__iexact=primero).exists():
+        return ''
+    return primero
+
+
 @login_required
 def customer_access(request, pk):
     """
@@ -2520,6 +2541,12 @@ def customer_access(request, pk):
     if request.method == 'POST':
         uname = request.POST.get('username', '').strip()
         pwd   = request.POST.get('password', '').strip()
+        # El correo de recuperacion, desde el alta. Es opcional -- se puede dar
+        # acceso a quien no tiene correo, o no lo tiene a mano -- pero pedirlo
+        # aqui es lo unico que evita el circulo de antes: sin correo no hay
+        # "olvide mi contrasena", y para ponerselo habia que entrar primero.
+        correo = request.POST.get('email', '').strip()
+        problema_correo = revisar_el_correo(correo)
         if not (uname and pwd):
             msg, msg_is_error = _('Username and password are both required.'), True
         elif User.objects.filter(username=uname).exists():
@@ -2528,14 +2555,20 @@ def customer_access(request, pk):
             msg = _('Username "%(usuario)s" is already taken. Nothing was '
                     'created — pick a different username.') % {'usuario': uname}
             msg_is_error = True
+        elif problema_correo:
+            msg, msg_is_error = problema_correo, True
         else:
             with transaction.atomic():
-                u = User.objects.create_user(username=uname, password=pwd)
+                u = User.objects.create_user(username=uname, password=pwd,
+                                             email=correo)
                 UserProfile.objects.create(
                     user=u, tenant=tenant, role='customer', customer=cliente)
             msg = _('"%(usuario)s" can now sign in as %(cliente)s. The password '
                     'is not stored anywhere — hand it over now.') % {
                         'usuario': uname, 'cliente': cliente.name}
+            if not correo:
+                msg += ' ' + _('Without a recovery email, only you can reset '
+                               'their password.')
 
     usuarios = (User.objects
                 .filter(profile__tenant=tenant, profile__customer=cliente,
@@ -2545,6 +2578,7 @@ def customer_access(request, pk):
     return render(request, 'warehouse/partials/customer_access.html', {
         'cliente': cliente, 'usuarios': usuarios,
         'msg': msg, 'msg_is_error': msg_is_error,
+        'correo_sugerido': _correo_de_la_ficha(cliente),
     })
 
 
@@ -2646,6 +2680,11 @@ def user_management(request):
             # Ahora importa de verdad: sin contrasena de borrado configurada,
             # el usuario no puede borrar nada.
             del_pwd = request.POST.get('delete_password','').strip()
+            # El correo de recuperacion, opcional, desde el alta. Ver
+            # `customer_access`: sin el, quien olvide su contrasena depende de
+            # que alguien de esta misma pantalla se la reasigne.
+            correo = request.POST.get('email','').strip()
+            problema_correo = revisar_el_correo(correo)
             if uname and pwd and not profile.can_assign_role(role):
                 # El rol llegaba del formulario y se guardaba tal cual, asi que
                 # un administrador podia nombrar un 'superadmin' y quedar por
@@ -2655,9 +2694,12 @@ def user_management(request):
             elif uname and pwd and _incoherencia_rol_cliente(role, cid):
                 msg = _incoherencia_rol_cliente(role, cid)
                 msg_is_error = True
+            elif uname and pwd and problema_correo:
+                msg, msg_is_error = problema_correo, True
             elif uname and pwd:
                 if not User.objects.filter(username=uname).exists():
-                    u = User.objects.create_user(username=uname, password=pwd)
+                    u = User.objects.create_user(username=uname, password=pwd,
+                                                 email=correo)
                     cat = Catalog.objects.filter(pk=int(cid), tenant=tenant).first() if cid else None
                     nuevo_perfil = UserProfile.objects.create(
                         user=u, role=role, customer=cat, tenant=tenant)
@@ -2666,10 +2708,17 @@ def user_management(request):
                         nuevo_perfil.save(update_fields=['delete_password'])
                     # La contrasena ya no queda guardada en claro, asi que esta
                     # pantalla no va a poder recordarla: se dice aqui, una vez.
+                    # El nombre del rol, no su codigo. El mensaje decia
+                    # 'staff' mientras el desplegable de al lado ofrecia
+                    # "Operador": quien acababa de elegir uno leia el otro.
                     msg = _('User "%(usuario)s" created with role "%(rol)s". '
                             'The password is not stored anywhere — write it '
                             'down or set a new one later.') % {
-                                'usuario': uname, 'rol': role}
+                                'usuario': uname,
+                                'rol': dict(ROLE_CHOICES).get(role, role)}
+                    if not correo:
+                        msg += ' ' + _('Without a recovery email, they cannot '
+                                       'reset it themselves.')
                 else:
                     msg = _('Username "%(usuario)s" already exists.') % {'usuario': uname}
                     msg_is_error = True
@@ -3530,8 +3579,18 @@ def platform_tenant_list(request):
             subdomain_in  = request.POST.get('subdomain', '').strip()
             plan          = request.POST.get('plan', 'starter')
             billing_email = request.POST.get('billing_email', '').strip()
+            # A donde contestan los clientes de esta empresa cuando reciben un
+            # aviso suyo. Sin esto las respuestas caen en el buzon de la
+            # plataforma, que nadie lee.
+            reply_to_email = request.POST.get('reply_to_email', '').strip()
             admin_username = request.POST.get('admin_username', '').strip()
             admin_password = request.POST.get('admin_password', '').strip()
+            # El correo de recuperacion del administrador, que no es el de
+            # facturacion de la empresa aunque a veces coincidan: uno lo lee
+            # contabilidad y el otro abre una cuenta. Guardarlos en el mismo
+            # campo seria dar acceso al sistema a quien solo pidio la factura.
+            admin_email = request.POST.get('admin_email', '').strip()
+            problema_correo = revisar_el_correo(admin_email)
 
             subdomain = re.sub(r'[^a-z0-9-]', '', slugify(subdomain_in or name))
             if not name:
@@ -3544,10 +3603,15 @@ def platform_tenant_list(request):
                 msg = _('Username "%(usuario)s" is already taken. The tenant was '
                         'NOT created — pick a different admin username.') % {
                             'usuario': admin_username}
+            elif admin_username and problema_correo:
+                # Se comprueba antes de crear nada, como el nombre de usuario:
+                # una empresa creada a medias hay que borrarla a mano.
+                msg = problema_correo
             else:
                 tenant = Tenant.objects.create(
                     name=name, type='organization', subdomain=subdomain,
                     is_active=True, plan=plan, billing_email=billing_email or None,
+                    reply_to_email=reply_to_email or None,
                 )
                 # El logo sale en los reportes y etiquetas que la empresa manda
                 # a sus clientes. Es opcional: sin el, los documentos llevan su
@@ -3562,7 +3626,9 @@ def platform_tenant_list(request):
                     msg += ' ' + error_logo
 
                 if admin_username and admin_password:
-                    admin_user = User.objects.create_user(username=admin_username, password=admin_password)
+                    admin_user = User.objects.create_user(
+                        username=admin_username, password=admin_password,
+                        email=admin_email)
                     UserProfile.objects.create(
                         user=admin_user, tenant=tenant, role='admin',
                     )
@@ -3570,6 +3636,9 @@ def platform_tenant_list(request):
                                    'tenant. Its password is not stored '
                                    'anywhere — hand it over now.') % {
                                        'usuario': admin_username}
+                    if not admin_email:
+                        msg += ' ' + _('Without a recovery email, only you can '
+                                       'reset it.')
 
         elif action == 'set_logo':
             t = get_object_or_404(Tenant, pk=request.POST.get('tenant_id'))
@@ -3593,6 +3662,7 @@ def platform_tenant_list(request):
             nombre   = request.POST.get('name', '').strip()
             plan     = request.POST.get('plan', t.plan)
             correo   = request.POST.get('billing_email', '').strip()
+            responder = request.POST.get('reply_to_email', '').strip()
             subdom_in = request.POST.get('subdomain', '').strip()
             subdominio = re.sub(r'[^a-z0-9-]', '', slugify(subdom_in)) if subdom_in else t.subdomain
 
@@ -3609,8 +3679,10 @@ def platform_tenant_list(request):
                 t.name = nombre
                 t.plan = plan
                 t.billing_email = correo or None
+                t.reply_to_email = responder or None
                 t.subdomain = subdominio
-                t.save(update_fields=['name', 'plan', 'billing_email', 'subdomain'])
+                t.save(update_fields=['name', 'plan', 'billing_email',
+                                      'reply_to_email', 'subdomain'])
 
                 # El plan vive en dos sitios -- la empresa y su suscripcion --
                 # y hasta ahora solo coincidian porque el alta los escribia a la
@@ -3955,6 +4027,13 @@ def platform_users(request):
             uname = request.POST.get('username', '').strip()
             pwd   = request.POST.get('password', '').strip()
             rol   = request.POST.get('role', 'staff')
+            # Aqui el correo pesa mas que en ninguna otra alta: por encima de un
+            # administrador de plataforma no hay nadie que le reasigne la
+            # contrasena, asi que sin correo la unica salida es entrar al
+            # servidor a correr un comando. Es el caso que la recuperacion vino
+            # a resolver.
+            correo = request.POST.get('email', '').strip()
+            problema_correo = revisar_el_correo(correo)
             roles_validos = [r for r, _ in PLATFORM_ROLE_CHOICES]
             if not uname or not pwd:
                 msg, msg_is_error = _('Username and password are required.'), True
@@ -3962,6 +4041,8 @@ def platform_users(request):
                 msg, msg_is_error = _('Unknown platform role "%(rol)s".') % {'rol': rol}, True
             elif User.objects.filter(username=uname).exists():
                 msg, msg_is_error = _('Username "%(usuario)s" is already taken.') % {'usuario': uname}, True
+            elif problema_correo:
+                msg, msg_is_error = problema_correo, True
             else:
                 # Sin tenant y sin UserProfile a propósito: un usuario de
                 # plataforma no pertenece a ninguna empresa, y es esa ausencia la
@@ -3969,10 +4050,15 @@ def platform_users(request):
                 # del tenant. Tampoco es superusuario: el admin de Django y los
                 # datos de las empresas siguen siendo otra cosa.
                 with transaction.atomic():
-                    u = User.objects.create_user(username=uname, password=pwd)
+                    u = User.objects.create_user(username=uname, password=pwd,
+                                                 email=correo)
                     PlatformUser.objects.create(user=u, role=rol)
                 msg = _('Platform user "%(usuario)s" created as %(rol)s.') % {
-                    'usuario': uname, 'rol': rol}
+                    'usuario': uname,
+                    'rol': dict(PLATFORM_ROLE_CHOICES).get(rol, rol)}
+                if not correo:
+                    msg += ' ' + _('Without a recovery email, nobody can reset '
+                                   'this password: there is no level above it.')
 
         elif action == 'update_role':
             pk  = request.POST.get('platform_user_id')
@@ -5643,8 +5729,10 @@ def impuestos_email(request):
             cuerpo += _('Estimate at working exchange rate %(tc)s. It is not a '
                         'settlement.') % {'tc': parametros.tipo_de_cambio} + '\n\n'
             cuerpo += _('Kind regards,') + '\n' + tenant.name
+        de, responder = notifications.remitente_de(tenant)
         correo = EmailMessage(subject=asunto, body=cuerpo, to=destinos,
-                              cc=_get_cc_emails(tenant))
+                              cc=_get_cc_emails(tenant),
+                              from_email=de, reply_to=responder)
         correo.attach('impuestos.pdf', pdf, 'application/pdf')
         correo.send()
         request.session['aviso_de_impuestos'] = str(

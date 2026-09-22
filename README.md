@@ -51,18 +51,30 @@ in the menu behind their initial, and recover it from the *Forgot your
 password?* link on the sign-in screen — that one needs an email address saved
 in the account.
 
-### 5. Configure your SMTP email settings
+### 5. Configure your outgoing email
 
-Open `warehouse_system/settings.py` and edit the EMAIL section at the bottom:
+Email settings live in the environment, not in the code. Put them in `.env`
+next to `manage.py`:
 
-```python
-EMAIL_HOST = 'smtp.tuservidor.com'     # Your SMTP server
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'tucorreo@dominio.com'
-EMAIL_HOST_PASSWORD = 'tu_password'
-DEFAULT_FROM_EMAIL = 'tucorreo@dominio.com'
+```ini
+EMAIL_HOST=smtp.tuservidor.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=tucorreo@dominio.com
+EMAIL_HOST_PASSWORD=tu_password
+DEFAULT_FROM_EMAIL=no-reply@dominio.com
 ```
+
+`DEFAULT_FROM_EMAIL` is what password-recovery links are sent from. Two more
+addresses are optional and default to it — `BILLING_FROM_EMAIL` for the
+invoices the platform charges a company, and `NOTIFICATIONS_FROM_EMAIL` for
+what a company sends to its own customers. See
+[docs/configurar-correo-resend.md](docs/configurar-correo-resend.md) for who
+signs each email and why none of them go out from a company's own domain.
+
+> **On Render**, outgoing SMTP is blocked. Production sends over the Resend
+> HTTPS API instead: set `EMAIL_PROVIDER=resend` and `RESEND_API_KEY`. Same
+> document has the steps.
 
 **Common SMTP providers:**
 | Provider | Host | Port |
