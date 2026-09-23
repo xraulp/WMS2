@@ -19,10 +19,16 @@ Configuración (variables de entorno):
 
     EMAIL_PROVIDER=resend
     RESEND_API_KEY=re_...
-    DEFAULT_FROM_EMAIL=avisos@dysergroup.com   # dominio verificado en Resend
+    DEFAULT_FROM_EMAIL=no-reply@miplataforma.com   # dominio verificado en Resend
 
 El remitente **tiene que pertenecer a un dominio verificado en Resend**; con
 cualquier otro la API responde 403 y el fallo queda anotado en NotificationLog.
+
+Y ese dominio es el de **quien opera la plataforma**, no el de ninguna empresa
+usuaria: firmar con el dominio de un tenant significa cobrarle a otro desde el
+dominio de su competidor. `docs/configurar-correo-resend.md` lo explica, junto
+con las otras dos direcciones -- `BILLING_FROM_EMAIL` y
+`NOTIFICATIONS_FROM_EMAIL` -- y el Reply-To de cada empresa.
 """
 import base64
 import logging

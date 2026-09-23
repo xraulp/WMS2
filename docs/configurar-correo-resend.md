@@ -34,16 +34,33 @@ El sistema de notificaciones no se tocó: todo el envío pasaba ya por
 
 ## Pasos manuales
 
-### 1. Crear la cuenta y verificar el dominio
+### 1. Crear la cuenta y verificar el dominio de la plataforma
 
 1. Crear cuenta en [resend.com](https://resend.com).
-2. **Domains → Add Domain** → `dysergroup.com`.
+2. **Domains → Add Domain** → el dominio **de la plataforma**.
 3. Resend muestra unos registros DNS (un TXT de verificación, un CNAME o TXT de
    DKIM y opcionalmente el de DMARC). Hay que darlos de alta donde estén los DNS
    del dominio. La verificación suele tardar minutos, a veces horas.
 
 Sin dominio verificado la API responde **403** y el motivo queda anotado en la
 bitácora de notificaciones (`Resend HTTP 403: ... domain is not verified`).
+
+> **El dominio tiene que ser el de quien opera el SaaS, no el de una empresa
+> usuaria.** Es fácil equivocarse mientras hay un solo cliente, porque su
+> dominio es el único a mano y funciona. Pero en cuanto entra el segundo, ese
+> atajo significa que la plataforma le cobra su factura desde el dominio de un
+> competidor suyo, que su administrador recibe el enlace de recuperación
+> avalado por ese competidor, y que los avisos que él manda a sus propios
+> clientes van firmados por otra empresa. Es la misma razón por la que el
+> nombre de la empresa dejó de estar escrito a mano en la pantalla de entrada:
+> quien opera esta plataforma puede no ser quien la escribió, ni quien la usa.
+>
+> El dominio de una empresa usuaria tiene su sitio, y es otro: el **correo de
+> respuesta** de su ficha, en el panel de plataforma. Así sus clientes le
+> contestan a ella aunque el sobre lo firme la plataforma.
+>
+> El plan gratuito admite tres dominios, así que tener verificado el de la
+> plataforma no obliga a retirar ningún otro.
 
 ### 2. Sacar la API key
 
@@ -57,9 +74,9 @@ En el servicio web, *Environment*:
 |---|---|
 | `EMAIL_PROVIDER` | `resend` |
 | `RESEND_API_KEY` | `re_...` |
-| `DEFAULT_FROM_EMAIL` | una dirección del dominio verificado, p. ej. `no-reply@dysergroup.com` |
-| `BILLING_FROM_EMAIL` | opcional: de dónde salen las facturas, p. ej. `billing@dysergroup.com` |
-| `NOTIFICATIONS_FROM_EMAIL` | opcional: de dónde salen los avisos a los clientes, p. ej. `reportes@dysergroup.com` |
+| `DEFAULT_FROM_EMAIL` | una dirección del dominio de la plataforma, p. ej. `no-reply@miplataforma.com` |
+| `BILLING_FROM_EMAIL` | opcional: de dónde salen las facturas, p. ej. `billing@miplataforma.com` |
+| `NOTIFICATIONS_FROM_EMAIL` | opcional: de dónde salen los avisos a los clientes, p. ej. `reportes@miplataforma.com` |
 | `PLATFORM_BILLING_EMAIL` | el contacto de cobranza: sale impreso en el PDF y va como Reply-To de la factura |
 
 Las variables `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER` y
