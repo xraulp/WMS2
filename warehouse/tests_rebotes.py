@@ -260,3 +260,100 @@ class ElWebhookTests(BaseConEmpresa):
 
     def test_solo_acepta_post(self):
         self.assertEqual(self.client.get(reverse('resend_webhook')).status_code, 405)
+
+
+# ── LOS ENVÍOS QUE NO NACEN DE UNA OPERACIÓN ──────────────────────────────────
+#
+# El informe, la hoja de impuestos y la recuperación salían sin dejar renglón,
+# así que su rebote no tenía dónde anotarse. Justo el informe y la hoja van a lo
+# que el operador teclee en el campo, que es donde más se equivoca uno.
+
+from .tests_hoja_y_calculo import BaseDeLaHoja  # noqa: E402
+
+
+@override_settings(**RESEND)
+class LaHojaDeImpuestosQuedaEnLaBitacoraTests(BaseDeLaHoja):
+
+    def _mandar(self, respuesta):
+        self.client.force_login(self.jefa)
+        with patch('requests.post', return_value=respuesta):
+            self.client.post('/impuestos/email/', {'customer': self.cliente.pk,
+                                                   'para': 'compras@acme.com'})
+        return NotificationLog.objects.get(event='TAX_SHEET')
+
+    def test_deja_renglon_con_el_id_de_resend(self):
+        renglon = self._mandar(RespuestaFalsa(payload={'id': 're_hoja'}))
+        self.assertEqual(renglon.status, 'SENT')
+        self.assertEqual(renglon.provider_id, 're_hoja')
+        self.assertEqual(renglon.recipient, 'compras@acme.com')
+        self.assertEqual(renglon.tenant, self.tenant)
+        self.assertEqual(renglon.customer, self.cliente)
+        self.assertEqual(renglon.triggered_by, self.jefa)
+
+    def test_un_fallo_tambien_queda_y_la_pantalla_sigue_avisandolo(self):
+        renglon = self._mandar(RespuestaFalsa(status_code=403, payload={
+            'message': 'The domain is not verified'}))
+        self.assertEqual(renglon.status, 'FAILED')
+        self.assertIn('not verified', renglon.detail)
+        self.assertIn('not verified',
+                      self.client.session.get('error_de_impuestos', ''))
+
+
+@override_settings(**RESEND)
+class ElInformeQuedaEnLaBitacoraTests(BaseConEmpresa):
+
+    def test_deja_renglon_con_el_id_de_resend(self):
+        op = WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='ENTRY', custom_id='ED-0002',
+            customer=self.cliente, description='Mercancia de prueba')
+        self.client.force_login(self.staff)
+        with patch('requests.post',
+                   return_value=RespuestaFalsa(payload={'id': 're_informe'})):
+            self.client.post(reverse('report_generator_email'), {
+                'ids': str(op.pk), 'customer_id': str(self.cliente.pk),
+                'extra_emails': 'gerente@ferreteria.com'})
+
+        renglon = NotificationLog.objects.get(event='OPERATIONS_REPORT')
+        self.assertEqual(renglon.provider_id, 're_informe')
+        self.assertIn('compras@ferreteria.com', renglon.recipient)
+        self.assertIn('gerente@ferreteria.com', renglon.recipient)
+        self.assertEqual(renglon.customer, self.cliente)
+
+
+@override_settings(**RESEND)
+class LaRecuperacionQuedaEnLaBitacoraTests(BaseConEmpresa):
+
+    def setUp(self):
+        self.staff.email = 'operador@norte.com'
+        self.staff.save(update_fields=['email'])
+
+    def test_deja_renglon_con_la_empresa_del_usuario(self):
+        with patch('requests.post',
+                   return_value=RespuestaFalsa(payload={'id': 're_recupera'})):
+            self.client.post('/password/reset/', {'email': 'operador@norte.com'})
+
+        renglon = NotificationLog.objects.get(event='PASSWORD_RESET')
+        self.assertEqual(renglon.status, 'SENT')
+        self.assertEqual(renglon.provider_id, 're_recupera')
+        self.assertEqual(renglon.recipient, 'operador@norte.com')
+        self.assertEqual(renglon.tenant, self.tenant)
+
+    def test_un_fallo_se_anota_pero_la_pantalla_no_lo_delata(self):
+        """
+        Contestar distinto cuando el correo no sale diría qué direcciones tienen
+        cuenta. Django lo calla a propósito y aquí se sigue callando; lo que
+        cambia es que soporte ya lo puede ver.
+        """
+        with patch('requests.post', return_value=RespuestaFalsa(
+                status_code=403, payload={'message': 'not verified'})):
+            respuesta = self.client.post('/password/reset/',
+                                         {'email': 'operador@norte.com'})
+
+        self.assertRedirects(respuesta, reverse('password_reset_done'))
+        renglon = NotificationLog.objects.get(event='PASSWORD_RESET')
+        self.assertEqual(renglon.status, 'FAILED')
+
+    def test_una_direccion_sin_cuenta_no_deja_nada(self):
+        self.client.post('/password/reset/', {'email': 'nadie@ningunlado.com'})
+        self.assertFalse(NotificationLog.objects.filter(
+            event='PASSWORD_RESET').exists())

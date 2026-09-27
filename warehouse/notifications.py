@@ -321,6 +321,34 @@ def log_notification(operation, customer, channel, event, status,
 
 # ── ENVÍO ─────────────────────────────────────────────────────────────────────
 
+def enviar_y_registrar(correo, event, tenant=None, customer=None,
+                       triggered_by=None):
+    """
+    Manda un correo ya armado y deja su renglón en la bitácora, salga o no.
+
+    Es para los envíos que no nacen de una operación —el informe, la hoja de
+    impuestos, la recuperación de contraseña— y que por eso no pasaban por
+    `_deliver_email`: salían sin dejar rastro, y el aviso de rebote que manda
+    Resend no tenía a qué renglón pegarse.
+
+    **Si falla, la excepción sigue subiendo** después de anotarla. Cada vista
+    que llama a esto ya sabe qué decirle a quien pulsó el botón, y ese mensaje
+    no debe cambiar por registrar el envío.
+    """
+    destinatarios = ', '.join(list(correo.to) + list(correo.cc or []))
+    try:
+        correo.send()
+    except Exception as e:
+        log_notification(None, customer, EMAIL, event, FAILED,
+                         recipient=destinatarios, subject=correo.subject,
+                         detail=str(e), triggered_by=triggered_by, tenant=tenant)
+        raise
+    log_notification(None, customer, EMAIL, event, SENT,
+                     recipient=destinatarios, subject=correo.subject,
+                     triggered_by=triggered_by, tenant=tenant,
+                     provider_id=getattr(correo, 'resend_id', ''))
+
+
 # Tope por archivo adjunto. Los expedientes traen fotos y hasta video, y un
 # correo de 40 MB lo rechaza cualquier servidor; además leerlo entero en memoria
 # en un plan chico es la forma rápida de quedarse sin RAM.

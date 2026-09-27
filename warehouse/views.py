@@ -2285,7 +2285,9 @@ def report_generator_email(request):
             reply_to=responder,
         )
         email.attach('report.pdf', pdf, 'application/pdf')
-        email.send()
+        notifications.enviar_y_registrar(
+            email, 'OPERATIONS_REPORT', tenant=tenant, customer=destinatario,
+            triggered_by=request.user)
         return HttpResponse(
             msg_exito(_('Report with %(n)s record(s) sent to %(destinatarios)s.')
                       % {'n': len(ops_list), 'destinatarios': ', '.join(recipients)})
@@ -5734,7 +5736,9 @@ def impuestos_email(request):
                               cc=_get_cc_emails(tenant),
                               from_email=de, reply_to=responder)
         correo.attach('impuestos.pdf', pdf, 'application/pdf')
-        correo.send()
+        notifications.enviar_y_registrar(
+            correo, 'TAX_SHEET', tenant=tenant, customer=cliente,
+            triggered_by=request.user)
         request.session['aviso_de_impuestos'] = str(
             _('Sheet sent to %(quien)s.') % {'quien': ', '.join(destinos)})
     except Exception as e:

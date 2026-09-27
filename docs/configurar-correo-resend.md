@@ -140,11 +140,17 @@ llega minutos después y nadie lo estaba escuchando.
 **Sin el secreto, el endpoint no acepta nada.** No es un descuido: sin firma que
 comprobar, cualquiera podría marcar como rebotados los correos que quisiera.
 
-Lo que el webhook no puede mover son los correos que no dejan renglón en la
-bitácora: la recuperación de contraseña, el informe de operaciones y la hoja de
-impuestos. Sus avisos se reciben y se contestan con `200` para que Resend no
-los reintente, pero no hay dónde anotarlos. Sus rebotes siguen viéndose solo en
-el panel de Resend (*Emails*).
+Todos los correos del sistema dejan renglón y por eso todos pueden cambiar de
+estado: los avisos de operaciones, el aviso del chat, la factura, el informe de
+operaciones, la hoja de impuestos y la recuperación de contraseña. A un aviso
+de Resend que no coincide con ningún renglón —un correo mandado antes de este
+cambio, por ejemplo— se le contesta `200` igual, para que no lo reintente.
+
+La recuperación es un caso aparte en la pantalla, no en la bitácora: si el
+correo no sale, quien lo pidió ve el mismo «te lo enviamos» que si hubiera
+salido. Es a propósito —contestar distinto delataría qué direcciones tienen
+cuenta—, así que el renglón «Fallida» de la bitácora es el único sitio donde se
+ve ese fallo.
 
 ## Quién firma cada correo
 

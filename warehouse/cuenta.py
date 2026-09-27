@@ -28,10 +28,13 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth import views as auth_views
+from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
 from django.shortcuts import redirect, render
+from django.template import loader
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 
@@ -183,7 +186,47 @@ def mi_cuenta(request):
 # clases y no con `as_view(...)` en las rutas para que el fichero de rutas siga
 # leyendose de un vistazo.
 
+class FormularioDeRecuperacion(PasswordResetForm):
+    """
+    El de Django, con el envío anotado en la bitácora.
+
+    La recuperación es el correo que más importa que llegue —quien lo pide ya
+    no puede entrar— y era de los que no dejaban rastro. Con el renglón, el
+    webhook de Resend puede marcar el rebote y soporte ve por qué no llegó.
+
+    El cuerpo se arma igual que en Django. Lo que no cambia es que un fallo se
+    anota y **no sube**: Django lo calla a propósito, porque contestar distinto
+    según si el correo salió delataría qué direcciones tienen cuenta.
+    """
+
+    def send_mail(self, subject_template_name, email_template_name, context,
+                  from_email, to_email, html_email_template_name=None):
+        from .notifications import enviar_y_registrar
+
+        asunto = ''.join(loader.render_to_string(subject_template_name,
+                                                 context).splitlines())
+        cuerpo = loader.render_to_string(email_template_name, context)
+        correo = EmailMultiAlternatives(asunto, cuerpo, from_email, [to_email])
+        if html_email_template_name is not None:
+            correo.attach_alternative(
+                loader.render_to_string(html_email_template_name, context),
+                'text/html')
+
+        usuario = context['user']
+        perfil = UserProfile.objects.filter(user=usuario).select_related('tenant').first()
+        try:
+            enviar_y_registrar(correo, 'PASSWORD_RESET',
+                               tenant=perfil.tenant if perfil else None,
+                               triggered_by=usuario)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'No se pudo enviar el correo de recuperacion al usuario %s',
+                usuario.pk)
+
+
 class PedirElEnlace(auth_views.PasswordResetView):
+    form_class = FormularioDeRecuperacion
     template_name = 'warehouse/password/reset_form.html'
     email_template_name = 'warehouse/password/reset_email.txt'
     html_email_template_name = 'warehouse/password/reset_email.html'

@@ -1710,6 +1710,9 @@ msgstr "Fallida"
 msgid "Skipped"
 msgstr "Omitida"
 
+msgid "Duty estimate sheet"
+msgstr "Hoja de impuestos"
+
 msgid "Delivered"
 msgstr "Entregada"
 

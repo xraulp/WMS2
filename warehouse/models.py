@@ -1625,6 +1625,13 @@ class NotificationLog(models.Model):
         ('INVOICE_SENT',      _('Invoice sent')),
         # El aviso de que hay un mensaje nuevo en el hilo de una operacion.
         ('CHAT_MESSAGE',      _('Message in the thread')),
+        # Los tres que llevan direcciones tecleadas a mano o que nadie mas
+        # puede revisar: el informe y la hoja se mandan a lo que el operador
+        # escriba en el campo, y la recuperacion la pide quien ya no puede
+        # entrar. Sin renglon, su rebote no tendria donde anotarse.
+        ('OPERATIONS_REPORT', _('Operations Report')),
+        ('TAX_SHEET',         _('Duty estimate sheet')),
+        ('PASSWORD_RESET',    _('Password recovery')),
     ]
     # SENT quiere decir que el proveedor **acepto** el correo, no que llego.
     # Lo que paso despues lo cuenta Resend por su webhook (`webhooks.py`) y
