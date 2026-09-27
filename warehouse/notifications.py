@@ -286,7 +286,7 @@ def en_segundo_plano(fn, *args, **kwargs):
 
 def log_notification(operation, customer, channel, event, status,
                      recipient='', subject='', detail='', triggered_by=None,
-                     tenant=None):
+                     tenant=None, provider_id=''):
     """
     Deja constancia de un envío. Nunca propaga: una bitácora rota no puede
     impedir que se registre la operación que la originó.
@@ -295,6 +295,9 @@ def log_notification(operation, customer, channel, event, status,
     que la plataforma le manda a una empresa—. Sin él, ese renglón quedaría sin
     empresa y no se podría filtrar en la bitácora de envíos, que es para lo que
     se mira.
+
+    `provider_id` es el id que Resend le dio al correo; sin él, el aviso de
+    rebote que llegue después no tiene a qué renglón pegarse.
     """
     try:
         return NotificationLog.objects.create(
@@ -309,6 +312,7 @@ def log_notification(operation, customer, channel, event, status,
             subject=(subject or '')[:300],
             detail=detail or '',
             triggered_by=triggered_by if (triggered_by and triggered_by.pk) else None,
+            provider_id=(provider_id or '')[:100],
         )
     except Exception:
         logger.exception('No se pudo registrar la notificacion en NotificationLog')
@@ -386,7 +390,8 @@ def _deliver_email(operation, customer, event, recipients, subject, html_body,
         return False, str(e)
 
     log_notification(operation, customer, EMAIL, event, SENT,
-                     recipient=joined, subject=subject, triggered_by=triggered_by)
+                     recipient=joined, subject=subject, triggered_by=triggered_by,
+                     provider_id=getattr(email, 'resend_id', ''))
     return True, None
 
 
@@ -702,7 +707,8 @@ def enviar_factura(factura, triggered_by=None):
 
     log_notification(None, None, EMAIL, 'INVOICE_SENT', SENT,
                      recipient=destino, subject=asunto,
-                     triggered_by=triggered_by, tenant=factura.tenant)
+                     triggered_by=triggered_by, tenant=factura.tenant,
+                     provider_id=getattr(correo, 'resend_id', ''))
 
     factura.enviada_el = timezone.now()
     factura.save(update_fields=['enviada_el'])

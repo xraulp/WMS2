@@ -3,6 +3,7 @@
 
 <p style="font-size:11px;color:var(--faint);margin:-4px 0 12px">
   {% blocktrans %}Every email and WhatsApp the system tried to send, across all companies. Read only — resending an alert is done by the company's own operator, from the operation. Showing the latest 200.{% endblocktrans %}
+  {% blocktrans %}“Sent” means the provider accepted it; “Delivered” and “Bounced” are what the recipient's server answered afterwards.{% endblocktrans %}
 </p>
 
 <form hx-get="{% url 'platform_notifications' %}" hx-target="#platform-content" hx-swap="innerHTML"
@@ -51,7 +52,7 @@
       <td style="font-size:11px">{{ r.get_channel_display }}</td>
       <td style="font-size:11px">{{ r.get_event_display }}</td>
       <td>
-        <span class="badge {% if r.status == 'SENT' %}b-entry{% elif r.status == 'FAILED' %}b-exit{% else %}b-sent{% endif %}">
+        <span class="badge {% if r.status == 'SENT' or r.status == 'DELIVERED' %}b-entry{% elif r.status == 'FAILED' or r.status == 'BOUNCED' or r.status == 'COMPLAINED' %}b-exit{% else %}b-sent{% endif %}">
           {{ r.get_status_display }}
         </span>
       </td>

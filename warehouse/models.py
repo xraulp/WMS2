@@ -1626,10 +1626,18 @@ class NotificationLog(models.Model):
         # El aviso de que hay un mensaje nuevo en el hilo de una operacion.
         ('CHAT_MESSAGE',      _('Message in the thread')),
     ]
+    # SENT quiere decir que el proveedor **acepto** el correo, no que llego.
+    # Lo que paso despues lo cuenta Resend por su webhook (`webhooks.py`) y
+    # mueve el renglon a uno de los tres ultimos. Van en el mismo campo y no en
+    # uno aparte porque la pregunta de soporte es una sola -- "¿le llego o
+    # no?" -- y el filtro de la bitacora tiene que poder contestarla.
     STATUS_CHOICES = [
-        ('SENT',    _('Sent')),
-        ('FAILED',  _('Failed')),
-        ('SKIPPED', _('Skipped')),
+        ('SENT',       _('Sent')),
+        ('FAILED',     _('Failed')),
+        ('SKIPPED',    _('Skipped')),
+        ('DELIVERED',  _('Delivered')),
+        ('BOUNCED',    _('Bounced')),
+        ('COMPLAINED', _('Marked as spam')),
     ]
 
     tenant     = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True,
@@ -1652,6 +1660,10 @@ class NotificationLog(models.Model):
     detail     = models.TextField(blank=True)
     triggered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
                                      related_name='triggered_notifications')
+    # El id que el proveedor le dio al correo al aceptarlo. Es la llave con la
+    # que su webhook avisa despues de una entrega o un rebote. Vacio en lo que
+    # no salio, en WhatsApp y en lo que se mando por SMTP.
+    provider_id = models.CharField(max_length=100, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

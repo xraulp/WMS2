@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, cuenta
+from . import views, cuenta, webhooks
 
 urlpatterns = [
     path('', views.login_view, name='login'),
@@ -84,6 +84,10 @@ urlpatterns = [
          name='password_reset_confirm'),
     path('password/reset/done/', cuenta.YaEstaCambiada.as_view(),
          name='password_reset_complete'),
+
+    # Lo que Resend cuenta de un correo despues de aceptarlo: entregas y
+    # rebotes. Lo llama Resend, no un navegador; lo protege la firma.
+    path('webhooks/resend/', webhooks.resend_webhook, name='resend_webhook'),
 
     # Como quiere ver la pantalla cada quien.
     path('preferencias/tema/', views.cambiar_tema, name='cambiar_tema'),

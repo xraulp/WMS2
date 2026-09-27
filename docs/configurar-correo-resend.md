@@ -99,11 +99,52 @@ En el log de arranque del deploy sale la línea:
 Después, registrar una operación de un cliente con correo y revisar
 `/admin/warehouse/notificationlog/`:
 
-- **Enviada** — llegó a Resend. La entrega se puede seguir en el panel de Resend
-  (*Emails*), que muestra entregados, rebotados y marcados como spam.
+- **Enviada** — Resend lo aceptó. Todavía no dice que haya llegado.
+- **Entregada** — el servidor de quien lo recibe lo tomó. Llega por el webhook
+  del paso 5; sin él, el renglón se queda en «Enviada» para siempre.
+- **Rebotada** — la dirección no existe o el buzón no lo acepta. El motivo que
+  contestó el servidor de destino va en `detail`.
+- **Marcada como spam** — el destinatario lo denunció.
 - **Fallida** — el motivo va en `detail` con el código HTTP de la API.
 - **Omitida** — no se intentó; el motivo va en `detail` (`preference_off`,
   `no_recipient`, `customer_not_in_catalog`, `already_notified`).
+
+La misma bitácora se ve sin entrar al admin en el panel de plataforma, pestaña
+de envíos, y se puede filtrar por estado: «Rebotada» es la lista de direcciones
+que alguien tecleó mal.
+
+### 5. El webhook de entregas y rebotes
+
+Sin esto la bitácora solo sabe si Resend **aceptó** el correo. Un
+`billing_email` mal tecleado se ve como enviado para siempre, porque el rebote
+llega minutos después y nadie lo estaba escuchando.
+
+1. En Resend, **Webhooks → Add Endpoint**.
+2. URL: `https://<dominio-de-la-aplicación>/webhooks/resend/`. Es el dominio donde
+   corre el WMS, no el del correo.
+3. Eventos: `email.delivered`, `email.bounced`, `email.complained`,
+   `email.delivery_delayed` y `email.failed`. Los demás (`email.sent`,
+   `email.opened`, `email.clicked`) no se usan y solo generan tráfico.
+4. Al crearlo, Resend muestra la **Signing Secret**, que empieza con `whsec_`.
+   Va en Render → Environment:
+
+   ```
+   RESEND_WEBHOOK_SECRET=whsec_...
+   ```
+
+5. Mandar cualquier aviso y, al rato, ver que su renglón pase a **Entregada**.
+   En Resend, dentro del endpoint, cada intento aparece con la respuesta que dio
+   el WMS: `200` es que se procesó; `401` es que el secreto no coincide; `503`
+   es que la variable no está puesta.
+
+**Sin el secreto, el endpoint no acepta nada.** No es un descuido: sin firma que
+comprobar, cualquiera podría marcar como rebotados los correos que quisiera.
+
+Lo que el webhook no puede mover son los correos que no dejan renglón en la
+bitácora: la recuperación de contraseña, el informe de operaciones y la hoja de
+impuestos. Sus avisos se reciben y se contestan con `200` para que Resend no
+los reintente, pero no hay dónde anotarlos. Sus rebotes siguen viéndose solo en
+el panel de Resend (*Emails*).
 
 ## Quién firma cada correo
 
@@ -149,7 +190,7 @@ gratuito admite tres dominios, el Pro diez, y hay un complemento de cien.
 
 ## Qué falta verificar cuando el correo salga
 
-1. Que el renglón de la bitácora diga **Enviada**.
+1. Que el renglón de la bitácora diga **Enviada**, y al rato **Entregada**.
 2. Que el usuario del cliente nivel 2 reciba el correo en su `User.email`,
    además del `contact_email` del catálogo. Antes solo se miraba el catálogo.
 3. Que los documentos del expediente lleguen **adjuntos**. Dejaron de adjuntarse

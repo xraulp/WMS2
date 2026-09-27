@@ -99,7 +99,12 @@ class ResendBackend(BaseEmailBackend):
             return
 
         payload = self._build_payload(message)
-        self._post(payload)
+        respuesta = self._post(payload)
+        # El id que Resend le pone al correo es lo único que enlaza el aviso de
+        # rebote que llega después (ver `warehouse/webhooks.py`) con el renglón
+        # de NotificationLog. Se deja en el propio mensaje porque `send()` solo
+        # devuelve cuántos salieron, y quien lo mandó es quien escribe el renglón.
+        message.resend_id = self._id_del_envio(respuesta)
 
     def _build_payload(self, message):
         payload = {
@@ -201,6 +206,20 @@ class ResendBackend(BaseEmailBackend):
         if respuesta.status_code >= 400:
             raise ResendAPIError(self._describe_error(respuesta))
         return respuesta
+
+    @staticmethod
+    def _id_del_envio(respuesta):
+        """
+        El `id` de `{"id": "..."}`, o cadena vacía.
+
+        El correo ya salió cuando se llega aquí, así que una respuesta rara no
+        puede convertirlo en un fallo: sin id solo se pierde la posibilidad de
+        enterarse de un rebote, no el envío.
+        """
+        try:
+            return str(respuesta.json().get('id') or '')
+        except (ValueError, AttributeError):
+            return ''
 
     @staticmethod
     def _describe_error(respuesta):

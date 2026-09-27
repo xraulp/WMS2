@@ -1710,6 +1710,18 @@ msgstr "Fallida"
 msgid "Skipped"
 msgstr "Omitida"
 
+msgid "Delivered"
+msgstr "Entregada"
+
+msgid "Bounced"
+msgstr "Rebotada"
+
+msgid "Marked as spam"
+msgstr "Marcada como spam"
+
+msgid "“Sent” means the provider accepted it; “Delivered” and “Bounced” are what the recipient's server answered afterwards."
+msgstr "«Enviada» quiere decir que el proveedor lo aceptó; «Entregada» y «Rebotada» son lo que contestó después el servidor de quien lo recibe."
+
 msgid "Photo"
 msgstr "Foto"
 

@@ -321,6 +321,10 @@ PLATFORM_BILLING_ADDRESS = os.environ.get('PLATFORM_BILLING_ADDRESS', '')
 # `EMAIL_BACKEND` explícito en el entorno gana sobre todo lo anterior, para poder
 # forzar el backend de consola al depurar.
 RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
+# La firma de los avisos que Resend manda al webhook de entregas y rebotes
+# (`warehouse/webhooks.py`). Es la «Signing Secret» del endpoint, `whsec_...`.
+# Sin ella el webhook no acepta nada.
+RESEND_WEBHOOK_SECRET = os.getenv('RESEND_WEBHOOK_SECRET', '')
 EMAIL_PROVIDER = os.getenv('EMAIL_PROVIDER', '').strip().lower()
 
 if not EMAIL_PROVIDER:
