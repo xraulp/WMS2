@@ -9,7 +9,6 @@
     {% blocktrans %}Type the email address of your account. We will send you a link to set a new password.{% endblocktrans %}
   </p>
 
-  {% if error_de_envio %}<div class="msg-err">{{ error_de_envio }}</div>{% endif %}
   {% if form.errors %}
     <div class="msg-err">{% trans "That does not look like an email address." %}</div>
   {% endif %}

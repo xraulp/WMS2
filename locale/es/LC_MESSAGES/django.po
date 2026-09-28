@@ -2574,9 +2574,6 @@ msgstr "Correo de recuperación guardado."
 msgid "Recovery email removed. Without one, only an administrator can reset your password."
 msgstr "Correo de recuperación quitado. Sin él, solo un administrador puede reasignarte la contraseña."
 
-msgid "The recovery email could not be sent right now. Try again in a few minutes, or ask an administrator to reset your password."
-msgstr "El correo de recuperación no pudo enviarse ahora mismo. Inténtalo en unos minutos o pide a un administrador que te reasigne la contraseña."
-
 msgid "My account"
 msgstr "Mi cuenta"
 

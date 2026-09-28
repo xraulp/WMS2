@@ -195,8 +195,14 @@ class FormularioDeRecuperacion(PasswordResetForm):
     webhook de Resend puede marcar el rebote y soporte ve por qué no llegó.
 
     El cuerpo se arma igual que en Django. Lo que no cambia es que un fallo se
-    anota y **no sube**: Django lo calla a propósito, porque contestar distinto
-    según si el correo salió delataría qué direcciones tienen cuenta.
+    anota y **no sube**, por dos razones. Django lo calla a propósito, porque
+    contestar distinto según si el correo salió delataría qué direcciones
+    tienen cuenta. Y el servidor de correo es lo que más se cae de todo esto:
+    con `EMAIL_TIMEOUT` a diez segundos, dejarlo subir le daría a quien perdió
+    su contraseña un "Internal Server Error", justo cuando ya no puede entrar.
+
+    Por eso la vista no necesita atrapar nada. Antes lo hacía para pintar «no se
+    pudo enviar», pero desde que Django calla el fallo ese aviso nunca salía.
     """
 
     def send_mail(self, subject_template_name, email_template_name, context,
@@ -236,28 +242,6 @@ class PedirElEnlace(auth_views.PasswordResetView):
     @property
     def from_email(self):
         return settings.DEFAULT_FROM_EMAIL
-
-    def form_valid(self, form):
-        """
-        Igual que el de Django, pero sin morir si el correo no sale.
-
-        El envio va dentro de la peticion, y el servidor de correo es lo que mas
-        se cae de todo esto: con `EMAIL_TIMEOUT` a diez segundos, un servidor
-        que no contesta le daria a quien perdio su contrasena un "Internal
-        Server Error". Es la misma leccion que dejo el chat, y aqui pesa mas
-        porque quien esta en esta pantalla ya no puede entrar.
-        """
-        try:
-            return super().form_valid(form)
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception(
-                'No se pudo enviar el correo de recuperacion')
-            return self.render_to_response(self.get_context_data(
-                form=form,
-                error_de_envio=_('The recovery email could not be sent right '
-                                 'now. Try again in a few minutes, or ask an '
-                                 'administrator to reset your password.')))
 
 
 class EnlaceEnviado(auth_views.PasswordResetDoneView):
