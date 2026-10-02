@@ -134,8 +134,22 @@
   </div>
   {% else %}
 
+  {% comment %}
+  Un cruce nuevo se arma marcando primero lo que va y eligiendo el dia al
+  final, en una pantalla aparte que sirve igual en el telefono. Antes aqui se
+  creaba una tarea vacia y despues se metia un embarque por vuelta.
+  {% endcomment %}
+  <div class="card" style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+    <div>
+      <p class="ct" style="margin:0 0 3px">{% trans "New crossing" %}</p>
+      <span class="soft" style="font-size:12px">{% trans "Mark what goes, then pick the day." %}</span>
+    </div>
+    <a class="btn btn-p" style="text-decoration:none"
+       href="{% url 'cruce_armar' %}?customer={{ cliente.pk }}">+ {% trans "Send to crossing" %}</a>
+  </div>
+
   {% for t in tareas %}
-  <div class="tarea">
+  <div class="tarea" id="tarea-{{ t.pk }}">
     <div class="tarea-hd">
       <div>
         <div class="tarea-id">{{ t.custom_id }}</div>
@@ -282,6 +296,10 @@
         {% endif %}
         <button class="btn btn-sm btn-p" type="submit">+ {% trans "Add" %}</button>
       </form>
+      {% if t.libres|length > 1 %}
+      <a class="btn btn-sm" style="text-decoration:none"
+         href="{% url 'cruce_armar' %}?customer={{ cliente.pk }}&amp;tarea={{ t.pk }}">&#9745; {% trans "Mark several" %}</a>
+      {% endif %}
     </div>
     {% endif %}
 
@@ -461,28 +479,6 @@
     <p class="soft" style="margin:0">{% trans "No crossings for this customer yet." %}</p>
   </div>
   {% endfor %}
-
-  <div class="card">
-    <p class="ct">{% trans "New crossing" %}</p>
-    <form method="post" action="{% url 'cruce_crear' %}"
-          style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-      {% csrf_token %}
-      <input type="hidden" name="customer" value="{{ cliente.pk }}">
-      <label class="campo">
-        {% comment %}
-        El dia se elige libremente en un calendario, no entre dias fijos.
-        {% endcomment %}
-        <span>{% trans "Crossing day" %}</span>
-        <input type="date" name="fecha_de_cruce" required>
-      </label>
-      <button class="btn btn-p" type="submit">{% trans "Create the crossing" %}</button>
-    </form>
-    {% if not es_cliente %}
-    <p class="soft" style="font-size:11px;margin:8px 0 0">
-      {% trans "Created on their behalf: the customer will be asked to confirm it." %}
-    </p>
-    {% endif %}
-  </div>
 
   {% endif %}
 </div>

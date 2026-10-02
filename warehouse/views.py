@@ -6070,17 +6070,7 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
                                     'cambios_de_dia')
                   .order_by('fecha_de_cruce'))
 
-    # Los embarques que se pueden meter: los del cliente que estan en bodega y
-    # no van ya en otra tarea viva. Un embarque no puede ir en dos camiones.
-    ya_comprometidos = set(CrossingTaskItem.objects
-                           .filter(task__tenant=tenant, task__customer=cliente)
-                           .exclude(task__estado=CrossingTask.CANCELADA)
-                           .values_list('operation_id', flat=True))
-    libres = [op for op in WarehouseOperation.objects
-              .filter(tenant=tenant, customer=cliente, operation_type='ENTRY')
-              .select_related('bundle_type', 'shipper')
-              .order_by('-date', '-created_at')
-              if op.status != 'Released Goods' and op.pk not in ya_comprometidos]
+    libres = _libres_del_cliente(tenant, cliente)
 
     for tarea in tareas:
         tarea.sin_factura = tarea.operaciones_sin_factura
@@ -6146,6 +6136,232 @@ def cruce_crear(request):
                        if origen == CrossingTask.LA_CREO_EL_CLIENTE else None),
         created_by=request.user)
     return redirect(f"{reverse('cruces_panel')}?customer={cliente.pk}")
+
+
+# ── Marcar y luego crear ────────────────────────────────────────────────────
+#
+# Lo que se diseno fue esto: el cliente ve su mercancia guardada, marca lo que
+# quiere cruzar, elige el dia y crea la tarea. Lo primero que se construyo fue
+# al reves -- una tarea vacia con fecha y despues los embarques de uno en uno,
+# un viaje al servidor por cada uno --, que en el telefono es un suplicio.
+#
+# Esta pantalla es la de marcar. Sirve para las dos cosas que pasan de verdad:
+# armar un cruce nuevo y añadir varios a uno que ya existe. Se llega desde la
+# pantalla de cruces y desde Operaciones, en PC y en movil, con lo marcado alla
+# ya marcado aqui.
+
+
+def _libres_del_cliente(tenant, cliente):
+    """
+    Los embarques del cliente que se pueden mandar a cruce.
+
+    Las entradas que siguen en bodega y no van ya en otra tarea viva: un
+    embarque no puede ir en dos camiones.
+    """
+    ya_comprometidos = set(CrossingTaskItem.objects
+                           .filter(task__tenant=tenant, task__customer=cliente)
+                           .exclude(task__estado=CrossingTask.CANCELADA)
+                           .values_list('operation_id', flat=True))
+    return [op for op in WarehouseOperation.objects
+            .filter(tenant=tenant, customer=cliente, operation_type='ENTRY')
+            .select_related('bundle_type', 'shipper')
+            .order_by('-date', '-created_at')
+            if op.status != 'Released Goods' and op.pk not in ya_comprometidos]
+
+
+def _desde_valido(valor, por_defecto):
+    return valor if valor in dict(CrossingTaskItem.ORIGENES) else por_defecto
+
+
+def _contexto_de_armar(request, cliente_pk=None, marcados=None, error=None):
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+
+    clientes = Catalog.objects.filter(
+        tenant=tenant, category='CUSTOMER', active=True).order_by('name')
+
+    # Lo que viene marcado de Operaciones. Puede traer de todo -- salidas, lo
+    # ya liberado, lo que ya va en otro cruce, de varios clientes -- porque
+    # alla la casilla no sabe nada de cruces. Aqui se separa lo que entra de
+    # lo que no, y lo que no se dice en vez de perderlo callado.
+    if marcados is None:
+        crudo = request.GET.get('ops') or ''
+        marcados = [int(p) for p in re.split(r'[,\s]+', crudo) if p.isdigit()]
+
+    if profile.is_customer():
+        clientes = clientes.filter(pk=getattr(profile.customer, 'pk', None))
+        cliente = clientes.first()
+    else:
+        pedido = cliente_pk if cliente_pk is not None else request.GET.get('customer')
+        if not pedido and marcados:
+            # La casa llega desde Operaciones sin haber elegido cliente: manda
+            # el del primer embarque marcado.
+            pedido = (WarehouseOperation.objects
+                      .filter(tenant=tenant, pk__in=marcados)
+                      .exclude(customer=None)
+                      .order_by('pk')
+                      .values_list('customer_id', flat=True).first())
+        cliente = clientes.filter(pk=pedido).first() if pedido else None
+
+    contexto = {
+        'clientes': clientes,
+        'cliente': cliente,
+        'es_cliente': profile.is_customer(),
+        'error': error,
+        'hoy': timezone.localdate(),
+        'marcados_crudo': ','.join(str(p) for p in marcados),
+        'desde': _desde_valido(request.GET.get('desde') or request.POST.get('desde'),
+                               CrossingTaskItem.DESDE_LA_TAREA),
+    }
+    if cliente is None:
+        return contexto
+
+    libres = _libres_del_cliente(tenant, cliente)
+    pks_libres = {op.pk for op in libres}
+    marcados = set(marcados)
+    for op in libres:
+        op.marcado = op.pk in marcados
+        op.bultos_pedidos = request.POST.get('bultos_%d' % op.pk, '')
+
+    # Los marcados que no entran, con su por que.
+    fuera = []
+    if marcados - pks_libres:
+        for op in (WarehouseOperation.objects
+                   .filter(tenant=tenant, pk__in=marcados - pks_libres)
+                   .select_related('customer')):
+            if profile.is_customer() and op.customer_id != cliente.pk:
+                continue
+            if op.customer_id != cliente.pk:
+                por_que = _('belongs to another customer')
+            elif op.operation_type != 'ENTRY':
+                por_que = _('only entries cross')
+            elif op.status == 'Released Goods':
+                por_que = _('already released')
+            else:
+                por_que = _('already in another crossing')
+            fuera.append({'op': op, 'por_que': por_que})
+
+    # Las tareas a las que todavia se les puede añadir: las abiertas y las que
+    # ya tienen orden de carga -- esas con motivo, como en la propia tarea.
+    abiertas = list(CrossingTask.objects
+                    .filter(tenant=tenant, customer=cliente,
+                            estado__in=[CrossingTask.ABIERTA,
+                                        CrossingTask.CON_ORDEN])
+                    .order_by('fecha_de_cruce'))
+    destino = request.GET.get('tarea') or request.POST.get('tarea') or ''
+
+    contexto.update({
+        'libres': libres,
+        'fuera': fuera,
+        'abiertas': abiertas,
+        'destino': int(destino) if destino.isdigit() else 0,
+        'fecha_pedida': request.POST.get('fecha_de_cruce', ''),
+        'motivo_pedido': request.POST.get('motivo', ''),
+    })
+    return contexto
+
+
+class _NoEntra(Exception):
+    """Un embarque marcado que no puede ir; deshace todo lo demas."""
+
+
+@login_required
+def cruce_armar(request):
+    """
+    Marcar la mercancia y crear el cruce de un solo envio.
+
+    O añadirla a un cruce que ya existe, si se elige uno. Todo o nada: si un
+    solo embarque no entra -- el candado del agente aduanal, los bultos de
+    mas -- no se crea nada y la pantalla vuelve con lo marcado intacto y el
+    motivo escrito arriba. Media tarea creada es peor que ninguna: el cliente
+    cree que pidio el cruce y le falta la mitad.
+    """
+    if request.method != 'POST':
+        return render(request, 'warehouse/cruce_armar.html',
+                      _contexto_de_armar(request))
+
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    marcados = [int(p) for p in request.POST.getlist('ops') if p.isdigit()]
+
+    if profile.is_customer():
+        cliente = get_object_or_404(Catalog, pk=getattr(profile.customer, 'pk', None),
+                                    tenant=tenant, category='CUSTOMER')
+    else:
+        cliente = get_object_or_404(Catalog, pk=request.POST.get('customer'),
+                                    tenant=tenant, category='CUSTOMER')
+
+    def de_vuelta(mensaje):
+        return render(request, 'warehouse/cruce_armar.html',
+                      _contexto_de_armar(request, cliente.pk, marcados, str(mensaje)),
+                      status=422)
+
+    if not marcados:
+        return de_vuelta(_('Mark at least one shipment.'))
+
+    desde  = _desde_valido(request.POST.get('desde'), CrossingTaskItem.DESDE_LA_TAREA)
+    motivo = (request.POST.get('motivo') or '').strip()
+
+    tarea = None
+    destino = request.POST.get('tarea') or ''
+    if destino.isdigit() and int(destino):
+        tarea = get_object_or_404(
+            CrossingTask, pk=destino, tenant=tenant, customer=cliente,
+            estado__in=[CrossingTask.ABIERTA, CrossingTask.CON_ORDEN])
+        if tarea.estado != CrossingTask.ABIERTA and not motivo:
+            return de_vuelta(_('The load order of %(t)s is already out: '
+                               'say why these shipments go in.')
+                             % {'t': tarea.custom_id})
+    else:
+        dia = parse_date_or_none(request.POST.get('fecha_de_cruce'))
+        if not dia:
+            return de_vuelta(_('Pick the crossing day.'))
+
+    libres = {op.pk: op for op in _libres_del_cliente(tenant, cliente)}
+    try:
+        with transaction.atomic():
+            if tarea is None:
+                origen = (CrossingTask.LA_CREO_EL_CLIENTE if profile.is_customer()
+                          else CrossingTask.LA_CREO_LA_CASA)
+                # Cuando la crea el cliente no hay nada que confirmar: la
+                # instruccion es suya.
+                tarea = CrossingTask.objects.create(
+                    tenant=tenant, customer=cliente, fecha_de_cruce=dia,
+                    origen=origen,
+                    confirmada_por_el_cliente=(origen == CrossingTask.LA_CREO_EL_CLIENTE),
+                    confirmada_en=(timezone.now()
+                                   if origen == CrossingTask.LA_CREO_EL_CLIENTE else None),
+                    created_by=request.user)
+                motivo = ''
+
+            for pk in marcados:
+                op = libres.get(pk)
+                if op is None:
+                    raise _NoEntra(_('One of the marked shipments can no longer '
+                                     'go: it was released or put in another '
+                                     'crossing meanwhile.'))
+                # El candado se mira contra lo que ya va dentro, que incluye lo
+                # que se acaba de meter en esta misma vuelta: dos marcados con
+                # patentes distintas chocan entre ellos, no solo con la tarea.
+                choca = tarea.choque_al_meter(op)
+                if choca:
+                    raise _NoEntra(choca['mensaje'])
+                try:
+                    cuantos = int(request.POST.get('bultos_%d' % pk) or 0)
+                except (TypeError, ValueError):
+                    cuantos = 0
+                tope = op.bundle_qty or 0
+                if cuantos and tope and cuantos > tope:
+                    raise _NoEntra(_('%(op)s only has %(n)d bundles.')
+                                   % {'op': op.custom_id, 'n': tope})
+                CrossingTaskItem.objects.create(
+                    task=tarea, operation=op, added_by=request.user,
+                    motivo=motivo, bultos=(cuantos or None), desde=desde)
+            _versionar_orden(tarea, request.user)
+    except _NoEntra as e:
+        return de_vuelta(e)
+
+    return redirect(f"{reverse('cruces_panel')}?customer={cliente.pk}#tarea-{tarea.pk}")
 
 
 @login_required

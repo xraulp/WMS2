@@ -1,0 +1,295 @@
+{% load i18n %}
+{% get_current_language as idioma_actual %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Send to crossing" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    a{color:inherit}
+    .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
+        padding:12px 18px;background:var(--ink);color:var(--on-accent);flex-wrap:wrap}
+    .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
+    .tb a{color:var(--bdr);text-decoration:none;font-size:12px}
+    .wrap{max-width:760px;margin:16px auto 0;padding:0 14px}
+    .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
+          padding:14px 16px;margin-bottom:14px}
+    .ct{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin:0 0 10px}
+    .mono{font-family:'IBM Plex Mono',monospace}
+    .soft{color:var(--soft)}
+    select,input[type=text],input[type=date],input[type=number],input[type=search]{
+      font-family:inherit;font-size:16px;padding:8px 10px;border:1px solid var(--bdr);
+      border-radius:var(--r);background:var(--surface);color:var(--ink);max-width:100%}
+    .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:var(--r);
+         padding:8px 14px;font-size:14px;font-family:inherit;cursor:pointer;color:var(--ink)}
+    .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+    .btn-p:disabled{background:var(--bg-sutil);border-color:var(--bdr);color:var(--soft);cursor:not-allowed}
+    .btn-sm{padding:4px 10px;font-size:12px}
+    .msg-error{background:var(--rsoft);color:var(--err-ink);padding:10px 12px;
+               border-radius:var(--r);font-size:14px;margin-bottom:12px}
+    .fuera{background:var(--warn-bg-suave);border:1px solid var(--warn-bdr);color:var(--warn-ink);
+           border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px;line-height:1.5}
+    .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft);
+         display:block;margin-bottom:4px}
+
+    /* La lista de lo que hay en bodega. Cada renglon es una ficha que se marca
+       tocandola entera: en el telefono una casilla de 16 px es un blanco que
+       se falla. */
+    .buscar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+    .buscar input{flex:1}
+    .emb{display:flex;gap:12px;align-items:flex-start;padding:12px;
+         border:1px solid var(--bdr);border-radius:10px;margin-bottom:8px;
+         background:var(--surface);cursor:pointer}
+    .emb.on{border-color:var(--accent);background:var(--asoft)}
+    .emb input[type=checkbox]{width:22px;height:22px;margin:2px 0 0;flex:0 0 auto;
+                              accent-color:var(--accent)}
+    .emb-cuerpo{flex:1;min-width:0}
+    .emb-po{font-size:16px;font-weight:700;word-break:break-word}
+    .emb-sub{font-size:12px;color:var(--soft);margin-top:2px;line-height:1.5}
+    .emb-bultos{display:none;margin-top:8px;align-items:center;gap:8px;font-size:13px}
+    .emb.on .emb-bultos{display:flex}
+    .emb-bultos input{width:84px}
+    .chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;
+          background:var(--bg-sutil);border:1px solid var(--bdr);color:var(--soft)}
+    .chip-ok{background:var(--ok-bg);border-color:transparent;color:var(--ok-ink)}
+
+    .destino label{display:flex;gap:10px;align-items:center;padding:10px 0;
+                   border-bottom:1px solid var(--bg);font-size:14px;cursor:pointer}
+    .destino label:last-child{border-bottom:none}
+    .destino input[type=radio]{width:20px;height:20px;accent-color:var(--accent);flex:0 0 auto}
+
+    /* El pie con la cuenta y el boton, siempre a la vista. En el telefono va
+       encima de la barra inferior, que ya ocupa el fondo. */
+    .pie{position:sticky;bottom:var(--pie-abajo,0);z-index:5;background:var(--surface);
+         border-top:1px solid var(--bdr);box-shadow:var(--sombra-alta);
+         padding:12px 16px;margin:0 -14px;display:flex;gap:12px;align-items:center;
+         justify-content:space-between;flex-wrap:wrap}
+    .pie-cuenta{font-size:14px}
+    .pie-cuenta b{font-size:18px}
+    .pie .btn-p{flex:0 0 auto;padding:11px 20px;font-size:15px}
+    @media (max-width:700px){
+      .wrap{padding:0 10px}
+      .pie{margin:0 -10px}
+      .pie .btn-p{flex:1 1 100%}
+    }
+  </style>
+</head>
+<body{% if es_telefono %} style="--pie-abajo:calc(76px + env(safe-area-inset-bottom))"{% endif %}>
+
+<div class="tb">
+  <span class="tb-brand">WMS — {% trans "Send to crossing" %}</span>
+  <a href="{% url 'cruces_panel' %}{% if cliente %}?customer={{ cliente.pk }}{% endif %}">← {% trans "Crossings" %}</a>
+</div>
+
+<div class="wrap">
+
+  {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
+
+  {% if not es_cliente %}
+  <div class="card">
+    <form method="get" style="margin:0">
+      <label class="lbl" for="sel-cliente">{% trans "Customer" %}</label>
+      <input type="hidden" name="desde" value="{{ desde }}">
+      <input type="hidden" name="ops" value="{{ marcados_crudo }}">
+      <select id="sel-cliente" name="customer" onchange="this.form.submit()" style="width:100%">
+        <option value="">— {% trans "Select a customer" %} —</option>
+        {% for c in clientes %}
+        <option value="{{ c.pk }}" {% if cliente and c.pk == cliente.pk %}selected{% endif %}>
+          {{ c.name }}{% if c.abbreviation %} · {{ c.abbreviation }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <noscript><button class="btn" type="submit">{% trans "Show" %}</button></noscript>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if not cliente %}
+  <div class="card">
+    <p class="soft" style="margin:0">{% trans "Pick a customer to see what they have in the warehouse." %}</p>
+  </div>
+  {% else %}
+
+  {% if fuera %}
+  {% comment %}
+  Lo marcado en Operaciones que no puede ir. Se dice aqui y con su por que: si
+  se cayera callado, quien marco cinco veria cuatro y no sabria cual falta.
+  {% endcomment %}
+  <div class="fuera">
+    <b>{% blocktrans count n=fuera|length %}{{ n }} marked shipment cannot go in this crossing:{% plural %}{{ n }} marked shipments cannot go in this crossing:{% endblocktrans %}</b><br>
+    {% for f in fuera %}<span class="mono">{{ f.op.custom_id }}</span>{% if f.op.po_order %} · {{ f.op.po_order }}{% endif %} — {{ f.por_que }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'cruce_armar' %}" id="armar">
+    {% csrf_token %}
+    <input type="hidden" name="customer" value="{{ cliente.pk }}">
+    <input type="hidden" name="desde" value="{{ desde }}">
+
+    <div class="card">
+      <p class="ct">1 · {% trans "Mark what crosses" %}</p>
+      {% if libres %}
+      <div class="buscar">
+        <input type="search" id="buscar" placeholder="{% trans "Search PO, entry, shipper..." %}"
+               autocomplete="off" aria-label="{% trans "Search" %}">
+        <button type="button" class="btn btn-sm" id="todos">{% trans "Mark all" %}</button>
+      </div>
+
+      {% for op in libres %}
+      <label class="emb{% if op.marcado %} on{% endif %}"
+             data-buscar="{{ op.po_order|lower }} {{ op.custom_id|lower }} {{ op.get_shipper_display|lower }} {{ op.invoice|lower }} {{ op.description|lower }}"
+             data-bultos="{{ op.bundle_qty|default:0 }}">
+        <input type="checkbox" name="ops" value="{{ op.pk }}"{% if op.marcado %} checked{% endif %}>
+        <span class="emb-cuerpo">
+          {% comment %}
+          El numero de pedido va primero y grande: es el dato con el que el
+          cliente reconoce su mercancia. El folio interno va despues.
+          {% endcomment %}
+          <span class="emb-po">{{ op.po_order|default:"—" }}</span>
+          <span class="emb-sub" style="display:block">
+            <span class="mono">{{ op.custom_id }}</span>
+            · {{ op.bundle_qty|default:"?" }}
+            {% if op.get_bundle_type_display_name != '—' %}{{ op.get_bundle_type_display_name }}{% else %}{% trans "bundles" %}{% endif %}
+            {% if op.get_shipper_display != '—' %}· {{ op.get_shipper_display|truncatechars:28 }}{% endif %}
+            <br>
+            {% trans "in the warehouse since" %} {{ op.date|date:"d/m" }}
+            {% if op.pedimento %}<span class="chip chip-ok">{% trans "pedimento" %} {{ op.pedimento|truncatechars:22 }}</span>{% endif %}
+          </span>
+          {% comment %}
+          Cuantos bultos van. Vacio son todos, que es el caso normal; el numero
+          se teclea para el caso de los 19 de 20.
+          {% endcomment %}
+          <span class="emb-bultos">
+            <input type="number" name="bultos_{{ op.pk }}" min="1"
+                   {% if op.bundle_qty %}max="{{ op.bundle_qty }}"{% endif %}
+                   value="{{ op.bultos_pedidos }}" placeholder="{{ op.bundle_qty|default:'—' }}"
+                   inputmode="numeric" onclick="event.stopPropagation()">
+            <span class="soft">{% trans "bundles go (blank = all)" %}</span>
+          </span>
+        </span>
+      </label>
+      {% endfor %}
+      <p class="soft" id="sin-resultados" style="display:none;font-size:13px">{% trans "Nothing matches the search." %}</p>
+      {% else %}
+      <p class="soft" style="margin:0">{% trans "This customer has nothing in the warehouse that can cross: every entry is released or already in a crossing." %}</p>
+      {% endif %}
+    </div>
+
+    {% if libres %}
+    <div class="card destino">
+      <p class="ct">2 · {% trans "Which truck" %}</p>
+      <label>
+        <input type="radio" name="tarea" value="0"{% if not destino %} checked{% endif %}>
+        <span style="flex:1">{% trans "A new crossing on" %}
+          <input type="date" name="fecha_de_cruce" value="{{ fecha_pedida }}" min="{{ hoy|date:'Y-m-d' }}"
+                 style="display:block;margin-top:6px;width:100%"
+                 onfocus="document.querySelector('input[name=tarea][value=\'0\']').checked=true;pintarMotivo()">
+        </span>
+      </label>
+      {% for t in abiertas %}
+      <label>
+        <input type="radio" name="tarea" value="{{ t.pk }}" data-con-orden="{% if t.estado != 'ABIERTA' %}1{% endif %}"{% if destino == t.pk %} checked{% endif %}>
+        <span>
+          <span class="mono" style="font-weight:600">{{ t.custom_id }}</span>
+          · {% trans "crosses" %} {{ t.fecha_de_cruce|date:"l j F" }}
+          <span class="soft" style="display:block;font-size:12px">
+            {% blocktrans count n=t.renglones.count %}already carries {{ n }} shipment{% plural %}already carries {{ n }} shipments{% endblocktrans %}
+            {% if t.estado != 'ABIERTA' %}· {% trans "the load order is already out" %}{% endif %}
+          </span>
+        </span>
+      </label>
+      {% endfor %}
+      <div id="motivo" style="display:none;padding-top:8px">
+        <label class="lbl" for="motivo-in" style="padding:0;border:none">{% trans "The load order is already out: why do these go in?" %}</label>
+        <input type="text" id="motivo-in" name="motivo" value="{{ motivo_pedido }}" style="width:100%">
+      </div>
+      {% if not es_cliente %}
+      <p class="soft" style="font-size:12px;margin:10px 0 0">
+        {% trans "Created on their behalf: the customer will be asked to confirm it." %}
+      </p>
+      {% endif %}
+    </div>
+
+    <div class="pie">
+      <span class="pie-cuenta"><b id="n-marcados">0</b> {% trans "marked" %} · <span id="n-bultos">0</span> {% trans "bundles" %}</span>
+      <button class="btn btn-p" type="submit" id="enviar" disabled>{% trans "Send to crossing" %}</button>
+    </div>
+    {% endif %}
+  </form>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  var form = document.getElementById('armar');
+  if (!form) return;
+  var fichas = Array.prototype.slice.call(form.querySelectorAll('.emb'));
+
+  function cuenta() {
+    var n = 0, b = 0;
+    fichas.forEach(function (f) {
+      var c = f.querySelector('input[type=checkbox]');
+      f.classList.toggle('on', c.checked);
+      if (!c.checked) return;
+      n += 1;
+      var tecleado = parseInt(f.querySelector('input[type=number]').value, 10);
+      b += tecleado > 0 ? tecleado : parseInt(f.dataset.bultos, 10) || 0;
+    });
+    document.getElementById('n-marcados').textContent = n;
+    document.getElementById('n-bultos').textContent = b;
+    document.getElementById('enviar').disabled = n === 0;
+  }
+
+  window.pintarMotivo = function () {
+    var elegido = form.querySelector('input[name=tarea]:checked');
+    var conOrden = elegido && elegido.dataset.conOrden === '1';
+    document.getElementById('motivo').style.display = conOrden ? 'block' : 'none';
+    document.getElementById('motivo-in').required = conOrden;
+    document.querySelector('input[name=fecha_de_cruce]').required =
+      !!elegido && elegido.value === '0';
+  };
+
+  form.addEventListener('change', function () { cuenta(); pintarMotivo(); });
+  form.addEventListener('input', cuenta);
+
+  // La busqueda solo esconde: lo marcado sigue marcado aunque no se vea, y se
+  // manda igual. Buscar no es desmarcar.
+  var buscar = document.getElementById('buscar');
+  if (buscar) buscar.addEventListener('input', function () {
+    var q = buscar.value.trim().toLowerCase(), visibles = 0;
+    fichas.forEach(function (f) {
+      var ve = !q || f.dataset.buscar.indexOf(q) !== -1;
+      f.style.display = ve ? '' : 'none';
+      if (ve) visibles += 1;
+    });
+    document.getElementById('sin-resultados').style.display = visibles ? 'none' : 'block';
+  });
+
+  // "Marcar todo" marca lo que se ve, para que buscar y luego marcar todo
+  // sirva: buscar un proveedor y mandarlo entero.
+  var todos = document.getElementById('todos');
+  if (todos) todos.addEventListener('click', function () {
+    var visibles = fichas.filter(function (f) { return f.style.display !== 'none'; });
+    var marcar = visibles.some(function (f) {
+      return !f.querySelector('input[type=checkbox]').checked;
+    });
+    visibles.forEach(function (f) { f.querySelector('input[type=checkbox]').checked = marcar; });
+    cuenta();
+  });
+
+  cuenta();
+  pintarMotivo();
+  var primero = form.querySelector('.emb.on');
+  if (primero && primero !== fichas[0]) primero.scrollIntoView({block: 'center'});
+})();
+</script>
+
+{% if es_telefono %}
+{% include "warehouse/partials/barra_inferior.html" with activa='cruces' %}
+{% endif %}
+</body>
+</html>

@@ -62,6 +62,32 @@ vista.
 <div id="aviso-impuestos"></div>
 {% endif %}
 
+{% comment %}
+Mandar a cruce lo marcado. Lo pueden hacer los dos -- el cliente y la casa en su
+nombre -- y por eso la casilla y el boton se pintan tambien al cliente. El
+boton no crea nada: lleva a la pantalla de marcar con esto ya marcado, que es
+donde se elige el dia y donde se dice lo que no puede ir y por que.
+{% endcomment %}
+{% if operations %}
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+  <button type="button" class="btn btn-g btn-sm" style="color:var(--accent);border-color:var(--accent)"
+          onclick="mandarACruce()">&#128667; {% trans "Send selection to crossing" %}</button>
+  <span style="font-size:11px;color:var(--faint)">{% trans "Mark the entries that cross and pick the day on the next screen." %}</span>
+</div>
+<script>
+  function mandarACruce() {
+    var ops = Array.prototype.map.call(
+      document.querySelectorAll('input[name=op_sel]:checked'),
+      function (c) { return c.value; });
+    var url = '{% url 'cruce_armar' %}?desde=OPERACIONES';
+    if (ops.length) url += '&ops=' + ops.join(',');
+    var filtro = document.getElementById('filter-customer');
+    if (!ops.length && filtro && filtro.value) url += '&customer=' + filtro.value;
+    window.location.href = url;
+  }
+</script>
+{% endif %}
+
 {% if operations %}
 <div class="tabla-navegable" data-columnas-fijas="4">
 
@@ -118,7 +144,7 @@ vista.
         {% for op in operations %}
         <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %};">
           <td style="color:var(--faint); font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">
-            {% if profile and not profile.is_customer %}
+            {% if profile %}
             <input type="checkbox" name="op_sel" value="{{ op.pk }}"
                    title="{% trans "Select" %}" style="vertical-align:middle">
             {% endif %}

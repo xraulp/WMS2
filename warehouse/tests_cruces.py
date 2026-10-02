@@ -375,3 +375,162 @@ class QuienVeQueTests(BaseDeCruces):
         respuesta = self.client.get('/cruces/', {'customer': self.cliente.pk})
         self.assertIn(op.pk, [o.pk for o in respuesta.context['libres']])
         self.assertNotIn(t, respuesta.context['tareas'])
+
+
+class MarcarYLuegoCrearTests(BaseDeCruces):
+    """
+    El cliente ve su mercancia, marca lo que quiere cruzar, elige el dia y crea
+    la tarea: un solo envio, en PC y en el telefono.
+
+    Lo que se prueba es que sale entera o no sale -- media tarea creada es
+    peor que ninguna --, que queda escrito desde donde se mando, y que lo
+    marcado en Operaciones que no puede ir se dice en vez de perderse.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.a = self.operacion('ED261001-0001', bundle_qty=5, po_order='PO-111')
+        self.b = self.operacion('ED261001-0002', bundle_qty=20, po_order='PO-222')
+
+    def armar(self, **datos):
+        base = {'customer': self.cliente.pk, 'fecha_de_cruce': str(self.viernes),
+                'ops': [self.a.pk, self.b.pk]}
+        base.update(datos)
+        return self.client.post('/cruces/mark/', base)
+
+    def test_un_envio_crea_la_tarea_ya_llena(self):
+        respuesta = self.armar(**{'bultos_%d' % self.b.pk: '19'})
+        self.assertEqual(respuesta.status_code, 302)
+        t = CrossingTask.objects.get()
+        self.assertEqual(t.fecha_de_cruce, self.viernes)
+        self.assertEqual(t.origen, CrossingTask.LA_CREO_LA_CASA)
+        self.assertTrue(t.espera_confirmacion)
+        self.assertEqual(t.renglones.count(), 2)
+        # El caso de los 19 de 20 se teclea en el mismo envio.
+        self.assertEqual(t.renglones.get(operation=self.b).bultos, 19)
+        self.assertIsNone(t.renglones.get(operation=self.a).bultos)
+        self.assertIn('#tarea-%d' % t.pk, respuesta['Location'])
+
+    def test_el_cliente_la_crea_desde_su_telefono(self):
+        self.client.force_login(self.duenio)
+        respuesta = self.client.post('/cruces/mark/', {
+            'fecha_de_cruce': str(self.viernes), 'ops': [self.a.pk],
+            'desde': 'OPERACIONES'})
+        self.assertEqual(respuesta.status_code, 302)
+        t = CrossingTask.objects.get()
+        self.assertEqual(t.origen, CrossingTask.LA_CREO_EL_CLIENTE)
+        self.assertFalse(t.espera_confirmacion)
+        self.assertEqual(t.renglones.get().desde,
+                         CrossingTaskItem.DESDE_OPERACIONES)
+
+    def test_un_desde_inventado_no_se_guarda(self):
+        self.armar(desde='LO_QUE_SEA')
+        self.assertEqual(
+            set(CrossingTaskItem.objects.values_list('desde', flat=True)),
+            {CrossingTaskItem.DESDE_LA_TAREA})
+
+    def test_sin_marcar_nada_no_hay_tarea(self):
+        respuesta = self.armar(ops=[])
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertFalse(CrossingTask.objects.exists())
+
+    def test_sin_dia_no_hay_tarea(self):
+        respuesta = self.armar(fecha_de_cruce='')
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertFalse(CrossingTask.objects.exists())
+
+    def test_dos_patentes_marcadas_juntas_no_crean_nada(self):
+        # El candado mira tambien lo que se acaba de meter en el mismo envio:
+        # los dos marcados chocan entre ellos aunque la tarea naciera vacia.
+        self.con_pedimento(self.a, patente='1515', consecutivo='6005000')
+        self.con_pedimento(self.b, patente='1781', consecutivo='6000200')
+        respuesta = self.armar()
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertFalse(CrossingTask.objects.exists())
+        self.assertFalse(CrossingTaskItem.objects.exists())
+        # Y la pantalla vuelve con lo marcado intacto.
+        marcados = [op.pk for op in respuesta.context['libres'] if op.marcado]
+        self.assertEqual(sorted(marcados), sorted([self.a.pk, self.b.pk]))
+
+    def test_bultos_de_mas_no_crean_nada(self):
+        respuesta = self.armar(**{'bultos_%d' % self.a.pk: '6'})
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertFalse(CrossingTask.objects.exists())
+
+    def test_lo_que_ya_va_en_otro_cruce_no_entra(self):
+        otra = self.tarea()
+        CrossingTaskItem.objects.create(task=otra, operation=self.a)
+        respuesta = self.armar()
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertEqual(CrossingTask.objects.count(), 1)
+
+    def test_meter_varios_en_una_tarea_que_ya_existe(self):
+        t = self.tarea()
+        respuesta = self.armar(tarea=t.pk, fecha_de_cruce='')
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(CrossingTask.objects.count(), 1)
+        self.assertEqual(t.renglones.count(), 2)
+
+    def test_con_la_orden_fuera_pide_motivo(self):
+        t = self.tarea(estado=CrossingTask.CON_ORDEN)
+        self.assertEqual(self.armar(tarea=t.pk).status_code, 422)
+        self.assertEqual(t.renglones.count(), 0)
+        self.assertEqual(self.armar(tarea=t.pk, motivo='lo pidio el cliente')
+                         .status_code, 302)
+        self.assertEqual(set(t.renglones.values_list('motivo', flat=True)),
+                         {'lo pidio el cliente'})
+
+    def test_el_cliente_no_mete_en_la_tarea_de_otro(self):
+        ajeno = Catalog.objects.create(category='CUSTOMER', name='Otro',
+                                       tenant=self.tenant)
+        suya = self.tarea(customer=ajeno)
+        self.client.force_login(self.duenio)
+        respuesta = self.client.post('/cruces/mark/', {
+            'tarea': suya.pk, 'ops': [self.a.pk]})
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertEqual(suya.renglones.count(), 0)
+
+    def test_lo_marcado_en_operaciones_llega_marcado(self):
+        respuesta = self.client.get('/cruces/mark/', {
+            'ops': str(self.b.pk), 'desde': 'OPERACIONES'})
+        # La casa no eligio cliente: manda el del embarque marcado.
+        self.assertEqual(respuesta.context['cliente'], self.cliente)
+        marcados = [op.pk for op in respuesta.context['libres'] if op.marcado]
+        self.assertEqual(marcados, [self.b.pk])
+        self.assertEqual(respuesta.context['desde'], 'OPERACIONES')
+
+    def test_lo_marcado_que_no_puede_ir_se_dice(self):
+        salida = WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='EXIT', custom_id='SD261001-0001',
+            customer=self.cliente, created_by=self.jefa)
+        respuesta = self.client.get('/cruces/mark/', {
+            'ops': '%d,%d' % (self.a.pk, salida.pk)})
+        fuera = [f['op'].pk for f in respuesta.context['fuera']]
+        self.assertEqual(fuera, [salida.pk])
+        self.assertContains(respuesta, 'SD261001-0001')
+
+    def test_el_cliente_no_ve_lo_marcado_de_otro(self):
+        ajeno = Catalog.objects.create(category='CUSTOMER', name='Otro',
+                                       tenant=self.tenant)
+        de_otro = self.operacion('ED261001-0009', bundle_qty=1)
+        de_otro.customer = ajeno
+        de_otro.save()
+        self.client.force_login(self.duenio)
+        respuesta = self.client.get('/cruces/mark/', {'ops': str(de_otro.pk)})
+        self.assertEqual(respuesta.context['fuera'], [])
+        self.assertNotContains(respuesta, 'ED261001-0009')
+
+    def test_la_pantalla_sirve_en_el_telefono(self):
+        respuesta = self.client.get(
+            '/cruces/mark/', {'customer': self.cliente.pk},
+            HTTP_USER_AGENT='Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'PO-111')
+        self.assertContains(respuesta, 'bottom-nav')
+
+    def test_operaciones_lleva_a_mandar_a_cruce(self):
+        # El cliente tambien: crean los dos.
+        self.client.force_login(self.duenio)
+        respuesta = self.client.get('/dashboard/')
+        self.assertContains(respuesta, 'mandarACruce()')
+        self.assertContains(respuesta, 'name="op_sel"')

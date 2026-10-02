@@ -2768,3 +2768,115 @@ msgstr "A donde contestan los clientes de esta empresa. Sus avisos salen del dom
 msgid "Replies from this company's customers go nowhere"
 msgstr "Las respuestas de los clientes de esta empresa no llegan a ninguna parte"
 
+# Mandar a cruce: marcar la mercancia y crear el cruce de un solo envio.
+msgid "Send to crossing"
+msgstr "Mandar a cruce"
+
+msgid "Send selection to crossing"
+msgstr "Mandar selección a cruce"
+
+msgid "Mark the entries that cross and pick the day on the next screen."
+msgstr "Marca las entradas que cruzan y elige el día en la siguiente pantalla."
+
+msgid "Crossings"
+msgstr "Cruces"
+
+msgid "Select a customer"
+msgstr "Elige un cliente"
+
+msgid "Pick a customer to see what they have in the warehouse."
+msgstr "Elige un cliente para ver lo que tiene en bodega."
+
+msgid "%(n)s marked shipment cannot go in this crossing:"
+msgid_plural "%(n)s marked shipments cannot go in this crossing:"
+msgstr[0] "%(n)s embarque marcado no puede ir en este cruce:"
+msgstr[1] "%(n)s embarques marcados no pueden ir en este cruce:"
+
+msgid "Mark what crosses"
+msgstr "Marca lo que cruza"
+
+msgid "Search PO, entry, shipper..."
+msgstr "Buscar pedido, entrada, proveedor..."
+
+msgid "Mark all"
+msgstr "Marcar todo"
+
+msgid "bundles"
+msgstr "bultos"
+
+msgid "in the warehouse since"
+msgstr "en bodega desde el"
+
+msgid "pedimento"
+msgstr "pedimento"
+
+msgid "bundles go (blank = all)"
+msgstr "bultos van (vacío = todos)"
+
+msgid "Nothing matches the search."
+msgstr "Nada coincide con la búsqueda."
+
+msgid "This customer has nothing in the warehouse that can cross: every entry is released or already in a crossing."
+msgstr "Este cliente no tiene nada en bodega que pueda cruzar: todas sus entradas están liberadas o ya van en un cruce."
+
+msgid "Which truck"
+msgstr "En qué camión"
+
+msgid "A new crossing on"
+msgstr "Un cruce nuevo el día"
+
+msgid "crosses"
+msgstr "cruza"
+
+msgid "already carries %(n)s shipment"
+msgid_plural "already carries %(n)s shipments"
+msgstr[0] "ya lleva %(n)s embarque"
+msgstr[1] "ya lleva %(n)s embarques"
+
+msgid "the load order is already out"
+msgstr "la orden de carga ya salió"
+
+msgid "The load order is already out: why do these go in?"
+msgstr "La orden de carga ya salió: ¿por qué entran estos?"
+
+msgid "Created on their behalf: the customer will be asked to confirm it."
+msgstr "Creado a su nombre: se le pedirá al cliente que lo confirme."
+
+msgid "marked"
+msgstr "marcados"
+
+msgid "belongs to another customer"
+msgstr "es de otro cliente"
+
+msgid "only entries cross"
+msgstr "solo cruzan las entradas"
+
+msgid "already released"
+msgstr "ya se liberó"
+
+msgid "already in another crossing"
+msgstr "ya va en otro cruce"
+
+msgid "Mark at least one shipment."
+msgstr "Marca al menos un embarque."
+
+msgid "The load order of %(t)s is already out: say why these shipments go in."
+msgstr "La orden de carga de %(t)s ya salió: di por qué entran estos embarques."
+
+msgid "Pick the crossing day."
+msgstr "Elige el día del cruce."
+
+msgid "One of the marked shipments can no longer go: it was released or put in another crossing meanwhile."
+msgstr "Uno de los embarques marcados ya no puede ir: mientras tanto se liberó o se metió en otro cruce."
+
+msgid "%(op)s only has %(n)d bundles."
+msgstr "%(op)s solo tiene %(n)d bultos."
+
+msgid "Mark several"
+msgstr "Marcar varios"
+
+msgid "New crossing"
+msgstr "Cruce nuevo"
+
+msgid "Mark what goes, then pick the day."
+msgstr "Marca lo que va y luego elige el día."
