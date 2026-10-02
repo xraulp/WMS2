@@ -534,3 +534,19 @@ class MarcarYLuegoCrearTests(BaseDeCruces):
         respuesta = self.client.get('/dashboard/')
         self.assertContains(respuesta, 'mandarACruce()')
         self.assertContains(respuesta, 'name="op_sel"')
+
+
+class LaPantallaEnEspañolTests(BaseDeCruces):
+    """La interfaz no mezcla idiomas: quien eligio español ve los cruces en español."""
+
+    def test_los_cruces_salen_en_español(self):
+        UserProfile.objects.filter(user=self.jefa).update(language='es')
+        t = self.tarea(origen=CrossingTask.LA_CREO_LA_CASA)
+        op = self.operacion('ED261002-0001', bundle_qty=20)
+        CrossingTaskItem.objects.create(task=t, operation=op, bultos=19)
+        respuesta = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        for frase in ('Sacar', '>de 20<', 'Lista de preparación', 'Mover el día del cruce al',
+                      'Cancelar este cruce', 'Abierta', 'a nombre de Ferreteria Lopez'):
+            self.assertContains(respuesta, frase)
+        for frase in ('Take out', 'Picking list', 'Cancel this crossing', 'on behalf of'):
+            self.assertNotContains(respuesta, frase)

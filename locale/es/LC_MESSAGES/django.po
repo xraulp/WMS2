@@ -2880,3 +2880,265 @@ msgstr "Cruce nuevo"
 
 msgid "Mark what goes, then pick the day."
 msgstr "Marca lo que va y luego elige el día."
+
+# La pantalla de cruces, sus papeles y los mensajes que vuelven a ella.
+msgid "Pick a customer to see their crossings."
+msgstr "Elige un cliente para ver sus cruces."
+
+msgid "No crossings for this customer yet."
+msgstr "Este cliente todavía no tiene cruces."
+
+msgid "already crossed"
+msgstr "ya cruzó"
+
+msgid "crosses today"
+msgstr "cruza hoy"
+
+msgid "This is what we understood over the phone. Is it right?"
+msgstr "Esto es lo que entendimos por teléfono. ¿Es correcto?"
+
+msgid "Yes, that is it"
+msgstr "Sí, es eso"
+
+msgid "waiting for the customer"
+msgstr "esperando al cliente"
+
+msgid "Read from the pedimento numbers"
+msgstr "Leído de los números de pedimento"
+
+msgid "Customs"
+msgstr "Aduana"
+
+msgid "Broker license"
+msgstr "Patente"
+
+msgid "Entry"
+msgstr "Entrada"
+
+msgid "Added"
+msgstr "Agregado"
+
+msgid "of"
+msgstr "de"
+
+msgid "Why?"
+msgstr "¿Por qué?"
+
+msgid "Take out"
+msgstr "Sacar"
+
+msgid "Nothing in this crossing yet."
+msgstr "Todavía no hay nada en este cruce."
+
+msgid "Add a shipment"
+msgstr "Agregar un embarque"
+
+msgid "Bundles (blank = all)"
+msgstr "Bultos (vacío = todos)"
+
+msgid "Move the crossing day to"
+msgstr "Mover el día del cruce al"
+
+msgid "Move it"
+msgstr "Moverlo"
+
+msgid "Cancel this crossing"
+msgstr "Cancelar este cruce"
+
+msgid "Picking list"
+msgstr "Lista de preparación"
+
+msgid "It does not cover goods. Print it whenever you need it."
+msgstr "No ampara mercancía. Imprímela cuando la necesites."
+
+msgid "Print"
+msgstr "Imprimir"
+
+msgid "Load order"
+msgstr "Orden de carga"
+
+msgid "issued"
+msgstr "emitida"
+
+msgid "Re-issue (new version)"
+msgstr "Volver a emitir (versión nueva)"
+
+msgid "Issue the load order"
+msgstr "Emitir la orden de carga"
+
+msgid "Load check"
+msgstr "Verificación de carga"
+
+msgid "bundles scanned one by one"
+msgstr "bultos escaneados uno por uno"
+
+msgid "Scan"
+msgstr "Escanear"
+
+msgid "there is nothing to check against yet"
+msgstr "todavía no hay contra qué verificar"
+
+msgid "Remision"
+msgstr "Remisión"
+
+msgid "verified"
+msgstr "verificados"
+
+msgid "ISSUED WITH A DIFFERENCE"
+msgstr "EMITIDA CON DIFERENCIA"
+
+msgid "needs a load order first"
+msgstr "primero necesita una orden de carga"
+
+msgid "Issue the remision"
+msgstr "Emitir la remisión"
+
+msgid "Transfer company"
+msgstr "Empresa de transfer"
+
+msgid "Driver"
+msgstr "Chofer"
+
+msgid "Unit / trailer"
+msgstr "Unidad / caja"
+
+msgid "Connecting carrier"
+msgstr "Línea de enlace"
+
+msgid "The scan does not match."
+msgstr "El escaneo no cuadra."
+
+msgid "Missing:"
+msgstr "Faltan:"
+
+msgid "Unlisted:"
+msgstr "Sin estar en la orden:"
+
+msgid "Why does it leave anyway?"
+msgstr "¿Por qué sale de todos modos?"
+
+msgid "Issue it"
+msgstr "Emitirla"
+
+msgid "The day moved:"
+msgstr "El día se movió:"
+
+msgid "Created by the customer"
+msgstr "Creada por el cliente"
+
+msgid "Created by the warehouse on their behalf"
+msgstr "Creada por la bodega a su nombre"
+
+msgid "Open"
+msgstr "Abierta"
+
+msgid "Load order issued"
+msgstr "Orden de carga emitida"
+
+msgid "Loaded"
+msgstr "Cargada"
+
+msgid "Crossed"
+msgstr "Cruzada"
+
+msgid "created by %(cliente)s"
+msgstr "creada por %(cliente)s"
+
+msgid "created by %(quien)s on behalf of %(cliente)s"
+msgstr "creada por %(quien)s a nombre de %(cliente)s"
+
+msgid "From the operations list"
+msgstr "Desde la lista de operaciones"
+
+msgid "From the duty sheet"
+msgstr "Desde la hoja de impuestos"
+
+msgid "From the crossing task"
+msgstr "Desde la tarea de cruce"
+
+msgid "Transport"
+msgstr "Transporte"
+
+msgid "Customs system down"
+msgstr "Sin sistema en la aduana"
+
+msgid "The customer asked"
+msgstr "Lo pidió el cliente"
+
+msgid "No shipments in this crossing yet"
+msgstr "Todavía no hay embarques en este cruce"
+
+msgid "No pedimento for this merchandise yet"
+msgstr "Esta mercancía todavía no tiene pedimento"
+
+msgid "These pedimentos are not paid yet: %(cuales)s"
+msgstr "Estos pedimentos todavía no están pagados: %(cuales)s"
+
+msgid "These shipments still have bundles without a pedimento: %(cuales)s"
+msgstr "Estos embarques todavía tienen bultos sin pedimento: %(cuales)s"
+
+msgid "%(op)s: %(n)d missing"
+msgstr "%(op)s: faltan %(n)d"
+
+msgid "%(op)s: %(n)d more than the order says"
+msgstr "%(op)s: %(n)d más de los que dice la orden"
+
+msgid "Loading"
+msgstr "Carga"
+
+msgid "%(op)s is already in another crossing."
+msgstr "%(op)s ya va en otro cruce."
+
+msgid "The load order is already out: say why this shipment goes in."
+msgstr "La orden de carga ya salió: di por qué entra este embarque."
+
+msgid "The load order is already out: say why this shipment comes out."
+msgstr "La orden de carga ya salió: di por qué sale este embarque."
+
+msgid "Pick the new crossing day."
+msgstr "Elige el nuevo día del cruce."
+
+msgid "Say why the day is moving."
+msgstr "Di por qué se mueve el día."
+
+msgid "This crossing is already on its way; it cannot be cancelled."
+msgstr "Este cruce ya va en camino; no se puede cancelar."
+
+msgid "The load order cannot be issued yet — missing: %(faltan)s."
+msgstr "Todavía no se puede emitir la orden de carga — falta: %(faltan)s."
+
+msgid "There is no load order yet."
+msgstr "Todavía no hay orden de carga."
+
+msgid "The crossing changed: check what changed against %(o)s."
+msgstr "El cruce cambió: revisa qué cambió contra %(o)s."
+
+msgid "The scan does not match. Only a manager can let the truck leave with a difference."
+msgstr "El escaneo no cuadra. Solo un gerente puede dejar salir el camión con diferencia."
+
+msgid "Write why the truck is leaving with a difference."
+msgstr "Escribe por qué sale el camión con diferencia."
+
+msgid "not on the order: %(cuales)s"
+msgstr "no están en la orden: %(cuales)s"
+
+msgid "This pedimento is from broker license %(nueva)s and %(otro)s is from %(otra)s. A single DODA cannot carry two customs brokers."
+msgstr "Este pedimento es de la patente %(nueva)s y %(otro)s es de la %(otra)s. Un mismo DODA no puede llevar dos agentes aduanales."
+
+msgid "This pedimento clears through %(nueva)s and %(otro)s clears through %(otra)s."
+msgstr "Este pedimento se despacha por %(nueva)s y %(otro)s por %(otra)s."
+
+msgid "%(n)s day left"
+msgid_plural "%(n)s days left"
+msgstr[0] "falta %(n)s día"
+msgstr[1] "faltan %(n)s días"
+
+msgid "%(n)s commercial invoice missing"
+msgid_plural "%(n)s commercial invoices missing"
+msgstr[0] "falta %(n)s factura comercial"
+msgstr[1] "faltan %(n)s facturas comerciales"
+
+msgid "version %(n)s"
+msgid_plural "version %(n)s — the earlier ones are obsolete"
+msgstr[0] "versión %(n)s"
+msgstr[1] "versión %(n)s — las anteriores son obsoletas"
