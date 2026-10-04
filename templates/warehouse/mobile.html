@@ -48,7 +48,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink
 .topbar{background:var(--tb-bg);display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:52px;position:sticky;top:0;z-index:100}
 .brand{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;color:var(--on-accent);display:flex;align-items:center;gap:8px}
 .brand-dot{width:8px;height:8px;background:var(--accent);border-radius:50%}
-.topbar-right{font-size:12px;color:var(--faint)}
+.topbar-right{font-size:13px;color:var(--tb-ink-suave)}
 .topbar-right strong{color:var(--on-accent)}
 .pg{padding:14px}
 
@@ -135,7 +135,7 @@ input:checked + .toggle-slider::before{transform:translateX(22px)}
 .tw{overflow-x:auto;border-radius:8px;border:1px solid var(--bdr)}
 table{width:100%;border-collapse:collapse;font-size:12px}
 thead{background:var(--th-bg)}
-thead th{padding:7px 8px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);white-space:nowrap}
+thead th{padding:8px 8px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--tb-ink);white-space:nowrap}
 tbody tr{border-bottom:1px solid var(--bdr)}
 tbody td{padding:6px 8px;font-size:11px;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
 /* Excepción para cualquier celda que contenga botones */
@@ -467,17 +467,12 @@ contenedor, htmx no encontraba donde pintar las cifras y las pegaba en el
       estructura -- el Anexo 22 dice cual -- y de los trece que se teclean
       salen la aduana y la patente del agente aduanal, que son las que
       sostienen el candado de que un camion no lleve dos agentes. El bloque
-      entero, con el ETA y la casilla de numeros de serie, vive en un partial
+      entero, con la casilla de numeros de serie, vive en un partial
       compartido con el tablero para que las dos pantallas no se separen.
       {% endcomment %}
       <div class="form-row">
         <label>PEDIMENTO</label>
         {% include "warehouse/partials/campos_de_pedimento.html" %}
-      </div>
-
-      <div class="form-row">
-        <label>ETA</label>
-        <input type="date" name="eta" class="form-input">
       </div>
 
       <div class="form-row">
@@ -624,8 +619,9 @@ capturar, se pintaban dos a la vez hasta que corria el guion.
 <!-- Modal de edicion del catalogo. Antes venia dentro del partial de la tabla;
      al haber ahora dos tablas en la pagina se saco fuera, y esta pantalla lo
      necesita igual porque pinta el boton Edit. -->
-<div id="cat-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;align-items:center;justify-content:center;padding:16px">
-  <div style="background:var(--surface);border-radius:10px;padding:18px;max-width:500px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+<div id="cat-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;align-items:center;justify-content:center;padding:16px"
+     onclick="if(event.target===this)closeCatalogEdit()">
+  <div style="background:var(--surface);border-radius:10px;padding:18px;max-width:980px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <span style="font-size:13px;font-weight:600">{% trans "Edit Catalog Entry" %}</span>
       <button onclick="closeCatalogEdit()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--soft)">✕</button>

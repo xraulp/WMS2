@@ -28,9 +28,9 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink
 .tb{background:var(--tb-bg);display:flex;align-items:center;justify-content:space-between;padding:0 18px;height:44px;position:fixed;top:0;left:0;right:0;z-index:200}
 .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:var(--on-accent);display:flex;align-items:center;gap:7px}
 .tb-dot{width:7px;height:7px;background:var(--accent);border-radius:50%}
-.tb-right{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--faint)}
+.tb-right{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--tb-ink-suave)}
 .tb-right strong{color:var(--on-accent)}
-.btn-lo{background:none;border:1px solid var(--tb-bdr);color:var(--faint);padding:3px 10px;border-radius:var(--r);cursor:pointer;font-size:11px;font-family:inherit}
+.btn-lo{background:none;border:1px solid var(--tb-bdr);color:var(--tb-ink-suave);padding:3px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;font-family:inherit}
 .btn-lo:hover{border-color:var(--red);color:var(--red)}
 /* Donde no cabe la razon social, las siglas de la empresa. */
 .marca-corta{display:none}
@@ -107,7 +107,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink
 .tw{overflow-x:auto;border-radius:var(--rL);border:1px solid var(--bdr)}
 table{width:100%;border-collapse:collapse}
 thead{background:var(--th-bg)}
-thead th{padding:7px 9px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);white-space:nowrap}
+thead th{padding:8px 9px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--tb-ink);white-space:nowrap}
 tbody tr{border-bottom:1px solid var(--bdr)}
 tbody tr:last-child{border-bottom:none}
 tbody td{padding:6px 9px;font-size:11px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
@@ -446,9 +446,6 @@ contenedor, htmx no encontraba donde pintar las cifras y las pegaba en el
           <div class="fi" style="grid-column:1/-1;height:auto;display:block;padding:6px 10px 10px">
             {% include "warehouse/partials/campos_de_pedimento.html" %}
           </div>
-
-          <div class="fl">ETA</div>
-          <div class="fi"><input type="date" name="eta"></div>
 
          <!-- Nuevos campos REF AA, DYS, PEDIMENTO -->
         </div>
@@ -803,20 +800,6 @@ capturar, se pintaban dos a la vez hasta que corria el guion.
           <input type="number" name="alert_days" min="1" max="3650" class="cf-i"
                  placeholder="{{ tenant.alert_days_default|default:7 }}">
         </div>
-        {% comment %}
-        En que idioma se le escribe a este cliente. Va aqui y no en los ajustes
-        de quien captura, porque un correo se lee en el idioma del que lo
-        recibe: el operador no tiene por que acordarse de con quien habla cada
-        idioma a las tres de la manana.
-        {% endcomment %}
-        <div class="cf-g" style="min-width:110px">
-          <label>{% trans "Language" %}</label>
-          <select name="language" class="cf-i">
-            {% for valor, etiqueta in idiomas_del_cliente %}
-            <option value="{{ valor }}">{{ etiqueta }}</option>
-            {% endfor %}
-          </select>
-        </div>
         <div class="cf-g">
           <label>&nbsp;</label>
           <button type="submit" class="btn btn-p" style="height:28px">{% trans "Save Customer" %}</button>
@@ -834,8 +817,9 @@ capturar, se pintaban dos a la vez hasta que corria el guion.
 <!-- Modal de edicion del catalogo. Vive aqui, una sola vez, y no dentro del
      partial de la tabla: al haber dos tablas en la pagina, un modal por partial
      duplicaria los mismos id y el segundo no responderia. -->
-<div id="cat-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;align-items:center;justify-content:center">
-  <div style="background:var(--surface);border-radius:10px;padding:20px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+<div id="cat-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;align-items:center;justify-content:center;padding:16px"
+     onclick="if(event.target===this)closeCatalogEdit()">
+  <div style="background:var(--surface);border-radius:10px;padding:20px;max-width:980px;width:100%;max-height:calc(100vh - 32px);overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">{% trans "Edit Catalog Entry" %}</span>
       <button onclick="closeCatalogEdit()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--soft)">✕</button>
@@ -978,11 +962,8 @@ function initActiveTab() {
     const urlParams = new URLSearchParams(window.location.search);
     const tabFromUrl = urlParams.get('tab');
 
-    // Si la URL tiene 'tab=digital', NO hacemos nada (lo manejará checkUrlParams)
-    if (tabFromUrl === 'digital') {
-        console.log("PC: URL con 'tab=digital', omitiendo pestaña por defecto");
-        return;
-    }
+    // `tab=digital` con busqueda (`&q=`) ya lo resolvio quien llama a esta
+    // funcion; sin busqueda es una pestana mas y se trata como las otras.
 
     // La pestaña por defecto es Inicio, para todos. Se caia directo en el
     // formulario de captura, que esta bien para quien captura todo el dia pero
@@ -1003,6 +984,10 @@ function initActiveTab() {
     // Una pestaña que este usuario no puede ver -- porque cambió de rol -- no
     // se restaura: su botón no existe en la pantalla que le llegó.
     if (guardada && document.getElementById('tab-' + guardada)) pestana = guardada;
+
+    // Si se llega desde el menu de arriba de pedimentos, cruces o impuestos, el
+    // enlace dice a que pestaña se iba, y eso manda sobre la recordada.
+    if (tabFromUrl && document.getElementById('tab-' + tabFromUrl)) pestana = tabFromUrl;
 
     showTab(pestana);
 }

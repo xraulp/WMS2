@@ -3142,3 +3142,19 @@ msgid "version %(n)s"
 msgid_plural "version %(n)s — the earlier ones are obsolete"
 msgstr[0] "versión %(n)s"
 msgstr[1] "versión %(n)s — las anteriores son obsoletas"
+
+#: templates/warehouse/impuestos.html
+msgid "Refresh"
+msgstr "Actualizar"
+
+#: templates/warehouse/cruces.html
+msgid "Add shipment"
+msgstr "Agregar embarque"
+
+#: templates/warehouse/cruces.html
+msgid "Move the day"
+msgstr "Mover el día"
+
+#: templates/warehouse/cruces.html
+msgid "Shipment"
+msgstr "Embarque"

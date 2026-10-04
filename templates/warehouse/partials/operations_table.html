@@ -100,14 +100,14 @@ donde se elige el dia y donde se dice lo que no puede ir y por que.
     <table style="min-width:2200px; width:100%; border-collapse:collapse; table-layout:auto;">
       <thead>
         <tr>
-          <th style="color:var(--faint); white-space:nowrap;">#</th>
+          <th style="color:var(--tb-ink); white-space:nowrap;">#</th>
           {% comment %}
           El aviso del hilo va aqui, junto al numero, y no al final con las
           acciones: la tabla mide 2200 px y nadie cruza esa distancia para
           descubrir si un cliente escribio. Lo que avisa tiene que verse sin
           mover la barra horizontal.
           {% endcomment %}
-          <th style="color:var(--faint); white-space:nowrap;" title="Mensajes">💬</th>
+          <th style="color:var(--tb-ink); white-space:nowrap;" title="Mensajes">💬</th>
           <th style="white-space:nowrap;">{% trans "Date" %}</th>
           <th style="white-space:nowrap;">Custom ID</th>
           <th style="white-space:nowrap;">{% trans "Entries Disp." %}</th>
@@ -135,8 +135,8 @@ donde se elige el dia y donde se dice lo que no puede ir y por que.
           <th style="white-space:nowrap;">PED</th>
           <th style="white-space:nowrap;">{% trans "Email" %}</th>
           <th style="white-space:nowrap;">Created By</th>
-          <th style="background:var(--th-bg-fija); color:var(--faint); white-space:nowrap;">{% trans "Actions" %}</th>
-          <th style="background:var(--th-bg-fija); color:var(--faint); white-space:nowrap;">#</th>
+          <th style="background:var(--th-bg-fija); color:var(--tb-ink); white-space:nowrap;">{% trans "Actions" %}</th>
+          <th style="background:var(--th-bg-fija); color:var(--tb-ink); white-space:nowrap;">#</th>
 
         </tr>
       </thead>

@@ -1,137 +1,142 @@
 {% load i18n %}
+{% comment %}
+La ficha de edicion de una entrada del catalogo, apaisada.
+
+Era una columna de dos campos de ancho, y con el bloque de avisos del cliente
+crecia mas que la pantalla: el modal no tenia scroll propio y la parte de abajo,
+con el boton de guardar, quedaba fuera. Ahora los datos van en cuatro columnas y
+los avisos en tres, uno al lado del otro, de modo que en una computadora cabe
+entera sin desplazarse; en el telefono las columnas se apilan.
+
+El formulario cierra el modal en el que este -- el del tablero, el del movil o
+el viejo `#modal` -- y repinta la tabla de su categoria: los clientes viven en
+`#customer-table` y el resto en `#catalog-table`.
+{% endcomment %}
+<style>
+.ced-rejilla{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 12px}
+.ced-rejilla label,.ced-titulo{display:block;font-size:10px;font-weight:600;text-transform:uppercase;
+          letter-spacing:.04em;color:var(--soft);margin-bottom:3px}
+.ced-rejilla input,.ced-rejilla textarea{width:100%;padding:6px 8px;border:1px solid var(--bdr);
+          border-radius:6px;font-size:13px;font-family:inherit}
+.ced-rejilla input[readonly]{background:var(--bg);color:var(--soft)}
+.ced-dos{grid-column:span 2}
+.ced-todo{grid-column:1/-1}
+.ced-cliente{margin-top:12px;border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;
+          background:var(--bg-sutil);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 18px}
+.ced-cliente .ced-op{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-bottom:5px}
+.ced-cliente input[type=number]{width:70px;padding:4px 6px;border:1px solid var(--bdr);border-radius:6px;font-size:12px}
+.ced-pie{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+.ced-pie button{padding:8px 22px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
+.ced-guardar{background:var(--accent);color:var(--on-accent);border:none}
+.ced-cancelar{background:var(--surface);color:var(--ink-fuerte);border:1px solid var(--bdr-fuerte)}
+@media (max-width:760px){
+  .ced-rejilla{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ced-cliente{grid-template-columns:1fr}
+}
+@media (max-width:440px){
+  .ced-rejilla{grid-template-columns:1fr}
+  .ced-dos{grid-column:auto}
+  .ced-pie button{flex:1}
+}
+</style>
 <form hx-post="{% url 'catalog_edit' entry.pk %}"
-      hx-target="#catalog-table"
+      hx-target="{% if entry.category == 'CUSTOMER' %}#customer-table{% else %}#catalog-table{% endif %}"
       hx-swap="innerHTML"
       hx-on::after-request="
-        var modalPC = document.getElementById('modal');
-        var modalMobile = document.getElementById('mobile-modal');
-        if (modalPC) modalPC.classList.remove('on');
-        if (modalMobile) modalMobile.style.display = 'none';
+        if (!event.detail.successful) return;
+        ['cat-edit-modal', 'mobile-modal'].forEach(function (id) {
+          var m = document.getElementById(id); if (m) m.style.display = 'none';
+        });
+        var viejo = document.getElementById('modal'); if (viejo) viejo.classList.remove('on');
       ">
   {% csrf_token %}
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-    <!-- Category: read-only -->
+  <div class="ced-rejilla">
     <div>
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Category" %}</label>
-      <input type="text" value="{{ entry.get_category_display }}" readonly
-             style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--bg);font-size:12px;color:var(--soft)">
-    </div>
-    <!-- Name: read-only -->
-    <div>
-      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Name" %}</label>
-      <input type="text" value="{{ entry.name }}" readonly
-             style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;background:var(--bg);font-size:12px;color:var(--soft)">
+      <label>{% trans "Category" %}</label>
+      <input type="text" value="{{ entry.get_category_display }}" readonly>
     </div>
     <div>
-      <label>{% trans "Email(s)" %}</label>
-      <input type="text" name="contact_email" value="{{ entry.contact_email|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px">
-    </div>
-    <div>
-      <label>{% trans "Phone" %}</label>
-      <input type="text" name="phone" value="{{ entry.phone|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px">
-    </div>
-    <div>
-      <label>{% trans "WhatsApp" %}</label>
-      <input type="text" name="whatsapp" value="{{ entry.whatsapp|default:'' }}" placeholder="+521XXXXXXXXXX" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px">
-    </div>
-    <div>
-      <label>{% trans "Address" %}</label>
-      <input type="text" name="address" value="{{ entry.address|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px">
-    </div>
-    <div style="grid-column:span 2">
-      <label>{% trans "Notes" %}</label>
-      <textarea name="notes" rows="2" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px">{{ entry.notes|default:'' }}</textarea>
+      <label>{% trans "Name" %}</label>
+      <input type="text" value="{{ entry.name }}" readonly>
     </div>
     <div>
       <label>{% trans "Abbreviation" %}</label>
-      <input type="text" name="abbreviation" value="{{ entry.abbreviation|default:'' }}" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px" placeholder="{% trans "e.g. LBO, ACME" %}">
+      <input type="text" name="abbreviation" value="{{ entry.abbreviation|default:'' }}" placeholder="{% trans "e.g. LBO, ACME" %}">
     </div>
-
-    {% if entry.category == 'CUSTOMER' %}
-    <div style="grid-column:span 2;margin-top:6px;border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;background:var(--bg-sutil)">
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft);margin-bottom:8px">
-        {% trans "Customer notifications" %}
-      </div>
-      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;margin-bottom:8px">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" name="notify_email" {% if entry.notify_email %}checked{% endif %}> {% trans "Email" %}
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" name="notify_whatsapp" {% if entry.notify_whatsapp %}checked{% endif %}> WhatsApp
-        </label>
-      </div>
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft);margin-bottom:6px">
-        {% trans "When to notify" %}
-      </div>
-      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" name="notify_on_create" {% if entry.notify_on_create %}checked{% endif %}> {% trans "When the operation is registered" %}
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" name="notify_on_release" {% if entry.notify_on_release %}checked{% endif %}> {% trans "When the goods are released" %}
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" name="notify_on_documents" {% if entry.notify_on_documents %}checked{% endif %}> {% trans "When documents are added" %}
-        </label>
-      </div>
-
-      {% comment %}
-      El plazo de permanencia de este cliente. Va aqui, en su ficha, y no en una
-      pantalla de configuracion aparte, porque es una condicion suya: una semana
-      para uno es lo normal y para otro ya es una factura de almacenaje.
-      {% endcomment %}
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft);margin:12px 0 6px">
-        {% trans "Time-in-warehouse alert" %}
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px">
-        <label style="display:flex;align-items:center;gap:6px">
-          {% trans "Alert when the goods have been here" %}
-          <input type="number" name="alert_days" min="1" max="3650"
-                 value="{{ entry.alert_days|default_if_none:'' }}"
-                 placeholder="{{ entry.tenant.alert_days_default|default:7 }}"
-                 style="width:70px;padding:4px 6px;border:1px solid var(--bdr);border-radius:6px;font-size:12px">
-          {% trans "days in the warehouse" %}
-        </label>
-        <span style="font-size:10px;color:var(--faint)">
-          {% blocktrans with plazo=entry.tenant.alert_days_default|default:7 %}Blank = use the company default ({{ plazo }} days).{% endblocktrans %}
-        </span>
-      </div>
-
-      {% comment %}
-      El idioma de sus correos y de sus documentos. Es del cliente y no de quien
-      se los manda: un PDF se lee en el idioma del que lo recibe.
-      {% endcomment %}
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft);margin:12px 0 6px">
-        {% trans "Emails and documents" %}
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px">
-        <label style="display:flex;align-items:center;gap:6px">
-          {% trans "Write to this customer in" %}
-          <select name="language"
-                  style="padding:4px 6px;border:1px solid var(--bdr);border-radius:6px;font-size:12px">
-            {% for valor, etiqueta in entry.LANGUAGE_CHOICES %}
-            <option value="{{ valor }}" {% if entry.language == valor %}selected{% endif %}>{{ etiqueta }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <span style="font-size:10px;color:var(--faint)">
-          {% trans "Applies to the notification emails, the WhatsApp messages and the PDF reports." %}
-        </span>
-      </div>
+    <div>
+      <label>{% trans "Phone" %}</label>
+      <input type="text" name="phone" value="{{ entry.phone|default:'' }}">
     </div>
-    {% endif %}
+    <div class="ced-dos">
+      <label>{% trans "Email(s)" %}</label>
+      <input type="text" name="contact_email" value="{{ entry.contact_email|default:'' }}">
+    </div>
+    <div>
+      <label>{% trans "WhatsApp" %}</label>
+      <input type="text" name="whatsapp" value="{{ entry.whatsapp|default:'' }}" placeholder="+521XXXXXXXXXX">
+    </div>
+    <div>
+      <label>{% trans "Address" %}</label>
+      <input type="text" name="address" value="{{ entry.address|default:'' }}">
+    </div>
+    <div class="ced-todo">
+      <label>{% trans "Notes" %}</label>
+      <textarea name="notes" rows="2">{{ entry.notes|default:'' }}</textarea>
+    </div>
   </div>
-  <div style="display:flex;gap:8px;margin-top:12px">
-    <button type="submit" style="flex:1;padding:8px;background:var(--accent);color:var(--on-accent);border:none;border-radius:6px;cursor:pointer">{% trans "Save Changes" %}</button>
-  <button type="button"
-        onclick="
-          var mm = document.getElementById('mobile-modal');
-          if (mm) mm.style.display = 'none';
-          var mp = document.getElementById('modal');
-          if (mp) mp.classList.remove('on');
-        "
-        style="flex:1;padding:8px;background:var(--bdr-fuerte);color:var(--ink-fuerte);border:1px solid var(--faint);border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;pointer-events:auto;opacity:1;">
-  {% trans "Cancel" %}
-</button>
+
+  {% if entry.category == 'CUSTOMER' %}
+  <div class="ced-cliente">
+    <div>
+      <span class="ced-titulo">{% trans "Customer notifications" %}</span>
+      <label class="ced-op">
+        <input type="checkbox" name="notify_email" {% if entry.notify_email %}checked{% endif %}> {% trans "Email" %}
+      </label>
+      <label class="ced-op">
+        <input type="checkbox" name="notify_whatsapp" {% if entry.notify_whatsapp %}checked{% endif %}> WhatsApp
+      </label>
+    </div>
+    <div>
+      <span class="ced-titulo">{% trans "When to notify" %}</span>
+      <label class="ced-op">
+        <input type="checkbox" name="notify_on_create" {% if entry.notify_on_create %}checked{% endif %}> {% trans "When the operation is registered" %}
+      </label>
+      <label class="ced-op">
+        <input type="checkbox" name="notify_on_release" {% if entry.notify_on_release %}checked{% endif %}> {% trans "When the goods are released" %}
+      </label>
+      <label class="ced-op">
+        <input type="checkbox" name="notify_on_documents" {% if entry.notify_on_documents %}checked{% endif %}> {% trans "When documents are added" %}
+      </label>
+    </div>
+    {% comment %}
+    El plazo de permanencia de este cliente. Va aqui, en su ficha, y no en una
+    pantalla de configuracion aparte, porque es una condicion suya: una semana
+    para uno es lo normal y para otro ya es una factura de almacenaje.
+    {% endcomment %}
+    <div>
+      <span class="ced-titulo">{% trans "Time-in-warehouse alert" %}</span>
+      <label class="ced-op" style="flex-wrap:wrap;cursor:default">
+        {% trans "Alert when the goods have been here" %}
+        <input type="number" name="alert_days" min="1" max="3650"
+               value="{{ entry.alert_days|default_if_none:'' }}"
+               placeholder="{{ entry.tenant.alert_days_default|default:7 }}">
+        {% trans "days in the warehouse" %}
+      </label>
+      <span style="font-size:10px;color:var(--faint)">
+        {% blocktrans with plazo=entry.tenant.alert_days_default|default:7 %}Blank = use the company default ({{ plazo }} days).{% endblocktrans %}
+      </span>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="ced-pie">
+    <button type="button" class="ced-cancelar"
+            onclick="
+              ['cat-edit-modal', 'mobile-modal'].forEach(function (id) {
+                var m = document.getElementById(id); if (m) m.style.display = 'none';
+              });
+              var viejo = document.getElementById('modal'); if (viejo) viejo.classList.remove('on');
+            ">{% trans "Cancel" %}</button>
+    <button type="submit" class="ced-guardar">{% trans "Save Changes" %}</button>
   </div>
 </form>

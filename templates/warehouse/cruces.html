@@ -12,9 +12,10 @@
     body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
     a{color:inherit}
     .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
-        padding:12px 18px;background:var(--ink);color:var(--on-accent);flex-wrap:wrap}
+        padding:12px 18px;background:var(--tb-bg);color:var(--on-accent);flex-wrap:wrap}
     .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
-    .tb a{color:var(--bdr);text-decoration:none;font-size:12px}
+    .tb a{color:var(--tb-ink-suave);text-decoration:none;font-size:13px}
+    .tb a:hover{color:var(--tb-ink)}
     .wrap{max-width:1000px;margin:16px auto 60px;padding:0 14px}
     .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
           padding:16px;margin-bottom:14px}
@@ -39,6 +40,14 @@
               flex-wrap:wrap;align-items:flex-start;justify-content:space-between}
     .tarea-id{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600}
     .tarea-sub{font-size:12px;color:var(--soft);margin-top:3px;line-height:1.5}
+    /* Las acciones de la tarea, en su titulo. Ocupan su propia linea debajo
+       del numero y la cuenta atras, para que no compitan con ellos. */
+    .tarea-acc{flex:1 0 100%;display:flex;gap:8px;flex-wrap:wrap}
+    .tarea-acc .btn[aria-expanded="true"]{box-shadow:0 0 0 2px var(--asoft)}
+    .panel-tarea{border-top:none;border-bottom:1px solid var(--bdr);background:var(--bg-sutil)}
+    /* `.acciones` pone `display:flex`, que le gana al atributo `hidden`. */
+    .panel-tarea[hidden]{display:none}
+    .acciones-pie{justify-content:flex-end}
 
     /* La cuenta atras. El dia de cruce es la fecha contra la que se mide todo
        lo que falta, asi que se lee de un golpe y no leyendo una fecha. */
@@ -106,6 +115,7 @@
   <span class="tb-brand">WMS — {% trans "Crossings" %}</span>
   <a href="{% if es_telefono %}{% url 'mobile_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}">← {% trans "Back to the dashboard" %}</a>
 </div>
+{% include "warehouse/partials/menu_superior.html" with activa='cruces' %}
 
 <div class="wrap">
 
@@ -175,6 +185,86 @@
         </span>
         <div class="tarea-sub">{{ t.get_estado_display }}</div>
       </div>
+      {% comment %}
+      El titulo de la tarea es donde se la reconoce y tambien donde se actua
+      sobre ella. Agregar un embarque y mover el dia eran dos formularios
+      abiertos debajo de la tabla, y el desplegable de embarques confundia al
+      cliente: parecia un dato de la tarea y no una accion. Ahora son dos
+      botones, y el formulario solo sale al pulsarlos.
+      {% endcomment %}
+      <div class="tarea-acc">
+        {% if t.libres %}
+        <button class="btn btn-sm btn-p" type="button" aria-expanded="false"
+                onclick="abrirPanelDeTarea(this, 'meter-{{ t.pk }}')">+ {% trans "Add shipment" %}</button>
+        {% endif %}
+        <button class="btn btn-sm" type="button" aria-expanded="false"
+                onclick="abrirPanelDeTarea(this, 'dia-{{ t.pk }}')">&#128197; {% trans "Move the day" %}</button>
+      </div>
+    </div>
+
+    {% if t.libres %}
+    <div class="acciones panel-tarea" id="meter-{{ t.pk }}" hidden>
+      <form method="post" action="{% url 'cruce_meter' t.pk %}"
+            style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        {% csrf_token %}
+        <label class="campo">
+          <span>{% trans "Shipment" %}</span>
+          <select name="operation">
+            {% for op in t.libres %}
+            <option value="{{ op.pk }}">
+              {{ op.custom_id }}{% if op.po_order %} · {{ op.po_order }}{% endif %}
+              {% if op.bundle_qty %} — {{ op.bundle_qty }} {% trans "bundles" %}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+        {% comment %}
+        Cuantos bultos van en este cruce. Vacio significa todos, que es el caso
+        normal; el numero se teclea para el caso de los 19 de 20 -- el cliente
+        pide importar solo 19 pallets y el 20 se queda para el siguiente.
+        {% endcomment %}
+        <label class="campo">
+          <span>{% trans "Bundles (blank = all)" %}</span>
+          <input type="number" name="bultos" min="1" style="width:90px" placeholder="—">
+        </label>
+        {% if t.estado != 'ABIERTA' %}
+        <label class="campo">
+          <span>{% trans "Why?" %}</span>
+          <input type="text" name="motivo" required>
+        </label>
+        {% endif %}
+        <button class="btn btn-sm btn-p" type="submit">+ {% trans "Add" %}</button>
+      </form>
+      {% if t.libres|length > 1 %}
+      <a class="btn btn-sm" style="text-decoration:none"
+         href="{% url 'cruce_armar' %}?customer={{ cliente.pk }}&amp;tarea={{ t.pk }}">&#9745; {% trans "Mark several" %}</a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="acciones panel-tarea" id="dia-{{ t.pk }}" hidden>
+      {% comment %}
+      El dia se puede cambiar, que era lo importante. El motivo sale de una
+      lista corta: en tres meses eso deja contestar "por que se nos mueven
+      tanto los cruces" con numeros en vez de con recuerdos.
+      {% endcomment %}
+      <form method="post" action="{% url 'cruce_cambiar_dia' t.pk %}"
+            style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        {% csrf_token %}
+        <label class="campo">
+          <span>{% trans "Move the crossing day to" %}</span>
+          <input type="date" name="fecha_de_cruce" value="{{ t.fecha_de_cruce|date:'Y-m-d' }}">
+        </label>
+        <label class="campo">
+          <span>{% trans "Why?" %}</span>
+          <select name="motivo">
+            {% for valor, etiqueta in motivos %}
+            <option value="{{ valor }}">{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button class="btn btn-sm" type="submit">{% trans "Move it" %}</button>
+      </form>
     </div>
 
     {% if t.espera_confirmacion %}
@@ -263,77 +353,14 @@
       </tbody>
     </table>
 
-    {% if t.libres %}
-    <div class="acciones">
-      <form method="post" action="{% url 'cruce_meter' t.pk %}"
-            style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-        {% csrf_token %}
-        <label class="campo">
-          <span>{% trans "Add a shipment" %}</span>
-          <select name="operation">
-            {% for op in t.libres %}
-            <option value="{{ op.pk }}">
-              {{ op.custom_id }}{% if op.po_order %} · {{ op.po_order }}{% endif %}
-              {% if op.bundle_qty %} — {{ op.bundle_qty }} {% trans "bundles" %}{% endif %}
-            </option>
-            {% endfor %}
-          </select>
-        </label>
-        {% comment %}
-        Cuantos bultos van en este cruce. Vacio significa todos, que es el caso
-        normal; el numero se teclea para el caso de los 19 de 20 -- el cliente
-        pide importar solo 19 pallets y el 20 se queda para el siguiente.
-        {% endcomment %}
-        <label class="campo">
-          <span>{% trans "Bundles (blank = all)" %}</span>
-          <input type="number" name="bultos" min="1" style="width:90px" placeholder="—">
-        </label>
-        {% if t.estado != 'ABIERTA' %}
-        <label class="campo">
-          <span>{% trans "Why?" %}</span>
-          <input type="text" name="motivo" required>
-        </label>
-        {% endif %}
-        <button class="btn btn-sm btn-p" type="submit">+ {% trans "Add" %}</button>
-      </form>
-      {% if t.libres|length > 1 %}
-      <a class="btn btn-sm" style="text-decoration:none"
-         href="{% url 'cruce_armar' %}?customer={{ cliente.pk }}&amp;tarea={{ t.pk }}">&#9745; {% trans "Mark several" %}</a>
-      {% endif %}
-    </div>
-    {% endif %}
-
-    <div class="acciones">
-      {% comment %}
-      El dia se puede cambiar, que era lo importante. El motivo sale de una
-      lista corta: en tres meses eso deja contestar "por que se nos mueven
-      tanto los cruces" con numeros en vez de con recuerdos.
-      {% endcomment %}
-      <form method="post" action="{% url 'cruce_cambiar_dia' t.pk %}"
-            style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-        {% csrf_token %}
-        <label class="campo">
-          <span>{% trans "Move the crossing day to" %}</span>
-          <input type="date" name="fecha_de_cruce" value="{{ t.fecha_de_cruce|date:'Y-m-d' }}">
-        </label>
-        <label class="campo">
-          <span>{% trans "Why?" %}</span>
-          <select name="motivo">
-            {% for valor, etiqueta in motivos %}
-            <option value="{{ valor }}">{{ etiqueta }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <button class="btn btn-sm" type="submit">{% trans "Move it" %}</button>
-      </form>
-
-      {% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
+    {% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
+    <div class="acciones acciones-pie">
       <form method="post" action="{% url 'cruce_cancelar' t.pk %}" style="margin:0">
         {% csrf_token %}
         <button class="btn btn-sm btn-d" type="submit">{% trans "Cancel this crossing" %}</button>
       </form>
-      {% endif %}
     </div>
+    {% endif %}
 
     {% comment %}
     Los dos papeles. La lista de preparacion sale desde el minuto uno y no
@@ -342,6 +369,11 @@
     uno --; lo que pierde el papel adelantado es la autoridad que hoy tiene y
     no deberia tener.
     {% endcomment %}
+    {% comment %}
+    El cliente no los ve. Los cuatro son papeles de bodega -- preparar, cargar,
+    escanear y remitir -- y en su pantalla solo eran ruido entre sus embarques.
+    {% endcomment %}
+    {% if not es_cliente %}
     <div class="papeles">
       {% comment %}
       La lista de preparacion, que sale desde el minuto uno y no ampara nada.
@@ -463,6 +495,7 @@
         {% endif %}
       </div>
     </div>
+    {% endif %}
 
     {% if t.cambios_de_dia.all %}
     <div class="historial">
@@ -482,6 +515,20 @@
 
   {% endif %}
 </div>
+
+<script>
+// Los botones del titulo de la tarea. Cada uno abre su formulario debajo del
+// titulo y cierra el otro de la misma tarea, para que no se apilen dos.
+function abrirPanelDeTarea(boton, id) {
+  const panel = document.getElementById(id);
+  const abrir = panel.hidden;
+  boton.closest('.tarea').querySelectorAll('.panel-tarea').forEach(function (p) { p.hidden = true; });
+  boton.parentElement.querySelectorAll('[aria-expanded]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+  panel.hidden = !abrir;
+  boton.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+  if (abrir) { const campo = panel.querySelector('select, input:not([type=hidden])'); if (campo) campo.focus(); }
+}
+</script>
 
 {% if es_telefono %}
 {% include "warehouse/partials/barra_inferior.html" with activa='cruces' %}

@@ -12,9 +12,10 @@
     body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
     a{color:inherit}
     .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
-        padding:12px 18px;background:var(--ink);color:var(--on-accent);flex-wrap:wrap}
+        padding:12px 18px;background:var(--tb-bg);color:var(--on-accent);flex-wrap:wrap}
     .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
-    .tb a{color:var(--bdr);text-decoration:none;font-size:12px}
+    .tb a{color:var(--tb-ink-suave);text-decoration:none;font-size:13px}
+    .tb a:hover{color:var(--tb-ink)}
     .wrap{max-width:1100px;margin:16px auto 60px;padding:0 14px}
     .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
           padding:16px;margin-bottom:14px}
@@ -133,6 +134,7 @@
   <span class="tb-brand">WMS — {% trans "Pedimentos" %}</span>
   <a href="{% if es_telefono %}{% url 'mobile_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}">← {% trans "Back to the dashboard" %}</a>
 </div>
+{% include "warehouse/partials/menu_superior.html" with activa='pedimentos' %}
 
 <div class="wrap">
 
@@ -321,7 +323,7 @@
         <select name="operation">
           {% for op in sin_repartir %}
           <option value="{{ op.pk }}">
-            {{ op.custom_id }}{% if op.po_order %} · {{ op.po_order }}{% endif %} — {{ op.bultos_sueltos }} {% trans "left" %}
+            {{ op.custom_id }}{% if op.po_order %} · {{ op.po_order }}{% endif %}{% if op.pedimento %} · PED {{ op.pedimento }}{% endif %} — {{ op.bultos_sueltos }} {% trans "left" %}
           </option>
           {% endfor %}
         </select>

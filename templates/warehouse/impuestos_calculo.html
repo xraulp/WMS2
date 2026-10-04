@@ -28,7 +28,8 @@
     .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
         padding:12px 18px;background:var(--tb-bg);color:var(--on-accent);flex-wrap:wrap}
     .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
-    .tb a{color:var(--tb-bdr);text-decoration:none;font-size:12px}
+    .tb a{color:var(--tb-ink-suave);text-decoration:none;font-size:13px}
+    .tb a:hover{color:var(--tb-ink)}
     .wrap{max-width:980px;margin:16px auto 60px;padding:0 14px}
     .msg-error{background:var(--rsoft);color:var(--err-ink);padding:9px 12px;
                border-radius:var(--r);font-size:13px;margin-bottom:12px}
@@ -46,6 +47,7 @@
   <span class="tb-brand">WMS — {% trans "Duty breakdown" %}</span>
   <a href="{% url 'impuestos_panel' %}?customer={{ cliente.pk }}">← {% trans "Back to the sheet" %}</a>
 </div>
+{% include "warehouse/partials/menu_superior.html" with activa='impuestos' %}
 
 <div class="wrap">
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}

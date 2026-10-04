@@ -2459,10 +2459,13 @@ def catalog_edit(request, pk):
             # exactamente lo que parece un cambio que no sirvio de nada.
             cambio_el_plazo = plazo_anterior != entry.alert_days
             # El idioma de sus correos y documentos. Uno que no se ofrece se
-            # descarta: el valor viaja en el formulario.
-            idioma = p.get('language', '').strip()
-            if idioma in dict(Catalog.LANGUAGE_CHOICES):
-                entry.language = idioma
+            # descarta: el valor viaja en el formulario. El formulario de
+            # edicion ya no lo pinta, y sin el campo el idioma que tuviera se
+            # queda como estaba en vez de volver al de la casa.
+            if 'language' in p:
+                idioma = p.get('language', '').strip()
+                if idioma in dict(Catalog.LANGUAGE_CHOICES):
+                    entry.language = idioma
         entry.save()
         respuesta = render(request, 'warehouse/partials/catalog_table.html',
                            _catalog_table_context(request, tenant,
@@ -4911,9 +4914,34 @@ def pedimento_asignar(request, pk):
     except (InvalidOperation, TypeError):
         libras = None
 
+    # La entrada puede traer ya su numero de pedimento, tecleado al capturarla.
+    # Si este pedimento todavia no tiene, se queda con ese: pedir que se
+    # vuelva a teclear aqui era escribir dos veces el mismo dato, y la segunda
+    # con la posibilidad de equivocarse. Pasa por el mismo candado que el
+    # numero tecleado a mano, y si choca no se mete nada.
+    adopta = None
+    if not ped.tiene_numero:
+        casillas = (op.ped_aduana, op.ped_patente, op.ped_consecutivo)
+        if not pedimentos.numero_corrido(*casillas):
+            # Las capturadas antes de las tres casillas solo tienen el texto.
+            casillas = pedimentos.desglosar(op.pedimento or '')
+        del_embarque = pedimentos.numero_corrido(*casillas)
+        if del_embarque:
+            hermanos = (Pedimento.objects
+                        .filter(tenant=ped.tenant, customer=ped.customer)
+                        .exclude(pk=ped.pk))
+            choca = pedimentos.choque(del_embarque, [h.numero for h in hermanos])
+            if choca:
+                return _panel_con_error(request, ped.customer_id, choca['mensaje'])
+            adopta = casillas
+
     renglon, creado = PedimentoBundle.objects.get_or_create(
         pedimento=ped, operation=op,
         defaults={'bultos': cuantos, 'weight_lbs': libras})
+    if adopta:
+        ped.ped_aduana, ped.ped_patente, ped.ped_consecutivo = adopta
+        ped.save(update_fields=['ped_aduana', 'ped_patente', 'ped_consecutivo',
+                                'updated_at'])
     if not creado:
         renglon.bultos += cuantos
         if libras is not None:

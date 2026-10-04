@@ -61,7 +61,8 @@
     .tb{display:flex;align-items:center;justify-content:space-between;gap:10px;
         padding:12px 18px;background:var(--tb-bg);color:var(--on-accent);flex-wrap:wrap}
     .tb-brand{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
-    .tb a{color:var(--tb-bdr);text-decoration:none;font-size:12px}
+    .tb a{color:var(--tb-ink-suave);text-decoration:none;font-size:13px}
+    .tb a:hover{color:var(--tb-ink)}
     .wrap{max-width:1180px;margin:16px auto 60px;padding:0 14px}
     .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
           padding:16px;margin-bottom:14px}
@@ -229,6 +230,7 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
   <span class="tb-brand">WMS — {% trans "Duties" %}</span>
   <a href="{% if es_telefono %}{% url 'mobile_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}">← {% trans "Back to the dashboard" %}</a>
 </div>
+{% include "warehouse/partials/menu_superior.html" with activa='impuestos' %}
 
 <div class="wrap">
 
@@ -281,6 +283,13 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
         {% endcomment %}
         {% if renglones %}
         <div class="membrete-botones">
+          {% comment %}
+          Volver a pedir la hoja. Las cifras salen de lo que hay en el sistema en
+          el momento de abrirla; quien la tiene abierta mientras la casa sube una
+          factura o pone un numero ve lo de antes hasta que la recarga.
+          {% endcomment %}
+          <a class="btn btn-sm" href="{% url 'impuestos_panel' %}?customer={{ cliente.pk }}">
+            &#8635; {% trans "Refresh" %}</a>
           <a class="btn btn-sm" href="{% url 'impuestos_pdf' %}?customer={{ cliente.pk }}">
             &#8681; {% trans "PDF" %}</a>
           {% if puede_escribir %}
@@ -659,7 +668,12 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
   uno que se quito.
   {% endcomment %}
 
-  {% if renglones %}
+  {% comment %}
+  El simulador no se le pinta al cliente. El tipo de cambio de trabajo va alto a
+  proposito, y con una casilla para probar otro el cliente mediria el colchon
+  desde su propia hoja. Tampoco le llegan los numeros con que se calcula.
+  {% endcomment %}
+  {% if renglones and puede_escribir %}
   <div class="card">
     <p class="ct">{% trans "With another exchange rate" %}</p>
     {% comment %}
@@ -712,7 +726,7 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
 
 {% if es_telefono %}{% include "warehouse/partials/barra_inferior.html" with activa='impuestos' %}{% endif %}
 
-{% if renglones %}
+{% if renglones and puede_escribir %}
 {{ para_simular|json_script:"datos-sim" }}
 <script>
 // El tipo de cambio de la pregunta: "y si fuera otro, cuanto seria".
