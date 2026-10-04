@@ -712,6 +712,30 @@ class ExpedienteDelPedimentoTests(BaseDeAlmacen):
             self.ped.documentos.filter(
                 ranura=PedimentoDocument.FOTOS_SERIES).count(), 0)
 
+    # -- Nombres largos ------------------------------------------------------
+
+    # El nombre real que no entraba: mas de cien caracteres, con espacios
+    # dobles, puntos en medio y guiones. Es como nombran los archivos los
+    # agentes aduanales, juntando todas las referencias del embarque.
+    NOMBRE_LARGO = ('LBO IP39.26 IP52.26 CD 353168 69 ED260930-0002 GL-2606652 '
+                    'DYS-040606  1780_240_6004086_proforma_pedimento.pdf')
+
+    def test_entra_un_archivo_de_nombre_largo(self):
+        respuesta = self.subir(PedimentoDocument.PROFORMA, self.NOMBRE_LARGO)
+        self.assertEqual(respuesta.status_code, 302)
+        doc = self.ped.documentos.get(ranura=PedimentoDocument.PROFORMA)
+        self.assertEqual(doc.original_name, self.NOMBRE_LARGO)
+        self.assertLessEqual(len(doc.file.name), 255)
+
+    def test_el_nombre_largo_se_ve_y_se_descarga(self):
+        self.subir(PedimentoDocument.PROFORMA, self.NOMBRE_LARGO)
+        doc = self.ped.documentos.get(ranura=PedimentoDocument.PROFORMA)
+        pantalla = self.client.get('/pedimentos/?customer=%d' % self.cliente.pk)
+        self.assertContains(pantalla, 'LBO IP39.26 IP52.26')
+        descarga = self.client.get('/pedimentos/file/%d/' % doc.pk)
+        # Sale por el enlace firmado del almacen, que es una redireccion.
+        self.assertEqual(descarga.status_code, 302)
+
     # -- La factura comercial ------------------------------------------------
 
     def test_subir_la_factura_desde_esta_pantalla(self):

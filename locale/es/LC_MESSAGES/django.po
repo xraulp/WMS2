@@ -3158,3 +3158,61 @@ msgstr "Mover el día"
 #: templates/warehouse/cruces.html
 msgid "Shipment"
 msgstr "Embarque"
+
+# La pantalla de escaneo (carga.html) y sus mensajes.
+msgid "Verify the load"
+msgstr "Verificar la carga"
+
+msgid "This crossing has no load order yet."
+msgstr "Este cruce todavía no tiene orden de carga."
+
+msgid "Until the pedimentos are paid, what bodega uses is the picking list."
+msgstr "Mientras no se paguen los pedimentos, bodega trabaja con la lista de preparación."
+
+msgid "obsolete"
+msgstr "obsoleta"
+
+msgid "in force"
+msgstr "vigente"
+
+msgid "Preparation"
+msgstr "Preparación"
+
+msgid "bundles scanned"
+msgstr "bultos escaneados"
+
+msgid "These are not on the order"
+msgstr "Estos no vienen en la orden"
+
+msgid "Scanned twice"
+msgstr "Escaneados dos veces"
+
+msgid "Point the scanner at the label"
+msgstr "Apunta la pistola a la etiqueta"
+
+msgid "Or type it: ED260901-0001-3"
+msgstr "O escríbelo: ED260901-0001-3"
+
+msgid "By shipment"
+msgstr "Por embarque"
+
+msgid "Still missing"
+msgstr "Faltan todavía"
+
+msgid "Last scans"
+msgstr "Últimos escaneos"
+
+msgid "Undo"
+msgstr "Deshacer"
+
+msgid "That code says nothing: %(x)s"
+msgstr "Ese código no dice nada: %(x)s"
+
+msgid "%(op)s has no bundle number in that code. Scan the barcode under the QR, or type it as %(op)s-1."
+msgstr "Ese código de %(op)s no trae número de bulto. Escanea el código de barras de debajo del QR o escríbelo como %(op)s-1."
+
+msgid "%(op)s is not an operation of this company."
+msgstr "%(op)s no es una operación de esta empresa."
+
+msgid "%(codigo)s was already scanned at %(hora)s."
+msgstr "%(codigo)s ya se escaneó a las %(hora)s."

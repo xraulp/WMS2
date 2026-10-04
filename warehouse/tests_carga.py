@@ -329,6 +329,28 @@ class NadaSeCargaSinPistolearTests(BaseDeCarga):
                          {'escaneo': escaneo.pk})
         self.assertEqual(self.orden.cuadre()['verificados'], 0)
 
+    def test_la_pantalla_sale_en_español(self):
+        # La interfaz no mezcla idiomas, y menos la del anden: quien carga lee
+        # el error de reojo con el bulto en las manos.
+        UserProfile.objects.filter(user=self.jefa).update(language='es')
+        self.pistolear(self.op, 1)
+        self.pistolear(self.op, 1)
+        respuesta = self.client.get('/cruces/%d/verify/' % self.tarea.pk)
+        for frase in ('Verificar la carga', 'Preparación', 'bultos escaneados',
+                      'Por embarque', 'Últimos escaneos', 'vigente',
+                      'ya se escaneó a las'):
+            self.assertContains(respuesta, frase)
+        for frase in ('Verify the load', 'bundles scanned', 'By shipment',
+                      'Last scans', 'was already scanned'):
+            self.assertNotContains(respuesta, frase)
+
+    def test_el_error_del_codigo_sale_en_español(self):
+        UserProfile.objects.filter(user=self.jefa).update(language='es')
+        self.client.post('/cruces/%d/verify/scan/' % self.tarea.pk,
+                         {'codigo': self.op.custom_id, 'fase': 'CARGA'})
+        respuesta = self.client.get('/cruces/%d/verify/' % self.tarea.pk)
+        self.assertContains(respuesta, 'no trae número de bulto')
+
 
 class LaRemisionTests(BaseDeCarga):
     """
