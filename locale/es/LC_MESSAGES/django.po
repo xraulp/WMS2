@@ -3216,3 +3216,229 @@ msgstr "%(op)s no es una operación de esta empresa."
 
 msgid "%(codigo)s was already scanned at %(hora)s."
 msgstr "%(codigo)s ya se escaneó a las %(hora)s."
+
+# La pantalla de pedimentos (pedimentos.html), sus mensajes y sus estados.
+msgid "Pedimentos"
+msgstr "Pedimentos"
+
+msgid "Pick a customer to see their pedimentos and the goods still waiting to be assigned."
+msgstr "Elige un cliente para ver sus pedimentos y la mercancía que falta por repartir."
+
+msgid "Shipments in warehouse"
+msgstr "Embarques en bodega"
+
+msgid "Without commercial invoice"
+msgstr "Sin factura comercial"
+
+msgid "Bundles not assigned yet"
+msgstr "Bultos sin repartir"
+
+msgid "Pedimentos with a number"
+msgstr "Pedimentos con número"
+
+msgid "Read from the pedimento number"
+msgstr "Leído del número de pedimento"
+
+msgid "no number yet"
+msgstr "todavía sin número"
+
+msgid "needs serial-number photos"
+msgstr "lleva fotos de números de serie"
+
+msgid "Save number"
+msgstr "Guardar número"
+
+msgid "Entry no."
+msgstr "Núm. de entrada"
+
+msgid "Lbs"
+msgstr "Lbs"
+
+msgid "Kgs"
+msgstr "Kgs"
+
+msgid "Nothing assigned to this pedimento yet."
+msgstr "Este pedimento todavía no tiene nada asignado."
+
+msgid "left"
+msgstr "por repartir"
+
+msgid "Assign bundles"
+msgstr "Asignar bultos"
+
+msgid "Serial-number photos — pick them from the shipment file"
+msgstr "Fotos de números de serie — elígelas del expediente del embarque"
+
+msgid "Save the choice"
+msgstr "Guardar la selección"
+
+msgid "no commercial invoice loaded"
+msgstr "no tiene factura comercial cargada"
+
+msgid "or mark one already in the file"
+msgstr "o marca una que ya esté en el expediente"
+
+msgid "Mark as invoice"
+msgstr "Marcar como factura"
+
+msgid "Download the whole pedimento (ZIP)"
+msgstr "Descargar el pedimento completo (ZIP)"
+
+msgid "Under customer review since"
+msgstr "En revisión del cliente desde"
+
+msgid "Send to review"
+msgstr "Enviar a revisión"
+
+msgid "pending"
+msgstr "pendiente"
+
+msgid "Delete this empty pedimento"
+msgstr "Borrar este pedimento vacío"
+
+msgid "Add pedimento"
+msgstr "Agregar pedimento"
+
+msgid "WITHOUT A PEDIMENTO"
+msgstr "SIN PEDIMENTO"
+
+msgid "bundles still unassigned"
+msgstr "bultos sin repartir todavía"
+
+msgid "no commercial invoice"
+msgstr "sin factura comercial"
+
+msgid "The load order cannot be issued while there are goods without a pedimento."
+msgstr "No se puede emitir la orden de carga mientras haya mercancía sin pedimento."
+
+msgid "Draft"
+msgstr "Borrador"
+
+msgid "Under customer review"
+msgstr "En revisión del cliente"
+
+msgid "Corrections requested"
+msgstr "Correcciones pedidas"
+
+msgid "Approved by the customer"
+msgstr "Aprobado por el cliente"
+
+msgid "Validated"
+msgstr "Validado"
+
+msgid "No goods assigned yet"
+msgstr "Todavía no tiene mercancía asignada"
+
+msgid "The pedimento number"
+msgstr "El número de pedimento"
+
+msgid "M3 file"
+msgstr "Archivo M3"
+
+msgid "Pedimento draft"
+msgstr "Proforma del pedimento"
+
+msgid "318 letter"
+msgstr "Carta 318"
+
+msgid "Serial-number photos"
+msgstr "Fotos de números de serie"
+
+msgid "Statement of value"
+msgstr "Manifestación de valor"
+
+msgid "Statement of value receipt"
+msgstr "Acuse de la manifestación de valor"
+
+msgid "Paid pedimento"
+msgstr "Pedimento pagado"
+
+msgid "%(ped)s is already with the customer; it cannot be changed."
+msgstr "%(ped)s ya está con el cliente; no se puede cambiar."
+
+msgid "%(op)s has %(libres)d bundles left to assign."
+msgstr "A %(op)s le quedan %(libres)d bultos por repartir."
+
+msgid "This pedimento already went to the customer; it cannot be deleted."
+msgstr "Este pedimento ya se le envió al cliente; no se puede borrar."
+
+msgid "%(ped)s is already with the customer; its documents cannot be changed."
+msgstr "%(ped)s ya está con el cliente; sus documentos no se pueden cambiar."
+
+msgid "Pick a file first."
+msgstr "Primero elige un archivo."
+
+msgid "It cannot go to review yet — missing: %(faltan)s."
+msgstr "Todavía no puede ir a revisión — falta: %(faltan)s."
+
+msgid "This pedimento is not in a state that can be sent to review."
+msgstr "Este pedimento no está en un estado que se pueda enviar a revisión."
+
+msgid "The customs office takes 2 digits (e.g. 24 for Nuevo Laredo)."
+msgstr "La aduana lleva 2 dígitos (por ejemplo, 24 para Nuevo Laredo)."
+
+msgid "The broker license takes 4 digits (e.g. 1780)."
+msgstr "La patente lleva 4 dígitos (por ejemplo, 1780)."
+
+msgid "The year and sequence take 7 digits — you typed %(n)d."
+msgstr "El año y consecutivo llevan 7 dígitos — escribiste %(n)d."
+
+# La respuesta del cliente a la revision, y validar y pagar.
+msgid "Check the pedimento against your invoice. Approving it authorizes us to validate it and pay its taxes."
+msgstr "Revisa el pedimento contra tu factura. Al aprobarlo nos autorizas a validarlo y a pagar sus impuestos."
+
+msgid "Approve this pedimento"
+msgstr "Aprobar este pedimento"
+
+msgid "Request corrections"
+msgstr "Pedir correcciones"
+
+msgid "What has to change? E.g. the value of PO 4500123 is 1,250 USD, not 1,520."
+msgstr "¿Qué hay que cambiar? Por ejemplo: el valor del pedido 4500123 es 1,250 USD, no 1,520."
+
+msgid "Send corrections"
+msgstr "Enviar correcciones"
+
+msgid "Approved"
+msgstr "Aprobado"
+
+msgid "by"
+msgstr "por"
+
+msgid "Mark as validated"
+msgstr "Marcar como validado"
+
+msgid "Mark as paid"
+msgstr "Marcar como pagado"
+
+msgid "Missing: the paid pedimento, in its slot below"
+msgstr "Falta: el pedimento pagado, en su ranura de abajo"
+
+msgid "We are making the corrections you asked for."
+msgstr "Estamos haciendo las correcciones que pediste."
+
+msgid "We are preparing this pedimento. You will review it here."
+msgstr "Estamos preparando este pedimento. Lo revisarás aquí."
+
+msgid "%(ped)s is not waiting for your review."
+msgstr "%(ped)s no está esperando tu revisión."
+
+msgid "Write what has to be corrected in %(ped)s."
+msgstr "Escribe qué hay que corregir en %(ped)s."
+
+msgid "%(ped)s can only be validated after the customer approves it."
+msgstr "%(ped)s solo se puede validar después de que el cliente lo apruebe."
+
+msgid "%(ped)s has to be validated before it is paid."
+msgstr "%(ped)s tiene que validarse antes de pagarse."
+
+msgid "Upload the paid pedimento to %(ped)s first."
+msgstr "Primero sube el pedimento pagado de %(ped)s."
+
+msgid "Paid on"
+msgstr "Pagado el"
+
+msgid "%(bultos)s bundle"
+msgid_plural "%(bultos)s bundles"
+msgstr[0] "%(bultos)s bulto"
+msgstr[1] "%(bultos)s bultos"

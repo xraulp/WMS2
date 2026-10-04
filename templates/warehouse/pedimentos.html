@@ -104,6 +104,21 @@
              cursor:not-allowed}
     .ya-salio{font-size:12px;color:var(--ok-ink-fuerte);font-weight:600}
 
+    /* La revision vista por el cliente: aprobar va delante y grande, porque es
+       lo que se hace casi siempre; pedir correcciones se despliega. */
+    .contestar{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
+    .contestar p{flex:1 1 100%;margin:0;font-size:13px}
+    .contestar details{flex:1 1 260px}
+    .contestar summary{list-style:none;display:inline-block}
+    .contestar summary::-webkit-details-marker{display:none}
+    .contestar details form{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+    .contestar textarea{width:100%;font:inherit;font-size:14px;padding:8px;
+                        border:1px solid var(--bdr-fuerte);border-radius:var(--r);
+                        background:var(--surface);color:var(--ink)}
+    .correcciones{padding:10px 14px;border-top:1px solid var(--warn-bdr);
+                  background:var(--warn-bg-suave);color:var(--warn-ink);font-size:13px}
+    .correcciones b{display:block;margin-bottom:3px;color:var(--warn-ink-fuerte)}
+
     .factura{padding:10px 14px;border-top:1px solid var(--bdr);
              background:var(--rsoft);font-size:12px}
     .factura form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
@@ -448,6 +463,19 @@
     activo y luego da error hace perder el viaje; uno atenuado que dice que
     falta es una instruccion.
     {% endcomment %}
+    {% if p.estado == 'CORRECCIONES' %}
+    <div class="correcciones">
+      <b>{% trans "Corrections requested" %}{% if p.revisado_por %} · {{ p.revisado_por.get_full_name|default:p.revisado_por.username }}{% endif %}</b>
+      {{ p.correcciones_pedidas|linebreaksbr }}
+    </div>
+    {% endif %}
+
+    {% comment %}
+    Cada tramo tiene un dueño y a cada quien se le pinta solo lo suyo: al
+    cliente, contestar la revision; a la casa, validar y despues pagar. Lo de
+    la casa nunca se le enseña atenuado al cliente -- para el no es un candado,
+    es ruido.
+    {% endcomment %}
     <div class="revision">
       {% if p.documentos.all %}
       <a class="btn btn-sm" href="{% url 'pedimento_zip' p.pk %}">
@@ -455,18 +483,62 @@
       </a>
       {% endif %}
       {% if p.estado == 'EN_REVISION' %}
+        {% if puede_editar %}
         <span class="ya-salio">
           {% trans "Under customer review since" %} {{ p.enviado_a_revision_en|date:"d/m H:i" }}
         </span>
-      {% elif p.estado == 'APROBADO' or p.estado == 'VALIDADO' or p.estado == 'PAGADO' %}
-        <span class="ya-salio">{{ p.get_estado_display }}</span>
-      {% elif p.listo_para_revision %}
+        {% else %}
+        <div class="contestar">
+          <p>{% trans "Check the pedimento against your invoice. Approving it authorizes us to validate it and pay its taxes." %}</p>
+          <form method="post" action="{% url 'pedimento_aprobar' p.pk %}" style="margin:0">
+            {% csrf_token %}
+            <button class="btn btn-p" type="submit">✓ {% trans "Approve this pedimento" %}</button>
+          </form>
+          <details>
+            <summary class="btn">{% trans "Request corrections" %}</summary>
+            <form method="post" action="{% url 'pedimento_pedir_correcciones' p.pk %}">
+              {% csrf_token %}
+              <textarea name="correcciones" rows="3" required
+                        placeholder="{% trans "What has to change? E.g. the value of PO 4500123 is 1,250 USD, not 1,520." %}"></textarea>
+              <button class="btn" type="submit">{% trans "Send corrections" %}</button>
+            </form>
+          </details>
+        </div>
+        {% endif %}
+      {% elif p.estado == 'APROBADO' %}
+        <span class="ya-salio">
+          {% trans "Approved" %}{% if p.revisado_por %} {% trans "by" %} {{ p.revisado_por.get_full_name|default:p.revisado_por.username }}{% endif %} · {{ p.aprobado_en|date:"d/m H:i" }}
+        </span>
         {% if puede_editar %}
+        <form method="post" action="{% url 'pedimento_marcar_validado' p.pk %}" style="margin:0">
+          {% csrf_token %}
+          <button class="btn btn-p" type="submit">{% trans "Mark as validated" %}</button>
+        </form>
+        {% endif %}
+      {% elif p.estado == 'VALIDADO' %}
+        <span class="ya-salio">{% trans "Validated" %} · {{ p.validado_en|date:"d/m H:i" }}</span>
+        {% if puede_editar %}
+          {% if p.tiene_pagado %}
+          <form method="post" action="{% url 'pedimento_marcar_pagado' p.pk %}" style="margin:0">
+            {% csrf_token %}
+            <button class="btn btn-p" type="submit">{% trans "Mark as paid" %}</button>
+          </form>
+          {% else %}
+          <span class="motivo">{% trans "Missing: the paid pedimento, in its slot below" %}</span>
+          <button class="btn btn-off" type="button" disabled>🔒 {% trans "Mark as paid" %}</button>
+          {% endif %}
+        {% endif %}
+      {% elif p.estado == 'PAGADO' %}
+        <span class="ya-salio">{% trans "Paid on" %} {{ p.pagado_en|date:"d/m H:i" }}</span>
+      {% elif not puede_editar %}
+        <span class="soft" style="font-size:12px">
+          {% if p.estado == 'CORRECCIONES' %}{% trans "We are making the corrections you asked for." %}{% else %}{% trans "We are preparing this pedimento. You will review it here." %}{% endif %}
+        </span>
+      {% elif p.listo_para_revision %}
         <form method="post" action="{% url 'pedimento_enviar_a_revision' p.pk %}" style="margin:0">
           {% csrf_token %}
           <button class="btn btn-p" type="submit">{% trans "Send to review" %}</button>
         </form>
-        {% endif %}
       {% else %}
         <span class="motivo">
           {% trans "Missing:" %}

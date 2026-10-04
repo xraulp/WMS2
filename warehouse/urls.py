@@ -129,6 +129,15 @@ urlpatterns = [
     path('pedimentos/<int:pk>/zip/', views.pedimento_zip, name='pedimento_zip'),
     path('pedimentos/<int:pk>/review/', views.pedimento_enviar_a_revision,
          name='pedimento_enviar_a_revision'),
+    # Lo que sigue a la revision: contesta el cliente, valida y paga la casa.
+    path('pedimentos/<int:pk>/approve/', views.pedimento_aprobar,
+         name='pedimento_aprobar'),
+    path('pedimentos/<int:pk>/corrections/', views.pedimento_pedir_correcciones,
+         name='pedimento_pedir_correcciones'),
+    path('pedimentos/<int:pk>/validated/', views.pedimento_marcar_validado,
+         name='pedimento_marcar_validado'),
+    path('pedimentos/<int:pk>/paid/', views.pedimento_marcar_pagado,
+         name='pedimento_marcar_pagado'),
     # La factura comercial es del embarque, no del pedimento, pero se marca y
     # se sube desde esta pantalla porque es aqui donde estorba que falte.
     path('operations/<int:pk>/invoice/mark/', views.operacion_marcar_factura,

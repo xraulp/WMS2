@@ -848,6 +848,215 @@ class ExpedienteDelPedimentoTests(BaseDeAlmacen):
         self.assertEqual(respuesta.status_code, 302)
 
 
+class ElClienteContestaLaRevisionTests(BaseDeAlmacen):
+    """
+    Lo que pasa despues de enviar a revision.
+
+    El cliente aprueba o pide correcciones; la casa valida y despues paga. Cada
+    tramo tiene un solo dueño y ninguno se salta, porque la orden de carga
+    confia en que PAGADO quiere decir que paso por todos.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.lopez = User.objects.create_user('lopez', password='x',
+                                             first_name='Ana', last_name='López')
+        UserProfile.objects.create(user=cls.lopez, tenant=cls.tenant,
+                                   role='customer', customer=cls.cliente)
+        cls.otro_cliente = Catalog.objects.create(
+            category='CUSTOMER', name='Otro', tenant=cls.tenant)
+        cls.ajeno = User.objects.create_user('ajeno', password='x')
+        UserProfile.objects.create(user=cls.ajeno, tenant=cls.tenant,
+                                   role='customer', customer=cls.otro_cliente)
+
+    def setUp(self):
+        self.entrada = self.operacion('ED261004-0001', bundle_qty=3)
+        self.ped = Pedimento.objects.create(
+            tenant=self.tenant, customer=self.cliente, orden=1,
+            ped_aduana='24', ped_patente='1515', ped_consecutivo='6005000',
+            estado=Pedimento.EN_REVISION, created_by=self.jefa)
+        PedimentoBundle.objects.create(pedimento=self.ped,
+                                       operation=self.entrada, bultos=3)
+
+    def como(self, usuario):
+        self.client.force_login(usuario)
+
+    def post(self, accion, datos=None):
+        return self.client.post('/pedimentos/%d/%s/' % (self.ped.pk, accion),
+                                datos or {})
+
+    def estado(self):
+        self.ped.refresh_from_db()
+        return self.ped.estado
+
+    def subir_pagado(self):
+        PedimentoDocument.objects.create(
+            pedimento=self.ped, ranura=PedimentoDocument.PEDIMENTO_PAGADO,
+            original_name='pagado.pdf',
+            file=SimpleUploadedFile('pagado.pdf', b'%PDF-1.4 x',
+                                    content_type='application/pdf'))
+
+    def pantalla(self):
+        return self.client.get('/pedimentos/', {'customer': self.cliente.pk})
+
+    # -- Aprobar -------------------------------------------------------------
+
+    def test_el_cliente_aprueba(self):
+        self.como(self.lopez)
+        respuesta = self.post('approve')
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(self.estado(), Pedimento.APROBADO)
+        self.assertEqual(self.ped.revisado_por, self.lopez)
+        self.assertIsNotNone(self.ped.aprobado_en)
+
+    def test_la_casa_no_puede_aprobar_por_el(self):
+        # La aprobacion es la firma del cliente para pagar con su dinero.
+        self.como(self.jefa)
+        self.assertEqual(self.post('approve').status_code, 404)
+        self.assertEqual(self.estado(), Pedimento.EN_REVISION)
+
+    def test_otro_cliente_no_puede_aprobarlo(self):
+        self.como(self.ajeno)
+        self.assertEqual(self.post('approve').status_code, 404)
+        self.assertEqual(self.estado(), Pedimento.EN_REVISION)
+
+    def test_no_se_aprueba_lo_que_no_esta_en_revision(self):
+        self.ped.estado = Pedimento.BORRADOR
+        self.ped.save()
+        self.como(self.lopez)
+        self.assertEqual(self.post('approve').status_code, 422)
+        self.assertEqual(self.estado(), Pedimento.BORRADOR)
+
+    def test_aprobado_la_hoja_dice_listo_para_pago(self):
+        from .models import RenglonDeImpuestos
+        renglon = RenglonDeImpuestos.objects.create(
+            tenant=self.tenant, customer=self.cliente, operation=self.entrada)
+        self.como(self.lopez)
+        self.post('approve')
+        self.assertEqual(renglon.status, RenglonDeImpuestos.LISTO_PAGO)
+
+    # -- Pedir correcciones --------------------------------------------------
+
+    def test_pedir_correcciones_sin_decir_que_no_vale(self):
+        self.como(self.lopez)
+        self.assertEqual(self.post('corrections', {'correcciones': '   '}).status_code, 422)
+        self.assertEqual(self.estado(), Pedimento.EN_REVISION)
+
+    def test_las_correcciones_le_llegan_a_la_casa(self):
+        self.como(self.lopez)
+        self.post('corrections', {'correcciones': 'El valor del pedido 4500123 es 1,250.'})
+        self.assertEqual(self.estado(), Pedimento.CORRECCIONES)
+        self.assertTrue(self.ped.se_puede_armar)
+        self.como(self.jefa)
+        respuesta = self.pantalla()
+        self.assertContains(respuesta, 'El valor del pedido 4500123 es 1,250.')
+        self.assertContains(respuesta, 'Ana López')
+
+    def test_volver_a_enviarlo_borra_las_correcciones_viejas(self):
+        self.ped.estado = Pedimento.CORRECCIONES
+        self.ped.correcciones_pedidas = 'el valor'
+        self.ped.save()
+        for ranura in PedimentoDocument.RANURAS_PARA_REVISION:
+            PedimentoDocument.objects.create(
+                pedimento=self.ped, ranura=ranura, original_name='x.pdf',
+                file=SimpleUploadedFile('x.pdf', b'%PDF-1.4 x'))
+        self.como(self.jefa)
+        self.post('review')
+        self.assertEqual(self.estado(), Pedimento.EN_REVISION)
+        self.assertEqual(self.ped.correcciones_pedidas, '')
+
+    # -- Validar y pagar -----------------------------------------------------
+
+    def test_la_casa_valida_lo_aprobado_y_se_sella_el_año(self):
+        from django.utils import timezone
+        self.ped.estado = Pedimento.APROBADO
+        self.ped.save()
+        self.como(self.jefa)
+        self.post('validated')
+        self.assertEqual(self.estado(), Pedimento.VALIDADO)
+        self.assertEqual(self.ped.anio_validacion,
+                         timezone.localdate().strftime('%y'))
+        self.assertTrue(self.ped.numero_completo.startswith(
+            timezone.localdate().strftime('%y')))
+
+    def test_no_se_valida_sin_la_aprobacion(self):
+        self.como(self.jefa)
+        self.assertEqual(self.post('validated').status_code, 422)
+        self.assertEqual(self.estado(), Pedimento.EN_REVISION)
+
+    def test_no_se_paga_sin_el_pedimento_pagado(self):
+        self.ped.estado = Pedimento.VALIDADO
+        self.ped.save()
+        self.como(self.jefa)
+        self.assertEqual(self.post('paid').status_code, 422)
+        self.assertEqual(self.estado(), Pedimento.VALIDADO)
+        self.subir_pagado()
+        self.post('paid')
+        self.assertEqual(self.estado(), Pedimento.PAGADO)
+        self.assertIsNotNone(self.ped.pagado_en)
+
+    def test_no_se_salta_de_aprobado_a_pagado(self):
+        self.ped.estado = Pedimento.APROBADO
+        self.ped.save()
+        self.subir_pagado()
+        self.como(self.jefa)
+        self.assertEqual(self.post('paid').status_code, 422)
+        self.assertEqual(self.estado(), Pedimento.APROBADO)
+
+    def test_el_cliente_no_valida_ni_paga(self):
+        self.ped.estado = Pedimento.APROBADO
+        self.ped.save()
+        self.como(self.lopez)
+        self.assertEqual(self.post('validated').status_code, 404)
+        self.assertEqual(self.post('paid').status_code, 404)
+        self.assertEqual(self.estado(), Pedimento.APROBADO)
+
+    # -- Lo que pinta la pantalla --------------------------------------------
+
+    def test_al_cliente_se_le_pinta_aprobar(self):
+        self.como(self.lopez)
+        respuesta = self.pantalla()
+        self.assertContains(respuesta, '/pedimentos/%d/approve/' % self.ped.pk)
+        self.assertContains(respuesta, '/pedimentos/%d/corrections/' % self.ped.pk)
+
+    def test_a_la_casa_no(self):
+        self.como(self.jefa)
+        respuesta = self.pantalla()
+        self.assertNotContains(respuesta, '/pedimentos/%d/approve/' % self.ped.pk)
+        self.assertContains(respuesta, 'Under customer review since')
+
+    def test_al_cliente_no_se_le_enseña_el_candado_de_la_casa(self):
+        # Lo que le falta a un borrador es trabajo de la casa; al cliente no le
+        # sirve ver un boton bloqueado que no es suyo.
+        self.ped.estado = Pedimento.BORRADOR
+        self.ped.save()
+        self.como(self.lopez)
+        respuesta = self.pantalla()
+        self.assertNotContains(respuesta, 'Send to review')
+        self.assertContains(respuesta, 'We are preparing this pedimento')
+
+    def test_validado_sin_archivo_el_boton_dice_que_falta(self):
+        self.ped.estado = Pedimento.VALIDADO
+        self.ped.save()
+        self.como(self.jefa)
+        self.assertContains(self.pantalla(), 'Missing: the paid pedimento')
+        self.subir_pagado()
+        self.assertContains(self.pantalla(), '/pedimentos/%d/paid/' % self.ped.pk)
+
+    def test_la_pantalla_sale_en_español(self):
+        UserProfile.objects.filter(user=self.lopez).update(language='es')
+        self.como(self.lopez)
+        respuesta = self.pantalla()
+        for frase in ('Aprobar este pedimento', 'Pedir correcciones',
+                      'En revisión del cliente', 'Embarques en bodega',
+                      'Proforma del pedimento'):
+            self.assertContains(respuesta, frase)
+        for frase in ('Approve this pedimento', 'Request corrections',
+                      'Shipments in warehouse', 'Pedimento draft'):
+            self.assertNotContains(respuesta, frase)
+
+
 class ZipDelPedimentoTests(BaseDeAlmacen):
     """
     El expediente entero en un archivo.

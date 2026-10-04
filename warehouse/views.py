@@ -4670,6 +4670,7 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None):
 
     lista = (Pedimento.objects
              .filter(tenant=tenant, customer=cliente)
+             .select_related('revisado_por')
              .prefetch_related('renglones__operation__shipper',
                                'renglones__operation__bundle_type')
              .order_by('orden'))
@@ -4728,6 +4729,9 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None):
         ped.editable = ped.se_puede_armar
         ped.listo_para_revision = ped.puede_enviarse_a_revision
         ped.sin_factura = ped.operaciones_sin_factura
+        # Lo que deja marcarlo pagado. Se lee de los cajones que ya estan en
+        # la mano en vez de preguntarle otra vez a la base.
+        ped.tiene_pagado = bool(cajones.get(PedimentoDocument.PEDIMENTO_PAGADO))
         # Las fotos que se pueden elegir: las del expediente de sus propias
         # operaciones, que es donde ya estan.
         if ped.necesita_fotos_de_series:
@@ -5220,6 +5224,83 @@ def pedimento_enviar_a_revision(request, pk):
             _('It cannot go to review yet — missing: %(faltan)s.')
             % {'faltan': ', '.join(str(f) for f in faltan)} if faltan else
             _('This pedimento is not in a state that can be sent to review.'))
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+def _pedimento_del_cliente(request, pk):
+    """
+    El pedimento `pk` si quien pide es el cliente dueño; si no, 404.
+
+    Contestar la revision es del cliente y solo del cliente: la aprobacion es
+    su firma para que se pague con su dinero. Si la casa pudiera pulsarla, el
+    boton dejaria de significar eso.
+    """
+    profile = get_profile(request.user)
+    if not profile.is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+    if ped.customer_id != getattr(profile.customer, 'pk', None):
+        raise Http404
+    return ped
+
+
+@login_required
+@require_POST
+def pedimento_aprobar(request, pk):
+    """El OK del cliente: que se valide y se pague."""
+    ped = _pedimento_del_cliente(request, pk)
+    if not ped.aprobar(request.user):
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('%(ped)s is not waiting for your review.') % {'ped': ped.etiqueta})
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+@login_required
+@require_POST
+def pedimento_pedir_correcciones(request, pk):
+    """El cliente lo devuelve, diciendo que hay que cambiar."""
+    ped = _pedimento_del_cliente(request, pk)
+    if ped.estado != Pedimento.EN_REVISION:
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('%(ped)s is not waiting for your review.') % {'ped': ped.etiqueta})
+    if not ped.pedir_correcciones(request.user, request.POST.get('correcciones')):
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('Write what has to be corrected in %(ped)s.') % {'ped': ped.etiqueta})
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+@login_required
+@require_POST
+def pedimento_marcar_validado(request, pk):
+    """La casa apunta que el agente aduanal ya lo valido."""
+    if get_profile(request.user).is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+    if not ped.marcar_validado():
+        return _panel_con_error(
+            request, ped.customer_id,
+            _('%(ped)s can only be validated after the customer approves it.')
+            % {'ped': ped.etiqueta})
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+
+
+@login_required
+@require_POST
+def pedimento_marcar_pagado(request, pk):
+    """La casa apunta que ya se pago, con el pedimento pagado en su ranura."""
+    if get_profile(request.user).is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+    if not ped.marcar_pagado():
+        if ped.estado != Pedimento.VALIDADO:
+            mensaje = _('%(ped)s has to be validated before it is paid.')
+        else:
+            mensaje = _('Upload the paid pedimento to %(ped)s first.')
+        return _panel_con_error(request, ped.customer_id,
+                                mensaje % {'ped': ped.etiqueta})
     return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
 
 

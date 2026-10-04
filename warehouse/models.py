@@ -2021,6 +2021,11 @@ class Pedimento(models.Model):
     # Lo que el cliente escribio al pedir correcciones. Se guarda el ultimo y
     # no el historial: quien lo lee esta arreglando el pedimento de ahora.
     correcciones_pedidas = models.TextField(blank=True, default='')
+    # Quien contesto la revision, aprobando o pidiendo correcciones. La
+    # aprobacion es la firma del cliente para que se valide y se pague con su
+    # dinero, asi que tiene que quedar a nombre de alguien y no solo con fecha.
+    revisado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                     blank=True, related_name='pedimentos_revisados')
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2199,6 +2204,77 @@ class Pedimento(models.Model):
         self.correcciones_pedidas = ''
         self.save(update_fields=['estado', 'enviado_a_revision_en',
                                  'correcciones_pedidas', 'updated_at'])
+        return True
+
+    # ── La respuesta del cliente, y lo que hace la casa despues ──────────────
+    #
+    # Cada tramo tiene un solo dueno y un solo paso de salida: el cliente
+    # contesta la revision, la casa valida y la casa paga. Ninguno se salta al
+    # siguiente, porque la orden de carga confia en que PAGADO quiere decir que
+    # paso por todos.
+
+    def aprobar(self, usuario):
+        """El OK del cliente para validar y pagar. Devuelve si se pudo."""
+        if self.estado != self.EN_REVISION:
+            return False
+        self.estado = self.APROBADO
+        self.aprobado_en = timezone.now()
+        self.revisado_por = usuario
+        self.save(update_fields=['estado', 'aprobado_en', 'revisado_por',
+                                 'updated_at'])
+        return True
+
+    def pedir_correcciones(self, usuario, texto):
+        """
+        El cliente devuelve el pedimento con lo que hay que cambiar.
+
+        Sin texto no se acepta: un "esta mal" sin decir que obliga a una
+        llamada para preguntar, y la llamada es justo lo que esto evita.
+        """
+        texto = (texto or '').strip()
+        if self.estado != self.EN_REVISION or not texto:
+            return False
+        self.estado = self.CORRECCIONES
+        self.correcciones_pedidas = texto
+        self.revisado_por = usuario
+        self.save(update_fields=['estado', 'correcciones_pedidas',
+                                 'revisado_por', 'updated_at'])
+        return True
+
+    def marcar_validado(self):
+        """
+        El agente aduanal valido el pedimento.
+
+        Aqui se sellan los dos digitos del ano de validacion, que completan los
+        quince del numero y no se pueden saber antes.
+        """
+        if self.estado != self.APROBADO:
+            return False
+        self.estado = self.VALIDADO
+        self.validado_en = timezone.now()
+        self.anio_validacion = timezone.localdate().strftime('%y')
+        self.save(update_fields=['estado', 'validado_en', 'anio_validacion',
+                                 'updated_at'])
+        return True
+
+    @property
+    def tiene_pedimento_pagado(self):
+        return self.documentos.filter(
+            ranura=PedimentoDocument.PEDIMENTO_PAGADO).exists()
+
+    def marcar_pagado(self):
+        """
+        Pagado, con el pedimento pagado en su ranura.
+
+        Se exige el archivo porque PAGADO es lo que deja emitir la orden de
+        carga: de aqui en adelante el camion se carga confiando en este estado,
+        y en la aduana lo que se ensena es el papel, no el estado.
+        """
+        if self.estado != self.VALIDADO or not self.tiene_pedimento_pagado:
+            return False
+        self.estado = self.PAGADO
+        self.pagado_en = timezone.now()
+        self.save(update_fields=['estado', 'pagado_en', 'updated_at'])
         return True
 
     # -- El candado ----------------------------------------------------------
