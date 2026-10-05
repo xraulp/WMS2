@@ -1252,12 +1252,52 @@ class AvisoDeAprobacionTests(BaseDeAlmacen):
         self.assertEqual(self.ped.estado, Pedimento.APROBADO)
         self.assertEqual(self.bitacora().get().status, 'FAILED')
 
-    def test_pedir_correcciones_no_lo_manda(self):
-        from django.core import mail
+    def test_pedir_correcciones_no_manda_el_de_aprobado(self):
         self.client.post('/pedimentos/%d/corrections/' % self.ped.pk,
                          {'correcciones': 'el valor'})
-        self.assertEqual(len(mail.outbox), 0)
         self.assertFalse(self.bitacora().exists())
+
+    # -- Las correcciones ----------------------------------------------------
+
+    def pedir(self, texto='El valor del pedido 4500777 es 1,250 USD, no 1,520.'):
+        return self.client.post('/pedimentos/%d/corrections/' % self.ped.pk,
+                                {'correcciones': texto})
+
+    def correcciones(self):
+        from .models import NotificationLog
+        return NotificationLog.objects.filter(event='PEDIMENTO_CORRECTION')
+
+    def test_las_correcciones_le_llegan_a_la_casa_con_el_texto(self):
+        from django.core import mail
+        self.pedir()
+        self.assertEqual(len(mail.outbox), 1)
+        correo = mail.outbox[0]
+        self.assertEqual(correo.to, ['jefa@dyser.com'])
+        self.assertTrue(correo.subject.startswith(
+            'Corrections requested | Acme | PO 4500777'))
+        self.assertIn('El valor del pedido 4500777 es 1,250 USD, no 1,520.', correo.body)
+        self.assertIn('Ana López · Acme', correo.body)
+        self.assertEqual(self.correcciones().get().status, 'SENT')
+
+    def test_las_correcciones_en_el_idioma_de_cada_operador(self):
+        from django.core import mail
+        UserProfile.objects.filter(user=self.jefa).update(language='es')
+        self.pedir()
+        correo = mail.outbox[0]
+        self.assertTrue(correo.subject.startswith('Correcciones pedidas'))
+        self.assertIn('lo devolvió con estas correcciones', correo.body)
+
+    def test_el_texto_del_cliente_no_se_cuela_como_html(self):
+        from django.core import mail
+        self.pedir('<script>alert(1)</script> el valor')
+        self.assertNotIn('<script>', mail.outbox[0].body)
+        self.assertIn('&lt;script&gt;', mail.outbox[0].body)
+
+    def test_sin_texto_no_se_avisa(self):
+        from django.core import mail
+        self.pedir('   ')
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(self.correcciones().exists())
 
 
 class ZipDelPedimentoTests(BaseDeAlmacen):

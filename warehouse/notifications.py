@@ -42,6 +42,7 @@ EVENT_MANUAL    = 'MANUAL'
 EVENT_MESSAGE   = 'CHAT_MESSAGE'
 EVENT_PEDIMENTO_REVIEW = 'PEDIMENTO_REVIEW'
 EVENT_PEDIMENTO_APPROVED = 'PEDIMENTO_APPROVED'
+EVENT_PEDIMENTO_CORRECTIONS = 'PEDIMENTO_CORRECTION'
 
 # Estados
 SENT    = 'SENT'
@@ -953,16 +954,11 @@ def avisar_pedimento_en_revision(pedimento, triggered_by=None):
     return True, None
 
 
+# ── LA RESPUESTA DEL CLIENTE, A LA CASA ───────────────────────────────────────
 
-
-@_never_breaks(lambda e: (False, str(e)))
-def avisar_pedimento_aprobado(pedimento, triggered_by=None):
+def _avisar_a_la_casa(pedimento, event, plantilla, titulo, triggered_by=None):
     """
-    Le avisa a la casa de que el cliente aprobo un pedimento.
-
-    Es la señal para validarlo y pagarlo. Sin el aviso, la aprobacion se
-    quedaba en la pantalla esperando a que alguien de la casa pasara a mirar,
-    y el tramo que el cliente ya cerro volvia a parar el camion.
+    Le cuenta a la casa lo que el cliente contesto sobre un pedimento.
 
     Va a los mismos que reciben los mensajes del chat -- los operadores activos
     con correo -- y por el mismo motivo: contesta quien este en el turno.
@@ -970,6 +966,9 @@ def avisar_pedimento_aprobado(pedimento, triggered_by=None):
     Cada uno lo recibe en el idioma que eligio en su perfil: sale un correo por
     idioma. El de la casa es el ingles, y mandarselo asi a quien trabaja en
     español seria escribirle en un idioma que no eligio.
+
+    `titulo` es la primera palabra del asunto, sin traducir: se traduce aqui,
+    una vez por idioma.
 
     Devuelve `(enviado, error)`: enviado si salio al menos uno, y el primer
     error si alguno fallo.
@@ -989,7 +988,7 @@ def avisar_pedimento_aprobado(pedimento, triggered_by=None):
         if po and po not in pedidos:
             pedidos.append(po)
 
-    # Quien firmo, con nombre si lo tiene. La aprobacion es del cliente, pero
+    # Quien contesto, con nombre si lo tiene. La respuesta es del cliente, pero
     # la da una persona, y si algo no cuadra es a ella a quien se llama.
     firmante = pedimento.revisado_por
     quien = ''
@@ -999,12 +998,12 @@ def avisar_pedimento_aprobado(pedimento, triggered_by=None):
 
     def componer(idioma):
         with en_idioma(idioma):
-            partes = [_('Pedimento approved'), nombre_cliente]
+            partes = [_(titulo), nombre_cliente]
             if pedidos:
                 partes.append('PO ' + ', '.join(pedidos))
             partes.append(pedimento.etiqueta)
             subject = ' | '.join(p for p in partes if p)
-            cuerpo = render_to_string('warehouse/email/pedimento_aprobado_email.html', {
+            cuerpo = render_to_string(plantilla, {
                 'pedimento':   pedimento,
                 'renglones':   renglones,
                 'tenant_name': empresa,
@@ -1018,7 +1017,7 @@ def avisar_pedimento_aprobado(pedimento, triggered_by=None):
 
     if not por_idioma:
         subject, _cuerpo = componer('')
-        log_notification(None, customer, EMAIL, EVENT_PEDIMENTO_APPROVED, SKIPPED,
+        log_notification(None, customer, EMAIL, event, SKIPPED,
                          subject=subject, detail='no_recipient',
                          triggered_by=triggered_by, tenant=tenant)
         return False, 'no_email'
@@ -1031,11 +1030,40 @@ def avisar_pedimento_aprobado(pedimento, triggered_by=None):
                               from_email=de, reply_to=responder)
         correo.content_subtype = 'html'
         try:
-            enviar_y_registrar(correo, EVENT_PEDIMENTO_APPROVED, tenant=tenant,
-                               customer=customer, triggered_by=triggered_by)
+            enviar_y_registrar(correo, event, tenant=tenant, customer=customer,
+                               triggered_by=triggered_by)
             enviado = True
         except Exception as e:
-            logger.warning('Fallo el aviso de aprobacion de %s: %s',
+            logger.warning('Fallo el aviso %s de %s: %s', event,
                            pedimento.etiqueta, e)
             primer_error = primer_error or str(e)
     return enviado, primer_error
+
+
+@_never_breaks(lambda e: (False, str(e)))
+def avisar_pedimento_aprobado(pedimento, triggered_by=None):
+    """
+    Le avisa a la casa de que el cliente aprobo un pedimento.
+
+    Es la señal para validarlo y pagarlo. Sin el aviso, la aprobacion se
+    quedaba en la pantalla esperando a que alguien de la casa pasara a mirar,
+    y el tramo que el cliente ya cerro volvia a parar el camion.
+    """
+    return _avisar_a_la_casa(
+        pedimento, EVENT_PEDIMENTO_APPROVED,
+        'warehouse/email/pedimento_aprobado_email.html',
+        'Pedimento approved', triggered_by=triggered_by)
+
+
+@_never_breaks(lambda e: (False, str(e)))
+def avisar_correcciones_pedidas(pedimento, triggered_by=None):
+    """
+    Le avisa a la casa de que el cliente devolvio un pedimento con correcciones.
+
+    El pedimento vuelve a estar en manos de la casa, y el correo trae lo que el
+    cliente escribio: quien lo lee puede ponerse a corregir sin abrir nada.
+    """
+    return _avisar_a_la_casa(
+        pedimento, EVENT_PEDIMENTO_CORRECTIONS,
+        'warehouse/email/pedimento_correcciones_email.html',
+        'Corrections requested', triggered_by=triggered_by)

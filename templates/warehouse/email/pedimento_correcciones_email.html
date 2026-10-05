@@ -1,0 +1,68 @@
+{% load i18n %}
+<!DOCTYPE html>
+{% get_current_language as idioma %}<html lang="{{ idioma }}">
+<head>
+  <meta charset="UTF-8"/>
+</head>
+<body style="margin:0; padding:0; background:#f8fafc; font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+  {% comment %}
+  El aviso a la casa de que un cliente devolvio un pedimento con correcciones.
+
+  Lo importante es lo que el cliente escribio, asi que va arriba y destacado,
+  en el ambar de las correcciones de la pantalla: quien lo lee puede ponerse a
+  corregir sin abrir nada. El boton lleva a los pedimentos de ese cliente.
+  {% endcomment %}
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;">
+    <tr>
+      <td align="center" style="padding:20px;">
+        <table width="480" cellpadding="0" cellspacing="0" border="0"
+               style="width:480px; max-width:100%; background:#fff; border-radius:12px; box-shadow:0 4px 24px rgba(0,0,0,.08);">
+          <tr>
+            <td style="padding:0;">
+
+              <div style="background:#0f172a; padding:24px 28px; border-radius:12px 12px 0 0;">
+                <h1 style="color:#fff; font-size:18px; margin:0 0 3px;">{{ cliente }}</h1>
+                <p style="color:#cbd5e1; font-size:12px; margin:0;">{% trans "Requested corrections to a pedimento" %}</p>
+                <span style="display:inline-block; padding:4px 14px; border-radius:99px; font-size:12px;
+                             font-weight:700; letter-spacing:.06em; margin-top:10px; color:#fff; background:#d97706;">
+                  {{ pedimento.etiqueta }}
+                </span>
+              </div>
+
+              <div style="padding:28px;">
+                <div style="font-size:14px; line-height:1.7; color:#334155; margin-bottom:14px;">
+                  {% blocktrans with quien=quien %}<b>{{ quien }}</b> sent it back with these corrections:{% endblocktrans %}
+                </div>
+
+                <div style="border-left:3px solid #f59e0b; background:#fffbeb; padding:12px 16px;
+                            border-radius:0 8px 8px 0; margin-bottom:20px; font-size:14px;
+                            line-height:1.6; color:#92400e; white-space:pre-wrap;">{{ pedimento.correcciones_pedidas }}</div>
+
+                {% include "warehouse/email/pedimento_renglones.html" %}
+
+                <div style="text-align:center; margin-bottom:8px;">
+                  <a href="{{ url }}"
+                     style="display:inline-block; padding:11px 24px; background:#0ea5e9; color:#fff;
+                            border-radius:6px; text-decoration:none; font-size:14px; font-weight:600;">
+                    {% trans "Open the pedimento" %}
+                  </a>
+                </div>
+
+                <div style="font-size:12px; line-height:1.6; color:#94a3b8; margin-top:18px; text-align:center;">
+                  {% trans "Once corrected, send it to review again from the same screen." %}
+                </div>
+              </div>
+
+              <div style="padding:16px 28px; background:#f8fafc; border-top:1px solid #e2e8f0;
+                          font-size:11px; color:#94a3b8; text-align:center;">
+                {% blocktrans with empresa=tenant_name id=pedimento.etiqueta %}Automatic message from the Warehouse Management System of {{ empresa }} · {{ id }}{% endblocktrans %}
+              </div>
+
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -5280,6 +5280,10 @@ def pedimento_pedir_correcciones(request, pk):
         return _panel_con_error(
             request, ped.customer_id,
             _('Write what has to be corrected in %(ped)s.') % {'ped': ped.etiqueta})
+    # La casa se entera por correo, con lo que hay que corregir dentro.
+    notifications.en_segundo_plano(
+        notifications.avisar_correcciones_pedidas, ped,
+        triggered_by=request.user)
     return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
 
 

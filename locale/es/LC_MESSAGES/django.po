@@ -3477,3 +3477,13 @@ msgstr "Ya se puede validar y pagar sus impuestos."
 
 msgid "Open the pedimento"
 msgstr "Abrir el pedimento"
+
+# El aviso a la casa cuando el cliente pide correcciones.
+msgid "Requested corrections to a pedimento"
+msgstr "Pidió correcciones a un pedimento"
+
+msgid "<b>%(quien)s</b> sent it back with these corrections:"
+msgstr "<b>%(quien)s</b> lo devolvió con estas correcciones:"
+
+msgid "Once corrected, send it to review again from the same screen."
+msgstr "Ya corregido, vuelve a enviarlo a revisión desde la misma pantalla."
