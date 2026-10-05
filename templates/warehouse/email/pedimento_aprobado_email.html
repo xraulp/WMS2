@@ -6,14 +6,11 @@
 </head>
 <body style="margin:0; padding:0; background:#f8fafc; font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
   {% comment %}
-  El aviso de que hay un pedimento esperando la revision del cliente.
+  El aviso a la casa de que un cliente aprobo un pedimento.
 
-  La cabecera va en el oscuro de la barra de la aplicacion y no en el rojo de
-  los otros correos: ese rojo es la marca de una empresa, y este aviso lo
-  manda cualquiera de ellas a sus clientes.
-
-  El numero de pedido va delante en cada renglon: es con lo que el cliente
-  reconoce su embarque. La entrada de bodega va de dato secundario.
+  Es la señal para validarlo y pagarlo, asi que dice quien lo aprobo y cuando
+  -- la aprobacion es la firma del cliente --, y el boton lleva directo a los
+  pedimentos de ese cliente, donde esta el boton de marcarlo como validado.
   {% endcomment %}
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;">
     <tr>
@@ -24,18 +21,18 @@
             <td style="padding:0;">
 
               <div style="background:#0f172a; padding:24px 28px; border-radius:12px 12px 0 0;">
-                <h1 style="color:#fff; font-size:18px; margin:0 0 3px;">{{ tenant_name }}</h1>
-                <p style="color:#cbd5e1; font-size:12px; margin:0;">{% trans "You have a pedimento to review" %}</p>
+                <h1 style="color:#fff; font-size:18px; margin:0 0 3px;">{{ cliente }}</h1>
+                <p style="color:#cbd5e1; font-size:12px; margin:0;">{% trans "Approved a pedimento" %}</p>
                 <span style="display:inline-block; padding:4px 14px; border-radius:99px; font-size:12px;
-                             font-weight:700; letter-spacing:.06em; margin-top:10px; color:#fff; background:#0ea5e9;">
-                  {{ pedimento.etiqueta }}
+                             font-weight:700; letter-spacing:.06em; margin-top:10px; color:#fff; background:#10b981;">
+                  ✓ {{ pedimento.etiqueta }}
                 </span>
               </div>
 
               <div style="padding:28px;">
                 <div style="font-size:14px; line-height:1.7; color:#334155; margin-bottom:18px;">
-                  {% blocktrans with cliente=cliente %}<b>{{ cliente }}</b>, this pedimento is ready for your review.{% endblocktrans %}
-                  {% trans "Check the pedimento against your invoice. Approving it authorizes us to validate it and pay its taxes." %}
+                  {% blocktrans with quien=quien fecha=pedimento.aprobado_en|date:"d/m/Y H:i" %}<b>{{ quien }}</b> approved it on {{ fecha }}.{% endblocktrans %}
+                  {% trans "It can now be validated and its taxes paid." %}
                 </div>
 
                 {% include "warehouse/email/pedimento_renglones.html" %}
@@ -44,12 +41,8 @@
                   <a href="{{ url }}"
                      style="display:inline-block; padding:11px 24px; background:#0ea5e9; color:#fff;
                             border-radius:6px; text-decoration:none; font-size:14px; font-weight:600;">
-                    {% trans "Review the pedimento" %}
+                    {% trans "Open the pedimento" %}
                   </a>
-                </div>
-
-                <div style="font-size:12px; line-height:1.6; color:#94a3b8; margin-top:18px; text-align:center;">
-                  {% trans "If something does not match, request corrections from the same screen and tell us what has to change." %}
                 </div>
               </div>
 

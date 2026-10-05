@@ -3461,3 +3461,19 @@ msgstr "Revisar el pedimento"
 
 msgid "If something does not match, request corrections from the same screen and tell us what has to change."
 msgstr "Si algo no cuadra, pide correcciones desde la misma pantalla y dinos qué hay que cambiar."
+
+# El aviso a la casa cuando el cliente aprueba un pedimento.
+msgid "Pedimento approved"
+msgstr "Pedimento aprobado"
+
+msgid "Approved a pedimento"
+msgstr "Aprobó un pedimento"
+
+msgid "<b>%(quien)s</b> approved it on %(fecha)s."
+msgstr "<b>%(quien)s</b> lo aprobó el %(fecha)s."
+
+msgid "It can now be validated and its taxes paid."
+msgstr "Ya se puede validar y pagar sus impuestos."
+
+msgid "Open the pedimento"
+msgstr "Abrir el pedimento"

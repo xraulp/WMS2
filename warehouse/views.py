@@ -5260,6 +5260,10 @@ def pedimento_aprobar(request, pk):
         return _panel_con_error(
             request, ped.customer_id,
             _('%(ped)s is not waiting for your review.') % {'ped': ped.etiqueta})
+    # La casa se entera por correo: es su señal para validar y pagar.
+    notifications.en_segundo_plano(
+        notifications.avisar_pedimento_aprobado, ped,
+        triggered_by=request.user)
     return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
 
 

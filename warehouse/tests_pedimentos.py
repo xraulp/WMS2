@@ -1163,6 +1163,103 @@ class AvisoDeRevisionTests(BaseDeAlmacen):
         self.assertFalse(self.bitacora().exists())
 
 
+@override_settings(NOTIFICATIONS_FROM_EMAIL='avisos@plataforma.com')
+class AvisoDeAprobacionTests(BaseDeAlmacen):
+    """
+    Cuando el cliente aprueba, la casa se entera por correo: es su señal para
+    validar y pagar, y sin el aviso la aprobacion se quedaba esperando en la
+    pantalla a que alguien pasara a mirar.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.jefa.email = 'jefa@dyser.com'
+        cls.jefa.save(update_fields=['email'])
+        cls.lopez = User.objects.create_user(
+            'lopez', password='x', email='lopez@acme.com',
+            first_name='Ana', last_name='López')
+        UserProfile.objects.create(user=cls.lopez, tenant=cls.tenant,
+                                   role='customer', customer=cls.cliente)
+
+    def setUp(self):
+        from django.core import mail
+        mail.outbox = []
+        self.cliente.language = 'es'
+        self.cliente.save(update_fields=['language'])
+        self.entrada = self.operacion('ED261004-0009', bundle_qty=2,
+                                      po_order='4500777')
+        self.ped = Pedimento.objects.create(
+            tenant=self.tenant, customer=self.cliente, orden=1,
+            ped_aduana='24', ped_patente='1780', ped_consecutivo='6004090',
+            estado=Pedimento.EN_REVISION, created_by=self.jefa)
+        PedimentoBundle.objects.create(pedimento=self.ped,
+                                       operation=self.entrada, bultos=2)
+        self.client.force_login(self.lopez)
+
+    def aprobar(self):
+        return self.client.post('/pedimentos/%d/approve/' % self.ped.pk)
+
+    def bitacora(self):
+        from .models import NotificationLog
+        return NotificationLog.objects.filter(event='PEDIMENTO_APPROVED')
+
+    def test_le_llega_a_la_casa_y_no_al_cliente(self):
+        from django.core import mail
+        self.aprobar()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['jefa@dyser.com'])
+
+    def test_dice_quien_lo_aprobo_y_el_pedido(self):
+        from django.core import mail
+        self.aprobar()
+        correo = mail.outbox[0]
+        self.assertTrue(correo.subject.startswith('Pedimento approved | Acme | PO 4500777'))
+        self.assertIn('Ana López · Acme', correo.body)
+        self.assertIn('<b>4500777</b>', correo.body)
+        self.assertIn('/pedimentos/?customer=%d' % self.cliente.pk, correo.body)
+
+    def test_cada_operador_lo_recibe_en_su_idioma(self):
+        # Lo lee la casa: cuenta el idioma de cada operador, no el del
+        # cliente. Sale un correo por idioma.
+        from django.core import mail
+        pepe = User.objects.create_user('pepe', password='x', email='pepe@dyser.com')
+        UserProfile.objects.create(user=pepe, tenant=self.tenant, role='admin',
+                                   language='es')
+        self.aprobar()
+        self.assertEqual(len(mail.outbox), 2)
+        por_destino = {tuple(c.to): c for c in mail.outbox}
+        espanol = por_destino[('pepe@dyser.com',)]
+        self.assertTrue(espanol.subject.startswith('Pedimento aprobado'))
+        self.assertIn('Ya se puede validar', espanol.body)
+        ingles = por_destino[('jefa@dyser.com',)]
+        self.assertTrue(ingles.subject.startswith('Pedimento approved'))
+        self.assertEqual(self.bitacora().count(), 2)
+
+    def test_queda_en_la_bitacora(self):
+        self.aprobar()
+        renglon = self.bitacora().get()
+        self.assertEqual(renglon.status, 'SENT')
+        self.assertEqual(renglon.tenant, self.tenant)
+        self.assertEqual(renglon.triggered_by, self.lopez)
+
+    def test_si_el_correo_falla_queda_aprobado_igual(self):
+        from unittest import mock
+        with mock.patch('django.core.mail.EmailMessage.send',
+                        side_effect=RuntimeError('sin correo')):
+            self.aprobar()
+        self.ped.refresh_from_db()
+        self.assertEqual(self.ped.estado, Pedimento.APROBADO)
+        self.assertEqual(self.bitacora().get().status, 'FAILED')
+
+    def test_pedir_correcciones_no_lo_manda(self):
+        from django.core import mail
+        self.client.post('/pedimentos/%d/corrections/' % self.ped.pk,
+                         {'correcciones': 'el valor'})
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(self.bitacora().exists())
+
+
 class ZipDelPedimentoTests(BaseDeAlmacen):
     """
     El expediente entero en un archivo.

@@ -1635,6 +1635,8 @@ class NotificationLog(models.Model):
         # El aviso al cliente de que tiene un pedimento por revisar. No nace
         # de una operacion: un pedimento junta bultos de varias.
         ('PEDIMENTO_REVIEW',  _('Pedimento to review')),
+        # Y el de vuelta: a la casa, cuando el cliente lo aprueba.
+        ('PEDIMENTO_APPROVED', _('Pedimento approved')),
     ]
     # SENT quiere decir que el proveedor **acepto** el correo, no que llego.
     # Lo que paso despues lo cuenta Resend por su webhook (`webhooks.py`) y

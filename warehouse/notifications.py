@@ -41,6 +41,7 @@ EVENT_DOCUMENTS = 'DOCUMENTS_ADDED'
 EVENT_MANUAL    = 'MANUAL'
 EVENT_MESSAGE   = 'CHAT_MESSAGE'
 EVENT_PEDIMENTO_REVIEW = 'PEDIMENTO_REVIEW'
+EVENT_PEDIMENTO_APPROVED = 'PEDIMENTO_APPROVED'
 
 # Estados
 SENT    = 'SENT'
@@ -771,6 +772,14 @@ def correos_del_tenant(tenant):
     esperando a que esa persona vuelva de vacaciones. Funciona como un buzón
     compartido, y por eso importa la espera de `AVISO_ESPERA`.
     """
+    return [addr for addr, _idioma in _operadores_con_correo(tenant)]
+
+
+def _operadores_con_correo(tenant):
+    """
+    Los correos de los operadores activos de la empresa, con el idioma que
+    cada uno eligio en su perfil (vacio = el de la casa). Sin repetidos.
+    """
     if not tenant:
         return []
 
@@ -784,7 +793,7 @@ def correos_del_tenant(tenant):
         addr = (perfil.user.email or '').strip()
         if addr and addr.lower() not in vistos:
             vistos.add(addr.lower())
-            correos.append(addr)
+            correos.append((addr, perfil.language or ''))
     return correos
 
 
@@ -942,3 +951,91 @@ def avisar_pedimento_en_revision(pedimento, triggered_by=None):
                        pedimento.etiqueta, e)
         return False, str(e)
     return True, None
+
+
+
+
+@_never_breaks(lambda e: (False, str(e)))
+def avisar_pedimento_aprobado(pedimento, triggered_by=None):
+    """
+    Le avisa a la casa de que el cliente aprobo un pedimento.
+
+    Es la señal para validarlo y pagarlo. Sin el aviso, la aprobacion se
+    quedaba en la pantalla esperando a que alguien de la casa pasara a mirar,
+    y el tramo que el cliente ya cerro volvia a parar el camion.
+
+    Va a los mismos que reciben los mensajes del chat -- los operadores activos
+    con correo -- y por el mismo motivo: contesta quien este en el turno.
+
+    Cada uno lo recibe en el idioma que eligio en su perfil: sale un correo por
+    idioma. El de la casa es el ingles, y mandarselo asi a quien trabaja en
+    español seria escribirle en un idioma que no eligio.
+
+    Devuelve `(enviado, error)`: enviado si salio al menos uno, y el primer
+    error si alguno fallo.
+    """
+    customer = pedimento.customer
+    tenant   = pedimento.tenant
+    empresa  = tenant.name if tenant else 'WMS'
+
+    por_idioma = {}
+    for addr, idioma in _operadores_con_correo(tenant):
+        por_idioma.setdefault(idioma, []).append(addr)
+
+    renglones = list(pedimento.renglones.select_related('operation'))
+    pedidos = []
+    for r in renglones:
+        po = (r.operation.po_order or '').strip()
+        if po and po not in pedidos:
+            pedidos.append(po)
+
+    # Quien firmo, con nombre si lo tiene. La aprobacion es del cliente, pero
+    # la da una persona, y si algo no cuadra es a ella a quien se llama.
+    firmante = pedimento.revisado_por
+    quien = ''
+    if firmante is not None:
+        quien = firmante.get_full_name() or firmante.username
+    nombre_cliente = nombre_corto(customer.name)
+
+    def componer(idioma):
+        with en_idioma(idioma):
+            partes = [_('Pedimento approved'), nombre_cliente]
+            if pedidos:
+                partes.append('PO ' + ', '.join(pedidos))
+            partes.append(pedimento.etiqueta)
+            subject = ' | '.join(p for p in partes if p)
+            cuerpo = render_to_string('warehouse/email/pedimento_aprobado_email.html', {
+                'pedimento':   pedimento,
+                'renglones':   renglones,
+                'tenant_name': empresa,
+                'cliente':     nombre_cliente,
+                'quien':       ('%s · %s' % (quien, nombre_cliente)) if quien
+                               else nombre_cliente,
+                'url':         (f"{tenant_public_url(tenant)}/pedimentos/"
+                                f"?customer={customer.pk}"),
+            })
+        return subject, cuerpo
+
+    if not por_idioma:
+        subject, _cuerpo = componer('')
+        log_notification(None, customer, EMAIL, EVENT_PEDIMENTO_APPROVED, SKIPPED,
+                         subject=subject, detail='no_recipient',
+                         triggered_by=triggered_by, tenant=tenant)
+        return False, 'no_email'
+
+    de, responder = remitente_de(tenant)
+    enviado, primer_error = False, None
+    for idioma, destinatarios in por_idioma.items():
+        subject, cuerpo = componer(idioma)
+        correo = EmailMessage(subject=subject, body=cuerpo, to=destinatarios,
+                              from_email=de, reply_to=responder)
+        correo.content_subtype = 'html'
+        try:
+            enviar_y_registrar(correo, EVENT_PEDIMENTO_APPROVED, tenant=tenant,
+                               customer=customer, triggered_by=triggered_by)
+            enviado = True
+        except Exception as e:
+            logger.warning('Fallo el aviso de aprobacion de %s: %s',
+                           pedimento.etiqueta, e)
+            primer_error = primer_error or str(e)
+    return enviado, primer_error
