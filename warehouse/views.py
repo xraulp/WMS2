@@ -5224,6 +5224,13 @@ def pedimento_enviar_a_revision(request, pk):
             _('It cannot go to review yet — missing: %(faltan)s.')
             % {'faltan': ', '.join(str(f) for f in faltan)} if faltan else
             _('This pedimento is not in a state that can be sent to review.'))
+    # El cliente se entera por correo: mientras no lo aprueba no se valida ni
+    # se paga, y sin el aviso tendria que acordarse de entrar a mirar. Sale
+    # fuera de la peticion, como el del chat; el resultado queda en la
+    # bitacora de avisos.
+    notifications.en_segundo_plano(
+        notifications.avisar_pedimento_en_revision, ped,
+        triggered_by=request.user)
     return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
 
 

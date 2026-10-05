@@ -3442,3 +3442,22 @@ msgid "%(bultos)s bundle"
 msgid_plural "%(bultos)s bundles"
 msgstr[0] "%(bultos)s bulto"
 msgstr[1] "%(bultos)s bultos"
+
+# El aviso al cliente de que tiene un pedimento por revisar.
+msgid "Pedimento to review"
+msgstr "Pedimento por revisar"
+
+msgid "You have a pedimento to review"
+msgstr "Tienes un pedimento por revisar"
+
+msgid "<b>%(cliente)s</b>, this pedimento is ready for your review."
+msgstr "<b>%(cliente)s</b>, este pedimento está listo para tu revisión."
+
+msgid "Total"
+msgstr "Total"
+
+msgid "Review the pedimento"
+msgstr "Revisar el pedimento"
+
+msgid "If something does not match, request corrections from the same screen and tell us what has to change."
+msgstr "Si algo no cuadra, pide correcciones desde la misma pantalla y dinos qué hay que cambiar."

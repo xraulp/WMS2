@@ -17,7 +17,7 @@ que se prueba aqui es lo que cambia al dejar de serlo:
 """
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from . import pedimentos
 from .models import (Catalog, OperationDocument, Pedimento, PedimentoBundle,
@@ -1055,6 +1055,112 @@ class ElClienteContestaLaRevisionTests(BaseDeAlmacen):
         for frase in ('Approve this pedimento', 'Request corrections',
                       'Shipments in warehouse', 'Pedimento draft'):
             self.assertNotContains(respuesta, frase)
+
+
+@override_settings(NOTIFICATIONS_FROM_EMAIL='avisos@plataforma.com')
+class AvisoDeRevisionTests(BaseDeAlmacen):
+    """
+    Al enviar un pedimento a revision, el cliente se entera por correo.
+
+    Mientras no lo aprueba no se valida ni se paga, y sin el aviso tendria que
+    acordarse de entrar a mirar. Lo que se prueba es que llega a quien tiene
+    que llegar, en su idioma, con el pedido delante y dejando rastro -- y que
+    si el correo falla, el pedimento sale a revision igual.
+    """
+
+    def setUp(self):
+        from django.core import mail
+        mail.outbox = []
+        self.tenant.reply_to_email = 'operaciones@dyser.com'
+        self.tenant.save(update_fields=['reply_to_email'])
+        self.cliente.contact_email = 'compras@acme.com'
+        self.cliente.language = 'en'
+        self.cliente.save(update_fields=['contact_email', 'language'])
+        self.client.force_login(self.jefa)
+        self.entrada = self.operacion('ED261004-0007', bundle_qty=5,
+                                      po_order='4500123')
+        self.ped = Pedimento.objects.create(
+            tenant=self.tenant, customer=self.cliente, orden=1,
+            ped_aduana='24', ped_patente='1780', ped_consecutivo='6004086',
+            created_by=self.jefa)
+        PedimentoBundle.objects.create(pedimento=self.ped,
+                                       operation=self.entrada, bultos=5)
+        for ranura in PedimentoDocument.RANURAS_PARA_REVISION:
+            PedimentoDocument.objects.create(
+                pedimento=self.ped, ranura=ranura, original_name='x.pdf',
+                file=SimpleUploadedFile('x.pdf', b'%PDF-1.4 x'))
+
+    def enviar(self):
+        return self.client.post('/pedimentos/%d/review/' % self.ped.pk)
+
+    def bitacora(self):
+        from .models import NotificationLog
+        return NotificationLog.objects.filter(event='PEDIMENTO_REVIEW')
+
+    def test_le_llega_al_cliente(self):
+        from django.core import mail
+        self.enviar()
+        self.assertEqual(len(mail.outbox), 1)
+        correo = mail.outbox[0]
+        self.assertEqual(correo.to, ['compras@acme.com'])
+        # Sale a nombre de la empresa y las respuestas le llegan a ella.
+        self.assertIn('Dyser Group', correo.from_email)
+        self.assertEqual(correo.reply_to, ['operaciones@dyser.com'])
+
+    def test_el_pedido_va_delante(self):
+        from django.core import mail
+        self.enviar()
+        correo = mail.outbox[0]
+        self.assertTrue(correo.subject.startswith('Pedimento to review | PO 4500123'))
+        self.assertIn('24-1780-6004086', correo.subject)
+        self.assertIn('<b>4500123</b>', correo.body)
+        self.assertIn('ED261004-0007', correo.body)
+        self.assertIn('/pedimentos/', correo.body)
+
+    def test_en_el_idioma_del_cliente(self):
+        from django.core import mail
+        self.cliente.language = 'es'
+        self.cliente.save(update_fields=['language'])
+        self.enviar()
+        correo = mail.outbox[0]
+        self.assertTrue(correo.subject.startswith('Pedimento por revisar'))
+        self.assertIn('Revisar el pedimento', correo.body)
+        self.assertNotIn('Review the pedimento', correo.body)
+
+    def test_queda_en_la_bitacora(self):
+        self.enviar()
+        renglon = self.bitacora().get()
+        self.assertEqual(renglon.status, 'SENT')
+        self.assertEqual(renglon.tenant, self.tenant)
+        self.assertEqual(renglon.customer, self.cliente)
+        self.assertEqual(renglon.triggered_by, self.jefa)
+
+    def test_sin_correo_no_manda_pero_lo_anota(self):
+        from django.core import mail
+        self.cliente.contact_email = ''
+        self.cliente.save(update_fields=['contact_email'])
+        self.enviar()
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(self.bitacora().get().status, 'SKIPPED')
+        self.ped.refresh_from_db()
+        self.assertEqual(self.ped.estado, Pedimento.EN_REVISION)
+
+    def test_si_el_correo_falla_el_pedimento_sale_igual(self):
+        from unittest import mock
+        with mock.patch('django.core.mail.EmailMessage.send',
+                        side_effect=RuntimeError('sin correo')):
+            respuesta = self.enviar()
+        self.assertEqual(respuesta.status_code, 302)
+        self.ped.refresh_from_db()
+        self.assertEqual(self.ped.estado, Pedimento.EN_REVISION)
+        self.assertEqual(self.bitacora().get().status, 'FAILED')
+
+    def test_si_no_sale_a_revision_no_se_avisa(self):
+        from django.core import mail
+        self.ped.documentos.all().delete()
+        self.enviar()
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(self.bitacora().exists())
 
 
 class ZipDelPedimentoTests(BaseDeAlmacen):

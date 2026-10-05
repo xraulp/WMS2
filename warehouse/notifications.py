@@ -25,7 +25,8 @@ from django.utils.translation import gettext as _
 from .models import (Catalog, NotificationLog, UserProfile,
                      LADO_TENANT, LADO_CLIENTE)
 from .utils import (datos_del_emisor, generar_pdf_factura,
-                    generate_pdf_report, nombre_corto, operation_digital_url)
+                    generate_pdf_report, nombre_corto, operation_digital_url,
+                    tenant_public_url)
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ EVENT_RELEASED  = 'GOODS_RELEASED'
 EVENT_DOCUMENTS = 'DOCUMENTS_ADDED'
 EVENT_MANUAL    = 'MANUAL'
 EVENT_MESSAGE   = 'CHAT_MESSAGE'
+EVENT_PEDIMENTO_REVIEW = 'PEDIMENTO_REVIEW'
 
 # Estados
 SENT    = 'SENT'
@@ -871,3 +873,72 @@ def avisar_mensaje_nuevo(conversation, lado, mensaje=None, triggered_by=None):
         conversation.save(update_fields=[campo])
 
     return enviado, error
+
+
+# ── EL PEDIMENTO, A REVISION ──────────────────────────────────────────────────
+
+@_never_breaks(lambda e: (False, str(e)))
+def avisar_pedimento_en_revision(pedimento, triggered_by=None):
+    """
+    Le avisa al cliente de que tiene un pedimento esperando su revision.
+
+    Sin esto el cliente solo se enteraba si entraba a la pantalla de
+    pedimentos, y mientras no lo aprueba no se valida ni se paga: el camion se
+    queda esperando una firma que nadie sabe que le estan pidiendo.
+
+    No nace de una operacion -- un pedimento junta bultos de varias -- y por eso
+    no pasa por `_deliver_email`, que saca de la operacion el remitente y las
+    copias. Aqui salen de la empresa del pedimento, por el mismo camino que el
+    informe y la hoja de impuestos, y deja su renglon en la bitacora salga o no.
+
+    Devuelve `(enviado, error)`, igual que el resto de avisos.
+    """
+    customer = pedimento.customer
+    tenant   = pedimento.tenant
+    empresa  = tenant.name if tenant else 'WMS'
+    destinatarios = email_recipients(customer)
+
+    renglones = list(pedimento.renglones.select_related('operation'))
+    # El numero de pedido manda: es con lo que el cliente identifica su
+    # embarque. La entrada interna va de dato secundario.
+    pedidos = []
+    for r in renglones:
+        po = (r.operation.po_order or '').strip()
+        if po and po not in pedidos:
+            pedidos.append(po)
+
+    with en_el_idioma_de(customer):
+        partes = [_('Pedimento to review')]
+        if pedidos:
+            partes.append('PO ' + ', '.join(pedidos))
+        partes += [nombre_corto(customer.name), nombre_corto(empresa),
+                   pedimento.etiqueta]
+        subject = ' | '.join(p for p in partes if p)
+
+        cuerpo = render_to_string('warehouse/email/pedimento_revision_email.html', {
+            'pedimento':   pedimento,
+            'renglones':   renglones,
+            'tenant_name': empresa,
+            'cliente':     customer.name,
+            'url':         f"{tenant_public_url(tenant)}/pedimentos/",
+        })
+
+    if not destinatarios:
+        log_notification(None, customer, EMAIL, EVENT_PEDIMENTO_REVIEW, SKIPPED,
+                         subject=subject, detail='no_recipient',
+                         triggered_by=triggered_by, tenant=tenant)
+        return False, 'no_email'
+
+    de, responder = remitente_de(tenant)
+    correo = EmailMessage(subject=subject, body=cuerpo, to=destinatarios,
+                          cc=get_cc_emails(tenant), from_email=de,
+                          reply_to=responder)
+    correo.content_subtype = 'html'
+    try:
+        enviar_y_registrar(correo, EVENT_PEDIMENTO_REVIEW, tenant=tenant,
+                           customer=customer, triggered_by=triggered_by)
+    except Exception as e:
+        logger.warning('Fallo el aviso de revision de %s: %s',
+                       pedimento.etiqueta, e)
+        return False, str(e)
+    return True, None

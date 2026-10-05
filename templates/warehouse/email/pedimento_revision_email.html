@@ -1,0 +1,86 @@
+{% load i18n %}
+<!DOCTYPE html>
+{% get_current_language as idioma %}<html lang="{{ idioma }}">
+<head>
+  <meta charset="UTF-8"/>
+</head>
+<body style="margin:0; padding:0; background:#f8fafc; font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+  {% comment %}
+  El aviso de que hay un pedimento esperando la revision del cliente.
+
+  La cabecera va en el oscuro de la barra de la aplicacion y no en el rojo de
+  los otros correos: ese rojo es la marca de una empresa, y este aviso lo
+  manda cualquiera de ellas a sus clientes.
+
+  El numero de pedido va delante en cada renglon: es con lo que el cliente
+  reconoce su embarque. La entrada de bodega va de dato secundario.
+  {% endcomment %}
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;">
+    <tr>
+      <td align="center" style="padding:20px;">
+        <table width="480" cellpadding="0" cellspacing="0" border="0"
+               style="width:480px; max-width:100%; background:#fff; border-radius:12px; box-shadow:0 4px 24px rgba(0,0,0,.08);">
+          <tr>
+            <td style="padding:0;">
+
+              <div style="background:#0f172a; padding:24px 28px; border-radius:12px 12px 0 0;">
+                <h1 style="color:#fff; font-size:18px; margin:0 0 3px;">{{ tenant_name }}</h1>
+                <p style="color:#cbd5e1; font-size:12px; margin:0;">{% trans "You have a pedimento to review" %}</p>
+                <span style="display:inline-block; padding:4px 14px; border-radius:99px; font-size:12px;
+                             font-weight:700; letter-spacing:.06em; margin-top:10px; color:#fff; background:#0ea5e9;">
+                  {{ pedimento.etiqueta }}
+                </span>
+              </div>
+
+              <div style="padding:28px;">
+                <div style="font-size:14px; line-height:1.7; color:#334155; margin-bottom:18px;">
+                  {% blocktrans with cliente=cliente %}<b>{{ cliente }}</b>, this pedimento is ready for your review.{% endblocktrans %}
+                  {% trans "Check the pedimento against your invoice. Approving it authorizes us to validate it and pay its taxes." %}
+                </div>
+
+                <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                       style="border:1px solid #e2e8f0; border-radius:8px; border-collapse:separate; margin-bottom:20px; font-size:13px;">
+                  <tr style="background:#f8fafc;">
+                    <td style="padding:8px 12px; font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; border-bottom:1px solid #e2e8f0;">{% trans "PO / Order" %}</td>
+                    <td style="padding:8px 12px; font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; border-bottom:1px solid #e2e8f0;">{% trans "Entry no." %}</td>
+                    <td align="right" style="padding:8px 12px; font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; border-bottom:1px solid #e2e8f0;">{% trans "Bundles" %}</td>
+                  </tr>
+                  {% for r in renglones %}
+                  <tr>
+                    <td style="padding:9px 12px; color:#0f172a; border-bottom:1px solid #f1f5f9;"><b>{{ r.operation.po_order|default:"—" }}</b></td>
+                    <td style="padding:9px 12px; color:#64748b; font-family:monospace; border-bottom:1px solid #f1f5f9;">{{ r.operation.custom_id }}</td>
+                    <td align="right" style="padding:9px 12px; color:#0f172a; font-family:monospace; border-bottom:1px solid #f1f5f9;">{{ r.bultos }}</td>
+                  </tr>
+                  {% endfor %}
+                  <tr style="background:#f8fafc;">
+                    <td colspan="2" style="padding:9px 12px; font-weight:600; color:#334155;">{% trans "Total" %}</td>
+                    <td align="right" style="padding:9px 12px; font-weight:700; color:#0f172a; font-family:monospace;">{{ pedimento.total_bultos }}</td>
+                  </tr>
+                </table>
+
+                <div style="text-align:center; margin-bottom:8px;">
+                  <a href="{{ url }}"
+                     style="display:inline-block; padding:11px 24px; background:#0ea5e9; color:#fff;
+                            border-radius:6px; text-decoration:none; font-size:14px; font-weight:600;">
+                    {% trans "Review the pedimento" %}
+                  </a>
+                </div>
+
+                <div style="font-size:12px; line-height:1.6; color:#94a3b8; margin-top:18px; text-align:center;">
+                  {% trans "If something does not match, request corrections from the same screen and tell us what has to change." %}
+                </div>
+              </div>
+
+              <div style="padding:16px 28px; background:#f8fafc; border-top:1px solid #e2e8f0;
+                          font-size:11px; color:#94a3b8; text-align:center;">
+                {% blocktrans with empresa=tenant_name id=pedimento.etiqueta %}Automatic message from the Warehouse Management System of {{ empresa }} · {{ id }}{% endblocktrans %}
+              </div>
+
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
