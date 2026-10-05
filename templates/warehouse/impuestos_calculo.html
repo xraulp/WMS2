@@ -43,13 +43,10 @@
 </head>
 <body>
 
-<div class="tb">
-  <span class="tb-brand">WMS — {% trans "Duty breakdown" %}</span>
-  <a href="{% url 'impuestos_panel' %}?customer={{ cliente.pk }}">← {% trans "Back to the sheet" %}</a>
-</div>
-{% include "warehouse/partials/menu_superior.html" with activa='impuestos' %}
+{% include "warehouse/partials/barra_superior.html" with activa='impuestos' %}
 
 <div class="wrap">
+  <a class="bs-volver" href="{% url 'impuestos_panel' %}?customer={{ cliente.pk }}">← {% trans "Back to the sheet" %}</a>
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
   <p style="font-size:12.5px;color:var(--soft);margin:0 0 12px">
     {{ cliente.name }}

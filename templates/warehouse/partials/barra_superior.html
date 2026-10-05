@@ -1,0 +1,131 @@
+{% load i18n wms_filters %}
+{% comment %}
+La barra de arriba de las pantallas que viven aparte del tablero: pedimentos,
+cruces e impuestos, y sus pantallas hijas.
+
+Antes llevaban una franja propia con el nombre de la pantalla y un "volver al
+tablero". Al entrar en ellas se perdia todo lo de arriba: el nombre de la
+empresa, quien estaba trabajando, el tema, el idioma, la salida y las
+pestañas. Diego lo pidio asi: que entrar a una de estas sea igual que entrar a
+cualquier otra pestaña. Asi que aqui va la misma barra que el tablero en la PC
+-- franja oscura con la empresa y la cuenta, y debajo las pestañas -- y la
+misma que el movil en el telefono, donde el menu es la barra de abajo.
+
+Las pestañas del tablero son enlaces a `/dashboard/?tab=...`, que abre el
+tablero ya en esa pestaña. Las tres de aqui son enlaces a su pantalla.
+
+`activa` es la pantalla en la que se esta: 'pedimentos', 'cruces' o
+'impuestos'. Los datos salen del procesador `barra_superior`.
+{% endcomment %}
+{% with profile=barra.perfil tenant=barra.tenant %}
+<style>
+.bs{position:sticky;top:0;z-index:150;font-family:'IBM Plex Sans','Segoe UI',sans-serif}
+.bs-tb{background:var(--tb-bg);display:flex;align-items:center;justify-content:space-between;
+       gap:10px;padding:0 18px;height:44px}
+.bs-marca{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;
+          color:var(--on-accent);display:flex;align-items:center;gap:7px;
+          text-decoration:none;white-space:nowrap;min-width:0}
+.bs-punto{width:7px;height:7px;background:var(--accent);border-radius:50%;flex:0 0 auto}
+.bs-derecha{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--tb-ink-suave)}
+.bs-derecha strong{color:var(--on-accent)}
+.bs .marca-corta{display:none}
+@media (max-width:760px){
+  .bs .marca-larga{display:none}
+  .bs .marca-corta{display:inline}
+  .bs-tb{padding:0 12px}
+}
+/* En el telefono, la del movil: algo mas alta y sin pestañas. */
+.bs.en-telefono .bs-tb{height:52px;padding:0 16px}
+.bs.en-telefono .bs-marca{font-size:16px;gap:8px}
+.bs.en-telefono .bs-punto{width:8px;height:8px}
+
+.bs-tabs{background:var(--surface);border-bottom:1px solid var(--bdr);display:flex;
+         padding:0 18px;overflow-x:auto}
+.bs-tabs a{border-bottom:2px solid transparent;font-size:12px;font-weight:500;color:var(--soft);
+           padding:9px 14px;white-space:nowrap;text-decoration:none;transition:all .15s}
+.bs-tabs a:hover{color:var(--ink)}
+.bs-tabs a.on{color:var(--accent);border-bottom-color:var(--accent)}
+/* Los contadores, a la derecha y con los colores del tablero. El
+   `margin-left:auto` lo lleva el primero que se pinte. */
+.bs-tabs .bs-sin-leer{margin-left:auto;color:var(--warn-ink-fuerte);font-weight:700;
+                      background:var(--warn-bg-suave);border-bottom-color:var(--warn)}
+.bs-tabs .bs-sin-leer:hover{color:var(--warn-ink);background:var(--warn-bg)}
+.bs-tabs .bs-vencidas{color:var(--err-ink-fuerte);font-weight:700;background:var(--err-bg);
+                      border-bottom-color:var(--red)}
+.bs-tabs .bs-vencidas:hover{color:var(--err-ink);background:var(--rsoft)}
+.bs-tabs a:not(.bs-sin-leer) + .bs-vencidas{margin-left:auto}
+
+/* El "volver" de las pantallas hijas: a su pantalla madre, no al tablero. */
+.bs-volver{display:inline-block;margin:12px 0 0;font-size:13px;color:var(--soft);
+           text-decoration:none}
+.bs-volver:hover{color:var(--accent)}
+</style>
+
+{% url 'dashboard' as tablero %}
+<div class="bs{% if es_telefono %} en-telefono{% endif %}">
+  <div class="bs-tb">
+    <a class="bs-marca" href="{% if es_telefono %}{% url 'mobile_dashboard' %}{% else %}{{ tablero }}?tab=inicio{% endif %}">
+      <span class="bs-punto"></span>
+      {% if es_telefono %}
+      <span>WMS{% if tenant %} · {{ tenant.sigla }}{% endif %}</span>
+      {% else %}
+      <span class="marca-larga">WMS{% if tenant %} - {{ tenant.name|upper }}{% endif %}</span>
+      <span class="marca-corta">WMS{% if tenant %} · {{ tenant.sigla }}{% endif %}</span>
+      {% endif %}
+    </a>
+    <div class="bs-derecha">
+      {% if es_telefono %}
+      {% include "warehouse/partials/cuenta.html" with siempre_menu=True vista_alterna='escritorio' %}
+      {% else %}
+      {% include "warehouse/partials/cuenta.html" with vista_alterna='movil' %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not es_telefono %}
+  <nav class="bs-tabs" aria-label="{% trans "Main menu" %}">
+    <a href="{{ tablero }}?tab=inicio">{% trans "Home" %}</a>
+    {% if profile|can_see_tab:'form' %}
+    <a href="{{ tablero }}?tab=form">{% trans "New Operation" %}</a>
+    {% endif %}
+    <a href="{{ tablero }}?tab=database">{% trans "Operations" %}</a>
+    <a href="{% url 'pedimentos_panel' %}"{% if activa == 'pedimentos' %} class="on"{% endif %}>{% trans "Pedimentos" %}</a>
+    <a href="{% url 'cruces_panel' %}"{% if activa == 'cruces' %} class="on"{% endif %}>{% trans "Crossings" %}</a>
+    <a href="{% url 'impuestos_panel' %}"{% if activa == 'impuestos' %} class="on"{% endif %}>{% trans "Duties" %}</a>
+    {% if profile|can_see_tab:'catalog' %}
+    <a href="{{ tablero }}?tab=catalog">{% trans "Catalog" %}</a>
+    {% endif %}
+    {% if profile|can_see_tab:'customers' %}
+    <a href="{{ tablero }}?tab=customers">{% trans "Customers" %}</a>
+    {% endif %}
+    {% if not profile.is_customer %}
+    <a href="{{ tablero }}?tab=locations">{% trans "Locations" %}</a>
+    {% endif %}
+    <a href="{{ tablero }}?tab=digital">{% trans "Digital" %}</a>
+    <a href="{{ tablero }}?tab=reports">{% trans "Report Generator" %}</a>
+    {% if profile.can_manage_users %}
+    <a href="{{ tablero }}?tab=users">{% trans "Users" %}</a>
+    {% endif %}
+    {% if profile.can_see_deletion_log %}
+    <a href="{{ tablero }}?tab=deletions">{% trans "Deletions" %}</a>
+    {% endif %}
+    {% if barra.plataforma %}
+    <a href="{{ tablero }}?tab=platform">🛠 {% trans "Platform" %}</a>
+    {% endif %}
+    {% comment %}
+    Los dos contadores del tablero. Alli son botones que filtran la tabla sin
+    recargar; aqui son enlaces que abren el tablero ya filtrado. Sin nada que
+    contar no se pintan, igual que alli.
+    {% endcomment %}
+    {% if barra.sin_leer.mensajes %}
+    <a class="bs-sin-leer" href="{{ tablero }}?tab=database&amp;ver=sin_leer"
+       title="{% trans "Operations with unread messages" %}">💬 {{ barra.sin_leer.mensajes }} {% trans "unread" %}</a>
+    {% endif %}
+    {% if barra.alertas.total %}
+    <a class="bs-vencidas" href="{{ tablero }}?tab=database&amp;ver=vencidas"
+       title="{% trans "Goods past their agreed time in the warehouse" %}">&#9200; {{ barra.alertas.total }} {% trans "aging" %}{% if barra.alertas.urgentes %} <span style="font-weight:400">({{ barra.alertas.urgentes }} {% trans "urgent" %})</span>{% endif %}</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endwith %}

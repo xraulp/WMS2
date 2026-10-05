@@ -37,6 +37,13 @@ class BaseDeRevision(TestCase):
 # ── El menu de arriba en las pantallas aparte ───────────────────────────────
 
 class ElMenuDeArribaTests(BaseDeRevision):
+    """
+    Entrar a pedimentos, cruces o impuestos es igual que entrar a cualquier
+    otra pestaña: la misma barra del tablero, con la empresa, quien esta
+    trabajando, su cuenta y las pestañas.
+    """
+
+    MOVIL = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Mobile/15E148'
 
     def setUp(self):
         self.client.force_login(self.jefa)
@@ -46,20 +53,43 @@ class ElMenuDeArribaTests(BaseDeRevision):
                             ('/cruces/', '/cruces/'),
                             ('/impuestos/', '/impuestos/')):
             html = self.client.get(url, {'customer': self.cliente.pk}).content.decode()
-            self.assertIn('class="menu-sup"', html, url)
+            self.assertIn('class="bs-tabs"', html, url)
             self.assertIn('href="%s" class="on"' % activa, html, url)
             self.assertIn('?tab=database', html, url)
 
-    def test_en_el_telefono_no_se_pinta(self):
-        movil = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Mobile/15E148'
+    def test_no_se_pierde_quien_esta_trabajando(self):
+        # Lo que se perdia al entrar: la empresa y la cuenta de quien trabaja.
+        for url in ('/pedimentos/', '/cruces/', '/impuestos/'):
+            html = self.client.get(url, {'customer': self.cliente.pk}).content.decode()
+            self.assertIn('WMS - DYSER GROUP', html, url)
+            self.assertIn('<strong>jefa</strong>', html, url)
+            self.assertIn('[ADMIN]', html, url)
+            self.assertIn('href="/logout/"', html, url)
+            self.assertNotIn('Back to the dashboard', html, url)
+
+    def test_las_pantallas_hijas_tambien(self):
+        for url in ('/cruces/mark/?customer=%d' % self.cliente.pk,
+                    '/impuestos/removed/?customer=%d' % self.cliente.pk):
+            respuesta = self.client.get(url)
+            self.assertEqual(respuesta.status_code, 200, url)
+            html = respuesta.content.decode()
+            self.assertIn('<strong>jefa</strong>', html, url)
+            self.assertIn('class="bs-volver"', html, url)
+
+    def test_en_el_telefono_la_barra_del_movil(self):
+        # En el telefono no van las pestañas -- el menu es la barra de abajo --
+        # pero si la empresa y la cuenta, como en el movil.
         html = self.client.get('/cruces/', {'customer': self.cliente.pk},
-                               HTTP_USER_AGENT=movil).content.decode()
-        self.assertNotIn('class="menu-sup"', html)
+                               HTTP_USER_AGENT=self.MOVIL).content.decode()
+        self.assertNotIn('class="bs-tabs"', html)
+        self.assertIn('bs en-telefono', html)
+        self.assertIn('<strong>jefa</strong>', html)
 
     def test_al_cliente_no_le_ofrece_lo_que_no_puede_ver(self):
         self.client.force_login(self.duenio)
         html = self.client.get('/cruces/').content.decode()
-        self.assertIn('class="menu-sup"', html)
+        self.assertIn('class="bs-tabs"', html)
+        self.assertIn('<strong>acme</strong>', html)
         self.assertNotIn('?tab=locations', html)
         self.assertNotIn('?tab=users', html)
 

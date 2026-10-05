@@ -226,11 +226,7 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
 {% endcomment %}
 <body{% if abierto %} data-cajon-abierto="{{ abierto }}"{% endif %}>
 
-<div class="tb">
-  <span class="tb-brand">WMS — {% trans "Duties" %}</span>
-  <a href="{% if es_telefono %}{% url 'mobile_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}">← {% trans "Back to the dashboard" %}</a>
-</div>
-{% include "warehouse/partials/menu_superior.html" with activa='impuestos' %}
+{% include "warehouse/partials/barra_superior.html" with activa='impuestos' %}
 
 <div class="wrap">
 

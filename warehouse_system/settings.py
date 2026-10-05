@@ -111,6 +111,9 @@ TEMPLATES = [
                 # Si quien mira esta en un telefono: decide la barra de
                 # abajo en las pantallas que no son el movil.
                 'warehouse.context_processors.vista',
+                # La barra de arriba del tablero, para las pantallas aparte
+                # (pedimentos, cruces, impuestos).
+                'warehouse.context_processors.barra_superior',
             ],
         },
     },

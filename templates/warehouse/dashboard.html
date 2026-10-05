@@ -990,6 +990,12 @@ function initActiveTab() {
     if (tabFromUrl && document.getElementById('tab-' + tabFromUrl)) pestana = tabFromUrl;
 
     showTab(pestana);
+
+    // Y si se llega desde uno de sus dos contadores, la tabla ya filtrada,
+    // como al pulsarlos aqui.
+    const ver = urlParams.get('ver');
+    if (ver === 'sin_leer') verSinLeer();
+    else if (ver === 'vencidas') verVencidas();
 }
 
 // function checkUrlParams() {

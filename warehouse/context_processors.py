@@ -56,3 +56,43 @@ def vista(request):
     # Lo usan las pantallas aparte -- pedimentos, cruces, impuestos -- para
     # saber si pintan la barra de abajo y a donde lleva su "volver".
     return {'es_telefono': es_telefono(request)}
+
+
+def barra_superior(request):
+    """
+    Lo que pinta la barra de arriba en las pantallas aparte: quien es, de que
+    empresa y si ademas administra la plataforma.
+
+    Pedimentos, cruces e impuestos no son paneles del tablero sino pantallas
+    propias, y al entrar en ellas se perdia la barra entera: el nombre de la
+    empresa, quien estaba trabajando, el tema, el idioma y la salida. Ahora
+    pintan la misma que el tablero, y lo que esa barra necesita sale de aqui y
+    no de cada vista.
+
+    Va perezoso porque este procesador corre en cada peticion, tambien en los
+    trozos que repinta htmx, y las consultas solo hacen falta donde se pinta la
+    barra.
+    """
+    from django.utils.functional import SimpleLazyObject
+
+    def datos():
+        usuario = getattr(request, 'user', None)
+        if not usuario or not usuario.is_authenticated:
+            return {}
+        from .views import (get_profile, platform_role, resumen_de_alertas,
+                            resumen_sin_leer)
+        tenant = getattr(request, 'tenant', None)
+        datos = {
+            'perfil': get_profile(usuario),
+            'tenant': tenant,
+            'plataforma': platform_role(usuario),
+        }
+        # Los dos contadores de la derecha del tablero: mensajes sin leer y
+        # mercancia pasada de tiempo. Los mismos numeros que alli, porque es
+        # la misma barra.
+        if tenant is not None:
+            datos['sin_leer'] = resumen_sin_leer(usuario, tenant)
+            datos['alertas'] = resumen_de_alertas(usuario, tenant)
+        return datos
+
+    return {'barra': SimpleLazyObject(datos)}

@@ -145,11 +145,7 @@
 </head>
 <body>
 
-<div class="tb">
-  <span class="tb-brand">WMS — {% trans "Pedimentos" %}</span>
-  <a href="{% if es_telefono %}{% url 'mobile_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}">← {% trans "Back to the dashboard" %}</a>
-</div>
-{% include "warehouse/partials/menu_superior.html" with activa='pedimentos' %}
+{% include "warehouse/partials/barra_superior.html" with activa='pedimentos' %}
 
 <div class="wrap">
 

@@ -81,13 +81,10 @@
 </head>
 <body{% if es_telefono %} style="--pie-abajo:calc(76px + env(safe-area-inset-bottom))"{% endif %}>
 
-<div class="tb">
-  <span class="tb-brand">WMS — {% trans "Send to crossing" %}</span>
-  <a href="{% url 'cruces_panel' %}{% if cliente %}?customer={{ cliente.pk }}{% endif %}">← {% trans "Crossings" %}</a>
-</div>
-{% include "warehouse/partials/menu_superior.html" with activa='cruces' %}
+{% include "warehouse/partials/barra_superior.html" with activa='cruces' %}
 
 <div class="wrap">
+  <a class="bs-volver" href="{% url 'cruces_panel' %}{% if cliente %}?customer={{ cliente.pk }}{% endif %}">← {% trans "Crossings" %}</a>
 
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
 

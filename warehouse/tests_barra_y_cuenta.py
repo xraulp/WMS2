@@ -138,7 +138,9 @@ class LasPantallasAparteTests(BaseDeLaBarra):
                 html = self.client.get(url, HTTP_USER_AGENT=UA_IPHONE).content.decode()
                 self.assertIn('class="bottom-nav"', html)
                 self.assertIn('/mobile/?tab=database', html)
-                self.assertIn('<a href="/mobile/">', html)
+                # La marca de la barra de arriba vuelve al movil, como en el
+                # propio movil.
+                self.assertIn('<a class="bs-marca" href="/mobile/">', html)
 
     def test_en_la_pc_no_llevan_barra_y_vuelven_al_tablero(self):
         self.client.force_login(self.jefe)
@@ -146,4 +148,4 @@ class LasPantallasAparteTests(BaseDeLaBarra):
             with self.subTest(url=url):
                 html = self.client.get(url, HTTP_USER_AGENT=UA_PC).content.decode()
                 self.assertNotIn('class="bottom-nav"', html)
-                self.assertIn('<a href="/dashboard/">', html)
+                self.assertIn('<a class="bs-marca" href="/dashboard/?tab=inicio">', html)
