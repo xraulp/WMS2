@@ -819,70 +819,82 @@ def avisar_mensaje_nuevo(conversation, lado, mensaje=None, triggered_by=None):
     le hace a esa pantalla es «¿por qué no me avisaron?», y un silencio sin
     registro no la responde.
 
-    Devuelve `(enviado, error)`, igual que el resto de avisos.
+    Devuelve `(enviado, error)`: enviado si salio al menos un correo, y el
+    primer error si alguno fallo.
     """
     operation = conversation.operation
     customer  = resolve_customer(operation)
     ahora     = timezone.now()
 
+    # El aviso va en dos direcciones y el idioma es el del que lee. Si escribio
+    # la empresa, lo recibe el cliente en el idioma de su ficha. Si escribio el
+    # cliente, lo reciben los operadores, cada uno en el que eligio en su
+    # perfil: sale un correo por idioma. Antes salia uno solo en el de la casa
+    # -- el ingles --, y a quien trabaja en español le llegaba en un idioma que
+    # no eligio.
     if lado == LADO_CLIENTE:
-        destinatarios = correos_del_tenant(operation.tenant)
-        campo         = 'avisado_al_tenant_at'
+        por_idioma = {}
+        for addr, idioma in _operadores_con_correo(operation.tenant):
+            por_idioma.setdefault(idioma, []).append(addr)
+        # Sin nadie a quien avisar, un solo grupo vacio: `_deliver_email` lo
+        # anota como omitido, que es como quedaba hasta ahora.
+        grupos = list(por_idioma.items()) or [('', [])]
+        campo  = 'avisado_al_tenant_at'
         # El nombre de la empresa como se firma, no como esta en el acta: en el
         # asunto y en la primera linea del correo, «Customer Test, SA. de CV»
         # ocupa el ancho util sin decir mas que «Customer Test».
-        quien         = nombre_corto(
+        quien  = nombre_corto(
             customer.name if customer else operation.get_customer_display())
     else:
-        destinatarios = email_recipients(customer)
-        campo         = 'avisado_al_cliente_at'
-        quien         = nombre_corto(
+        grupos = [(idioma_del_cliente(customer), email_recipients(customer))]
+        campo  = 'avisado_al_cliente_at'
+        quien  = nombre_corto(
             operation.tenant.name if operation.tenant else 'WMS')
 
-    # El aviso va en dos direcciones y el idioma es el del que lee: si escribio
-    # el cliente, lo recibe la empresa y manda el idioma de la casa; si escribio
-    # la empresa, lo recibe el cliente y manda el suyo.
-    lee_el_cliente = (lado != LADO_CLIENTE)
-    idioma_aviso = idioma_del_cliente(customer) if lee_el_cliente else ''
-
-    with en_idioma(idioma_aviso):
-        subject = f"{_('New message')} | {build_subject(operation)}"
+    def asunto(idioma):
+        with en_idioma(idioma):
+            return f"{_('New message')} | {build_subject(operation)}"
 
     if not _hay_que_avisar(conversation, campo, ahora):
+        todos = [addr for _idioma, destinos in grupos for addr in destinos]
         log_notification(operation, customer, EMAIL, EVENT_MESSAGE, SKIPPED,
-                         recipient=', '.join(destinatarios), subject=subject,
+                         recipient=', '.join(todos), subject=asunto(grupos[0][0]),
                          detail='aviso_reciente', triggered_by=triggered_by)
         return False, 'aviso_reciente'
 
-    with en_idioma(idioma_aviso):
-        cuerpo = render_to_string('warehouse/email/chat_email.html', {
-            'operation':   operation,
-            'tenant_name': operation.tenant.name if operation.tenant else 'WMS',
-            'de_quien':    quien,
-            'extracto':    (mensaje.body[:AVISO_EXTRACTO] if mensaje else ''),
-            'recortado':   bool(mensaje and len(mensaje.body) > AVISO_EXTRACTO),
-            # La firma del correo lleva las dos: arriba ya se dijo que empresa
-            # escribio, y aqui quien de esa empresa lo hizo.
-            'firma':       ('%s · %s' % (quien, mensaje.author_name)
-                            if mensaje and mensaje.author_name else ''),
-            'digital_url': operation_digital_url(operation, '/dashboard/'),
-            # Un mensaje puede ser solo un archivo, y entonces el extracto va
-            # vacio: sin esto el aviso diria que alguien escribio y no ensenaria
-            # nada. Van los nombres digitales, que son los que ese archivo va a
-            # tener en el expediente y en el ZIP.
-            'adjuntos':    ([a.digital_name or a.original_name
-                             for a in mensaje.adjuntos.all()] if mensaje else []),
-        })
+    enviado, primer_error = False, None
+    for idioma, destinatarios in grupos:
+        with en_idioma(idioma):
+            cuerpo = render_to_string('warehouse/email/chat_email.html', {
+                'operation':   operation,
+                'tenant_name': operation.tenant.name if operation.tenant else 'WMS',
+                'de_quien':    quien,
+                'extracto':    (mensaje.body[:AVISO_EXTRACTO] if mensaje else ''),
+                'recortado':   bool(mensaje and len(mensaje.body) > AVISO_EXTRACTO),
+                # La firma del correo lleva las dos: arriba ya se dijo que
+                # empresa escribio, y aqui quien de esa empresa lo hizo.
+                'firma':       ('%s · %s' % (quien, mensaje.author_name)
+                                if mensaje and mensaje.author_name else ''),
+                'digital_url': operation_digital_url(operation, '/dashboard/'),
+                # Un mensaje puede ser solo un archivo, y entonces el extracto
+                # va vacio: sin esto el aviso diria que alguien escribio y no
+                # ensenaria nada. Van los nombres digitales, que son los que
+                # ese archivo va a tener en el expediente y en el ZIP.
+                'adjuntos':    ([a.digital_name or a.original_name
+                                 for a in mensaje.adjuntos.all()] if mensaje else []),
+            })
 
-    enviado, error = _deliver_email(
-        operation, customer, EVENT_MESSAGE, destinatarios, subject, cuerpo,
-        triggered_by=triggered_by)
+        salio, error = _deliver_email(
+            operation, customer, EVENT_MESSAGE, destinatarios, asunto(idioma),
+            cuerpo, triggered_by=triggered_by)
+        enviado = enviado or salio
+        primer_error = primer_error or error
 
     if enviado:
         setattr(conversation, campo, ahora)
         conversation.save(update_fields=[campo])
 
-    return enviado, error
+    return enviado, primer_error
 
 
 # ── EL PEDIMENTO, A REVISION ──────────────────────────────────────────────────

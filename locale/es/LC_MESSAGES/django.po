@@ -3487,3 +3487,9 @@ msgstr "<b>%(quien)s</b> lo devolvió con estas correcciones:"
 
 msgid "Once corrected, send it to review again from the same screen."
 msgstr "Ya corregido, vuelve a enviarlo a revisión desde la misma pantalla."
+
+# El aviso del chat: los archivos que trae el mensaje.
+msgid "%(n)s file in the shipment file:"
+msgid_plural "%(n)s files in the shipment file:"
+msgstr[0] "%(n)s archivo en el expediente:"
+msgstr[1] "%(n)s archivos en el expediente:"

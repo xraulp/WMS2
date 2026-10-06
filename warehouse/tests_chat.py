@@ -432,6 +432,35 @@ class AvisoPorCorreoTests(HiloBase):
         self.assertIn('ana@clientea.com', destinos)
         self.assertNotIn('operador@almacen.com', destinos)
 
+    def test_cada_operador_lo_recibe_en_su_idioma(self):
+        """
+        Lo que escribe el cliente lo lee la casa, y cada operador en el idioma
+        que eligio en su perfil: sale un correo por idioma. Antes salia uno
+        solo en el de la casa, y a quien trabaja en español le llegaba en
+        ingles.
+        """
+        UserProfile.objects.filter(user=self.staff).update(language='es')
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+
+        self.assertEqual(len(mail.outbox), 2)
+        por_destino = {tuple(c.to): c for c in mail.outbox}
+        espanol = por_destino[('operador@almacen.com',)]
+        ingles = por_destino[('jefa@almacen.com',)]
+        self.assertTrue(espanol.subject.startswith('Mensaje nuevo'), espanol.subject)
+        self.assertTrue(ingles.subject.startswith('New message'), ingles.subject)
+        # Los dos llevan lo que se escribio, y los dos quedan en la bitacora.
+        self.assertIn('Necesito la factura.', espanol.body)
+        self.assertEqual(NotificationLog.objects.filter(
+            event='CHAT_MESSAGE', status='SENT').count(), 2)
+
+    def test_con_dos_idiomas_la_espera_sigue_siendo_una(self):
+        # Se avisa por lado, no por correo: el segundo mensaje seguido no
+        # manda ninguno de los dos.
+        UserProfile.objects.filter(user=self.staff).update(language='es')
+        self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
+        self._escribir(self.usuario_a, self.op, 'Y el packing list.')
+        self.assertEqual(len(mail.outbox), 2)
+
     def test_el_correo_lleva_el_mensaje_y_a_donde_responder(self):
         self._escribir(self.staff, self.op, 'Falta la etiqueta del lote 7.')
         cuerpo = mail.outbox[0].body
@@ -487,7 +516,7 @@ class AvisoPorCorreoTests(HiloBase):
         Lo importante es lo que se dijo; el correo es secundario. Si el envio
         revienta, el mensaje ya esta en el hilo.
         """
-        with patch.object(notifications, 'correos_del_tenant',
+        with patch.object(notifications, '_operadores_con_correo',
                           side_effect=RuntimeError('sin correo')):
             resp = self._escribir(self.usuario_a, self.op, 'Necesito la factura.')
 
@@ -1066,9 +1095,18 @@ class AdjuntosEnElHiloTests(HiloBase):
         self._mandar(self.usuario_a, self.op, '', [self._foto('pedimento.jpg')])
 
         cuerpo = mail.outbox[0].body
-        self.assertIn('1 archivo en el expediente', cuerpo)
+        self.assertIn('1 file in the shipment file', cuerpo)
         doc = OperationDocument.objects.get()
         self.assertIn(doc.digital_name, cuerpo)
+
+    def test_el_aviso_del_archivo_va_en_el_idioma_de_quien_lo_lee(self):
+        # Estaba escrito en español a mano y salia asi tambien en el correo en
+        # ingles.
+        UserProfile.objects.filter(tenant=self.tenant).exclude(
+            role='customer').update(language='es')
+        mail.outbox = []
+        self._mandar(self.usuario_a, self.op, '', [self._foto('pedimento.jpg')])
+        self.assertIn('1 archivo en el expediente', mail.outbox[0].body)
 
     def test_una_subida_que_falla_no_tumba_la_pantalla(self):
         """

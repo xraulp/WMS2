@@ -40,7 +40,7 @@
                   {% endif %}
                   {% if adjuntos %}
                   <div style="font-size:12px; line-height:1.6; color:#334155; margin-top:{% if extracto %}8px{% else %}0{% endif %};">
-                    📎 {{ adjuntos|length }} archivo{{ adjuntos|length|pluralize }} en el expediente:
+                    📎 {% blocktrans count n=adjuntos|length %}{{ n }} file in the shipment file:{% plural %}{{ n }} files in the shipment file:{% endblocktrans %}
                     <b>{{ adjuntos|join:", " }}</b>
                   </div>
                   {% endif %}
