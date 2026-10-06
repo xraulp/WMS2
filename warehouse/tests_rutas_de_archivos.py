@@ -132,6 +132,22 @@ class LaRutaSeparaLasEmpresasTests(BaseRutas):
 
         self.assertIn('/norte/', doc.file.name)
 
+    def test_las_ranuras_del_pedimento_toman_la_empresa_del_pedimento(self):
+        """
+        El archivo de una ranura cuelga del pedimento, no de una operacion, y
+        no tiene tenant propio. Todos acababan en `sin-empresa/`.
+        """
+        from .models import Pedimento, PedimentoDocument
+        for tenant, carpeta in ((self.tenant, '/norte/'), (self.otro, '/sur/')):
+            cliente = Catalog.objects.create(
+                tenant=tenant, category='CUSTOMER', name='Cliente de %s' % carpeta)
+            ped = Pedimento.objects.create(tenant=tenant, customer=cliente, orden=1)
+            doc = PedimentoDocument.objects.create(
+                pedimento=ped, ranura=PedimentoDocument.COVE, original_name='cove.pdf',
+                file=SimpleUploadedFile('cove.pdf', b'contenido'))
+            self.assertIn(carpeta, doc.file.name)
+            self.assertNotIn('sin-empresa', doc.file.name)
+
     def test_sin_empresa_por_ningun_lado_no_revienta(self):
         """Un huérfano de verdad va a su propio cajón, no a la raíz."""
         operacion = WarehouseOperation.objects.create(

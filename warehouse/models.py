@@ -904,6 +904,11 @@ def ruta_documento(instance, filename):
         # El documento puede llegar sin tenant propio; el de su operacion es el
         # mismo, y vale mas que mandarlo todo al cajon de los huerfanos.
         tenant = getattr(instance.operation, 'tenant', None)
+    if tenant is None and getattr(instance, 'pedimento_id', None):
+        # Los archivos de las ranuras del pedimento no tienen ni tenant ni
+        # operacion propios: cuelgan del pedimento, que si tiene empresa. Sin
+        # esto acababan todos en `sin-empresa/`.
+        tenant = getattr(instance.pedimento, 'tenant', None)
     if tenant is not None and tenant.subdomain:
         empresa = slugify(tenant.subdomain)[:40] or 'sin-empresa'
 
