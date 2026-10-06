@@ -91,7 +91,21 @@ class AlmacenamientoTests(SimpleTestCase):
 
     def test_el_backend_por_defecto_es_r2(self):
         """Django >= 5.1 ignora DEFAULT_FILE_STORAGE: manda STORAGES."""
-        self.assertEqual(
-            settings.STORAGES['default']['BACKEND'],
-            'storages.backends.s3boto3.S3Boto3Storage',
-        )
+        self.assertEqual(settings.ALMACEN_DE_PRODUCCION,
+                         'storages.backends.s3boto3.S3Boto3Storage')
+        # Y es el que se usa fuera de las pruebas: lo que se lee en el archivo
+        # de settings, no lo que quedo puesto para correrlas.
+        texto = (Path(settings.BASE_DIR) / 'warehouse_system' / 'settings.py'
+                 ).read_text(encoding='utf-8')
+        self.assertIn('"BACKEND": ALMACEN_DE_PRODUCCION', texto)
+
+    def test_las_pruebas_no_escriben_en_el_bucket(self):
+        """
+        El `.env` de la maquina de desarrollo apunta al bucket de produccion, y
+        las pruebas que no cambiaban el almacen a mano subian cada archivo a
+        R2: casi tres mil objetos de prueba antes de que se viera.
+        """
+        from django.core.files.storage import default_storage
+        self.assertEqual(settings.STORAGES['default']['BACKEND'],
+                         'django.core.files.storage.FileSystemStorage')
+        self.assertNotIn('S3', type(default_storage).__name__)

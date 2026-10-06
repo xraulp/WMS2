@@ -261,9 +261,10 @@ MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/' if AWS_S3_CUSTOM_DOMAIN else '/me
 # Django >= 5.1 ya no lee DEFAULT_FILE_STORAGE: el backend se declara aquí. El
 # archivo definía aquella variable en dos sitios y hasta la imprimía al
 # arrancar, pero no tenía efecto alguno sobre este proyecto (Django 6.0).
+ALMACEN_DE_PRODUCCION = "storages.backends.s3boto3.S3Boto3Storage"
 STORAGES = {
     "default": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "BACKEND": ALMACEN_DE_PRODUCCION,
     },
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
@@ -289,6 +290,24 @@ if os.getenv('MEDIA_LOCAL') == '1':
         'OPTIONS': {'location': str(MEDIA_ROOT)},
     }
     print('[INFO] MEDIA_LOCAL: los archivos se guardan en', MEDIA_ROOT)
+
+# Y las pruebas, nunca al bucket.
+#
+# `manage.py test` carga el mismo `.env` que todo lo demas, y el `.env` de la
+# maquina de desarrollo apunta al bucket de produccion. Solo algunos modulos de
+# pruebas cambiaban el almacen a disco; los demas -- pedimentos, cruces, carga,
+# el chat -- subian cada archivo de prueba a R2. Cuando se vio, el 5 de octubre
+# de 2026, habia casi tres mil objetos de diez bytes en `sin-empresa/` y en
+# `dyser/`, que es el subdominio de la empresa de pruebas. Aqui se corta para
+# todas de una vez, en vez de confiar en que cada prueba nueva se acuerde.
+if 'test' in sys.argv:
+    import tempfile
+    MEDIA_ROOT = tempfile.mkdtemp(prefix='wms-pruebas-')
+    MEDIA_URL = '/media/'
+    STORAGES['default'] = {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {'location': MEDIA_ROOT},
+    }
 
 # La política CORS del bucket se configura en el panel de Cloudflare, no aquí.
 # Estaba pegada en este archivo como un literal JSON suelto que Python evaluaba
