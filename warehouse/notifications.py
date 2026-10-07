@@ -43,6 +43,7 @@ EVENT_MESSAGE   = 'CHAT_MESSAGE'
 EVENT_PEDIMENTO_REVIEW = 'PEDIMENTO_REVIEW'
 EVENT_PEDIMENTO_APPROVED = 'PEDIMENTO_APPROVED'
 EVENT_PEDIMENTO_CORRECTIONS = 'PEDIMENTO_CORRECTION'
+EVENT_CRUCE_POR_CONFIRMAR = 'CROSSING_TO_CONFIRM'
 
 # Estados
 SENT    = 'SENT'
@@ -1079,3 +1080,84 @@ def avisar_correcciones_pedidas(pedimento, triggered_by=None):
         pedimento, EVENT_PEDIMENTO_CORRECTIONS,
         'warehouse/email/pedimento_correcciones_email.html',
         'Corrections requested', triggered_by=triggered_by)
+
+
+# ── EL CRUCE QUE LA CASA CREO POR EL CLIENTE ──────────────────────────────────
+
+@_never_breaks(lambda e: (False, str(e)))
+def avisar_cruce_por_confirmar(tarea, triggered_by=None):
+    """
+    Le pide al cliente que confirme un cruce que la casa creo en su nombre.
+
+    Pasa cuando el cliente llama por telefono: la casa arma la tarea con lo que
+    entendio, y el cliente recibe "esto es lo que entendimos, confirmalo". Un
+    toque, no un tramite: es la instruccion telefonica puesta por escrito, y
+    convierte un "yo te dije otra cosa" en algo que se puede mirar. Sin el
+    aviso, la tarea se quedaba esperando una confirmacion que el cliente no
+    sabia que le pedian.
+
+    Mismo camino que el aviso de pedimento por revisar: los correos del
+    cliente, en su idioma, a nombre de la empresa, y su renglon en la bitacora.
+
+    Devuelve `(enviado, error)`, igual que el resto de avisos.
+    """
+    customer = tarea.customer
+    tenant   = tarea.tenant
+    empresa  = tenant.name if tenant else 'WMS'
+    destinatarios = email_recipients(customer)
+
+    renglones = list(tarea.renglones.select_related('operation'))
+    pedidos = []
+    for r in renglones:
+        po = (r.operation.po_order or '').strip()
+        if po and po not in pedidos:
+            pedidos.append(po)
+
+    # Un renglon sin bultos cruza la entrada entera; con bultos, solo esos (el
+    # caso de 19 de 20).
+    for r in renglones:
+        r.cruzan = r.bultos or r.operation.bundle_qty
+    total = sum(r.cruzan or 0 for r in renglones)
+
+    creador = tarea.created_by
+    quien = (creador.get_full_name() or creador.username) if creador else ''
+
+    with en_el_idioma_de(customer):
+        partes = [_('Crossing to confirm')]
+        if pedidos:
+            partes.append('PO ' + ', '.join(pedidos))
+        partes += [nombre_corto(customer.name), nombre_corto(empresa),
+                   '%s · %s' % (tarea.custom_id,
+                                tarea.fecha_de_cruce.strftime('%d/%m/%Y'))]
+        subject = ' | '.join(p for p in partes if p)
+
+        cuerpo = render_to_string('warehouse/email/cruce_por_confirmar_email.html', {
+            'tarea':       tarea,
+            'renglones':   renglones,
+            'total':       total,
+            'tenant_name': empresa,
+            'cliente':     customer.name,
+            'quien':       ('%s · %s' % (quien, nombre_corto(empresa))) if quien
+                           else nombre_corto(empresa),
+            'url':         f"{tenant_public_url(tenant)}/cruces/#tarea-{tarea.pk}",
+        })
+
+    if not destinatarios:
+        log_notification(None, customer, EMAIL, EVENT_CRUCE_POR_CONFIRMAR, SKIPPED,
+                         subject=subject, detail='no_recipient',
+                         triggered_by=triggered_by, tenant=tenant)
+        return False, 'no_email'
+
+    de, responder = remitente_de(tenant)
+    correo = EmailMessage(subject=subject, body=cuerpo, to=destinatarios,
+                          cc=get_cc_emails(tenant), from_email=de,
+                          reply_to=responder)
+    correo.content_subtype = 'html'
+    try:
+        enviar_y_registrar(correo, EVENT_CRUCE_POR_CONFIRMAR, tenant=tenant,
+                           customer=customer, triggered_by=triggered_by)
+    except Exception as e:
+        logger.warning('Fallo el aviso de confirmacion de %s: %s',
+                       tarea.custom_id, e)
+        return False, str(e)
+    return True, None

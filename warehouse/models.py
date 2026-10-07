@@ -1644,6 +1644,8 @@ class NotificationLog(models.Model):
         ('PEDIMENTO_APPROVED', _('Pedimento approved')),
         # O cuando lo devuelve con correcciones.
         ('PEDIMENTO_CORRECTION', _('Corrections requested')),
+        # El cruce que la casa creo en nombre del cliente, para que lo confirme.
+        ('CROSSING_TO_CONFIRM', _('Crossing to confirm')),
     ]
     # SENT quiere decir que el proveedor **acepto** el correo, no que llego.
     # Lo que paso despues lo cuenta Resend por su webhook (`webhooks.py`) y

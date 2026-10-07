@@ -6262,7 +6262,7 @@ def cruce_crear(request):
         return _cruces_con_error(request, cliente.pk,
                                  _('Pick the crossing day.'))
 
-    CrossingTask.objects.create(
+    tarea = CrossingTask.objects.create(
         tenant=tenant, customer=cliente, fecha_de_cruce=dia, origen=origen,
         # Cuando la crea el cliente no hay nada que confirmar: la instruccion
         # es suya.
@@ -6270,6 +6270,10 @@ def cruce_crear(request):
         confirmada_en=(timezone.now()
                        if origen == CrossingTask.LA_CREO_EL_CLIENTE else None),
         created_by=request.user)
+    if tarea.espera_confirmacion:
+        notifications.en_segundo_plano(
+            notifications.avisar_cruce_por_confirmar, tarea,
+            triggered_by=request.user)
     return redirect(f"{reverse('cruces_panel')}?customer={cliente.pk}")
 
 
@@ -6453,6 +6457,7 @@ def cruce_armar(request):
             return de_vuelta(_('Pick the crossing day.'))
 
     libres = {op.pk: op for op in _libres_del_cliente(tenant, cliente)}
+    nueva = tarea is None
     try:
         with transaction.atomic():
             if tarea is None:
@@ -6496,6 +6501,15 @@ def cruce_armar(request):
     except _NoEntra as e:
         return de_vuelta(e)
 
+    # Si la armo la casa, el cliente recibe "esto es lo que entendimos,
+    # confirmalo". Solo al crearla: añadir a una que ya existe no es una
+    # instruccion nueva. Va despues de la transaccion para que el correo diga
+    # lo que de verdad quedo guardado.
+    if nueva and tarea.espera_confirmacion:
+        notifications.en_segundo_plano(
+            notifications.avisar_cruce_por_confirmar, tarea,
+            triggered_by=request.user)
+
     return redirect(f"{reverse('cruces_panel')}?customer={cliente.pk}#tarea-{tarea.pk}")
 
 
@@ -6507,7 +6521,13 @@ def cruce_confirmar(request, pk):
 
     Un toque, no un tramite: es la instruccion telefonica puesta por escrito, y
     convierte un "yo te dije otra cosa" en algo que se puede mirar.
+
+    Solo el cliente: si la casa pudiera confirmar por el, la confirmacion
+    dejaria de probar nada. La pantalla ya le enseñaba el boton solo a el; esto
+    lo asegura tambien para quien mande el formulario a mano.
     """
+    if not get_profile(request.user).is_customer():
+        raise Http404
     tarea = _cruce_del_tenant(request, pk)
     if not tarea.confirmada_por_el_cliente:
         tarea.confirmada_por_el_cliente = True

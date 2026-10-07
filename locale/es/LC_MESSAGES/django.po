@@ -3496,3 +3496,22 @@ msgstr[1] "%(n)s archivos en el expediente:"
 
 msgid "The shipments ready to cross arrive already marked"
 msgstr "Los embarques listos para cruzar llegan ya marcados"
+
+# El aviso al cliente para que confirme el cruce que la casa armo en su nombre.
+msgid "Crossing to confirm"
+msgstr "Cruce por confirmar"
+
+msgid "A crossing to confirm"
+msgstr "Un cruce por confirmar"
+
+msgid "<b>%(cliente)s</b>, <b>%(quien)s</b> set up this crossing on your behalf. This is what we understood: is it right?"
+msgstr "<b>%(cliente)s</b>, <b>%(quien)s</b> armó este cruce en tu nombre. Esto es lo que entendimos: ¿es correcto?"
+
+msgid "Crossing day"
+msgstr "Día de cruce"
+
+msgid "Confirm the crossing"
+msgstr "Confirmar el cruce"
+
+msgid "If something is not what you asked for, just reply to this email and tell us."
+msgstr "Si algo no es lo que pediste, contesta este correo y dinos."

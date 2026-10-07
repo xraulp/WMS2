@@ -550,3 +550,99 @@ class LaPantallaEnEspañolTests(BaseDeCruces):
             self.assertContains(respuesta, frase)
         for frase in ('Take out', 'Picking list', 'Cancel this crossing', 'on behalf of'):
             self.assertNotContains(respuesta, frase)
+
+
+class AvisoDeCrucePorConfirmarTests(BaseDeCruces):
+    """
+    "Esto es lo que entendimos, confirmalo".
+
+    Cuando la casa arma un cruce en nombre del cliente, el cliente recibe un
+    correo para confirmarlo. Sin el, la tarea se quedaba esperando una
+    confirmacion que el cliente no sabia que le pedian.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from django.core import mail
+        mail.outbox = []
+        self.cliente.contact_email = 'compras@lopez.com'
+        self.cliente.language = 'en'
+        self.cliente.save(update_fields=['contact_email', 'language'])
+        self.a = self.operacion('ED261006-0001', bundle_qty=20, po_order='4500321')
+        self.b = self.operacion('ED261006-0002', bundle_qty=3)
+
+    def armar(self, **datos):
+        base = {'customer': self.cliente.pk, 'fecha_de_cruce': str(self.viernes),
+                'ops': [self.a.pk, self.b.pk], 'bultos_%d' % self.a.pk: '19'}
+        base.update(datos)
+        return self.client.post('/cruces/mark/', base)
+
+    def bitacora(self):
+        from .models import NotificationLog
+        return NotificationLog.objects.filter(event='CROSSING_TO_CONFIRM')
+
+    def test_la_casa_lo_arma_y_al_cliente_le_llega(self):
+        from django.core import mail
+        self.armar()
+        self.assertEqual(len(mail.outbox), 1)
+        correo = mail.outbox[0]
+        t = CrossingTask.objects.get()
+        self.assertEqual(correo.to, ['compras@lopez.com'])
+        self.assertTrue(correo.subject.startswith('Crossing to confirm | PO 4500321'))
+        self.assertIn(t.custom_id, correo.subject)
+        # Lo que va en el camion, con el pedido delante y el 19 de 20.
+        self.assertIn('<b>4500321</b>', correo.body)
+        self.assertIn('19 of 20', correo.body)
+        self.assertIn('ED261006-0002', correo.body)
+        self.assertIn('/cruces/#tarea-%d' % t.pk, correo.body)
+        self.assertEqual(self.bitacora().get().status, 'SENT')
+
+    def test_en_el_idioma_del_cliente(self):
+        from django.core import mail
+        self.cliente.language = 'es'
+        self.cliente.save(update_fields=['language'])
+        self.armar()
+        correo = mail.outbox[0]
+        self.assertTrue(correo.subject.startswith('Cruce por confirmar'))
+        self.assertIn('Confirmar el cruce', correo.body)
+        self.assertNotIn('Confirm the crossing', correo.body)
+
+    def test_si_lo_arma_el_cliente_no_hay_nada_que_confirmar(self):
+        from django.core import mail
+        self.client.force_login(self.duenio)
+        self.armar(customer='')
+        self.assertTrue(CrossingTask.objects.get().confirmada_por_el_cliente)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(self.bitacora().exists())
+
+    def test_añadir_a_una_que_ya_existe_no_vuelve_a_pedirlo(self):
+        from django.core import mail
+        self.armar(ops=[self.a.pk])
+        mail.outbox = []
+        t = CrossingTask.objects.get()
+        self.armar(ops=[self.b.pk], tarea=t.pk)
+        self.assertEqual(t.renglones.count(), 2)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_tambien_desde_la_tarea_vacia(self):
+        from django.core import mail
+        self.client.post('/cruces/new/', {'customer': self.cliente.pk,
+                                          'fecha_de_cruce': str(self.viernes)})
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_si_el_correo_falla_el_cruce_queda_igual(self):
+        from unittest import mock
+        with mock.patch('django.core.mail.EmailMessage.send',
+                        side_effect=RuntimeError('sin correo')):
+            respuesta = self.armar()
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(CrossingTask.objects.get().renglones.count(), 2)
+        self.assertEqual(self.bitacora().get().status, 'FAILED')
+
+    def test_la_casa_no_puede_confirmar_por_el_cliente(self):
+        self.armar()
+        t = CrossingTask.objects.get()
+        respuesta = self.client.post('/cruces/%d/confirm/' % t.pk)
+        self.assertEqual(respuesta.status_code, 404)
+        t.refresh_from_db()
+        self.assertTrue(t.espera_confirmacion)
