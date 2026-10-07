@@ -76,6 +76,9 @@
          text-decoration:none;display:inline-block}
     .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
     .btn-sm{padding:3px 8px;font-size:12px}
+    /* Mandar a cruce: en el azul de la casa, como en Operaciones, para que se
+       distinga de los dos que solo leen la hoja. */
+    .btn-cruce{color:var(--accent);border-color:var(--accent)}
     .msg-error{background:var(--rsoft);color:var(--err-ink);padding:9px 12px;
                border-radius:var(--r);font-size:13px;margin-bottom:10px}
 
@@ -288,6 +291,17 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
             &#8635; {% trans "Refresh" %}</a>
           <a class="btn btn-sm" href="{% url 'impuestos_pdf' %}?customer={{ cliente.pk }}">
             &#8681; {% trans "PDF" %}</a>
+          {% comment %}
+          Mandar a cruce desde aqui, que es donde se ve que un embarque ya esta
+          listo. Lleva a la pantalla de marcar con los listos ya marcados -- el
+          pedimento aprobado o pagado, y sin otro cruce --; alli se elige el
+          dia y se quita o se añade lo que haga falta. Lo pueden hacer los dos,
+          el cliente y la casa en su nombre, igual que desde Operaciones.
+          {% endcomment %}
+          <a class="btn btn-sm btn-cruce"
+             href="{% url 'cruce_armar' %}?desde=IMPUESTOS&amp;customer={{ cliente.pk }}{% if listos_para_cruzar %}&amp;ops={{ listos_para_cruzar }}{% endif %}"
+             title="{% trans "The shipments ready to cross arrive already marked" %}">
+            &#128667; {% trans "Send to crossing" %}</a>
           {% if puede_escribir %}
           <button class="btn btn-sm" type="button" onclick="abrirCorreo(true)">
             &#9993; {% trans "Send to the customer" %}</button>

@@ -84,7 +84,11 @@
 {% include "warehouse/partials/barra_superior.html" with activa='cruces' %}
 
 <div class="wrap">
+  {% if desde == 'IMPUESTOS' %}
+  <a class="bs-volver" href="{% url 'impuestos_panel' %}{% if cliente %}?customer={{ cliente.pk }}{% endif %}">← {% trans "Back to the sheet" %}</a>
+  {% else %}
   <a class="bs-volver" href="{% url 'cruces_panel' %}{% if cliente %}?customer={{ cliente.pk }}{% endif %}">← {% trans "Crossings" %}</a>
+  {% endif %}
 
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
 

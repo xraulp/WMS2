@@ -3493,3 +3493,6 @@ msgid "%(n)s file in the shipment file:"
 msgid_plural "%(n)s files in the shipment file:"
 msgstr[0] "%(n)s archivo en el expediente:"
 msgstr[1] "%(n)s archivos en el expediente:"
+
+msgid "The shipments ready to cross arrive already marked"
+msgstr "Los embarques listos para cruzar llegan ya marcados"

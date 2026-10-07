@@ -368,3 +368,85 @@ class LosParametrosDelDiaTests(BaseDeAlmacen):
 
         self.assertEqual(de_marzo.calcular()['S_prevalidacion'], Decimal('300.00'))
         self.assertEqual(de_agosto.calcular()['S_prevalidacion'], Decimal('450.00'))
+
+
+class MandarACruceDesdeLaHojaTests(BaseDeAlmacen):
+    """
+    El boton de mandar a cruce de la hoja.
+
+    La hoja es donde se ve que un embarque ya esta listo, asi que el boton
+    lleva a la pantalla de marcar con esos ya marcados: el pedimento aprobado
+    o pagado, y sin otro cruce. Los demas no, para no llegar con avisos de
+    "ya va en otro cruce" o con embarques que todavia no pueden salir.
+    """
+
+    def setUp(self):
+        from .models import CrossingTask, CrossingTaskItem
+        self.client.force_login(self.jefa)
+        self.ops = {}
+        for nombre, estado in (('aprobado', Pedimento.APROBADO),
+                               ('pagado', Pedimento.PAGADO),
+                               ('revision', Pedimento.EN_REVISION),
+                               ('ya_cruza', Pedimento.PAGADO)):
+            op = self.operacion('ED-%s' % nombre, bundle_qty=2)
+            ped = Pedimento.objects.create(tenant=self.tenant, customer=self.cliente,
+                                           orden=len(self.ops) + 1, estado=estado)
+            PedimentoBundle.objects.create(pedimento=ped, operation=op, bultos=2)
+            RenglonDeImpuestos.objects.create(tenant=self.tenant,
+                                              customer=self.cliente, operation=op)
+            self.ops[nombre] = op
+        # Uno sin pedimento todavia: se esta elaborando.
+        self.ops['elab'] = self.operacion('ED-elab', bundle_qty=1)
+        RenglonDeImpuestos.objects.create(tenant=self.tenant, customer=self.cliente,
+                                          operation=self.ops['elab'])
+        tarea = CrossingTask.objects.create(tenant=self.tenant, customer=self.cliente,
+                                            fecha_de_cruce=date(2026, 10, 9),
+                                            created_by=self.jefa)
+        CrossingTaskItem.objects.create(task=tarea, operation=self.ops['ya_cruza'])
+
+    def enlace(self):
+        import re
+        html = self.client.get('/impuestos/', {'customer': self.cliente.pk}).content.decode()
+        encontrado = re.search(r'href="(/cruces/mark/\?[^"]+)"', html)
+        self.assertIsNotNone(encontrado, 'la hoja no tiene el boton de mandar a cruce')
+        return encontrado.group(1).replace('&amp;', '&')
+
+    def test_lleva_marcados_solo_los_listos_que_pueden_cruzar(self):
+        from urllib.parse import parse_qs, urlparse
+        datos = parse_qs(urlparse(self.enlace()).query)
+        self.assertEqual(datos['desde'], ['IMPUESTOS'])
+        self.assertEqual(datos['customer'], [str(self.cliente.pk)])
+        marcados = {int(p) for p in datos['ops'][0].split(',')}
+        self.assertEqual(marcados, {self.ops['aprobado'].pk, self.ops['pagado'].pk})
+
+    def test_la_otra_pantalla_llega_con_ellos_marcados(self):
+        respuesta = self.client.get(self.enlace())
+        marcados = {op.pk for op in respuesta.context['libres'] if op.marcado}
+        self.assertEqual(marcados, {self.ops['aprobado'].pk, self.ops['pagado'].pk})
+        # Y sin avisos de "no puede ir": lo que no podia ir no se mando.
+        self.assertEqual(respuesta.context['fuera'], [])
+
+    def test_y_su_volver_regresa_a_la_hoja(self):
+        respuesta = self.client.get(self.enlace())
+        self.assertContains(respuesta, 'href="/impuestos/?customer=%d"' % self.cliente.pk)
+
+    def test_sin_ninguno_listo_el_boton_lleva_solo_al_cliente(self):
+        Pedimento.objects.update(estado=Pedimento.EN_REVISION)
+        enlace = self.enlace()
+        self.assertIn('desde=IMPUESTOS', enlace)
+        self.assertNotIn('ops=', enlace)
+
+    def test_el_cruce_queda_escrito_como_mandado_desde_la_hoja(self):
+        from .models import CrossingTaskItem
+        self.client.post('/cruces/mark/', {
+            'customer': self.cliente.pk, 'fecha_de_cruce': '2026-10-09',
+            'ops': [self.ops['aprobado'].pk], 'desde': 'IMPUESTOS'})
+        renglon = CrossingTaskItem.objects.get(operation=self.ops['aprobado'])
+        self.assertEqual(renglon.desde, CrossingTaskItem.DESDE_IMPUESTOS)
+
+    def test_el_cliente_tambien_lo_ve(self):
+        duenio = User.objects.create_user('acme', password='x')
+        UserProfile.objects.create(user=duenio, tenant=self.tenant,
+                                   role='customer', customer=self.cliente)
+        self.client.force_login(duenio)
+        self.assertIn('desde=IMPUESTOS', self.enlace())

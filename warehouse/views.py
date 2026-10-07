@@ -5631,8 +5631,19 @@ def impuestos_panel(request):
             'fijo': str(parametros.prevalidacion + salto),
         })
 
+    # Los que el boton de mandar a cruce lleva ya marcados: los que la hoja dice
+    # listos -- el cliente aprobo el pedimento, o ya se pago -- y que todavia
+    # pueden cruzar. Se cruzan con lo libre para no llegar a la otra pantalla
+    # con avisos de "ya va en otro cruce" por cada uno que ya salio.
+    libres = {op.pk for op in _libres_del_cliente(tenant, cliente)}
+    listos_para_cruzar = [
+        r.operation_id for r in renglones
+        if r.operation_id in libres
+        and r.status in (RenglonDeImpuestos.LISTO_PAGO, RenglonDeImpuestos.PAGADO)]
+
     contexto.update({
         'renglones': renglones,
+        'listos_para_cruzar': ','.join(str(pk) for pk in listos_para_cruzar),
         'parametros': parametros,
         'total': total,
         'para_simular': para_simular,
