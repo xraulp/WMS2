@@ -6201,13 +6201,28 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
     tareas = list(CrossingTask.objects
                   .filter(tenant=tenant, customer=cliente)
                   .exclude(estado=CrossingTask.CANCELADA)
-                  .prefetch_related('renglones__operation',
+                  .prefetch_related('renglones__operation__renglon_de_impuestos',
                                     'cambios_de_dia')
                   .order_by('fecha_de_cruce'))
 
     libres = _libres_del_cliente(tenant, cliente)
 
     for tarea in tareas:
+        # El impuesto aproximado de cada embarque, el mismo que dice su hoja,
+        # para que el cliente tenga junto lo que cruza y lo que va a pagar. Un
+        # parcial lleva la cifra entera: el pedimento se paga completo aunque
+        # cruce en dos camiones.
+        tarea.filas = list(tarea.renglones.all())
+        tarea.impuesto_total = Decimal('0')
+        tarea.sin_impuesto = 0
+        for fila in tarea.filas:
+            fila.pedimento_texto = _pedimento_que_ampara(fila.operation)
+            hoja = getattr(fila.operation, 'renglon_de_impuestos', None)
+            fila.impuesto = hoja.impuesto_estimado if hoja else None
+            if fila.impuesto:
+                tarea.impuesto_total += fila.impuesto
+            else:
+                tarea.sin_impuesto += 1
         tarea.sin_factura = tarea.operaciones_sin_factura
         tarea.dias = tarea.dias_para_el_cruce
         tarea.libres = libres

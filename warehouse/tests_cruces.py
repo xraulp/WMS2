@@ -377,6 +377,68 @@ class QuienVeQueTests(BaseDeCruces):
         self.assertNotIn(t, respuesta.context['tareas'])
 
 
+class ElImpuestoEnLaTareaTests(BaseDeCruces):
+    """
+    Cada embarque de la tarea lleva el impuesto aproximado de su hoja, y la
+    tarea el total: el cliente revisa lo que cruza con lo que va a pagar al
+    lado, sin ir a buscarlo a otra pantalla.
+    """
+
+    def con_impuesto(self, op, cifra):
+        from decimal import Decimal
+
+        from .models import RenglonDeImpuestos
+        RenglonDeImpuestos.objects.create(
+            tenant=self.tenant, customer=self.cliente, operation=op,
+            impuesto_reportado=Decimal(cifra))
+
+    def tarea_con(self, *ops):
+        t = self.tarea()
+        for op in ops:
+            CrossingTaskItem.objects.create(task=t, operation=op,
+                                            added_by=self.jefa)
+        return t
+
+    def pantalla(self, quien):
+        self.client.force_login(quien)
+        return self.client.get('/cruces/', {'customer': self.cliente.pk})
+
+    def test_cada_embarque_lleva_su_impuesto_y_la_tarea_el_total(self):
+        a = self.operacion('ED261012-0001', bundle_qty=15, po_order='IP45/26')
+        b = self.operacion('ED261012-0002', bundle_qty=4, po_order='IP46/26')
+        self.con_impuesto(a, '48000')
+        self.con_impuesto(b, '31500')
+        self.tarea_con(a, b)
+        respuesta = self.pantalla(self.duenio)
+        t = respuesta.context['tareas'][0]
+        self.assertEqual([str(f.impuesto) for f in t.filas],
+                         ['48000.00', '31500.00'])
+        self.assertEqual(str(t.impuesto_total), '79500.00')
+        self.assertContains(respuesta, '$48,000')
+        self.assertContains(respuesta, '$79,500')
+
+    def test_con_un_solo_embarque_no_hay_renglon_de_total(self):
+        a = self.operacion('ED261012-0001', bundle_qty=15)
+        self.con_impuesto(a, '48000')
+        self.tarea_con(a)
+        self.assertNotContains(self.pantalla(self.jefa), '<tfoot>')
+
+    def test_el_que_no_tiene_cifra_se_dice_y_no_suma(self):
+        a = self.operacion('ED261012-0001', bundle_qty=15)
+        b = self.operacion('ED261012-0002', bundle_qty=4)
+        self.con_impuesto(a, '48000')
+        self.tarea_con(a, b)
+        t = self.pantalla(self.jefa).context['tareas'][0]
+        self.assertEqual(str(t.impuesto_total), '48000.00')
+        self.assertEqual(t.sin_impuesto, 1)
+
+    def test_el_pedimento_tecleado_al_capturar_sale_en_la_tarea(self):
+        a = self.operacion('ED261012-0001', bundle_qty=15,
+                           pedimento='24-1780-6003577')
+        self.tarea_con(a)
+        self.assertContains(self.pantalla(self.jefa), '24-1780-6003577')
+
+
 class MarcarYLuegoCrearTests(BaseDeCruces):
     """
     El cliente ve su mercancia, marca lo que quiere cruzar, elige el dia y crea

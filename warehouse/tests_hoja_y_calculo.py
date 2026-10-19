@@ -423,6 +423,26 @@ class LaHojaTraeLoQueElExcelTraeTests(BaseDeLaHoja):
     def test_sin_pedimento_la_fecha_va_vacia(self):
         self.assertIsNone(self.r.fecha_enviado_a_rev_y_mv)
 
+    def test_el_pedimento_tecleado_al_capturar_sale_en_la_hoja(self):
+        # Antes de que el pedimento se arme y reparta los bultos, el numero
+        # que se escribio en la entrada es el unico que hay.
+        self.op.pedimento = '24-1780-6003577'
+        self.op.save()
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.pedimento_texto, '6003577')
+
+    def test_el_pedimento_armado_manda_sobre_el_tecleado(self):
+        from .models import Pedimento, PedimentoBundle
+        self.op.pedimento = '24-1780-6003577'
+        self.op.save()
+        ped = Pedimento.objects.create(
+            tenant=self.tenant, customer=self.cliente, orden=1,
+            ped_consecutivo='6003598')
+        PedimentoBundle.objects.create(pedimento=ped, operation=self.op,
+                                       bultos=1)
+        self.r.refresh_from_db()
+        self.assertEqual(self.r.pedimento_texto, '6003598')
+
 
 class LaHojaSeCierraSolaTests(BaseDeLaHoja):
     """

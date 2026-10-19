@@ -2735,10 +2735,17 @@ class RenglonDeImpuestos(models.Model):
         Del pedimento de verdad cuando lo hay, y del que se tecleo cuando la
         linea es a mano. Existe para que la plantilla no tenga que preguntar
         dos veces ni saber cual de los dos mira.
+
+        Entre los dos esta el numero que se escribio al capturar la entrada:
+        hasta que el pedimento se arma y reparte los bultos, es el unico que
+        hay, y sin el la columna salia vacia aunque el numero estuviera dado.
         """
         ped = self.pedimento
         if ped is not None:
             return ped.ped_consecutivo or ped.etiqueta
+        if self.operation and (self.operation.pedimento or '').strip():
+            return (self.operation.pedimento_desglosado[2]
+                    or self.operation.pedimento.strip())
         return (self.pedimento_manual or '').strip()
 
     # ── La factura, que decide si el valor es firme ──────────────────────────
