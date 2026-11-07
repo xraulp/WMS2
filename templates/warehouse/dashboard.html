@@ -186,13 +186,9 @@ tbody td:has(.btn-action) {
   {% endif %}
   <button class="tab" id="tab-database" onclick="showTab('database')">{% trans "Operations" %}</button>
   {% comment %}
-  Armar pedimentos vive en su propia pantalla y no en una pestana de esta,
-  porque no comparte nada con el resto del tablero: no es una lista de
-  operaciones filtrada, es un reparto de bultos. El enlace se pinta como una
-  pestana mas para que este donde se le va a buscar.
+  Sin pestana de Pedimentos: a cada pedimento se entra desde su tarea de
+  cruce, que es donde Diego lo va a buscar. La pantalla sigue existiendo.
   {% endcomment %}
-  <a class="tab" href="{% url 'pedimentos_panel' %}"
-     style="text-decoration:none;display:inline-flex;align-items:center">{% trans "Pedimentos" %}</a>
   <a class="tab" href="{% url 'cruces_panel' %}"
      style="text-decoration:none;display:inline-flex;align-items:center">{% trans "Crossings" %}</a>
   <a class="tab" href="{% url 'impuestos_panel' %}"

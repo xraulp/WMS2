@@ -49,13 +49,10 @@ body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
     <span class="icon">🗄️</span>{% trans "Operations" %}
   </a>
   {% comment %}
-  Armar pedimentos, los cruces y la hoja de impuestos son pantallas aparte, las
-  mismas que en el tablero. Van en la barra y no escondidas en un menu porque
+  Los cruces y la hoja de impuestos son pantallas aparte, las mismas que en el
+  tablero. A los pedimentos se entra desde la tarea de cruce. Van en la barra y no escondidas en un menu porque
   quien reparte bultos lo hace con el telefono en la mano, andando por la bodega.
   {% endcomment %}
-  <a class="nav-btn{% if activa == 'pedimentos' %} on{% endif %}" href="{% url 'pedimentos_panel' %}">
-    <span class="icon">📄</span>{% trans "Pedimentos" %}
-  </a>
   <a class="nav-btn{% if activa == 'cruces' %} on{% endif %}" href="{% url 'cruces_panel' %}">
     <span class="icon">🚛</span>{% trans "Crossings" %}
   </a>

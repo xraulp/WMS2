@@ -52,7 +52,10 @@
               border-top:1px dashed var(--bdr);padding-top:10px;margin-top:4px}
     .deducido b{color:var(--ink);font-family:'IBM Plex Mono',monospace}
 
-    .ped{border:1px solid var(--bdr);border-radius:12px;margin-bottom:12px;overflow:hidden}
+    .ped{border:1px solid var(--bdr);border-radius:12px;margin-bottom:12px;overflow:hidden;
+         scroll-margin-top:110px}
+    /* El pedimento al que se entro desde la tarea de cruce, marcado. */
+    .ped:target{border-color:var(--accent);box-shadow:0 0 0 3px var(--asoft)}
     .ped-hd{padding:12px 14px;background:var(--bg-sutil);border-bottom:1px solid var(--bdr);
             display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;justify-content:space-between}
     .ped-num{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600}
@@ -145,9 +148,14 @@
 </head>
 <body>
 
-{% include "warehouse/partials/barra_superior.html" with activa='pedimentos' %}
+{% include "warehouse/partials/barra_superior.html" with activa='cruces' %}
 
 <div class="wrap">
+  {% comment %}
+  Ya no hay pestana de Pedimentos: aqui se llega desde la tarea de cruce, y
+  el volver lleva a ella.
+  {% endcomment %}
+  <a class="bs-volver" href="{% url 'cruces_panel' %}{% if cliente %}?customer={{ cliente.pk }}{% endif %}">← {% trans "Crossings" %}</a>
 
   {% comment %}
   El candado saltando. Sale aqui arriba, dentro de la pantalla y con la pantalla
@@ -225,7 +233,7 @@
   {% endif %}
 
   {% for p in pedimentos %}
-  <div class="ped">
+  <div class="ped" id="ped-{{ p.pk }}">
     <div class="ped-hd">
       <div>
         {% if p.tiene_numero %}
@@ -625,7 +633,7 @@
 </div>
 
 {% if es_telefono %}
-{% include "warehouse/partials/barra_inferior.html" with activa='pedimentos' %}
+{% include "warehouse/partials/barra_inferior.html" with activa='cruces' %}
 {% endif %}
 </body>
 </html>

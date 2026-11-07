@@ -6202,6 +6202,7 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
                   .filter(tenant=tenant, customer=cliente)
                   .exclude(estado=CrossingTask.CANCELADA)
                   .prefetch_related('renglones__operation__renglon_de_impuestos',
+                                    'renglones__operation__renglones_de_pedimento__pedimento',
                                     'cambios_de_dia')
                   .order_by('fecha_de_cruce'))
 
@@ -6215,8 +6216,31 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
         tarea.filas = list(tarea.renglones.all())
         tarea.impuesto_total = Decimal('0')
         tarea.sin_impuesto = 0
+        # Cada pedimento de la tarea lleva un color, el mismo en todos sus
+        # renglones, para que se vea de un golpe que embarques van juntos. Y
+        # cada uno es un enlace a su pedimento: desde que no hay pestana de
+        # Pedimentos, a ellos se entra desde aqui.
+        # El que solo trae el numero tecleado en la entrada tambien lleva
+        # color: dos embarques con el mismo numero van en el mismo pedimento.
+        colores = {}
+
+        def _color(llave):
+            return colores.setdefault(llave, len(colores) % 4)
+
         for fila in tarea.filas:
+            fila.pedimentos = []
+            for enlace in fila.operation.renglones_de_pedimento.all():
+                ped = enlace.pedimento
+                if ped.pk not in [p.pk for p in fila.pedimentos]:
+                    ped.color = _color(('armado', ped.pk))
+                    fila.pedimentos.append(ped)
             fila.pedimento_texto = _pedimento_que_ampara(fila.operation)
+            if fila.pedimentos:
+                fila.color = fila.pedimentos[0].color
+            elif fila.pedimento_texto:
+                fila.color = _color(('tecleado', fila.pedimento_texto))
+            else:
+                fila.color = None
             hoja = getattr(fila.operation, 'renglon_de_impuestos', None)
             fila.impuesto = hoja.impuesto_estimado if hoja else None
             if fila.impuesto:

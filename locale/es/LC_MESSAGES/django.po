@@ -3527,3 +3527,6 @@ msgid "%(n)s shipment without an amount yet"
 msgid_plural "%(n)s shipments without an amount yet"
 msgstr[0] "%(n)s embarque todavía sin cifra"
 msgstr[1] "%(n)s embarques todavía sin cifra"
+
+msgid "Make the pedimento"
+msgstr "Armar pedimento"

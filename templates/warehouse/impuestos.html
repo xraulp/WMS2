@@ -606,13 +606,14 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
           <span style="display:flex;gap:8px;align-items:center">
             {% if ve_los_calculos %}
             {% comment %}
-            En el telefono el calculo era otra pantalla, y volver de ella
-            dejaba la hoja al principio. Aqui se despliega bajo la ficha.
+            Desactivado a proposito (6 nov 2026): Diego todavia esta disenando
+            como presentar el desglose en el telefono. El boton se queda para
+            que no se mueva la ficha, pero no abre nada. Para volver a
+            encenderlo: un <a> a `renglon_calculo` con `data-abre-cajon`.
             {% endcomment %}
-            <a class="mini" href="{% url 'renglon_calculo' r.pk %}"
-               data-abre-cajon="{{ r.pk }}" aria-expanded="false"
-               aria-controls="cajon-f-{{ r.pk }}">
-              &#8942; {% trans "Breakdown" %}</a>
+            <button class="mini" type="button" disabled aria-disabled="true"
+                    style="opacity:.45;cursor:not-allowed">
+              &#8942; {% trans "Breakdown" %}</button>
             {% endif %}
             <form method="post" action="{% url 'renglon_quitar' r.pk %}" style="margin:0"
                   onsubmit="return confirm('{% trans "Remove this shipment from the sheet? It is not deleted: the shipment stays in the warehouse and can be put back." %}')">

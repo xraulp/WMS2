@@ -49,7 +49,9 @@ class ElMenuDeArribaTests(BaseDeRevision):
         self.client.force_login(self.jefa)
 
     def test_las_tres_pantallas_lo_pintan_con_la_suya_marcada(self):
-        for url, activa in (('/pedimentos/', '/pedimentos/'),
+        # Pedimentos ya no tiene pestana: se entra desde la tarea de cruce, y
+        # por eso alli la marcada es Cruces.
+        for url, activa in (('/pedimentos/', '/cruces/'),
                             ('/cruces/', '/cruces/'),
                             ('/impuestos/', '/impuestos/')):
             html = self.client.get(url, {'customer': self.cliente.pk}).content.decode()

@@ -33,13 +33,35 @@
     .msg-error{background:var(--rsoft);color:var(--err-ink);padding:9px 12px;
                border-radius:var(--r);font-size:13px;margin-bottom:10px}
 
-    .tarea{border:1px solid var(--bdr);border-radius:12px;margin-bottom:14px;
-           overflow:hidden;background:var(--surface)}
-    .tarea-hd{padding:13px 15px;background:var(--bg-sutil);
-              border-bottom:1px solid var(--bdr);display:flex;gap:12px;
+    /* Cada tarea, una tarjeta que se separa de la siguiente: titulo oscuro,
+       mas aire entre ellas y una franja a la izquierda que alterna de color,
+       para que dos tareas seguidas no se lean como una sola. */
+    .tarea{border:1px solid var(--bdr-fuerte);border-left:6px solid var(--accent);
+           border-radius:12px;margin-bottom:26px;overflow:hidden;
+           background:var(--surface);box-shadow:0 2px 8px rgba(15,23,42,.10)}
+    .tarea.par{border-left-color:var(--violet)}
+    .tarea-hd{padding:13px 15px;background:var(--th-bg-acento);color:var(--tb-ink);
+              border-bottom:1px solid var(--bdr-fuerte);display:flex;gap:12px;
               flex-wrap:wrap;align-items:flex-start;justify-content:space-between}
-    .tarea-id{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600}
+    .tarea-id{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;
+              color:#fff}
     .tarea-sub{font-size:12px;color:var(--soft);margin-top:3px;line-height:1.5}
+    .tarea-hd .tarea-sub{color:var(--tb-ink-suave)}
+
+    /* Cada pedimento de la tarea con su color, el mismo en todos sus
+       renglones: la franja de la izquierda y la etiqueta del numero. */
+    tbody tr.pc td:first-child{border-left:5px solid var(--pc)}
+    tbody tr.pc{background:var(--pc-bg)}
+    .pc-0{--pc:var(--accent);--pc-bg:var(--info-bg-suave);--pc-ink:var(--accent-ink)}
+    .pc-1{--pc:var(--violet);--pc-bg:var(--violet-soft);--pc-ink:var(--violet)}
+    .pc-2{--pc:var(--warn);--pc-bg:var(--warn-bg-suave);--pc-ink:var(--warn-ink-fuerte)}
+    .pc-3{--pc:var(--green);--pc-bg:var(--gsoft);--pc-ink:var(--ok-ink-fuerte)}
+    .ped-link{display:inline-block;padding:2px 8px;border-radius:6px;
+              border:1px solid var(--pc, var(--bdr-fuerte));background:var(--surface);
+              color:var(--pc-ink, var(--accent-ink));font-weight:600;text-decoration:none;
+              white-space:nowrap}
+    .ped-link:hover{background:var(--pc, var(--accent));color:#fff}
+    .ped-link + .ped-link{margin-left:4px}
     /* Las acciones de la tarea, en su titulo. Ocupan su propia linea debajo
        del numero y la cuenta atras, para que no compitan con ellos. */
     .tarea-acc{flex:1 0 100%;display:flex;gap:8px;flex-wrap:wrap}
@@ -107,6 +129,8 @@
       tfoot td{display:block;width:auto;padding:6px 14px}
       thead{display:none}
       tr{border-bottom:1px solid var(--bdr);padding:7px 0}
+      tbody tr.pc{border-left:5px solid var(--pc)}
+      tbody tr.pc td:first-child{border-left:none}
       td{border:none;display:flex;justify-content:space-between;gap:10px;padding:3px 14px}
       td::before{content:attr(data-etq);font-size:10px;text-transform:uppercase;
                  letter-spacing:.05em;color:var(--soft);flex:0 0 auto}
@@ -161,7 +185,7 @@
   </div>
 
   {% for t in tareas %}
-  <div class="tarea" id="tarea-{{ t.pk }}">
+  <div class="tarea{% if forloop.counter|divisibleby:2 %} par{% endif %}" id="tarea-{{ t.pk }}">
     <div class="tarea-hd">
       <div>
         <div class="tarea-id">{{ t.custom_id }}</div>
@@ -327,14 +351,27 @@
       </thead>
       <tbody>
         {% for r in t.filas %}
-        <tr>
+        <tr{% if r.color is not None %} class="pc pc-{{ r.color }}"{% endif %}>
           <td data-etq="{% trans "Entry" %}" class="mono">{{ r.operation.custom_id }}</td>
           <td data-etq="{% trans "PO / Order" %}"><strong>{{ r.operation.po_order|default:"—" }}</strong></td>
           <td data-etq="{% trans "Bundles" %}">
             <span>{{ r.bultos_que_van }}{% if r.es_parcial %}
             <span class="soft">{% trans "of" %} {{ r.operation.bundle_qty }}</span>{% endif %}</span>
           </td>
-          <td data-etq="{% trans "Pedimento" %}" class="mono">{{ r.pedimento_texto|default:"—" }}</td>
+          {% comment %}
+          A cada pedimento se entra desde aqui: no hay pestana de Pedimentos.
+          El armado lleva a su tarjeta; el que solo trae el numero tecleado en
+          la entrada, a los pedimentos del cliente, que es donde se arma.
+          {% endcomment %}
+          <td data-etq="{% trans "Pedimento" %}" class="mono">
+            <span>
+            {% for p in r.pedimentos %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% empty %}
+            {% if r.pedimento_texto %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}">{{ r.pedimento_texto }} ›</a>
+            {% elif not es_cliente %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}">+ {% trans "Make the pedimento" %}</a>
+            {% else %}<span class="soft">—</span>{% endif %}
+            {% endfor %}
+            </span>
+          </td>
           <td data-etq="{% trans "Approx. taxes" %}" class="importe">
             {% if r.impuesto %}${{ r.impuesto|pesos }}{% else %}<span class="soft">—</span>{% endif %}
           </td>

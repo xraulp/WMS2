@@ -432,6 +432,31 @@ class ElImpuestoEnLaTareaTests(BaseDeCruces):
         self.assertEqual(str(t.impuesto_total), '48000.00')
         self.assertEqual(t.sin_impuesto, 1)
 
+    def test_cada_pedimento_es_un_enlace_a_su_tarjeta(self):
+        a = self.operacion('ED261012-0001', bundle_qty=15)
+        ped = self.con_pedimento(a)
+        self.tarea_con(a)
+        self.assertContains(
+            self.pantalla(self.jefa),
+            '/pedimentos/?customer=%d#ped-%d' % (self.cliente.pk, ped.pk))
+
+    def test_los_embarques_del_mismo_pedimento_llevan_el_mismo_color(self):
+        a = self.operacion('ED261012-0001', bundle_qty=15)
+        b = self.operacion('ED261012-0002', bundle_qty=4)
+        c = self.operacion('ED261012-0003', bundle_qty=4)
+        ped = self.con_pedimento(a)
+        PedimentoBundle.objects.create(pedimento=ped, operation=b, bultos=1)
+        self.con_pedimento(c, consecutivo='6005001')
+        self.tarea_con(a, b, c)
+        t = self.pantalla(self.jefa).context['tareas'][0]
+        self.assertEqual([f.color for f in t.filas], [0, 0, 1])
+
+    def test_sin_pedimento_la_casa_ve_armarlo_y_el_cliente_un_guion(self):
+        a = self.operacion('ED261012-0001', bundle_qty=15)
+        self.tarea_con(a)
+        self.assertContains(self.pantalla(self.jefa), 'Make the pedimento')
+        self.assertNotContains(self.pantalla(self.duenio), 'Make the pedimento')
+
     def test_el_pedimento_tecleado_al_capturar_sale_en_la_tarea(self):
         a = self.operacion('ED261012-0001', bundle_qty=15,
                            pedimento='24-1780-6003577')
