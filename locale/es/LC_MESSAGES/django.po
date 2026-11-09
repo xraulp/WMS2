@@ -3530,3 +3530,24 @@ msgstr[1] "%(n)s embarques todavía sin cifra"
 
 msgid "Make the pedimento"
 msgstr "Armar pedimento"
+
+msgid "Crossing confirmed"
+msgstr "Cruce confirmado"
+
+msgid "The customer confirmed a crossing"
+msgstr "El cliente confirmó un cruce"
+
+#, python-format
+msgid "<b>%(quien)s</b> confirmed this crossing. This is what goes on the truck:"
+msgstr "<b>%(quien)s</b> confirmó este cruce. Esto es lo que va en el camión:"
+
+msgid "See the crossing"
+msgstr "Ver el cruce"
+
+#, python-format
+msgid "Take %(embarque)s out of this crossing? It will be available for another crossing."
+msgstr "¿Sacar %(embarque)s de este cruce? Volverá a quedar disponible para otro cruce."
+
+#, python-format
+msgid "Cancel crossing %(cruce)s? Its shipments will be available again."
+msgstr "¿Cancelar el cruce %(cruce)s? Sus embarques volverán a quedar disponibles."

@@ -380,7 +380,9 @@
             {% if r.motivo %}<br>{{ r.motivo }}{% endif %}
           </td>
           <td data-etq="">
-            <form method="post" action="{% url 'cruce_sacar' t.pk %}" style="margin:0;display:flex;gap:6px">
+            <form method="post" action="{% url 'cruce_sacar' t.pk %}" style="margin:0;display:flex;gap:6px"
+                  data-aviso="{% blocktrans with embarque=r.operation.po_order|default:r.operation.custom_id %}Take {{ embarque }} out of this crossing? It will be available for another crossing.{% endblocktrans %}"
+                  onsubmit="return confirm(this.dataset.aviso)">
               {% csrf_token %}
               <input type="hidden" name="renglon" value="{{ r.pk }}">
               {% if t.estado != 'ABIERTA' %}
@@ -410,7 +412,9 @@
 
     {% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
     <div class="acciones acciones-pie">
-      <form method="post" action="{% url 'cruce_cancelar' t.pk %}" style="margin:0">
+      <form method="post" action="{% url 'cruce_cancelar' t.pk %}" style="margin:0"
+            data-aviso="{% blocktrans with cruce=t.custom_id %}Cancel crossing {{ cruce }}? Its shipments will be available again.{% endblocktrans %}"
+            onsubmit="return confirm(this.dataset.aviso)">
         {% csrf_token %}
         <button class="btn btn-sm btn-d" type="submit">{% trans "Cancel this crossing" %}</button>
       </form>

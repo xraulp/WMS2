@@ -44,6 +44,7 @@ EVENT_PEDIMENTO_REVIEW = 'PEDIMENTO_REVIEW'
 EVENT_PEDIMENTO_APPROVED = 'PEDIMENTO_APPROVED'
 EVENT_PEDIMENTO_CORRECTIONS = 'PEDIMENTO_CORRECTION'
 EVENT_CRUCE_POR_CONFIRMAR = 'CROSSING_TO_CONFIRM'
+EVENT_CRUCE_CONFIRMADO = 'CROSSING_CONFIRMED'
 
 # Estados
 SENT    = 'SENT'
@@ -1084,6 +1085,22 @@ def avisar_correcciones_pedidas(pedimento, triggered_by=None):
 
 # ── EL CRUCE QUE LA CASA CREO POR EL CLIENTE ──────────────────────────────────
 
+def _lo_que_va_en_el_cruce(tarea):
+    """Los renglones de la tarea con lo que cruza cada uno, los pedidos y el total."""
+    renglones = list(tarea.renglones.select_related('operation'))
+    pedidos = []
+    for r in renglones:
+        po = (r.operation.po_order or '').strip()
+        if po and po not in pedidos:
+            pedidos.append(po)
+
+    # Un renglon sin bultos cruza la entrada entera; con bultos, solo esos (el
+    # caso de 19 de 20).
+    for r in renglones:
+        r.cruzan = r.bultos or r.operation.bundle_qty
+    return renglones, pedidos, sum(r.cruzan or 0 for r in renglones)
+
+
 @_never_breaks(lambda e: (False, str(e)))
 def avisar_cruce_por_confirmar(tarea, triggered_by=None):
     """
@@ -1105,19 +1122,7 @@ def avisar_cruce_por_confirmar(tarea, triggered_by=None):
     tenant   = tarea.tenant
     empresa  = tenant.name if tenant else 'WMS'
     destinatarios = email_recipients(customer)
-
-    renglones = list(tarea.renglones.select_related('operation'))
-    pedidos = []
-    for r in renglones:
-        po = (r.operation.po_order or '').strip()
-        if po and po not in pedidos:
-            pedidos.append(po)
-
-    # Un renglon sin bultos cruza la entrada entera; con bultos, solo esos (el
-    # caso de 19 de 20).
-    for r in renglones:
-        r.cruzan = r.bultos or r.operation.bundle_qty
-    total = sum(r.cruzan or 0 for r in renglones)
+    renglones, pedidos, total = _lo_que_va_en_el_cruce(tarea)
 
     creador = tarea.created_by
     quien = (creador.get_full_name() or creador.username) if creador else ''
@@ -1161,3 +1166,75 @@ def avisar_cruce_por_confirmar(tarea, triggered_by=None):
                        tarea.custom_id, e)
         return False, str(e)
     return True, None
+
+
+@_never_breaks(lambda e: (False, str(e)))
+def avisar_cruce_confirmado(tarea, triggered_by=None):
+    """
+    Le avisa a la casa de que el cliente confirmo un cruce que ella armo.
+
+    Es la otra mitad de `avisar_cruce_por_confirmar`: sin este aviso, el "si, es
+    eso" del cliente se quedaba en la pantalla hasta que alguien pasara a mirar.
+
+    Mismos destinatarios que las respuestas sobre un pedimento: los operadores
+    activos con correo, cada uno en su idioma.
+
+    Devuelve `(enviado, error)`, igual que el resto de avisos.
+    """
+    customer = tarea.customer
+    tenant   = tarea.tenant
+    empresa  = tenant.name if tenant else 'WMS'
+    nombre_cliente = nombre_corto(customer.name)
+
+    por_idioma = {}
+    for addr, idioma in _operadores_con_correo(tenant):
+        por_idioma.setdefault(idioma, []).append(addr)
+
+    renglones, pedidos, total = _lo_que_va_en_el_cruce(tarea)
+    quien = ''
+    if triggered_by is not None:
+        quien = triggered_by.get_full_name() or triggered_by.username
+
+    def componer(idioma):
+        with en_idioma(idioma):
+            partes = [_('Crossing confirmed'), nombre_cliente]
+            if pedidos:
+                partes.append('PO ' + ', '.join(pedidos))
+            partes.append('%s · %s' % (tarea.custom_id,
+                                       tarea.fecha_de_cruce.strftime('%d/%m/%Y')))
+            subject = ' | '.join(p for p in partes if p)
+            cuerpo = render_to_string('warehouse/email/cruce_confirmado_email.html', {
+                'tarea':       tarea,
+                'renglones':   renglones,
+                'total':       total,
+                'tenant_name': empresa,
+                'quien':       ('%s · %s' % (quien, nombre_cliente)) if quien
+                               else nombre_cliente,
+                'url':         (f"{tenant_public_url(tenant)}/cruces/"
+                                f"?customer={customer.pk}#tarea-{tarea.pk}"),
+            })
+        return subject, cuerpo
+
+    if not por_idioma:
+        subject, _cuerpo = componer('')
+        log_notification(None, customer, EMAIL, EVENT_CRUCE_CONFIRMADO, SKIPPED,
+                         subject=subject, detail='no_recipient',
+                         triggered_by=triggered_by, tenant=tenant)
+        return False, 'no_email'
+
+    de, responder = remitente_de(tenant)
+    enviado, primer_error = False, None
+    for idioma, destinatarios in por_idioma.items():
+        subject, cuerpo = componer(idioma)
+        correo = EmailMessage(subject=subject, body=cuerpo, to=destinatarios,
+                              from_email=de, reply_to=responder)
+        correo.content_subtype = 'html'
+        try:
+            enviar_y_registrar(correo, EVENT_CRUCE_CONFIRMADO, tenant=tenant,
+                               customer=customer, triggered_by=triggered_by)
+            enviado = True
+        except Exception as e:
+            logger.warning('Fallo el aviso de cruce confirmado de %s: %s',
+                           tarea.custom_id, e)
+            primer_error = primer_error or str(e)
+    return enviado, primer_error

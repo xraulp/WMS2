@@ -6573,6 +6573,9 @@ def cruce_confirmar(request, pk):
         tarea.confirmada_en = timezone.now()
         tarea.save(update_fields=['confirmada_por_el_cliente', 'confirmada_en',
                                   'updated_at'])
+        notifications.en_segundo_plano(
+            notifications.avisar_cruce_confirmado, tarea,
+            triggered_by=request.user)
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
 
 

@@ -733,3 +733,73 @@ class AvisoDeCrucePorConfirmarTests(BaseDeCruces):
         self.assertEqual(respuesta.status_code, 404)
         t.refresh_from_db()
         self.assertTrue(t.espera_confirmacion)
+
+    def test_sacar_y_cancelar_piden_confirmacion(self):
+        self.armar(ops=[self.a.pk])
+        t = CrossingTask.objects.get()
+        html = self.client.get('/cruces/', {'customer': self.cliente.pk}).content.decode()
+        self.assertIn('data-aviso="Take 4500321 out of this crossing?', html)
+        self.assertIn('data-aviso="Cancel crossing %s?' % t.custom_id, html)
+        self.assertEqual(html.count('onsubmit="return confirm(this.dataset.aviso)"'), 2)
+
+    # El cliente confirma y la casa se entera.
+
+    def confirmar(self, email='jefa@dyser.com', idioma=''):
+        """El cruce armado por la casa y confirmado por el cliente."""
+        from django.core import mail
+        self.armar()
+        mail.outbox = []
+        self.jefa.email = email
+        self.jefa.save(update_fields=['email'])
+        UserProfile.objects.filter(user=self.jefa).update(language=idioma)
+        self.client.force_login(self.duenio)
+        t = CrossingTask.objects.get()
+        return t, self.client.post('/cruces/%d/confirm/' % t.pk)
+
+    def bitacora_de_confirmados(self):
+        from .models import NotificationLog
+        return NotificationLog.objects.filter(event='CROSSING_CONFIRMED')
+
+    def test_el_cliente_confirma_y_a_la_casa_le_llega(self):
+        from django.core import mail
+        t, _respuesta = self.confirmar()
+        self.assertEqual(len(mail.outbox), 1)
+        correo = mail.outbox[0]
+        self.assertEqual(correo.to, ['jefa@dyser.com'])
+        self.assertTrue(correo.subject.startswith('Crossing confirmed | '))
+        self.assertIn('PO 4500321', correo.subject)
+        self.assertIn(t.custom_id, correo.subject)
+        self.assertIn('<b>lopez', correo.body)
+        self.assertIn('19 of 20', correo.body)
+        self.assertIn('#tarea-%d' % t.pk, correo.body)
+        self.assertEqual(self.bitacora_de_confirmados().get().status, 'SENT')
+
+    def test_a_la_casa_le_llega_en_su_idioma(self):
+        from django.core import mail
+        self.confirmar(idioma='es')
+        correo = mail.outbox[0]
+        self.assertTrue(correo.subject.startswith('Cruce confirmado'))
+        self.assertIn('Ver el cruce', correo.body)
+        self.assertNotIn('See the crossing', correo.body)
+
+    def test_confirmar_dos_veces_avisa_una(self):
+        from django.core import mail
+        t, _respuesta = self.confirmar()
+        self.client.post('/cruces/%d/confirm/' % t.pk)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_sin_operadores_con_correo_queda_anotado(self):
+        from django.core import mail
+        self.confirmar(email='')
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(self.bitacora_de_confirmados().get().status, 'SKIPPED')
+
+    def test_si_falla_el_aviso_la_confirmacion_queda(self):
+        from unittest import mock
+        with mock.patch('django.core.mail.EmailMessage.send',
+                        side_effect=[1, RuntimeError('sin correo')]):
+            t, respuesta = self.confirmar()
+        self.assertEqual(respuesta.status_code, 302)
+        t.refresh_from_db()
+        self.assertTrue(t.confirmada_por_el_cliente)
+        self.assertEqual(self.bitacora_de_confirmados().get().status, 'FAILED')
