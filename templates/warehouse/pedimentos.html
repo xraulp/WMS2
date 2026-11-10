@@ -96,6 +96,15 @@
     .ranura .nada{font-size:12px;color:var(--soft);font-style:italic}
     .subir{margin-top:6px}
     .subir input[type=file]{font-size:11px;max-width:100%}
+    .series .ayuda{font-size:12px;color:var(--soft);margin-bottom:6px}
+    .series .fotos{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+    .series .foto{display:flex;gap:8px;align-items:center;font-size:12px;cursor:pointer}
+    .series .foto input{width:20px;height:20px;flex:none}
+    .series .foto img{width:48px;height:48px;object-fit:cover;border-radius:6px;
+                      border:1px solid var(--bdr);flex:none}
+    .series .foto span{word-break:break-all}
+    .series .subir{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+    .series .subir label.btn{cursor:pointer}
 
     /* El boton de enviar a revision y su motivo. El candado se dice en la
        pantalla, no en un error despues de pulsar. */
@@ -379,6 +388,48 @@
       {% for clave, etiqueta, archivos, obligatoria in p.ranuras_envio %}
       <div class="ranura{% if not archivos %} vacia{% if obligatoria %} pide{% endif %}{% endif %}">
         <h4>{{ etiqueta }}{% if obligatoria and not archivos %} *{% endif %}</h4>
+        {% comment %}
+        Las fotos de series se eligen del expediente del embarque aqui mismo,
+        dentro de su ranura, y si la foto todavia no esta en el expediente se
+        toma o se sube desde aqui: entra al expediente y queda elegida. Antes el
+        selector vivia debajo de las ranuras y, con una foto cualquiera en el
+        expediente, la ranura se quedaba sin nada que hacer.
+        {% endcomment %}
+        {% if clave == 'FOTOS_SERIES' and puede_editar and p.editable %}
+        <form class="series" method="post" enctype="multipart/form-data"
+              action="{% url 'pedimento_fotos_de_series' p.pk %}">
+          {% csrf_token %}
+          {% if p.fotos_candidatas %}
+          <div class="ayuda">{% trans "Tick the ones that show the serial number:" %}</div>
+          <div class="fotos">
+            {% for foto in p.fotos_candidatas %}
+            <label class="foto">
+              <input type="checkbox" name="documento" value="{{ foto.pk }}"
+                     {% if foto.pk in p.fotos_elegidas %}checked{% endif %}>
+              <img src="{% url 'document_file' foto.pk %}" alt="" loading="lazy">
+              <span class="mono">{{ foto.original_name|default:foto.pk }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <button class="btn btn-sm" type="submit">{% trans "Save the choice" %}</button>
+          {% else %}
+          <div class="nada">{% trans "The shipment file has no photos yet." %}</div>
+          {% endif %}
+          <div class="subir">
+            {% if p.operaciones_de_fotos|length > 1 %}
+            <select name="operacion">
+              {% for op in p.operaciones_de_fotos %}
+              <option value="{{ op.pk }}">{{ op.custom_id }}</option>
+              {% endfor %}
+            </select>
+            {% endif %}
+            <label class="btn btn-sm">📷 {% trans "Take or upload photo" %}
+              <input type="file" name="archivo" accept="image/*" multiple hidden
+                     onchange="this.form.submit()">
+            </label>
+          </div>
+        </form>
+        {% else %}
         {% for d in archivos %}
         <div class="archivo">
           <a href="{% url 'pedimento_archivo' d.pk %}" target="_blank">{{ d.nombre }}</a>
@@ -394,48 +445,18 @@
         <div class="nada">{% trans "empty" %}</div>
         {% endfor %}
 
-        {% comment %}
-        Las fotos de series se eligen del expediente, abajo. Si el expediente
-        no trae ninguna se dejan subir aqui: es requisito para enviar a
-        revision, y sin este campo la ranura seria un callejon sin salida.
-        {% endcomment %}
-        {% if puede_editar and p.editable %}{% if clave != 'FOTOS_SERIES' or not p.fotos_candidatas %}
+        {% if puede_editar and p.editable %}
         <form class="subir" method="post" enctype="multipart/form-data"
               action="{% url 'pedimento_subir' p.pk %}">
           {% csrf_token %}
           <input type="hidden" name="ranura" value="{{ clave }}">
           <input type="file" name="archivo" multiple onchange="this.form.submit()">
         </form>
-        {% endif %}{% endif %}
+        {% endif %}
+        {% endif %}
       </div>
       {% endfor %}
     </div>
-
-    {% comment %}
-    Las fotos de numeros de serie no se suben: se eligen del expediente de la
-    operacion, que es donde ya estan desde que se recibio la mercancia.
-    Subirlas otra vez crearia dos verdades sobre la misma caja.
-    {% endcomment %}
-    {% if puede_editar and p.editable and p.fotos_candidatas %}
-    <div style="padding:10px 14px;border-top:1px solid var(--bdr);background:var(--bg-sutil)">
-      <form method="post" action="{% url 'pedimento_fotos_de_series' p.pk %}">
-        {% csrf_token %}
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--soft);margin-bottom:6px">
-          {% trans "Serial-number photos — pick them from the shipment file" %}
-        </div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px">
-          {% for foto in p.fotos_candidatas %}
-          <label style="display:flex;gap:6px;align-items:center;font-size:12px">
-            <input type="checkbox" name="documento" value="{{ foto.pk }}"
-                   {% if foto.pk in p.fotos_elegidas %}checked{% endif %}>
-            <span class="mono">{{ foto.original_name|default:foto.pk }}</span>
-          </label>
-          {% endfor %}
-        </div>
-        <button class="btn btn-sm" type="submit">{% trans "Save the choice" %}</button>
-      </form>
-    </div>
-    {% endif %}
 
     {% comment %}
     La factura comercial no es del pedimento sino del embarque, pero se marca

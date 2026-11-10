@@ -3586,3 +3586,15 @@ msgstr "Se quitó lo validado"
 
 msgid "it had been marked on"
 msgstr "se había marcado el"
+
+msgid "Tick the ones that show the serial number:"
+msgstr "Marca las que muestran el número de serie:"
+
+msgid "The shipment file has no photos yet."
+msgstr "El expediente del embarque todavía no tiene fotos."
+
+msgid "Take or upload photo"
+msgstr "Tomar o subir foto"
+
+msgid "Choose which shipment the photos belong to."
+msgstr "Elige a qué embarque pertenecen las fotos."

@@ -701,6 +701,46 @@ class ExpedienteDelPedimentoTests(BaseDeAlmacen):
         self.assertFalse(renglon.file)
         self.assertEqual(renglon.nombre, 'serie.jpg')
 
+    def test_la_foto_que_falta_se_sube_al_expediente_y_queda_elegida(self):
+        # El caso que trabo la prueba: el expediente ya traia una foto, pero no
+        # era la de la serie, y la ranura no dejaba subir otra.
+        self.entrada.has_serial_numbers = True
+        self.entrada.save()
+        otra = OperationDocument.objects.create(
+            tenant=self.tenant, operation=self.entrada, file_type='PHOTO',
+            file=self.archivo('caja.jpg'), original_name='caja.jpg')
+        self.client.post('/pedimentos/%d/serials/' % self.ped.pk,
+                         {'archivo': self.archivo('serie.jpg')})
+        nueva = self.entrada.documents.exclude(pk=otra.pk).get()
+        self.assertEqual(nueva.original_name, 'serie.jpg')
+        elegidas = self.ped.documentos.filter(
+            ranura=PedimentoDocument.FOTOS_SERIES)
+        self.assertEqual([d.documento_de_operacion_id for d in elegidas],
+                         [nueva.pk])
+
+    def test_subir_una_foto_no_suelta_las_ya_elegidas(self):
+        self.entrada.has_serial_numbers = True
+        self.entrada.save()
+        primera = OperationDocument.objects.create(
+            tenant=self.tenant, operation=self.entrada, file_type='PHOTO',
+            file=self.archivo('serie1.jpg'), original_name='serie1.jpg')
+        self.client.post('/pedimentos/%d/serials/' % self.ped.pk,
+                         {'documento': primera.pk,
+                          'archivo': self.archivo('serie2.jpg')})
+        self.assertEqual(self.ped.documentos.filter(
+            ranura=PedimentoDocument.FOTOS_SERIES).count(), 2)
+
+    def test_la_ranura_de_series_deja_subir_aunque_haya_fotos(self):
+        self.entrada.has_serial_numbers = True
+        self.entrada.save()
+        OperationDocument.objects.create(
+            tenant=self.tenant, operation=self.entrada, file_type='PHOTO',
+            file=self.archivo('caja.jpg'), original_name='caja.jpg')
+        respuesta = self.client.get('/pedimentos/', {
+            'customer': self.cliente.pk, 'solo': self.ped.pk})
+        self.assertContains(respuesta, 'name="documento"')
+        self.assertContains(respuesta, 'accept="image/*"')
+
     def test_no_se_pueden_elegir_fotos_de_otra_operacion(self):
         ajena = self.operacion('ED260901-0009', bundle_qty=1)
         foto = OperationDocument.objects.create(

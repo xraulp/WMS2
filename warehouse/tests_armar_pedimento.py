@@ -290,7 +290,8 @@ class ArmarDesdeLaTareaTests(Base):
         self.entrada.save()
         self.armar()
         respuesta = self.client.get(URL, {'customer': self.cliente.pk})
-        self.assertContains(respuesta, 'value="FOTOS_SERIES"')
+        self.assertContains(respuesta, '/serials/')
+        self.assertContains(respuesta, 'accept="image/*"')
 
 
 class ElNumeroLlegaAOperacionesTests(Base):

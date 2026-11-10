@@ -4732,7 +4732,9 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None,
         cajones = ped.documentos_por_ranura()
         ped.ranuras_envio = [
             (clave, etiquetas[clave], cajones.get(clave, []),
-             clave in PedimentoDocument.RANURAS_PARA_REVISION)
+             clave in PedimentoDocument.RANURAS_PARA_REVISION
+             # Cuando aparece es porque hace falta: tambien lleva asterisco.
+             or clave == PedimentoDocument.FOTOS_SERIES)
             for clave in PedimentoDocument.RANURAS_DE_ENVIO
             # La de fotos de series aparece o no aparece segun la mercancia. No
             # es una casilla de "no aplica" que alguien marque cada vez.
@@ -4756,14 +4758,20 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None,
         # Las fotos que se pueden elegir: las del expediente de sus propias
         # operaciones, que es donde ya estan.
         if ped.necesita_fotos_de_series:
-            suyas = [r.operation_id for r in ped.renglones.all()]
+            # Las operaciones van aparte porque una foto nueva se sube a una
+            # de ellas: con un solo bulto no se pregunta, con varios si.
+            ped.operaciones_de_fotos = [
+                r.operation for r in ped.renglones.select_related('operation')]
+            suyas = [op.pk for op in ped.operaciones_de_fotos]
             ped.fotos_candidatas = list(
                 OperationDocument.objects.filter(
-                    operation_id__in=suyas, file_type='PHOTO'))
+                    operation_id__in=suyas, file_type='PHOTO')
+                .select_related('operation'))
             ped.fotos_elegidas = {d.documento_de_operacion_id
                                   for d in cajones.get(
                                       PedimentoDocument.FOTOS_SERIES, [])}
         else:
+            ped.operaciones_de_fotos = []
             ped.fotos_candidatas = []
             ped.fotos_elegidas = set()
 
@@ -5257,8 +5265,24 @@ def pedimento_fotos_de_series(request, pk):
 
     # Solo se pueden elegir documentos de las operaciones que van dentro.
     operaciones = [r.operation_id for r in ped.renglones.all()]
-    elegidos = OperationDocument.objects.filter(
-        pk__in=request.POST.getlist('documento'), operation_id__in=operaciones)
+    elegidos = list(OperationDocument.objects.filter(
+        pk__in=request.POST.getlist('documento'), operation_id__in=operaciones))
+
+    # Si la foto de la serie todavia no esta en el expediente -- se recibio
+    # sin ella, o la que hay es de otra cosa --, se sube desde aqui mismo. Va
+    # al expediente de la operacion y no al pedimento, para que siga habiendo
+    # una sola verdad sobre la caja, y queda elegida de una vez.
+    archivos = request.FILES.getlist('archivo')
+    if archivos:
+        op = (WarehouseOperation.objects
+              .filter(pk__in=operaciones, pk=request.POST.get('operacion'))
+              .first())
+        if op is None:
+            if len(operaciones) != 1:
+                return _error_en_pedimento(request, ped,
+                    _('Choose which shipment the photos belong to.'))
+            op = WarehouseOperation.objects.get(pk=operaciones[0])
+        elegidos += guardar_en_expediente(op, archivos, request.user)
 
     ped.documentos.filter(ranura=PedimentoDocument.FOTOS_SERIES).delete()
     for doc in elegidos:
