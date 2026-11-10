@@ -239,6 +239,80 @@ class QuitarPagadoYValidadoTests(Base):
         self.assertContains(respuesta, f'/pedimentos/{ped.pk}/unpaid/')
 
 
+class ReabrirParaRehacerTests(Base):
+    """
+    La tarea que avanzo y se cancelo antes de validar y pagar: el pedimento
+    aprobado vuelve a borrador para cambiarle papeles y revisarse otra vez.
+    """
+
+    def aprobado(self):
+        from django.utils import timezone
+        ped = self.ped(estado=Pedimento.APROBADO, aprobado_en=timezone.now(),
+                       revisado_por=self.jefa)
+        PedimentoDocument.objects.create(
+            pedimento=ped, ranura=PedimentoDocument.COVE,
+            file=SimpleUploadedFile('cove.pdf', b'%PDF-1.4 x'),
+            original_name='cove.pdf')
+        return ped
+
+    def test_vuelve_a_borrador_sin_la_aprobacion(self):
+        ped = self.aprobado()
+        respuesta = self.client.post(f'/pedimentos/{ped.pk}/reopen/')
+        ped.refresh_from_db()
+        self.assertEqual(ped.estado, Pedimento.BORRADOR)
+        self.assertIsNone(ped.aprobado_en)
+        self.assertIsNone(ped.revisado_por)
+        self.assertTrue(ped.se_puede_armar)
+        self.assertIn(f'solo={ped.pk}', respuesta['Location'])
+
+    def test_los_archivos_se_quedan(self):
+        ped = self.aprobado()
+        self.client.post(f'/pedimentos/{ped.pk}/reopen/')
+        self.assertEqual(ped.documentos.count(), 1)
+
+    def test_queda_en_la_bitacora(self):
+        from .models import CambioDePedimento
+        ped = self.aprobado()
+        self.client.post(f'/pedimentos/{ped.pk}/reopen/')
+        cambio = CambioDePedimento.objects.get(pedimento=ped)
+        self.assertEqual(cambio.accion, CambioDePedimento.REABRIR)
+        self.assertEqual(cambio.usuario, self.jefa)
+        self.assertIsNotNone(cambio.marca_anterior)
+
+    def test_validado_primero_se_le_quita_lo_validado(self):
+        ped = self.ped(estado=Pedimento.VALIDADO)
+        self.assertEqual(
+            self.client.post(f'/pedimentos/{ped.pk}/reopen/').status_code, 422)
+        ped.refresh_from_db()
+        self.assertEqual(ped.estado, Pedimento.VALIDADO)
+
+    def test_con_orden_de_carga_emitida_no_se_reabre(self):
+        from datetime import date
+        from .models import CrossingTask, CrossingTaskItem
+        ped = self.aprobado()
+        self.dentro(ped)
+        tarea = CrossingTask.objects.create(
+            tenant=self.tenant, customer=self.cliente, fecha_de_cruce=date.today(),
+            estado=CrossingTask.CON_ORDEN)
+        CrossingTaskItem.objects.create(task=tarea, operation=self.entrada)
+        self.assertEqual(
+            self.client.post(f'/pedimentos/{ped.pk}/reopen/').status_code, 422)
+
+    def test_el_cliente_no_puede(self):
+        ped = self.aprobado()
+        duenio = User.objects.create_user('duenio3', password='x')
+        UserProfile.objects.create(user=duenio, tenant=self.tenant,
+                                   role='customer', customer=self.cliente)
+        self.client.force_login(duenio)
+        self.assertEqual(
+            self.client.post(f'/pedimentos/{ped.pk}/reopen/').status_code, 404)
+
+    def test_la_tarjeta_aprobada_trae_el_boton(self):
+        ped = self.aprobado()
+        respuesta = self.client.get(URL, {'customer': self.cliente.pk, 'solo': ped.pk})
+        self.assertContains(respuesta, f'/pedimentos/{ped.pk}/reopen/')
+
+
 class ArmarDesdeLaTareaTests(Base):
 
     def armar(self, op=None):

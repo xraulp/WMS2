@@ -2344,6 +2344,34 @@ class Pedimento(models.Model):
             marca_anterior=antes, usuario=usuario)
         return True
 
+    def reabrir(self, usuario=None):
+        """
+        De aprobado a borrador, para rehacerlo.
+
+        Es el caso de la tarea que avanzo y se cancelo antes de validar y
+        pagar: el pedimento queda aprobado, pero para que vaya en otro cruce
+        hacen falta documentos con fechas nuevas. No se le quita al cliente su
+        aprobacion a escondidas: el pedimento vuelve a borrador, la casa cambia
+        lo que haga falta y el cliente lo revisa y lo aprueba otra vez.
+
+        Los archivos de las ranuras se quedan; la casa quita y sube los que
+        cambian. Si esta validado o pagado, primero se quitan esas marcas.
+        """
+        if self.estado != self.APROBADO or self.tareas_que_ya_salieron().exists():
+            return False
+        antes = self.aprobado_en
+        self.estado = self.BORRADOR
+        self.aprobado_en = None
+        self.enviado_a_revision_en = None
+        self.revisado_por = None
+        self.save(update_fields=['estado', 'aprobado_en', 'enviado_a_revision_en',
+                                 'revisado_por', 'updated_at'])
+        CambioDePedimento.objects.create(
+            pedimento=self, accion=CambioDePedimento.REABRIR,
+            estado_anterior=self.APROBADO, estado_nuevo=self.BORRADOR,
+            marca_anterior=antes, usuario=usuario)
+        return True
+
     # -- El candado ----------------------------------------------------------
 
     def choque_con(self, otros):
@@ -2373,9 +2401,11 @@ class CambioDePedimento(models.Model):
 
     QUITAR_PAGADO   = 'QUITAR_PAGADO'
     QUITAR_VALIDADO = 'QUITAR_VALIDADO'
+    REABRIR         = 'REABRIR'
     ACCIONES = [
         (QUITAR_PAGADO,   _('Paid mark removed')),
         (QUITAR_VALIDADO, _('Validated mark removed')),
+        (REABRIR,         _('Reopened to redo it; the approval was removed')),
     ]
 
     pedimento = models.ForeignKey(Pedimento, on_delete=models.CASCADE,

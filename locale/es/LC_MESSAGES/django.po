@@ -3630,3 +3630,20 @@ msgstr "Validación y pago"
 
 msgid "Waiting for transport"
 msgstr "Espera de transporte"
+
+msgid "Reopened to redo it; the approval was removed"
+msgstr "Reabierto para rehacerlo; se le quitó la aprobación"
+
+msgid "Reopen to redo"
+msgstr "Reabrir para rehacer"
+
+#, python-format
+msgid "Reopen %(ped)s to redo it? It loses the customer's approval and goes back to draft, so you can change its documents and send it to review again."
+msgstr "¿Reabrir %(ped)s para rehacerlo? Pierde la aprobación del cliente y vuelve a borrador, para que cambies sus documentos y lo mandes otra vez a revisión."
+
+#, python-format
+msgid "%(ped)s cannot be reopened: the load order of %(tareas)s was already issued with it."
+msgstr "%(ped)s no se puede reabrir: ya se emitió con él la orden de carga de %(tareas)s."
+
+msgid "Only an approved pedimento can be reopened; if it is validated or paid, remove those marks first."
+msgstr "Solo se puede reabrir un pedimento aprobado; si está validado o pagado, quita primero esas marcas."

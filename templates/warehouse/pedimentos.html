@@ -552,6 +552,16 @@
           {% csrf_token %}
           <button class="btn btn-p" type="submit">{% trans "Mark as validated" %}</button>
         </form>
+        {% comment %}
+        Para la tarea que se cancelo antes de validar y pagar: el pedimento
+        vuelve a borrador, se cambian los papeles y el cliente lo revisa otra vez.
+        {% endcomment %}
+        <form method="post" action="{% url 'pedimento_reabrir' p.pk %}" style="margin:0"
+              data-aviso="{% blocktrans with ped=p.etiqueta %}Reopen {{ ped }} to redo it? It loses the customer's approval and goes back to draft, so you can change its documents and send it to review again.{% endblocktrans %}"
+              onsubmit="return confirm(this.dataset.aviso)">
+          {% csrf_token %}
+          <button class="btn btn-sm" type="submit">↺ {% trans "Reopen to redo" %}</button>
+        </form>
         {% endif %}
       {% elif p.estado == 'VALIDADO' %}
         <span class="ya-salio">{% trans "Validated" %} · {{ p.validado_en|date:"d/m H:i" }}</span>

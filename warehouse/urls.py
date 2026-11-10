@@ -142,6 +142,8 @@ urlpatterns = [
          name='pedimento_quitar_pagado'),
     path('pedimentos/<int:pk>/unvalidated/', views.pedimento_quitar_validado,
          name='pedimento_quitar_validado'),
+    path('pedimentos/<int:pk>/reopen/', views.pedimento_reabrir,
+         name='pedimento_reabrir'),
     # La factura comercial es del embarque, no del pedimento, pero se marca y
     # se sube desde esta pantalla porque es aqui donde estorba que falte.
     path('operations/<int:pk>/invoice/mark/', views.operacion_marcar_factura,

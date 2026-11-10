@@ -5529,6 +5529,33 @@ def pedimento_quitar_validado(request, pk):
 
 
 @login_required
+@require_POST
+def pedimento_reabrir(request, pk):
+    """
+    Aprobado a borrador, para rehacerlo con documentos nuevos.
+
+    El caso es la tarea que se cancelo antes de validar y pagar: para ir en
+    otro cruce, el pedimento necesita papeles con fechas actualizadas y una
+    revision nueva del cliente.
+    """
+    if get_profile(request.user).is_customer():
+        raise Http404
+    ped = _pedimento_del_tenant(request, pk)
+    if not ped.reabrir(request.user):
+        salieron = list(ped.tareas_que_ya_salieron())
+        if salieron:
+            mensaje = _('%(ped)s cannot be reopened: the load order of '
+                        '%(tareas)s was already issued with it.') % {
+                'ped': ped.etiqueta,
+                'tareas': ', '.join(str(t) for t in salieron)}
+        else:
+            mensaje = _('Only an approved pedimento can be reopened; if it is '
+                        'validated or paid, remove those marks first.')
+        return _error_en_pedimento(request, ped, mensaje)
+    return _volver_al_pedimento(ped)
+
+
+@login_required
 def pedimento_archivo(request, pk):
     """
     Entrega un archivo de una ranura del pedimento.
