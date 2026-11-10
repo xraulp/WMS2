@@ -544,9 +544,23 @@
           <span class="motivo">{% trans "Missing: the paid pedimento, in its slot below" %}</span>
           <button class="btn btn-off" type="button" disabled>🔒 {% trans "Mark as paid" %}</button>
           {% endif %}
+          <form method="post" action="{% url 'pedimento_quitar_validado' p.pk %}" style="margin:0"
+                data-aviso="{% blocktrans with ped=p.etiqueta %}Remove the validated mark from {{ ped }}? It goes back to approved.{% endblocktrans %}"
+                onsubmit="return confirm(this.dataset.aviso)">
+            {% csrf_token %}
+            <button class="btn btn-sm" type="submit">{% trans "Remove validated" %}</button>
+          </form>
         {% endif %}
       {% elif p.estado == 'PAGADO' %}
         <span class="ya-salio">{% trans "Paid on" %} {{ p.pagado_en|date:"d/m H:i" }}</span>
+        {% if puede_editar %}
+        <form method="post" action="{% url 'pedimento_quitar_pagado' p.pk %}" style="margin:0"
+              data-aviso="{% blocktrans with ped=p.etiqueta %}Remove the paid mark from {{ ped }}? It goes back to validated.{% endblocktrans %}"
+              onsubmit="return confirm(this.dataset.aviso)">
+          {% csrf_token %}
+          <button class="btn btn-sm" type="submit">{% trans "Remove paid" %}</button>
+        </form>
+        {% endif %}
       {% elif not puede_editar %}
         <span class="soft" style="font-size:12px">
           {% if p.estado == 'CORRECCIONES' %}{% trans "We are making the corrections you asked for." %}{% else %}{% trans "We are preparing this pedimento. You will review it here." %}{% endif %}

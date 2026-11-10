@@ -151,6 +151,59 @@ class SoloEsePedimentoTests(Base):
         self.assertIn(f'solo={ped.pk}', respuesta['Location'])
 
 
+class QuitarPagadoYValidadoTests(Base):
+
+    def test_quitar_pagado_lo_regresa_a_validado(self):
+        ped = self.pagado()
+        respuesta = self.client.post(f'/pedimentos/{ped.pk}/unpaid/')
+        ped.refresh_from_db()
+        self.assertEqual(ped.estado, Pedimento.VALIDADO)
+        self.assertIsNone(ped.pagado_en)
+        self.assertIn(f'solo={ped.pk}', respuesta['Location'])
+
+    def test_quitar_validado_lo_regresa_a_aprobado(self):
+        ped = self.ped(estado=Pedimento.VALIDADO, anio_validacion='26')
+        self.client.post(f'/pedimentos/{ped.pk}/unvalidated/')
+        ped.refresh_from_db()
+        self.assertEqual(ped.estado, Pedimento.APROBADO)
+        self.assertEqual(ped.anio_validacion, '')
+
+    def test_un_pagado_no_salta_directo_a_aprobado(self):
+        ped = self.pagado()
+        self.assertEqual(
+            self.client.post(f'/pedimentos/{ped.pk}/unvalidated/').status_code, 422)
+        ped.refresh_from_db()
+        self.assertEqual(ped.estado, Pedimento.PAGADO)
+
+    def test_con_orden_de_carga_emitida_no_se_quita_el_pagado(self):
+        from datetime import date
+        from .models import CrossingTask, CrossingTaskItem
+        ped = self.pagado()
+        self.dentro(ped)
+        tarea = CrossingTask.objects.create(
+            tenant=self.tenant, customer=self.cliente, fecha_de_cruce=date.today(),
+            estado=CrossingTask.CON_ORDEN)
+        CrossingTaskItem.objects.create(task=tarea, operation=self.entrada)
+        respuesta = self.client.post(f'/pedimentos/{ped.pk}/unpaid/')
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertContains(respuesta, tarea.custom_id, status_code=422)
+        ped.refresh_from_db()
+        self.assertEqual(ped.estado, Pedimento.PAGADO)
+
+    def test_el_cliente_no_puede(self):
+        ped = self.pagado()
+        duenio = User.objects.create_user('duenio2', password='x')
+        UserProfile.objects.create(user=duenio, tenant=self.tenant,
+                                   role='customer', customer=self.cliente)
+        self.client.force_login(duenio)
+        self.assertEqual(self.client.post(f'/pedimentos/{ped.pk}/unpaid/').status_code, 404)
+
+    def test_la_tarjeta_pagada_trae_el_boton(self):
+        ped = self.pagado()
+        respuesta = self.client.get(URL, {'customer': self.cliente.pk, 'solo': ped.pk})
+        self.assertContains(respuesta, f'/pedimentos/{ped.pk}/unpaid/')
+
+
 class ArmarDesdeLaTareaTests(Base):
 
     def armar(self, op=None):

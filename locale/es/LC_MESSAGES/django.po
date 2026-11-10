@@ -3551,3 +3551,29 @@ msgstr "¿Sacar %(embarque)s de este cruce? Volverá a quedar disponible para ot
 #, python-format
 msgid "Cancel crossing %(cruce)s? Its shipments will be available again."
 msgstr "¿Cancelar el cruce %(cruce)s? Sus embarques volverán a quedar disponibles."
+
+msgid "Remove validated"
+msgstr "Quitar validado"
+
+msgid "Remove paid"
+msgstr "Quitar pagado"
+
+#, python-format
+msgid "Remove the validated mark from %(ped)s? It goes back to approved."
+msgstr "¿Quitarle lo validado a %(ped)s? Vuelve a quedar aprobado."
+
+#, python-format
+msgid "Remove the paid mark from %(ped)s? It goes back to validated."
+msgstr "¿Quitarle lo pagado a %(ped)s? Vuelve a quedar validado."
+
+#, python-format
+msgid "%(ped)s cannot stop being paid: the load order of %(tareas)s was already issued with it."
+msgstr "A %(ped)s no se le puede quitar lo pagado: la orden de carga de %(tareas)s ya se emitió con él."
+
+#, python-format
+msgid "%(ped)s is not marked as paid."
+msgstr "%(ped)s no está marcado como pagado."
+
+#, python-format
+msgid "%(ped)s is not validated; if it is paid, remove the paid mark first."
+msgstr "%(ped)s no está validado; si está pagado, primero quítale lo pagado."

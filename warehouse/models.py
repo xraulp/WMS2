@@ -2292,6 +2292,48 @@ class Pedimento(models.Model):
         self.save(update_fields=['estado', 'pagado_en', 'updated_at'])
         return True
 
+    # ── Echar atras un paso de la casa ───────────────────────────────────────
+    #
+    # Validar y pagar son marcas que pone la casa a mano, y a mano se pueden
+    # equivocar. Se deshacen de una en una y en orden: primero el pagado,
+    # luego el validado. Lo que no se deshace desde aqui es lo del cliente --
+    # su aprobacion es suya.
+
+    def tareas_que_ya_salieron(self):
+        """
+        Las tareas con este pedimento que ya tienen orden de carga, o que ya
+        cargaron o cruzaron. Mientras haya alguna, el pagado no se quita: esa
+        orden se emitio confiando en el, y puede estar impresa en una mano.
+        """
+        return (CrossingTask.objects
+                .filter(renglones__operation__renglones_de_pedimento__pedimento=self,
+                        estado__in=[CrossingTask.CON_ORDEN, CrossingTask.CARGADA,
+                                    CrossingTask.CRUZADA])
+                .distinct())
+
+    def quitar_pagado(self):
+        """De pagado a validado. Devuelve si se pudo."""
+        if self.estado != self.PAGADO or self.tareas_que_ya_salieron().exists():
+            return False
+        self.estado = self.VALIDADO
+        self.pagado_en = None
+        self.save(update_fields=['estado', 'pagado_en', 'updated_at'])
+        return True
+
+    def quitar_validado(self):
+        """
+        De validado a aprobado, con el OK del cliente intacto. El ano de
+        validacion se borra porque se sello al validar y volvera a sellarse.
+        """
+        if self.estado != self.VALIDADO:
+            return False
+        self.estado = self.APROBADO
+        self.validado_en = None
+        self.anio_validacion = ''
+        self.save(update_fields=['estado', 'validado_en', 'anio_validacion',
+                                 'updated_at'])
+        return True
+
     # -- El candado ----------------------------------------------------------
 
     def choque_con(self, otros):
