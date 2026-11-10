@@ -6382,6 +6382,33 @@ def _cruce_del_tenant(request, pk):
     return tarea
 
 
+def _fase_de_la_tarea(tarea, pedimentos):
+    """
+    En que va la tarea, dicho como lo dice la casa: de quien es la pelota.
+
+    Se deduce de lo que ya paso, no se marca. Un embarque que todavia no tiene
+    pedimento armado cuenta como pendiente de revision: sin pedimento no hay
+    nada que el cliente haya podido aprobar.
+
+    `Cruce` sale de la remision emitida, que es cuando la mercancia ya va
+    arriba del camion.
+    """
+    if not tarea.filas:
+        return ''
+    if tarea.estado in (CrossingTask.CARGADA, CrossingTask.CRUZADA):
+        return _('Crossing')
+    pedimentos = list(pedimentos)
+    sin_pedimento = any(not f.pedimentos for f in tarea.filas)
+    if not pedimentos or sin_pedimento:
+        return _('Review and MV')
+    estados = {p.estado for p in pedimentos}
+    if estados <= {Pedimento.PAGADO}:
+        return _('Waiting for transport')
+    if estados <= {Pedimento.APROBADO, Pedimento.VALIDADO, Pedimento.PAGADO}:
+        return _('Validation and payment')
+    return _('Review and MV')
+
+
 def _contexto_de_cruces(request, cliente_pk=None, error=None):
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
@@ -6456,6 +6483,19 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
                 tarea.impuesto_total += fila.impuesto
             else:
                 tarea.sin_impuesto += 1
+        # Los pedidos van en la linea del numero de la tarea: el pedido es el
+        # dato con el que el cliente reconoce su mercancia.
+        tarea.pedidos = []
+        for fila in tarea.filas:
+            po = (fila.operation.po_order or '').strip()
+            if po and po not in tarea.pedidos:
+                tarea.pedidos.append(po)
+            fila.en_revision = any(p.estado == Pedimento.EN_REVISION
+                                   for p in fila.pedimentos)
+        armados = {p.pk: p for fila in tarea.filas for p in fila.pedimentos}
+        tarea.en_revision = sum(1 for p in armados.values()
+                                if p.estado == Pedimento.EN_REVISION)
+        tarea.fase = _fase_de_la_tarea(tarea, armados.values())
         tarea.sin_factura = tarea.operaciones_sin_factura
         tarea.dias = tarea.dias_para_el_cruce
         tarea.libres = libres
@@ -6852,7 +6892,14 @@ def cruce_meter(request, pk):
 @login_required
 @require_POST
 def cruce_sacar(request, pk):
-    """Sacar un embarque. Vuelve a estar libre para el siguiente cruce."""
+    """
+    Sacar un embarque. Vuelve a estar libre para el siguiente cruce.
+
+    Solo la casa. Al cliente el boton le causaba confusion y un toque de mas
+    le sacaba un pedimento de la tarea; si quiere sacar algo, lo pide.
+    """
+    if get_profile(request.user).is_customer():
+        raise Http404
     tarea = _cruce_del_tenant(request, pk)
     renglon = get_object_or_404(CrossingTaskItem,
                                 pk=request.POST.get('renglon'), task=tarea)

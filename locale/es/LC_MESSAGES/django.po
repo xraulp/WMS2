@@ -3598,3 +3598,35 @@ msgstr "Tomar o subir foto"
 
 msgid "Choose which shipment the photos belong to."
 msgstr "Elige a qué embarque pertenecen las fotos."
+
+msgid "Orders:"
+msgstr "Pedidos:"
+
+msgid "Stage:"
+msgstr "Estado:"
+
+msgid "Status:"
+msgstr "Status:"
+
+msgid "Review"
+msgstr "Revisión"
+
+msgid "FOR REVIEW"
+msgstr "PARA REVISIÓN"
+
+msgid "%(n)s pedimento under review"
+msgid_plural "%(n)s pedimentos under review"
+msgstr[0] "%(n)s pedimento en revisión"
+msgstr[1] "%(n)s pedimentos en revisión"
+
+msgid "Crossing"
+msgstr "Cruce"
+
+msgid "Review and MV"
+msgstr "Revisión y MV"
+
+msgid "Validation and payment"
+msgstr "Validación y pago"
+
+msgid "Waiting for transport"
+msgstr "Espera de transporte"

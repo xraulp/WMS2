@@ -804,3 +804,71 @@ class AvisoDeCrucePorConfirmarTests(BaseDeCruces):
         t.refresh_from_db()
         self.assertTrue(t.confirmada_por_el_cliente)
         self.assertEqual(self.bitacora_de_confirmados().get().status, 'FAILED')
+
+
+class LoQueSeVeEnLaTareaTests(BaseDeCruces):
+    """El aviso de revision, el estado de la tarea, los pedidos y el sacar."""
+
+    def setUp(self):
+        super().setUp()
+        self.t = self.tarea()
+        self.a = self.operacion('ED261110-0001', bundle_qty=2, po_order='4500321')
+        self.b = self.operacion('ED261110-0002', bundle_qty=1, po_order='4500322')
+        CrossingTaskItem.objects.create(task=self.t, operation=self.a)
+        CrossingTaskItem.objects.create(task=self.t, operation=self.b)
+        self.pa = self.con_pedimento(self.a, consecutivo='6005001')
+        self.pb = self.con_pedimento(self.b, consecutivo='6005002')
+
+    def pantalla(self, quien=None):
+        if quien:
+            self.client.force_login(quien)
+        return self.client.get('/cruces/', {'customer': self.cliente.pk})
+
+    def estados(self, a, b):
+        Pedimento.objects.filter(pk=self.pa.pk).update(estado=a)
+        Pedimento.objects.filter(pk=self.pb.pk).update(estado=b)
+
+    def fase(self):
+        return self.pantalla().context['tareas'][0].fase
+
+    def test_los_pedidos_van_en_la_linea_de_la_tarea(self):
+        self.assertContains(self.pantalla(), '4500321 - 4500322')
+
+    def test_el_cliente_ve_el_aviso_y_la_cuenta_de_revision(self):
+        self.estados(Pedimento.EN_REVISION, Pedimento.BORRADOR)
+        respuesta = self.pantalla(self.duenio)
+        self.assertContains(respuesta, 'class="en-revision"', count=1)
+        self.assertContains(respuesta, '1 pedimento under review')
+
+    def test_sin_revision_no_hay_aviso(self):
+        respuesta = self.pantalla()
+        self.assertNotContains(respuesta, 'class="en-revision"')
+        self.assertNotContains(respuesta, 'class="alerta-revision"')
+
+    def test_la_fase_sigue_a_los_pedimentos(self):
+        self.estados(Pedimento.EN_REVISION, Pedimento.APROBADO)
+        self.assertEqual(self.fase(), 'Review and MV')
+        self.estados(Pedimento.APROBADO, Pedimento.VALIDADO)
+        self.assertEqual(self.fase(), 'Validation and payment')
+        self.estados(Pedimento.PAGADO, Pedimento.PAGADO)
+        self.assertEqual(self.fase(), 'Waiting for transport')
+        CrossingTask.objects.filter(pk=self.t.pk).update(estado=CrossingTask.CARGADA)
+        self.assertEqual(self.fase(), 'Crossing')
+
+    def test_un_embarque_sin_pedimento_sigue_en_revision(self):
+        self.estados(Pedimento.PAGADO, Pedimento.PAGADO)
+        c = self.operacion('ED261110-0003', bundle_qty=1)
+        CrossingTaskItem.objects.create(task=self.t, operation=c)
+        self.assertEqual(self.fase(), 'Review and MV')
+
+    def test_el_cliente_no_ve_sacar_ni_puede_sacar(self):
+        respuesta = self.pantalla(self.duenio)
+        self.assertNotContains(respuesta, '/remove/')
+        renglon = self.t.renglones.first()
+        respuesta = self.client.post('/cruces/%d/remove/' % self.t.pk,
+                                     {'renglon': renglon.pk})
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertEqual(self.t.renglones.count(), 2)
+
+    def test_la_casa_si_puede_sacar(self):
+        self.assertContains(self.pantalla(), '/remove/')

@@ -47,6 +47,19 @@
               color:#fff}
     .tarea-sub{font-size:12px;color:var(--soft);margin-top:3px;line-height:1.5}
     .tarea-hd .tarea-sub{color:var(--tb-ink-suave)}
+    .tarea-pedidos{font-size:14px;font-weight:600;margin-left:6px}
+    .tarea-hd .fase{color:#fff}
+
+    /* El aviso de "pedimento para revision". Colores fijos, iguales en tema
+       claro y oscuro: es una alarma y tiene que verse igual en los dos.
+       Naranja de fondo, rojo oscuro en negritas y borde amarillo; se cambian
+       aqui en un solo sitio mientras se prueba la combinacion. */
+    :root{--rev-bg:#fb923c;--rev-ink:#7f1d1d;--rev-bdr:#facc15}
+    .en-revision, .alerta-revision{background:var(--rev-bg);color:var(--rev-ink);
+      border:2px solid var(--rev-bdr);font-weight:800;text-transform:uppercase;
+      letter-spacing:.03em;border-radius:6px;white-space:nowrap}
+    .en-revision{display:inline-block;padding:2px 8px;font-size:12px}
+    .alerta-revision{display:inline-block;margin-top:7px;padding:4px 11px;font-size:13px}
 
     /* Cada pedimento de la tarea con su color, el mismo en todos sus
        renglones: la franja de la izquierda y la etiqueta del numero. */
@@ -137,6 +150,7 @@
                  letter-spacing:.05em;color:var(--soft);flex:0 0 auto}
       .acciones{flex-direction:column;align-items:stretch}
       .campo, .acciones form{width:100%}
+      td.sin-revision{display:none}
     }
   </style>
 </head>
@@ -189,7 +203,13 @@
   <div class="tarea{% if forloop.counter|divisibleby:2 %} par{% endif %}" id="tarea-{{ t.pk }}">
     <div class="tarea-hd">
       <div>
-        <div class="tarea-id">{{ t.custom_id }}</div>
+        <div class="tarea-id">{{ t.custom_id }}{% if t.pedidos %}
+          <span class="tarea-pedidos">· {% trans "Orders:" %} {{ t.pedidos|join:" - " }}</span>{% endif %}</div>
+        {% if t.en_revision %}
+        <div class="alerta-revision">
+          ⚠ {% blocktrans count n=t.en_revision %}{{ n }} pedimento under review{% plural %}{{ n }} pedimentos under review{% endblocktrans %}
+        </div>
+        {% endif %}
         {% comment %}
         Quien la creo se enseña siempre. El dia que alguien reclame que se pidio
         cruzar, esta linea es la respuesta.
@@ -198,6 +218,7 @@
           {{ t.creada_por }} · {{ t.created_at|date:"d/m/y H:i" }}<br>
           {% blocktrans count n=t.renglones.count %}{{ n }} shipment{% plural %}{{ n }} shipments{% endblocktrans %}
           · {% trans "crosses" %} {{ t.fecha_de_cruce|date:"l j F" }}
+          {% if t.fase %}· {% trans "Stage:" %} <b class="fase">{{ t.fase }}</b>{% endif %}
         </div>
       </div>
       <div style="text-align:right">
@@ -210,7 +231,7 @@
           {% elif t.dias == 0 %}{% trans "crosses today" %}
           {% else %}{% blocktrans count n=t.dias %}{{ n }} day left{% plural %}{{ n }} days left{% endblocktrans %}{% endif %}
         </span>
-        <div class="tarea-sub">{{ t.get_estado_display }}</div>
+        <div class="tarea-sub">{% trans "Status:" %} {{ t.get_estado_display }}</div>
       </div>
       {% comment %}
       El titulo de la tarea es donde se la reconoce y tambien donde se actua
@@ -344,6 +365,7 @@
           <th>{% trans "Entry" %}</th>
           <th>{% trans "PO / Order" %}</th>
           <th>{% trans "Bundles" %}</th>
+          <th>{% trans "Review" %}</th>
           <th>{% trans "Pedimento" %}</th>
           <th class="importe">{% trans "Approx. taxes" %}</th>
           <th>{% trans "Added" %}</th>
@@ -358,6 +380,15 @@
           <td data-etq="{% trans "Bundles" %}">
             <span>{{ r.bultos_que_van }}{% if r.es_parcial %}
             <span class="soft">{% trans "of" %} {{ r.operation.bundle_qty }}</span>{% endif %}</span>
+          </td>
+          {% comment %}
+          El aviso de que el pedimento espera la revision del cliente. En el
+          movil cae justo debajo de los bultos, y sin aviso la celda no ocupa
+          renglon.
+          {% endcomment %}
+          <td data-etq="{% trans "Review" %}" class="{% if not r.en_revision %}sin-revision{% endif %}">
+            {% if r.en_revision %}<span class="en-revision">{% trans "FOR REVIEW" %}</span>
+            {% else %}<span class="soft">—</span>{% endif %}
           </td>
           {% comment %}
           A cada pedimento se entra desde aqui: no hay pestana de Pedimentos.
@@ -391,6 +422,7 @@
             {% if r.motivo %}<br>{{ r.motivo }}{% endif %}
           </td>
           <td data-etq="">
+            {% if not es_cliente %}
             <form method="post" action="{% url 'cruce_sacar' t.pk %}" style="margin:0;display:flex;gap:6px"
                   data-aviso="{% blocktrans with embarque=r.operation.po_order|default:r.operation.custom_id %}Take {{ embarque }} out of this crossing? It will be available for another crossing.{% endblocktrans %}"
                   onsubmit="return confirm(this.dataset.aviso)">
@@ -401,16 +433,17 @@
               {% endif %}
               <button class="btn btn-sm" type="submit">{% trans "Take out" %}</button>
             </form>
+            {% endif %}
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="soft">{% trans "Nothing in this crossing yet." %}</td></tr>
+        <tr><td colspan="8" class="soft">{% trans "Nothing in this crossing yet." %}</td></tr>
         {% endfor %}
       </tbody>
       {% if t.filas|length > 1 %}
       <tfoot>
         <tr class="total">
-          <td colspan="4" class="total-etq">
+          <td colspan="5" class="total-etq">
             {% trans "Approx. taxes total" %}
             {% if t.sin_impuesto %}<span class="soft">· {% blocktrans count n=t.sin_impuesto %}{{ n }} shipment without an amount yet{% plural %}{{ n }} shipments without an amount yet{% endblocktrans %}</span>{% endif %}
           </td>
