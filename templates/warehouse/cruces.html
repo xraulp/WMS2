@@ -60,6 +60,7 @@
               border:1px solid var(--pc, var(--bdr-fuerte));background:var(--surface);
               color:var(--pc-ink, var(--accent-ink));font-weight:600;text-decoration:none;
               white-space:nowrap}
+    button.ped-link{font-family:inherit;font-size:inherit;cursor:pointer}
     .ped-link:hover{background:var(--pc, var(--accent));color:#fff}
     .ped-link + .ped-link{margin-left:4px}
     /* Las acciones de la tarea, en su titulo. Ocupan su propia linea debajo
@@ -365,9 +366,19 @@
           {% endcomment %}
           <td data-etq="{% trans "Pedimento" %}" class="mono">
             <span>
-            {% for p in r.pedimentos %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% empty %}
-            {% if r.pedimento_texto %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}">{{ r.pedimento_texto }} ›</a>
-            {% elif not es_cliente %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}">+ {% trans "Make the pedimento" %}</a>
+            {% for p in r.pedimentos %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% empty %}
+            {% if not es_cliente %}
+            {% comment %}
+            Un POST y no un enlace: abre un pedimento con este embarque dentro,
+            listo para teclearle el numero y subirle sus documentos.
+            {% endcomment %}
+            <form method="post" action="{% url 'pedimento_create' %}" style="margin:0">
+              {% csrf_token %}
+              <input type="hidden" name="customer" value="{{ cliente.pk }}">
+              <input type="hidden" name="operation" value="{{ r.operation.pk }}">
+              <button class="ped-link" type="submit">{% if r.pedimento_texto %}{{ r.pedimento_texto }} ›{% else %}+ {% trans "Make the pedimento" %}{% endif %}</button>
+            </form>
+            {% elif r.pedimento_texto %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}">{{ r.pedimento_texto }} ›</a>
             {% else %}<span class="soft">—</span>{% endif %}
             {% endfor %}
             </span>

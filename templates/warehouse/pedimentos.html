@@ -153,7 +153,9 @@
 <div class="wrap">
   {% comment %}
   Ya no hay pestana de Pedimentos: aqui se llega desde la tarea de cruce, y
-  el volver lleva a ella.
+  el volver lleva a ella. Desde un renglon de la tarea se llega con `solo`, y
+  entonces solo esta la tarjeta de ese pedimento: ni el selector de cliente,
+  ni los cuadritos, ni los demas pedimentos, ni lo que falta por repartir.
   {% endcomment %}
   <a class="bs-volver" href="{% url 'cruces_panel' %}{% if cliente %}?customer={{ cliente.pk }}{% endif %}">← {% trans "Crossings" %}</a>
 
@@ -172,6 +174,7 @@
   mezcla dos clientes, asi que una lista mezclada solo obligaria a filtrar con
   los ojos.
   {% endcomment %}
+  {% if not solo %}
   <div class="card">
     <p class="ct">{% trans "Customer" %}</p>
     <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -186,6 +189,7 @@
       <noscript><button class="btn" type="submit">{% trans "Show" %}</button></noscript>
     </form>
   </div>
+  {% endif %}
 
   {% if not cliente %}
   <div class="card">
@@ -203,6 +207,7 @@
   documentos del pedimento — un cuadrito que enseña un numero inventado es
   peor que un hueco, porque se cree.
   {% endcomment %}
+  {% if not solo %}
   <div class="vistazo">
     <div class="cuadro">
       <b>{{ resumen.embarques }}</b>
@@ -221,6 +226,7 @@
       <span>{% trans "Pedimentos with a number" %}</span>
     </div>
   </div>
+  {% endif %}
 
   {% if patente %}
   <div class="card" style="padding:12px 16px">
@@ -388,14 +394,19 @@
         <div class="nada">{% trans "empty" %}</div>
         {% endfor %}
 
-        {% if puede_editar and p.editable and clave != 'FOTOS_SERIES' %}
+        {% comment %}
+        Las fotos de series se eligen del expediente, abajo. Si el expediente
+        no trae ninguna se dejan subir aqui: es requisito para enviar a
+        revision, y sin este campo la ranura seria un callejon sin salida.
+        {% endcomment %}
+        {% if puede_editar and p.editable %}{% if clave != 'FOTOS_SERIES' or not p.fotos_candidatas %}
         <form class="subir" method="post" enctype="multipart/form-data"
               action="{% url 'pedimento_subir' p.pk %}">
           {% csrf_token %}
           <input type="hidden" name="ranura" value="{{ clave }}">
           <input type="file" name="archivo" multiple onchange="this.form.submit()">
         </form>
-        {% endif %}
+        {% endif %}{% endif %}
       </div>
       {% endfor %}
     </div>
@@ -439,12 +450,14 @@
               action="{% url 'operacion_subir_factura' op.pk %}">
           {% csrf_token %}
           <input type="hidden" name="customer" value="{{ cliente.pk }}">
+          {% if solo %}<input type="hidden" name="solo" value="{{ solo }}">{% endif %}
           <input type="file" name="archivo" onchange="this.form.submit()">
         </form>
         {% if op.docs_del_expediente %}
         <form method="post" action="{% url 'operacion_marcar_factura' op.pk %}">
           {% csrf_token %}
           <input type="hidden" name="customer" value="{{ cliente.pk }}">
+          {% if solo %}<input type="hidden" name="solo" value="{{ solo }}">{% endif %}
           <select name="documento">
             <option value="">— {% trans "or mark one already in the file" %} —</option>
             {% for d in op.docs_del_expediente %}
@@ -593,6 +606,7 @@
     <div style="padding:8px 14px;border-top:1px solid var(--bdr)">
       <form method="post" action="{% url 'pedimento_borrar' p.pk %}" style="margin:0">
         {% csrf_token %}
+        {% if solo %}<input type="hidden" name="solo" value="{{ solo }}">{% endif %}
         <button class="btn btn-sm btn-d" type="submit">{% trans "Delete this empty pedimento" %}</button>
       </form>
     </div>
@@ -600,7 +614,7 @@
   </div>
   {% endfor %}
 
-  {% if puede_editar %}
+  {% if puede_editar and not solo %}
   <form method="post" action="{% url 'pedimento_create' %}" style="margin-bottom:16px">
     {% csrf_token %}
     <input type="hidden" name="customer" value="{{ cliente.pk }}">
@@ -608,7 +622,7 @@
   </form>
   {% endif %}
 
-  {% if sin_repartir %}
+  {% if sin_repartir and not solo %}
   <div class="suelto">
     <p class="ct">{% trans "WITHOUT A PEDIMENTO" %}</p>
     {% for op in sin_repartir %}

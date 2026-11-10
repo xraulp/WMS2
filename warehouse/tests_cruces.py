@@ -438,7 +438,8 @@ class ElImpuestoEnLaTareaTests(BaseDeCruces):
         self.tarea_con(a)
         self.assertContains(
             self.pantalla(self.jefa),
-            '/pedimentos/?customer=%d#ped-%d' % (self.cliente.pk, ped.pk))
+            '/pedimentos/?customer=%d&solo=%d#ped-%d'
+            % (self.cliente.pk, ped.pk, ped.pk))
 
     def test_los_embarques_del_mismo_pedimento_llevan_el_mismo_color(self):
         a = self.operacion('ED261012-0001', bundle_qty=15)

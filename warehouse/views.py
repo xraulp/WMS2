@@ -4627,7 +4627,8 @@ def _bultos_repartidos(operaciones):
 
 
 
-def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None):
+def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None,
+                            solo=None):
     """
     Todo lo que necesita la pantalla de armar pedimentos.
 
@@ -4675,6 +4676,19 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None):
                                'renglones__operation__bundle_type')
              .order_by('orden'))
 
+    # Desde un renglon de la tarea de cruce se entra a **ese** pedimento y a
+    # nada mas: `solo` lo dice. Los demas del cliente -- y sobre todo los
+    # pagados de cruces viejos -- no tienen nada que hacer en una tarea nueva,
+    # y enseñarlos obliga a buscar el bueno entre todos.
+    solo = str(solo if solo is not None else request.GET.get('solo', ''))
+    if solo.isdigit():
+        lista = lista.filter(pk=solo)
+        contexto['solo'] = int(solo)
+    # Sin `solo`, la casa tampoco ve los pagados: esto es para armar el cruce
+    # que viene. El cliente sigue viendo los suyos: para el es su lista.
+    elif not profile.is_customer():
+        lista = lista.exclude(estado=Pedimento.PAGADO)
+
     # Los embarques del cliente que todavia estan en bodega. Son los unicos que
     # se pueden repartir: lo que ya salio no se mete en un pedimento nuevo.
     embarques = (WarehouseOperation.objects
@@ -4692,6 +4706,12 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None):
             op.bultos_sueltos = total - dentro
             op.bultos_dentro  = dentro
             sin_repartir.append(op)
+
+    # Con un pedimento solo, lo que se le puede asignar son los bultos que les
+    # quedan libres a sus propios embarques, no los pedidos de otros cruces.
+    if 'solo' in contexto:
+        suyas = {r.operation_id for p in lista for r in p.renglones.all()}
+        sin_repartir = [op for op in sin_repartir if op.pk in suyas]
 
     # La aduana y el agente aduanal no se eligen: salen del numero del primer
     # pedimento que los tenga. Se enseñan arriba como informacion, para que se
@@ -4785,11 +4805,32 @@ def pedimentos_panel(request):
                   _contexto_de_pedimentos(request))
 
 
-def _panel_con_error(request, cliente_pk, mensaje, intento=None):
+def _panel_con_error(request, cliente_pk, mensaje, intento=None, solo=None):
     """La pantalla otra vez, con el aviso arriba y sin haber guardado nada."""
+    if solo is None:
+        solo = request.POST.get('solo')
     return render(request, 'warehouse/pedimentos.html',
-                  _contexto_de_pedimentos(request, cliente_pk, str(mensaje), intento),
+                  _contexto_de_pedimentos(request, cliente_pk, str(mensaje),
+                                          intento, solo),
                   status=422)
+
+
+def _error_en_pedimento(request, ped, mensaje, intento=None):
+    """El aviso, sobre la tarjeta de `ped` sola: alli es donde se trabajaba."""
+    return _panel_con_error(request, ped.customer_id, mensaje, intento,
+                            solo=ped.pk)
+
+
+def _volver_a_la_tarjeta(request, cliente_pk):
+    """
+    De vuelta a la pantalla tras una accion que no es del pedimento -- la
+    factura del embarque --, pero sin perder la tarjeta enfocada de la que salio.
+    """
+    url = f"{reverse('pedimentos_panel')}?customer={cliente_pk}"
+    solo = request.POST.get('solo', '')
+    if solo.isdigit():
+        url += f'&solo={solo}#ped-{solo}'
+    return redirect(url)
 
 
 def _pedimento_del_tenant(request, pk):
@@ -4798,10 +4839,135 @@ def _pedimento_del_tenant(request, pk):
     return get_object_or_404(Pedimento, pk=pk, tenant=tenant)
 
 
+def _volver_al_pedimento(ped):
+    """
+    La pantalla, con este pedimento solo.
+
+    Armar uno son varias vueltas seguidas --el numero, un archivo, otro
+    archivo-- y cada una tiene que caer otra vez en su tarjeta, sin los demas
+    pedimentos del cliente alrededor: se entro a este desde su tarea de cruce.
+    """
+    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}"
+                    f"&solo={ped.pk}#ped-{ped.pk}")
+
+
+def _hermanos_en_curso(ped):
+    """
+    Los pedimentos del cliente contra los que se comprueba el candado.
+
+    Los pagados no cuentan: ya cruzaron o van en otro camion, asi que su agente
+    aduanal no le dice nada al pedimento que se esta armando. Contarlos seria
+    rechazar un numero por culpa de uno que en la pantalla ni se ve.
+    """
+    return (Pedimento.objects
+            .filter(tenant=ped.tenant, customer=ped.customer)
+            .exclude(pk=ped.pk)
+            .exclude(estado=Pedimento.PAGADO))
+
+
+def _numero_a_las_operaciones(operaciones, antes=''):
+    """
+    Deja en cada operacion el numero de los pedimentos que la amparan.
+
+    Es lo que hace que el numero tecleado al armar el pedimento aparezca en su
+    campo de la pestana Operaciones sin capturarlo dos veces. La operacion solo
+    tiene un campo y un embarque puede ir partido en dos pedimentos: con uno
+    solo se llenan las tres casillas, y con varios se escriben todos en el
+    texto, porque quedarse con uno diria que el otro no existe.
+
+    `antes` es el numero que tenia el pedimento. Si ya nada ampara a la
+    operacion, solo se borra el suyo si es ese: lo que otra persona tecleo en
+    la entrada y no vino de aqui no es de esta funcion.
+    """
+    campos = ['pedimento', 'ped_aduana', 'ped_patente', 'ped_consecutivo',
+              'updated_at']
+    for op in operaciones:
+        numeros = []
+        for enlace in op.renglones_de_pedimento.select_related('pedimento'):
+            numero = enlace.pedimento.numero
+            if numero and numero not in numeros:
+                numeros.append(numero)
+
+        if len(numeros) == 1:
+            casillas, texto = pedimentos.desglosar(numeros[0]), numeros[0]
+        elif numeros:
+            casillas, texto = ('', '', ''), ', '.join(numeros)[:100]
+        elif antes and (op.pedimento or '').strip() == antes:
+            casillas, texto = ('', '', ''), ''
+        else:
+            continue
+
+        if (op.ped_aduana, op.ped_patente, op.ped_consecutivo) == casillas \
+                and (op.pedimento or '') == texto:
+            continue
+        op.ped_aduana, op.ped_patente, op.ped_consecutivo = casillas
+        op.pedimento = texto
+        op.save(update_fields=campos)
+
+
+def _operaciones_del_pedimento(ped):
+    return [r.operation for r in ped.renglones.select_related('operation')]
+
+
+def _meter_bultos(ped, op, cuantos, libras=None):
+    """
+    Mete bultos de `op` en `ped`. Devuelve el aviso del candado si no se pudo.
+
+    Si la operacion ya tiene un renglon aqui se le suman: dos renglones de la
+    misma operacion en el mismo pedimento no significan nada distinto y solo
+    harian que las sumas dependieran de como se capturo.
+
+    La entrada puede traer ya su numero de pedimento, tecleado al capturarla.
+    Si este pedimento todavia no tiene, se queda con ese: pedir que se vuelva a
+    teclear aqui era escribir dos veces el mismo dato, y la segunda con la
+    posibilidad de equivocarse. Pasa por el mismo candado que el numero
+    tecleado a mano, y si choca no se mete nada. Si la operacion ya va en otro
+    pedimento no se adopta: ese numero es del otro, y este tendra el suyo.
+    """
+    adopta = None
+    if not ped.tiene_numero and not op.renglones_de_pedimento.exclude(
+            pedimento=ped).exists():
+        casillas = (op.ped_aduana, op.ped_patente, op.ped_consecutivo)
+        if not pedimentos.numero_corrido(*casillas):
+            # Las capturadas antes de las tres casillas solo tienen el texto.
+            casillas = pedimentos.desglosar(op.pedimento or '')
+        del_embarque = pedimentos.numero_corrido(*casillas)
+        if del_embarque:
+            choca = pedimentos.choque(
+                del_embarque, [h.numero for h in _hermanos_en_curso(ped)])
+            if choca:
+                return choca['mensaje']
+            adopta = casillas
+
+    renglon, creado = PedimentoBundle.objects.get_or_create(
+        pedimento=ped, operation=op,
+        defaults={'bultos': cuantos, 'weight_lbs': libras})
+    if adopta:
+        ped.ped_aduana, ped.ped_patente, ped.ped_consecutivo = adopta
+        ped.save(update_fields=['ped_aduana', 'ped_patente', 'ped_consecutivo',
+                                'updated_at'])
+    if not creado:
+        renglon.bultos += cuantos
+        if libras is not None:
+            renglon.weight_lbs = (renglon.weight_lbs or Decimal('0')) + libras
+        # `save()` sin `update_fields` para que los kilos se recalculen.
+        renglon.save()
+    # Si acaba de adoptar un numero, tambien les toca a los que ya iban dentro.
+    _numero_a_las_operaciones(_operaciones_del_pedimento(ped))
+    return None
+
+
 @login_required
 @require_POST
 def pedimento_create(request):
-    """Un pedimento nuevo y vacio para un cliente."""
+    """
+    Un pedimento nuevo para un cliente.
+
+    Con `operation` viene de "Armar pedimento" en la tarea de cruce: nace con
+    los bultos libres de ese embarque dentro --un pedimento se paga completo
+    aunque cruce en dos camiones-- y queda esperando su numero y sus
+    documentos. Sin `operation`, nace vacio.
+    """
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
     if profile.is_customer():
@@ -4809,14 +4975,37 @@ def pedimento_create(request):
 
     cliente = get_object_or_404(Catalog, pk=request.POST.get('customer'),
                                 tenant=tenant, category='CUSTOMER')
-    # El orden se cuenta sobre los que ya existen y no se recalcula nunca mas:
-    # un nombre que se mueve al borrar otro pedimento no sirve para hablar por
-    # telefono, que es justo para lo que existe "Pedimento 2".
-    ultimo = (Pedimento.objects.filter(tenant=tenant, customer=cliente)
-              .aggregate(Max('orden'))['orden__max'] or 0)
-    Pedimento.objects.create(tenant=tenant, customer=cliente, orden=ultimo + 1,
-                             created_by=request.user)
-    return redirect(f"{reverse('pedimentos_panel')}?customer={cliente.pk}")
+
+    op = ped = None
+    if request.POST.get('operation'):
+        op = get_object_or_404(WarehouseOperation, pk=request.POST.get('operation'),
+                               tenant=tenant, customer=cliente)
+        # Un segundo toque, o un intento que el candado rechazo, no debe dejar
+        # un pedimento vacio de mas por cada vez.
+        ped = (Pedimento.objects
+               .filter(tenant=tenant, customer=cliente,
+                       estado=Pedimento.BORRADOR, renglones__isnull=True,
+                       ped_consecutivo='')
+               .order_by('orden').first())
+
+    if ped is None:
+        # El orden se cuenta sobre los que ya existen y no se recalcula nunca
+        # mas: un nombre que se mueve al borrar otro pedimento no sirve para
+        # hablar por telefono, que es justo para lo que existe "Pedimento 2".
+        ultimo = (Pedimento.objects.filter(tenant=tenant, customer=cliente)
+                  .aggregate(Max('orden'))['orden__max'] or 0)
+        ped = Pedimento.objects.create(tenant=tenant, customer=cliente,
+                                       orden=ultimo + 1, created_by=request.user)
+
+    if op is None:
+        return redirect(f"{reverse('pedimentos_panel')}?customer={cliente.pk}")
+
+    libres = (op.bundle_qty or 0) - _bultos_repartidos([op]).get(op.pk, 0)
+    if libres > 0:
+        aviso = _meter_bultos(ped, op, libres)
+        if aviso:
+            return _error_en_pedimento(request, ped, aviso)
+    return _volver_al_pedimento(ped)
 
 
 @login_required
@@ -4837,8 +5026,7 @@ def pedimento_numero(request, pk):
     ped = _pedimento_del_tenant(request, pk)
 
     if not ped.se_puede_armar:
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('%(ped)s is already with the customer; it cannot be changed.')
             % {'ped': ped.etiqueta})
 
@@ -4851,23 +5039,22 @@ def pedimento_numero(request, pk):
 
     errores = pedimentos.errores_de_casillas(aduana, patente, consecutivo)
     if errores:
-        return _panel_con_error(request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
                                 ' '.join(str(e) for e in errores), intento)
 
     nuevo = pedimentos.numero_corrido(aduana, patente, consecutivo)
     if nuevo:
-        hermanos = (Pedimento.objects
-                    .filter(tenant=ped.tenant, customer=ped.customer)
-                    .exclude(pk=ped.pk))
-        choca = pedimentos.choque(nuevo, [h.numero for h in hermanos])
+        choca = pedimentos.choque(nuevo, [h.numero for h in _hermanos_en_curso(ped)])
         if choca:
-            return _panel_con_error(request, ped.customer_id,
+            return _error_en_pedimento(request, ped,
                                     choca['mensaje'], intento)
 
+    antes = ped.numero
     ped.ped_aduana, ped.ped_patente, ped.ped_consecutivo = aduana, patente, consecutivo
     ped.save(update_fields=['ped_aduana', 'ped_patente', 'ped_consecutivo',
                             'updated_at'])
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    _numero_a_las_operaciones(_operaciones_del_pedimento(ped), antes=antes)
+    return _volver_al_pedimento(ped)
 
 
 @login_required
@@ -4875,10 +5062,6 @@ def pedimento_numero(request, pk):
 def pedimento_asignar(request, pk):
     """
     Meter bultos de una operacion en este pedimento.
-
-    Si la operacion ya tiene un renglon aqui se le suman: dos renglones de la
-    misma operacion en el mismo pedimento no significan nada distinto y solo
-    harian que las sumas dependieran de como se capturo.
     """
     profile = get_profile(request.user)
     if profile.is_customer():
@@ -4886,8 +5069,7 @@ def pedimento_asignar(request, pk):
     ped = _pedimento_del_tenant(request, pk)
 
     if not ped.se_puede_armar:
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('%(ped)s is already with the customer; it cannot be changed.')
             % {'ped': ped.etiqueta})
 
@@ -4905,8 +5087,7 @@ def pedimento_asignar(request, pk):
     dentro = _bultos_repartidos([op]).get(op.pk, 0)
     libres = (op.bundle_qty or 0) - dentro
     if cuantos < 1 or cuantos > libres:
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('%(op)s has %(libres)d bundles left to assign.')
             % {'op': op.custom_id, 'libres': libres})
 
@@ -4918,41 +5099,10 @@ def pedimento_asignar(request, pk):
     except (InvalidOperation, TypeError):
         libras = None
 
-    # La entrada puede traer ya su numero de pedimento, tecleado al capturarla.
-    # Si este pedimento todavia no tiene, se queda con ese: pedir que se
-    # vuelva a teclear aqui era escribir dos veces el mismo dato, y la segunda
-    # con la posibilidad de equivocarse. Pasa por el mismo candado que el
-    # numero tecleado a mano, y si choca no se mete nada.
-    adopta = None
-    if not ped.tiene_numero:
-        casillas = (op.ped_aduana, op.ped_patente, op.ped_consecutivo)
-        if not pedimentos.numero_corrido(*casillas):
-            # Las capturadas antes de las tres casillas solo tienen el texto.
-            casillas = pedimentos.desglosar(op.pedimento or '')
-        del_embarque = pedimentos.numero_corrido(*casillas)
-        if del_embarque:
-            hermanos = (Pedimento.objects
-                        .filter(tenant=ped.tenant, customer=ped.customer)
-                        .exclude(pk=ped.pk))
-            choca = pedimentos.choque(del_embarque, [h.numero for h in hermanos])
-            if choca:
-                return _panel_con_error(request, ped.customer_id, choca['mensaje'])
-            adopta = casillas
-
-    renglon, creado = PedimentoBundle.objects.get_or_create(
-        pedimento=ped, operation=op,
-        defaults={'bultos': cuantos, 'weight_lbs': libras})
-    if adopta:
-        ped.ped_aduana, ped.ped_patente, ped.ped_consecutivo = adopta
-        ped.save(update_fields=['ped_aduana', 'ped_patente', 'ped_consecutivo',
-                                'updated_at'])
-    if not creado:
-        renglon.bultos += cuantos
-        if libras is not None:
-            renglon.weight_lbs = (renglon.weight_lbs or Decimal('0')) + libras
-        # `save()` sin `update_fields` para que los kilos se recalculen.
-        renglon.save()
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    aviso = _meter_bultos(ped, op, cuantos, libras)
+    if aviso:
+        return _error_en_pedimento(request, ped, aviso)
+    return _volver_al_pedimento(ped)
 
 
 @login_required
@@ -4964,15 +5114,18 @@ def pedimento_quitar(request, pk):
         raise Http404
     ped = _pedimento_del_tenant(request, pk)
     if not ped.se_puede_armar:
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('%(ped)s is already with the customer; it cannot be changed.')
             % {'ped': ped.etiqueta})
 
     renglon = get_object_or_404(PedimentoBundle, pk=request.POST.get('renglon'),
                                 pedimento=ped)
+    op = renglon.operation
     renglon.delete()
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    # El embarque ya no va en este pedimento: su numero no puede seguir en la
+    # pestana Operaciones, ni adoptarse al meterlo en otro.
+    _numero_a_las_operaciones([op], antes=ped.numero)
+    return _volver_al_pedimento(ped)
 
 
 @login_required
@@ -4991,10 +5144,15 @@ def pedimento_borrar(request, pk):
     ped = _pedimento_del_tenant(request, pk)
     cliente_id = ped.customer_id
     if ped.estado != Pedimento.BORRADOR:
-        return _panel_con_error(
-            request, cliente_id,
+        return _error_en_pedimento(
+            request, ped,
             _('This pedimento already went to the customer; it cannot be deleted.'))
+    operaciones, antes = _operaciones_del_pedimento(ped), ped.numero
     ped.delete()
+    _numero_a_las_operaciones(operaciones, antes=antes)
+    # Si se estaba viendo solo, ya no queda nada que ver aqui: a la tarea.
+    if request.POST.get('solo'):
+        return redirect(f"{reverse('cruces_panel')}?customer={cliente_id}")
     return redirect(f"{reverse('pedimentos_panel')}?customer={cliente_id}")
 
 
@@ -5042,20 +5200,19 @@ def pedimento_subir(request, pk):
             raise Http404
 
     if ranura in PedimentoDocument.RANURAS_DE_ENVIO and not ped.se_puede_armar:
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('%(ped)s is already with the customer; its documents cannot be '
               'changed.') % {'ped': ped.etiqueta})
 
     archivos = request.FILES.getlist('archivo')
     if not archivos:
-        return _panel_con_error(request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
                                 _('Pick a file first.'))
     for f in archivos:
         PedimentoDocument.objects.create(
             pedimento=ped, ranura=ranura, file=f, original_name=f.name,
             uploaded_by=request.user)
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    return _volver_al_pedimento(ped)
 
 
 @login_required
@@ -5067,15 +5224,14 @@ def pedimento_quitar_documento(request, pk):
         raise Http404
     ped = _pedimento_del_tenant(request, pk)
     if not ped.se_puede_armar:
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('%(ped)s is already with the customer; it cannot be changed.')
             % {'ped': ped.etiqueta})
 
     doc = get_object_or_404(PedimentoDocument, pk=request.POST.get('documento'),
                             pedimento=ped)
     doc.delete()
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    return _volver_al_pedimento(ped)
 
 
 @login_required
@@ -5094,8 +5250,7 @@ def pedimento_fotos_de_series(request, pk):
     ped = _pedimento_del_tenant(request, pk)
 
     if not ped.se_puede_armar:
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('%(ped)s is already with the customer; it cannot be changed.')
             % {'ped': ped.etiqueta})
 
@@ -5109,7 +5264,7 @@ def pedimento_fotos_de_series(request, pk):
         PedimentoDocument.objects.create(
             pedimento=ped, ranura=PedimentoDocument.FOTOS_SERIES,
             documento_de_operacion=doc, uploaded_by=request.user)
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    return _volver_al_pedimento(ped)
 
 
 @login_required
@@ -5149,7 +5304,7 @@ def operacion_marcar_factura(request, pk):
             request.session['aviso_de_impuestos'] = str(
                 _('Invoice of %(id)s marked.') % {'id': op.custom_id})
         return redirect(f"{reverse('impuestos_panel')}?customer={volver}")
-    return redirect(f"{reverse('pedimentos_panel')}?customer={volver}")
+    return _volver_a_la_tarjeta(request, volver)
 
 
 @login_required
@@ -5199,7 +5354,7 @@ def operacion_subir_factura(request, pk):
         request.session['aviso_de_impuestos'] = str(
             _('Invoice of %(id)s uploaded.') % {'id': op.custom_id})
         return redirect(a_la_hoja)
-    return redirect(f"{reverse('pedimentos_panel')}?customer={volver}")
+    return _volver_a_la_tarjeta(request, volver)
 
 
 @login_required
@@ -5219,8 +5374,7 @@ def pedimento_enviar_a_revision(request, pk):
 
     if not ped.enviar_a_revision():
         faltan = ped.faltantes_para_revision
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('It cannot go to review yet — missing: %(faltan)s.')
             % {'faltan': ', '.join(str(f) for f in faltan)} if faltan else
             _('This pedimento is not in a state that can be sent to review.'))
@@ -5231,7 +5385,7 @@ def pedimento_enviar_a_revision(request, pk):
     notifications.en_segundo_plano(
         notifications.avisar_pedimento_en_revision, ped,
         triggered_by=request.user)
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    return _volver_al_pedimento(ped)
 
 
 def _pedimento_del_cliente(request, pk):
@@ -5257,14 +5411,13 @@ def pedimento_aprobar(request, pk):
     """El OK del cliente: que se valide y se pague."""
     ped = _pedimento_del_cliente(request, pk)
     if not ped.aprobar(request.user):
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('%(ped)s is not waiting for your review.') % {'ped': ped.etiqueta})
     # La casa se entera por correo: es su señal para validar y pagar.
     notifications.en_segundo_plano(
         notifications.avisar_pedimento_aprobado, ped,
         triggered_by=request.user)
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    return _volver_al_pedimento(ped)
 
 
 @login_required
@@ -5273,18 +5426,16 @@ def pedimento_pedir_correcciones(request, pk):
     """El cliente lo devuelve, diciendo que hay que cambiar."""
     ped = _pedimento_del_cliente(request, pk)
     if ped.estado != Pedimento.EN_REVISION:
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('%(ped)s is not waiting for your review.') % {'ped': ped.etiqueta})
     if not ped.pedir_correcciones(request.user, request.POST.get('correcciones')):
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('Write what has to be corrected in %(ped)s.') % {'ped': ped.etiqueta})
     # La casa se entera por correo, con lo que hay que corregir dentro.
     notifications.en_segundo_plano(
         notifications.avisar_correcciones_pedidas, ped,
         triggered_by=request.user)
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    return _volver_al_pedimento(ped)
 
 
 @login_required
@@ -5295,11 +5446,10 @@ def pedimento_marcar_validado(request, pk):
         raise Http404
     ped = _pedimento_del_tenant(request, pk)
     if not ped.marcar_validado():
-        return _panel_con_error(
-            request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
             _('%(ped)s can only be validated after the customer approves it.')
             % {'ped': ped.etiqueta})
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    return _volver_al_pedimento(ped)
 
 
 @login_required
@@ -5314,9 +5464,9 @@ def pedimento_marcar_pagado(request, pk):
             mensaje = _('%(ped)s has to be validated before it is paid.')
         else:
             mensaje = _('Upload the paid pedimento to %(ped)s first.')
-        return _panel_con_error(request, ped.customer_id,
+        return _error_en_pedimento(request, ped,
                                 mensaje % {'ped': ped.etiqueta})
-    return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}")
+    return _volver_al_pedimento(ped)
 
 
 @login_required
