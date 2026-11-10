@@ -60,6 +60,14 @@
       letter-spacing:.03em;border-radius:6px;white-space:nowrap}
     .en-revision{display:inline-block;padding:2px 8px;font-size:12px}
     .alerta-revision{display:inline-block;margin-top:7px;padding:4px 11px;font-size:13px}
+    .estado-ped{display:inline-block;padding:2px 8px;font-size:12px;font-weight:600;
+                border:1px solid var(--bdr-fuerte);border-radius:6px;white-space:nowrap;
+                background:var(--surface)}
+    .en-revision + .en-revision, .en-revision + .estado-ped,
+    .estado-ped + .estado-ped, .estado-ped + .en-revision{margin-left:4px}
+    .tarea-hd .fase-rojo_aduana{background:#dc2626;color:#fff;padding:1px 7px;border-radius:5px}
+    .tarea-hd .fase-entregada{background:#16a34a;color:#fff;padding:1px 7px;border-radius:5px}
+    .tarea-acc form{display:inline}
 
     /* Cada pedimento de la tarea con su color, el mismo en todos sus
        renglones: la franja de la izquierda y la etiqueta del numero. */
@@ -150,7 +158,6 @@
                  letter-spacing:.05em;color:var(--soft);flex:0 0 auto}
       .acciones{flex-direction:column;align-items:stretch}
       .campo, .acciones form{width:100%}
-      td.sin-revision{display:none}
     }
   </style>
 </head>
@@ -218,7 +225,7 @@
           {{ t.creada_por }} · {{ t.created_at|date:"d/m/y H:i" }}<br>
           {% blocktrans count n=t.renglones.count %}{{ n }} shipment{% plural %}{{ n }} shipments{% endblocktrans %}
           · {% trans "crosses" %} {{ t.fecha_de_cruce|date:"l j F" }}
-          {% if t.fase %}· {% trans "Stage:" %} <b class="fase">{{ t.fase }}</b>{% endif %}
+          · {% trans "Stage:" %} <b class="fase fase-{{ t.fase|lower }}">{{ t.fase_texto }}</b>
         </div>
       </div>
       <div style="text-align:right">
@@ -247,6 +254,29 @@
         {% endif %}
         <button class="btn btn-sm" type="button" aria-expanded="false"
                 onclick="abrirPanelDeTarea(this, 'dia-{{ t.pk }}')">&#128197; {% trans "Move the day" %}</button>
+        {% comment %}
+        Lo que pasa despues de la remision no lo puede saber el sistema: lo
+        marca la casa. Rojo solo mientras va en cruce; entregada, en cruce o
+        despues del rojo.
+        {% endcomment %}
+        {% if not es_cliente %}
+        {% if t.fase == 'EN_CRUCE' %}
+        <form method="post" action="{% url 'cruce_rojo_aduana' t.pk %}" style="margin:0"
+              data-aviso="{% blocktrans with cruce=t.custom_id %}Mark {{ cruce }} as customs red light?{% endblocktrans %}"
+              onsubmit="return confirm(this.dataset.aviso)">
+          {% csrf_token %}
+          <button class="btn btn-sm btn-d" type="submit">🚨 {% trans "Customs red light" %}</button>
+        </form>
+        {% endif %}
+        {% if t.fase == 'EN_CRUCE' or t.fase == 'ROJO_ADUANA' %}
+        <form method="post" action="{% url 'cruce_entregada' t.pk %}" style="margin:0"
+              data-aviso="{% blocktrans with cruce=t.custom_id %}Mark {{ cruce }} as delivered? The crossing ends.{% endblocktrans %}"
+              onsubmit="return confirm(this.dataset.aviso)">
+          {% csrf_token %}
+          <button class="btn btn-sm btn-p" type="submit">✓ {% trans "Delivered" %}</button>
+        </form>
+        {% endif %}
+        {% endif %}
       </div>
     </div>
 
@@ -365,7 +395,7 @@
           <th>{% trans "Entry" %}</th>
           <th>{% trans "PO / Order" %}</th>
           <th>{% trans "Bundles" %}</th>
-          <th>{% trans "Review" %}</th>
+          <th>{% trans "State" %}</th>
           <th>{% trans "Pedimento" %}</th>
           <th class="importe">{% trans "Approx. taxes" %}</th>
           <th>{% trans "Added" %}</th>
@@ -382,13 +412,12 @@
             <span class="soft">{% trans "of" %} {{ r.operation.bundle_qty }}</span>{% endif %}</span>
           </td>
           {% comment %}
-          El aviso de que el pedimento espera la revision del cliente. En el
-          movil cae justo debajo de los bultos, y sin aviso la celda no ocupa
-          renglon.
+          El estado del pedimento con la abreviatura de quien tiene la pelota.
+          Cuando le toca al cliente revisar, sale con el estilo de alarma. En el
+          movil cae justo debajo de los bultos.
           {% endcomment %}
-          <td data-etq="{% trans "Review" %}" class="{% if not r.en_revision %}sin-revision{% endif %}">
-            {% if r.en_revision %}<span class="en-revision">{% trans "FOR REVIEW" %}</span>
-            {% else %}<span class="soft">—</span>{% endif %}
+          <td data-etq="{% trans "State" %}">
+            <span>{% for texto, del_cliente in r.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% endfor %}</span>
           </td>
           {% comment %}
           A cada pedimento se entra desde aqui: no hay pestana de Pedimentos.

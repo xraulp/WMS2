@@ -28,6 +28,12 @@
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:200px">
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
+             title="{% trans "How it is shown next to the pedimento states, e.g. Elab Ped - DYSER" %}">{% trans "Short name" %}</label>
+      <input type="text" name="short_name" maxlength="20" placeholder="DYSER"
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:100px;text-transform:uppercase">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)">{% trans "Subdomain" %}</label>
       <input type="text" name="subdomain" placeholder="{% trans "auto from name" %}"
              style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:150px">
@@ -110,7 +116,7 @@
   <tbody>
     {% for t in tenants %}
     <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %}">
-      <td><strong>{{ t.name }}</strong></td>
+      <td><strong>{{ t.name }}</strong>{% if t.short_name %} <span class="mono" style="font-size:11px;color:var(--soft)">· {{ t.short_name }}</span>{% endif %}</td>
       <td class="mono" style="font-size:11px;color:var(--soft)">{{ t.subdomain }}</td>
       <td><span class="badge b-sent">{{ t.plan }}</span></td>
       {% comment %}
@@ -159,6 +165,7 @@
         <button class="btn btn-g btn-sm" onclick="abrirEdicionDeEmpresa(this)"
                 data-t-id="{{ t.pk }}" data-t-name="{{ t.name }}"
                 data-t-sub="{{ t.subdomain }}" data-t-plan="{{ t.plan }}"
+                data-t-short="{{ t.short_name }}"
                 data-t-mail="{{ t.billing_email|default:'' }}"
                 data-t-reply="{{ t.reply_to_email|default:'' }}">{% trans "Edit" %}</button>
         <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML"
@@ -233,6 +240,15 @@ Uno por fila repetiria los mismos id tantas veces como empresas haya.
                     font-size:13px;margin-bottom:12px">
 
       <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">{% trans "Short name" %}</label>
+      <input type="text" name="short_name" id="tenant-edit-short" maxlength="20"
+             style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
+                    font-size:13px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase">
+      <div style="font-size:11px;color:var(--faint);margin:5px 0 12px">
+        {% trans "How it is shown next to the pedimento states, e.g. Elab Ped - DYSER" %}
+      </div>
+
+      <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
                     letter-spacing:.05em;color:var(--soft);margin-bottom:3px">{% trans "Subdomain" %}</label>
       <input type="text" name="subdomain" id="tenant-edit-sub" required maxlength="50"
              style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
@@ -282,6 +298,7 @@ function abrirEdicionDeEmpresa(boton){
   document.getElementById('tenant-edit-id').value    = d.tId;
   document.getElementById('tenant-edit-name').value  = d.tName;
   document.getElementById('tenant-edit-sub').value   = d.tSub;
+  document.getElementById('tenant-edit-short').value = d.tShort || '';
   document.getElementById('tenant-edit-plan').value  = d.tPlan;
   document.getElementById('tenant-edit-mail').value  = d.tMail;
   document.getElementById('tenant-edit-reply').value = d.tReply;

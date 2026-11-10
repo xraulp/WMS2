@@ -3638,8 +3638,8 @@ msgid "Reopen to redo"
 msgstr "Reabrir para rehacer"
 
 #, python-format
-msgid "Reopen %(ped)s to redo it? It loses the customer's approval and goes back to draft, so you can change its documents and send it to review again."
-msgstr "¿Reabrir %(ped)s para rehacerlo? Pierde la aprobación del cliente y vuelve a borrador, para que cambies sus documentos y lo mandes otra vez a revisión."
+msgid "Reopen %(ped)s to redo it? It loses the customer's approval, goes back to draft and ALL its uploaded documents and chosen photos are removed, so you can upload them again and send it to review."
+msgstr "¿Reabrir %(ped)s para rehacerlo? Pierde la aprobación del cliente, vuelve a borrador y se quitan TODOS sus documentos cargados y las fotos elegidas, para que los subas de nuevo y lo mandes a revisión."
 
 #, python-format
 msgid "%(ped)s cannot be reopened: the load order of %(tareas)s was already issued with it."
@@ -3647,3 +3647,54 @@ msgstr "%(ped)s no se puede reabrir: ya se emitió con él la orden de carga de 
 
 msgid "Only an approved pedimento can be reopened; if it is validated or paid, remove those marks first."
 msgstr "Solo se puede reabrir un pedimento aprobado; si está validado o pagado, quita primero esas marcas."
+
+msgid "Ped prep"
+msgstr "Elab Ped"
+
+msgid "Under review"
+msgstr "En revisión"
+
+msgid "Corr"
+msgstr "Corr"
+
+msgid "Corr review"
+msgstr "Rev corr"
+
+msgid "Approval"
+msgstr "Aprobación"
+
+
+msgid "In crossing"
+msgstr "En cruce"
+
+msgid "Customs red light"
+msgstr "Rojo aduana"
+
+
+msgid "State"
+msgstr "Estado"
+
+#, python-format
+msgid "Mark %(cruce)s as customs red light?"
+msgstr "¿Marcar %(cruce)s como rojo en aduana?"
+
+#, python-format
+msgid "Mark %(cruce)s as delivered? The crossing ends."
+msgstr "¿Marcar %(cruce)s como entregada? El cruce termina."
+
+#, python-format
+msgid "%(tarea)s is not in crossing: issue its remision first."
+msgstr "%(tarea)s no está en cruce: primero emite su remisión."
+
+#, python-format
+msgid "%(tarea)s cannot be delivered yet: it is not in crossing."
+msgstr "%(tarea)s todavía no se puede marcar entregada: no está en cruce."
+
+msgid "Short name"
+msgstr "Abreviatura"
+
+msgid "How it is shown next to the pedimento states, e.g. Elab Ped - DYSER"
+msgstr "Cómo aparece junto a los estados del pedimento, p. ej. Elab Ped - DYSER"
+
+msgid "Ped paid"
+msgstr "Pagado"

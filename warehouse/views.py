@@ -3588,6 +3588,9 @@ def platform_tenant_list(request):
             # aviso suyo. Sin esto las respuestas caen en el buzon de la
             # plataforma, que nadie lee.
             reply_to_email = request.POST.get('reply_to_email', '').strip()
+            # La abreviatura con la que la casa firma sus estados: "Elab Ped -
+            # DYSER". Se elige; recortar la razon social no sirve.
+            short_name = request.POST.get('short_name', '').strip().upper()[:20]
             admin_username = request.POST.get('admin_username', '').strip()
             admin_password = request.POST.get('admin_password', '').strip()
             # El correo de recuperacion del administrador, que no es el de
@@ -3615,6 +3618,7 @@ def platform_tenant_list(request):
             else:
                 tenant = Tenant.objects.create(
                     name=name, type='organization', subdomain=subdomain,
+                    short_name=short_name,
                     is_active=True, plan=plan, billing_email=billing_email or None,
                     reply_to_email=reply_to_email or None,
                 )
@@ -3668,6 +3672,7 @@ def platform_tenant_list(request):
             plan     = request.POST.get('plan', t.plan)
             correo   = request.POST.get('billing_email', '').strip()
             responder = request.POST.get('reply_to_email', '').strip()
+            corto    = request.POST.get('short_name', '').strip().upper()[:20]
             subdom_in = request.POST.get('subdomain', '').strip()
             subdominio = re.sub(r'[^a-z0-9-]', '', slugify(subdom_in)) if subdom_in else t.subdomain
 
@@ -3686,8 +3691,10 @@ def platform_tenant_list(request):
                 t.billing_email = correo or None
                 t.reply_to_email = responder or None
                 t.subdomain = subdominio
+                t.short_name = corto
                 t.save(update_fields=['name', 'plan', 'billing_email',
-                                      'reply_to_email', 'subdomain'])
+                                      'reply_to_email', 'subdomain',
+                                      'short_name'])
 
                 # El plan vive en dos sitios -- la empresa y su suscripcion --
                 # y hasta ahora solo coincidian porque el alta los escribia a la
@@ -6409,33 +6416,6 @@ def _cruce_del_tenant(request, pk):
     return tarea
 
 
-def _fase_de_la_tarea(tarea, pedimentos):
-    """
-    En que va la tarea, dicho como lo dice la casa: de quien es la pelota.
-
-    Se deduce de lo que ya paso, no se marca. Un embarque que todavia no tiene
-    pedimento armado cuenta como pendiente de revision: sin pedimento no hay
-    nada que el cliente haya podido aprobar.
-
-    `Cruce` sale de la remision emitida, que es cuando la mercancia ya va
-    arriba del camion.
-    """
-    if not tarea.filas:
-        return ''
-    if tarea.estado in (CrossingTask.CARGADA, CrossingTask.CRUZADA):
-        return _('Crossing')
-    pedimentos = list(pedimentos)
-    sin_pedimento = any(not f.pedimentos for f in tarea.filas)
-    if not pedimentos or sin_pedimento:
-        return _('Review and MV')
-    estados = {p.estado for p in pedimentos}
-    if estados <= {Pedimento.PAGADO}:
-        return _('Waiting for transport')
-    if estados <= {Pedimento.APROBADO, Pedimento.VALIDADO, Pedimento.PAGADO}:
-        return _('Validation and payment')
-    return _('Review and MV')
-
-
 def _contexto_de_cruces(request, cliente_pk=None, error=None):
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
@@ -6519,10 +6499,17 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
                 tarea.pedidos.append(po)
             fila.en_revision = any(p.estado == Pedimento.EN_REVISION
                                    for p in fila.pedimentos)
+            # El estado de su pedimento, con de quien es la pelota. El embarque
+            # que aun no tiene pedimento armado esta en manos de la casa.
+            if fila.pedimentos:
+                fila.estados = [(p.estado_corto, p.es_turno_del_cliente)
+                                for p in fila.pedimentos]
+            else:
+                fila.estados = [(Pedimento.texto_corto(
+                    Pedimento.ELAB_PED, tenant, cliente), False)]
         armados = {p.pk: p for fila in tarea.filas for p in fila.pedimentos}
         tarea.en_revision = sum(1 for p in armados.values()
                                 if p.estado == Pedimento.EN_REVISION)
-        tarea.fase = _fase_de_la_tarea(tarea, armados.values())
         tarea.sin_factura = tarea.operaciones_sin_factura
         tarea.dias = tarea.dias_para_el_cruce
         tarea.libres = libres
@@ -6938,6 +6925,34 @@ def cruce_sacar(request, pk):
     renglon.delete()
     _versionar_orden(tarea, request.user)
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+
+@login_required
+@require_POST
+def cruce_rojo_aduana(request, pk):
+    """A la mercancia le toco rojo en la aduana. Lo marca la casa."""
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    if not tarea.marcar_rojo_aduana(request.user):
+        return _cruces_con_error(request, tarea.customer_id,
+            _('%(tarea)s is not in crossing: issue its remision first.')
+            % {'tarea': tarea.custom_id})
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+
+
+@login_required
+@require_POST
+def cruce_entregada(request, pk):
+    """La mercancia se entrego. Lo marca la casa y la tarea termina."""
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    if not tarea.marcar_entregada(request.user):
+        return _cruces_con_error(request, tarea.customer_id,
+            _('%(tarea)s cannot be delivered yet: it is not in crossing.')
+            % {'tarea': tarea.custom_id})
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
 
 
 @login_required

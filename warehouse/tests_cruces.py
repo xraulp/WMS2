@@ -829,6 +829,7 @@ class LoQueSeVeEnLaTareaTests(BaseDeCruces):
         Pedimento.objects.filter(pk=self.pb.pk).update(estado=b)
 
     def fase(self):
+        self.t.refresh_from_db()
         return self.pantalla().context['tareas'][0].fase
 
     def test_los_pedidos_van_en_la_linea_de_la_tarea(self):
@@ -845,21 +846,63 @@ class LoQueSeVeEnLaTareaTests(BaseDeCruces):
         self.assertNotContains(respuesta, 'class="en-revision"')
         self.assertNotContains(respuesta, 'class="alerta-revision"')
 
-    def test_la_fase_sigue_a_los_pedimentos(self):
-        self.estados(Pedimento.EN_REVISION, Pedimento.APROBADO)
-        self.assertEqual(self.fase(), 'Review and MV')
-        self.estados(Pedimento.APROBADO, Pedimento.VALIDADO)
-        self.assertEqual(self.fase(), 'Validation and payment')
-        self.estados(Pedimento.PAGADO, Pedimento.PAGADO)
-        self.assertEqual(self.fase(), 'Waiting for transport')
+    def test_las_cuatro_fases(self):
+        self.assertEqual(self.fase(), CrossingTask.FASE_PEDIMENTOS)
         CrossingTask.objects.filter(pk=self.t.pk).update(estado=CrossingTask.CARGADA)
-        self.assertEqual(self.fase(), 'Crossing')
+        self.assertEqual(self.fase(), CrossingTask.FASE_EN_CRUCE)
+        self.client.post('/cruces/%d/red-light/' % self.t.pk)
+        self.assertEqual(self.fase(), CrossingTask.FASE_ROJO)
+        self.client.post('/cruces/%d/delivered/' % self.t.pk)
+        self.assertEqual(self.fase(), CrossingTask.FASE_ENTREGADA)
+        self.t.refresh_from_db()
+        self.assertEqual(self.t.estado, CrossingTask.CRUZADA)
+        self.assertEqual(self.t.entregada_por, self.jefa)
 
-    def test_un_embarque_sin_pedimento_sigue_en_revision(self):
-        self.estados(Pedimento.PAGADO, Pedimento.PAGADO)
+    def test_sin_remision_no_hay_rojo_ni_entregada(self):
+        self.assertEqual(
+            self.client.post('/cruces/%d/red-light/' % self.t.pk).status_code, 422)
+        self.assertEqual(
+            self.client.post('/cruces/%d/delivered/' % self.t.pk).status_code, 422)
+        self.assertNotContains(self.pantalla(), '/red-light/')
+
+    def test_en_cruce_la_casa_ve_los_botones_y_el_cliente_no(self):
+        CrossingTask.objects.filter(pk=self.t.pk).update(estado=CrossingTask.CARGADA)
+        self.assertContains(self.pantalla(), '/red-light/')
+        self.assertContains(self.pantalla(), '/delivered/')
+        respuesta = self.pantalla(self.duenio)
+        self.assertNotContains(respuesta, '/red-light/')
+        self.assertEqual(
+            self.client.post('/cruces/%d/delivered/' % self.t.pk).status_code, 404)
+
+    def test_el_estado_de_cada_pedimento_con_su_abreviatura(self):
+        # DYSER es la casa, LBO el cliente.
+        casos = [
+            (Pedimento.BORRADOR, 0, 'Ped prep - DYSER'),
+            (Pedimento.EN_REVISION, 0, 'Under review - LBO'),
+            (Pedimento.CORRECCIONES, 1, 'Corr - DYSER'),
+            (Pedimento.EN_REVISION, 1, 'Corr review - LBO'),
+            (Pedimento.APROBADO, 1, 'Approval - LBO'),
+            (Pedimento.VALIDADO, 0, 'Validated - DYSER'),
+            (Pedimento.PAGADO, 0, 'Ped paid - DYSER'),
+        ]
+        for estado, veces, texto in casos:
+            Pedimento.objects.filter(pk=self.pa.pk).update(
+                estado=estado, veces_con_correcciones=veces)
+            self.assertContains(self.pantalla(), texto)
+
+    def test_sin_pedimento_armado_es_de_la_casa(self):
         c = self.operacion('ED261110-0003', bundle_qty=1)
         CrossingTaskItem.objects.create(task=self.t, operation=c)
-        self.assertEqual(self.fase(), 'Review and MV')
+        fila = [f for f in self.pantalla().context['tareas'][0].filas
+                if f.operation_id == c.pk][0]
+        self.assertEqual(fila.estados, [('Ped prep - DYSER', False)])
+
+    def test_pedir_correcciones_cuenta(self):
+        Pedimento.objects.filter(pk=self.pa.pk).update(estado=Pedimento.EN_REVISION)
+        self.pa.refresh_from_db()
+        self.pa.pedir_correcciones(self.duenio, 'el valor')
+        self.assertEqual(self.pa.veces_con_correcciones, 1)
+        self.assertEqual(self.pa.clave_corta, Pedimento.CORRECCIONES)
 
     def test_el_cliente_no_ve_sacar_ni_puede_sacar(self):
         respuesta = self.pantalla(self.duenio)

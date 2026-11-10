@@ -557,7 +557,7 @@
         vuelve a borrador, se cambian los papeles y el cliente lo revisa otra vez.
         {% endcomment %}
         <form method="post" action="{% url 'pedimento_reabrir' p.pk %}" style="margin:0"
-              data-aviso="{% blocktrans with ped=p.etiqueta %}Reopen {{ ped }} to redo it? It loses the customer's approval and goes back to draft, so you can change its documents and send it to review again.{% endblocktrans %}"
+              data-aviso="{% blocktrans with ped=p.etiqueta %}Reopen {{ ped }} to redo it? It loses the customer's approval, goes back to draft and ALL its uploaded documents and chosen photos are removed, so you can upload them again and send it to review.{% endblocktrans %}"
               onsubmit="return confirm(this.dataset.aviso)">
           {% csrf_token %}
           <button class="btn btn-sm" type="submit">↺ {% trans "Reopen to redo" %}</button>

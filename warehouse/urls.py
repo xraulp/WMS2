@@ -183,6 +183,8 @@ urlpatterns = [
     path('cruces/<int:pk>/add/', views.cruce_meter, name='cruce_meter'),
     path('cruces/<int:pk>/remove/', views.cruce_sacar, name='cruce_sacar'),
     path('cruces/<int:pk>/day/', views.cruce_cambiar_dia, name='cruce_cambiar_dia'),
+    path('cruces/<int:pk>/red-light/', views.cruce_rojo_aduana, name='cruce_rojo_aduana'),
+    path('cruces/<int:pk>/delivered/', views.cruce_entregada, name='cruce_entregada'),
     path('cruces/<int:pk>/cancel/', views.cruce_cancelar, name='cruce_cancelar'),
 
     # La orden de carga, el escaneo y la remision.

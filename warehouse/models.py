@@ -2041,6 +2041,11 @@ class Pedimento(models.Model):
     # dinero, asi que tiene que quedar a nombre de alguien y no solo con fecha.
     revisado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
                                      blank=True, related_name='pedimentos_revisados')
+    # Cuantas veces el cliente pidio correcciones. Es lo que distingue la
+    # primera revision ("En revision") de la que viene despues de corregir
+    # ("Rev corr"): el estado es el mismo, la pelota tambien, pero el cliente
+    # tiene que saber que esta mirando la version corregida.
+    veces_con_correcciones = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2118,6 +2123,53 @@ class Pedimento(models.Model):
         """Los kilos, que salen de las libras y nunca se teclean."""
         pesos = [r.weight_kgs for r in self.renglones.all() if r.weight_kgs]
         return sum(pesos) if pesos else None
+
+    # ── El estado corto, con de quien es la pelota ───────────────────────────
+
+    # Cada estado dice tambien quien tiene que moverse: la casa o el cliente.
+    # Por eso la abreviatura que lo acompaña es la de uno o la del otro.
+    ELAB_PED = 'ELAB_PED'
+    REV_CORR = 'REV_CORR'
+    ESTADOS_CORTOS = {
+        ELAB_PED:     (_('Ped prep'),    'casa'),
+        EN_REVISION:  (_('Under review'), 'cliente'),
+        CORRECCIONES: (_('Corr'),        'casa'),
+        REV_CORR:     (_('Corr review'), 'cliente'),
+        APROBADO:     (_('Approval'),    'cliente'),
+        VALIDADO:     (_('Validated'),   'casa'),
+        PAGADO:       (_("Ped paid"), "casa"),
+    }
+
+    @property
+    def clave_corta(self):
+        if self.estado == self.BORRADOR:
+            return self.ELAB_PED
+        if self.estado == self.EN_REVISION and self.veces_con_correcciones:
+            return self.REV_CORR
+        return self.estado
+
+    @classmethod
+    def texto_corto(cls, clave, tenant, cliente):
+        """
+        "Elab Ped - DYSER", "En revision - CDOS"... La abreviatura de la casa
+        es la que puso el administrador de la plataforma al dar de alta al
+        tenant; la del cliente, la de su ficha. Si falta, el estado va solo:
+        un recorte inventado del nombre parece un error.
+        """
+        texto, de_quien = cls.ESTADOS_CORTOS[clave]
+        if de_quien == 'casa':
+            abrev = (getattr(tenant, 'short_name', '') or '').strip().upper()
+        else:
+            abrev = (getattr(cliente, 'abbreviation', '') or '').strip().upper()
+        return f'{texto} - {abrev}' if abrev else str(texto)
+
+    @property
+    def estado_corto(self):
+        return self.texto_corto(self.clave_corta, self.tenant, self.customer)
+
+    @property
+    def es_turno_del_cliente(self):
+        return self.estado == self.EN_REVISION
 
     @property
     def necesita_fotos_de_series(self):
@@ -2252,8 +2304,10 @@ class Pedimento(models.Model):
         self.estado = self.CORRECCIONES
         self.correcciones_pedidas = texto
         self.revisado_por = usuario
+        self.veces_con_correcciones += 1
         self.save(update_fields=['estado', 'correcciones_pedidas',
-                                 'revisado_por', 'updated_at'])
+                                 'revisado_por', 'veces_con_correcciones',
+                                 'updated_at'])
         return True
 
     def marcar_validado(self):
@@ -2354,18 +2408,28 @@ class Pedimento(models.Model):
         aprobacion a escondidas: el pedimento vuelve a borrador, la casa cambia
         lo que haga falta y el cliente lo revisa y lo aprueba otra vez.
 
-        Los archivos de las ranuras se quedan; la casa quita y sube los que
-        cambian. Si esta validado o pagado, primero se quitan esas marcas.
+        Empieza de cero: se vacian todas las ranuras, tambien la eleccion de
+        fotos de series, porque los papeles viejos llevan fechas que ya no
+        sirven y dejarlos invita a mandar uno sin cambiar. Las fotos en si no
+        se borran -- viven en el expediente del embarque y son de la caja, no
+        del pedimento --; solo se sueltan y se vuelven a elegir.
+
+        Si esta validado o pagado, primero se quitan esas marcas.
         """
         if self.estado != self.APROBADO or self.tareas_que_ya_salieron().exists():
             return False
         antes = self.aprobado_en
+        # Igual que el ✕ de cada ranura: se quita el renglon.
+        self.documentos.all().delete()
         self.estado = self.BORRADOR
         self.aprobado_en = None
         self.enviado_a_revision_en = None
         self.revisado_por = None
+        self.correcciones_pedidas = ''
+        self.veces_con_correcciones = 0
         self.save(update_fields=['estado', 'aprobado_en', 'enviado_a_revision_en',
-                                 'revisado_por', 'updated_at'])
+                                 'revisado_por', 'correcciones_pedidas',
+                                 'veces_con_correcciones', 'updated_at'])
         CambioDePedimento.objects.create(
             pedimento=self, accion=CambioDePedimento.REABRIR,
             estado_anterior=self.APROBADO, estado_nuevo=self.BORRADOR,
@@ -3127,6 +3191,16 @@ class CrossingTask(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
                                    blank=True, related_name='cruces_creados')
 
+    # Lo que pasa del otro lado de la remision y el sistema no puede saber
+    # solo: que a la mercancia le toco rojo en la aduana, y que se entrego. Lo
+    # marca la casa con un boton, y queda quien y cuando.
+    rojo_aduana_en  = models.DateTimeField(null=True, blank=True)
+    rojo_aduana_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                        blank=True, related_name='+')
+    entregada_en    = models.DateTimeField(null=True, blank=True)
+    entregada_por   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                        blank=True, related_name='+')
+
     class Meta:
         ordering = ['fecha_de_cruce', 'custom_id']
         verbose_name = 'Tarea de cruce'
@@ -3240,6 +3314,57 @@ class CrossingTask(models.Model):
     def dias_para_el_cruce(self):
         """Cuantos dias faltan. Negativo si ya paso."""
         return (self.fecha_de_cruce - timezone.localdate()).days
+
+    # ── En que va ────────────────────────────────────────────────────────────
+    #
+    # Cuatro fases. Las dos primeras salen solas -- mientras no hay remision la
+    # tarea esta en sus pedimentos; con la remision, la mercancia va en el
+    # camion --; las dos ultimas las marca la casa.
+
+    FASE_PEDIMENTOS = 'PEDIMENTOS'
+    FASE_EN_CRUCE   = 'EN_CRUCE'
+    FASE_ROJO       = 'ROJO_ADUANA'
+    FASE_ENTREGADA  = 'ENTREGADA'
+    FASES = {
+        FASE_PEDIMENTOS: _('Pedimentos'),
+        FASE_EN_CRUCE:   _('In crossing'),
+        FASE_ROJO:       _('Customs red light'),
+        FASE_ENTREGADA:  _('Delivered'),
+    }
+
+    @property
+    def fase(self):
+        if self.entregada_en:
+            return self.FASE_ENTREGADA
+        if self.rojo_aduana_en:
+            return self.FASE_ROJO
+        if self.estado in (self.CARGADA, self.CRUZADA):
+            return self.FASE_EN_CRUCE
+        return self.FASE_PEDIMENTOS
+
+    @property
+    def fase_texto(self):
+        return self.FASES[self.fase]
+
+    def marcar_rojo_aduana(self, usuario):
+        """Rojo en la aduana. Solo con la mercancia ya en el camion."""
+        if self.fase != self.FASE_EN_CRUCE:
+            return False
+        self.rojo_aduana_en = timezone.now()
+        self.rojo_aduana_por = usuario
+        self.save(update_fields=['rojo_aduana_en', 'rojo_aduana_por', 'updated_at'])
+        return True
+
+    def marcar_entregada(self, usuario):
+        """Entregada: la tarea termina y queda como cruzada."""
+        if self.fase not in (self.FASE_EN_CRUCE, self.FASE_ROJO):
+            return False
+        self.entregada_en = timezone.now()
+        self.entregada_por = usuario
+        self.estado = self.CRUZADA
+        self.save(update_fields=['entregada_en', 'entregada_por', 'estado',
+                                 'updated_at'])
+        return True
 
     # ── El candado ───────────────────────────────────────────────────────────
 

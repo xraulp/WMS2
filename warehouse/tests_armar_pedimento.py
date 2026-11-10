@@ -265,10 +265,27 @@ class ReabrirParaRehacerTests(Base):
         self.assertTrue(ped.se_puede_armar)
         self.assertIn(f'solo={ped.pk}', respuesta['Location'])
 
-    def test_los_archivos_se_quedan(self):
+    def test_se_quitan_todos_los_archivos_y_las_fotos_elegidas(self):
+        from .models import OperationDocument
         ped = self.aprobado()
+        self.dentro(ped)
+        foto = OperationDocument.objects.create(
+            tenant=self.tenant, operation=self.entrada, file_type='PHOTO',
+            file=SimpleUploadedFile('serie.jpg', b'x'), original_name='serie.jpg')
+        PedimentoDocument.objects.create(
+            pedimento=ped, ranura=PedimentoDocument.FOTOS_SERIES,
+            documento_de_operacion=foto)
         self.client.post(f'/pedimentos/{ped.pk}/reopen/')
-        self.assertEqual(ped.documentos.count(), 1)
+        self.assertEqual(ped.documentos.count(), 0)
+        # La foto sigue en el expediente del embarque: solo se solto.
+        self.assertTrue(OperationDocument.objects.filter(pk=foto.pk).exists())
+
+    def test_reabrir_reinicia_la_cuenta_de_correcciones(self):
+        ped = self.aprobado()
+        Pedimento.objects.filter(pk=ped.pk).update(veces_con_correcciones=2)
+        self.client.post(f'/pedimentos/{ped.pk}/reopen/')
+        ped.refresh_from_db()
+        self.assertEqual(ped.veces_con_correcciones, 0)
 
     def test_queda_en_la_bitacora(self):
         from .models import CambioDePedimento

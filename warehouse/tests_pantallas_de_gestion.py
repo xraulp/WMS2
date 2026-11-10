@@ -165,6 +165,18 @@ class EditarElAltaDeUnaEmpresaTests(BaseGestion):
         self.assertEqual(self.tenant.name, 'Almacen Uno SA de CV')
         self.assertEqual(self.tenant.billing_email, 'cobros@uno.com')
 
+    def test_se_pone_la_abreviatura(self):
+        self.client.force_login(self.plat_admin)
+        self._editar(short_name='alm1')
+        self.tenant.refresh_from_db()
+        self.assertEqual(self.tenant.short_name, 'ALM1')
+
+    def test_el_alta_trae_la_abreviatura(self):
+        self.client.force_login(self.plat_admin)
+        self.client.post('/platform/tenants/', {
+            'action': 'create', 'name': 'Almacen Tres', 'short_name': 'at3'})
+        self.assertEqual(Tenant.objects.get(name='Almacen Tres').short_name, 'AT3')
+
     def test_el_plan_se_cambia_en_los_dos_sitios(self):
         """
         El plan vive en la empresa y en su suscripcion, y la facturacion lee el
