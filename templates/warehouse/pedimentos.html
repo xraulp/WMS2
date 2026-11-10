@@ -580,6 +580,23 @@
     </div>
 
     {% comment %}
+    La bitacora de lo que la casa echo atras: quien le quito lo pagado o lo
+    validado, y cuando. Solo la ve la casa.
+    {% endcomment %}
+    {% if puede_editar and p.cambios.all %}
+    <div class="soft" style="padding:8px 14px;border-top:1px solid var(--bdr);font-size:12px">
+      {% for c in p.cambios.all %}
+      <div>
+        {{ c.get_accion_display }} ·
+        {{ c.usuario.get_full_name|default:c.usuario.username|default:"?" }} ·
+        {{ c.fecha|date:"d/m/y H:i" }}{% if c.marca_anterior %}
+        · {% trans "it had been marked on" %} {{ c.marca_anterior|date:"d/m/y H:i" }}{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% comment %}
     Lo que llega despues, ya con el pedimento fuera. Se enseña siempre para que
     se vea el camino entero, y solo se puede llenar cuando el pedimento ya
     salio: una manifestacion de valor de un pedimento que aun es borrador no

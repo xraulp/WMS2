@@ -3577,3 +3577,12 @@ msgstr "%(ped)s no está marcado como pagado."
 #, python-format
 msgid "%(ped)s is not validated; if it is paid, remove the paid mark first."
 msgstr "%(ped)s no está validado; si está pagado, primero quítale lo pagado."
+
+msgid "Paid mark removed"
+msgstr "Se quitó lo pagado"
+
+msgid "Validated mark removed"
+msgstr "Se quitó lo validado"
+
+msgid "it had been marked on"
+msgstr "se había marcado el"

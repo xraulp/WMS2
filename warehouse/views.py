@@ -4673,7 +4673,8 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None,
              .filter(tenant=tenant, customer=cliente)
              .select_related('revisado_por')
              .prefetch_related('renglones__operation__shipper',
-                               'renglones__operation__bundle_type')
+                               'renglones__operation__bundle_type',
+                               'cambios__usuario')
              .order_by('orden'))
 
     # Desde un renglon de la tarea de cruce se entra a **ese** pedimento y a
@@ -5476,7 +5477,7 @@ def pedimento_quitar_pagado(request, pk):
     if get_profile(request.user).is_customer():
         raise Http404
     ped = _pedimento_del_tenant(request, pk)
-    if not ped.quitar_pagado():
+    if not ped.quitar_pagado(request.user):
         salieron = list(ped.tareas_que_ya_salieron())
         if salieron:
             mensaje = _('%(ped)s cannot stop being paid: the load order of '
@@ -5496,7 +5497,7 @@ def pedimento_quitar_validado(request, pk):
     if get_profile(request.user).is_customer():
         raise Http404
     ped = _pedimento_del_tenant(request, pk)
-    if not ped.quitar_validado():
+    if not ped.quitar_validado(request.user):
         return _error_en_pedimento(request, ped,
             _('%(ped)s is not validated; if it is paid, remove the paid mark first.')
             % {'ped': ped.etiqueta})

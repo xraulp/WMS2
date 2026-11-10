@@ -198,6 +198,41 @@ class QuitarPagadoYValidadoTests(Base):
         self.client.force_login(duenio)
         self.assertEqual(self.client.post(f'/pedimentos/{ped.pk}/unpaid/').status_code, 404)
 
+    def test_quitar_pagado_queda_en_la_bitacora(self):
+        from django.utils import timezone
+        from .models import CambioDePedimento
+        marcado = timezone.now()
+        ped = self.pagado()
+        ped.pagado_en = marcado
+        ped.save()
+        self.client.post(f'/pedimentos/{ped.pk}/unpaid/')
+        cambio = CambioDePedimento.objects.get(pedimento=ped)
+        self.assertEqual(cambio.accion, CambioDePedimento.QUITAR_PAGADO)
+        self.assertEqual(cambio.usuario, self.jefa)
+        self.assertEqual((cambio.estado_anterior, cambio.estado_nuevo),
+                         (Pedimento.PAGADO, Pedimento.VALIDADO))
+        self.assertEqual(cambio.marca_anterior, marcado)
+
+    def test_quitar_validado_tambien_queda(self):
+        from .models import CambioDePedimento
+        ped = self.ped(estado=Pedimento.VALIDADO)
+        self.client.post(f'/pedimentos/{ped.pk}/unvalidated/')
+        self.assertEqual(CambioDePedimento.objects.get(pedimento=ped).accion,
+                         CambioDePedimento.QUITAR_VALIDADO)
+
+    def test_si_no_se_pudo_no_se_apunta_nada(self):
+        from .models import CambioDePedimento
+        ped = self.ped(estado=Pedimento.APROBADO)
+        self.client.post(f'/pedimentos/{ped.pk}/unpaid/')
+        self.assertFalse(CambioDePedimento.objects.exists())
+
+    def test_la_casa_ve_quien_lo_quito(self):
+        ped = self.pagado()
+        self.client.post(f'/pedimentos/{ped.pk}/unpaid/')
+        respuesta = self.client.get(URL, {'customer': self.cliente.pk, 'solo': ped.pk})
+        self.assertContains(respuesta, self.jefa.username)
+        self.assertContains(respuesta, 'Paid mark removed')
+
     def test_la_tarjeta_pagada_trae_el_boton(self):
         ped = self.pagado()
         respuesta = self.client.get(URL, {'customer': self.cliente.pk, 'solo': ped.pk})

@@ -2311,27 +2311,37 @@ class Pedimento(models.Model):
                                     CrossingTask.CRUZADA])
                 .distinct())
 
-    def quitar_pagado(self):
-        """De pagado a validado. Devuelve si se pudo."""
+    def quitar_pagado(self, usuario=None):
+        """De pagado a validado. Devuelve si se pudo, y lo apunta en la bitacora."""
         if self.estado != self.PAGADO or self.tareas_que_ya_salieron().exists():
             return False
+        antes = self.pagado_en
         self.estado = self.VALIDADO
         self.pagado_en = None
         self.save(update_fields=['estado', 'pagado_en', 'updated_at'])
+        CambioDePedimento.objects.create(
+            pedimento=self, accion=CambioDePedimento.QUITAR_PAGADO,
+            estado_anterior=self.PAGADO, estado_nuevo=self.VALIDADO,
+            marca_anterior=antes, usuario=usuario)
         return True
 
-    def quitar_validado(self):
+    def quitar_validado(self, usuario=None):
         """
         De validado a aprobado, con el OK del cliente intacto. El ano de
         validacion se borra porque se sello al validar y volvera a sellarse.
         """
         if self.estado != self.VALIDADO:
             return False
+        antes = self.validado_en
         self.estado = self.APROBADO
         self.validado_en = None
         self.anio_validacion = ''
         self.save(update_fields=['estado', 'validado_en', 'anio_validacion',
                                  'updated_at'])
+        CambioDePedimento.objects.create(
+            pedimento=self, accion=CambioDePedimento.QUITAR_VALIDADO,
+            estado_anterior=self.VALIDADO, estado_nuevo=self.APROBADO,
+            marca_anterior=antes, usuario=usuario)
         return True
 
     # -- El candado ----------------------------------------------------------
@@ -2349,6 +2359,44 @@ class Pedimento(models.Model):
                    for o in otros if o is not None]
         numeros = [n for n in numeros if n and n != self.numero]
         return ped.choque(self.numero, numeros)
+
+
+class CambioDePedimento(models.Model):
+    """
+    Cada vez que la casa le quita a un pedimento lo pagado o lo validado.
+
+    Esas marcas son las que dejan emitir la orden de carga, asi que echarlas
+    atras no puede quedar sin dueño: el dia que alguien pregunte por que un
+    pedimento pagado volvio a validado, este renglon dice quien y cuando.
+    Nunca se edita ni se borra desde la aplicacion.
+    """
+
+    QUITAR_PAGADO   = 'QUITAR_PAGADO'
+    QUITAR_VALIDADO = 'QUITAR_VALIDADO'
+    ACCIONES = [
+        (QUITAR_PAGADO,   _('Paid mark removed')),
+        (QUITAR_VALIDADO, _('Validated mark removed')),
+    ]
+
+    pedimento = models.ForeignKey(Pedimento, on_delete=models.CASCADE,
+                                  related_name='cambios')
+    accion    = models.CharField(max_length=20, choices=ACCIONES)
+    estado_anterior = models.CharField(max_length=15)
+    estado_nuevo    = models.CharField(max_length=15)
+    # La fecha de la marca que se quito: cuando se habia marcado pagado o
+    # validado. Al quitarla, el pedimento la pierde; aqui se conserva.
+    marca_anterior  = models.DateTimeField(null=True, blank=True)
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                blank=True, related_name='cambios_de_pedimento')
+    fecha   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Cambio de pedimento'
+        verbose_name_plural = 'Cambios de pedimento'
+
+    def __str__(self):
+        return f'{self.pedimento} · {self.accion} · {self.fecha:%Y-%m-%d %H:%M}'
 
 
 class PedimentoBundle(models.Model):
