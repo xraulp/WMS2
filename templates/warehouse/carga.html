@@ -55,6 +55,12 @@
                    border-radius:var(--r);background:var(--surface);color:var(--ink);
                    text-align:center;letter-spacing:1px}
     .disparo input:focus{outline:none;border-color:var(--adark)}
+    .camara-btn{width:100%;margin-top:12px;padding:13px;font-size:15px;font-weight:600}
+    #camara{margin-top:12px}
+    #lector{width:100%;border-radius:10px;overflow:hidden;background:#000}
+    #lector video{width:100% !important;display:block}
+    .camara-estado{font-size:12px;text-align:center;margin:8px 0}
+    .camara-estado.mal-camara{color:var(--err-ink-fuerte);font-weight:600}
 
     .op{display:flex;gap:10px;align-items:center;justify-content:space-between;
         padding:10px 0;border-bottom:1px solid var(--bg)}
@@ -163,6 +169,21 @@
     <p class="soft" style="font-size:11px;margin:8px 0 0;text-align:center">
       {% trans "Or type it: ED260901-0001-3" %}
     </p>
+    {% comment %}
+    La camara del telefono, para cuando no hay pistola a la mano. Lee el QR y
+    el codigo de rayas de la etiqueta, y cada lectura entra por la misma caja
+    que la pistola: el servidor no distingue una de otra. Tras cada lectura la
+    pagina se recarga con el contador al dia y la camara vuelve a abrirse sola
+    hasta que se cierra.
+    {% endcomment %}
+    <button type="button" class="btn btn-p camara-btn" id="abrir-camara">
+      📷 {% trans "Scan with the phone camera" %}
+    </button>
+    <div id="camara" hidden>
+      <div id="lector"></div>
+      <p class="soft camara-estado" id="camara-estado">{% trans "Point the camera at the label" %}</p>
+      <button type="button" class="btn" id="cerrar-camara" style="width:100%">✕ {% trans "Close camera" %}</button>
+    </div>
   </div>
 
   <div class="card">
@@ -215,7 +236,10 @@
 (function(){
   var caja = document.getElementById('disparo');
   if (!caja) return;
-  function enfocar(){ try { caja.focus(); } catch (e) {} }
+  /* Con la camara abierta no se enfoca la caja: en el telefono eso abre el
+     teclado encima del visor. */
+  window.camaraActiva = false;
+  function enfocar(){ if (window.camaraActiva) return; try { caja.focus(); } catch (e) {} }
   enfocar();
   document.addEventListener('click', function(e){
     /* Salvo cuando se esta pulsando un boton de verdad. */
@@ -223,6 +247,80 @@
     enfocar();
   });
   setInterval(enfocar, 1500);
+})();
+
+/* La camara del telefono. La libreria se baja solo cuando se pulsa el boton:
+   quien usa la pistola no paga por ella. */
+(function(){
+  var caja = document.getElementById('disparo');
+  var abrir = document.getElementById('abrir-camara');
+  if (!caja || !abrir) return;
+  var panel = document.getElementById('camara');
+  var cerrar = document.getElementById('cerrar-camara');
+  var estado = document.getElementById('camara-estado');
+  var CLAVE = 'wms-camara-carga';
+  var lector = null, enviado = false;
+
+  function recordar(si){
+    try { if (si) sessionStorage.setItem(CLAVE, '1'); else sessionStorage.removeItem(CLAVE); } catch (e) {}
+  }
+  function seguiaAbierta(){
+    try { return sessionStorage.getItem(CLAVE) === '1'; } catch (e) { return false; }
+  }
+  function cargarLibreria(listo){
+    if (window.Html5Qrcode) return listo();
+    var s = document.createElement('script');
+    s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    s.onload = listo;
+    s.onerror = function(){ fallo('{% filter escapejs %}{% trans "The camera reader could not be loaded. Check the connection." %}{% endfilter %}'); };
+    document.head.appendChild(s);
+  }
+  function fallo(texto){
+    estado.textContent = texto;
+    estado.classList.add('mal-camara');
+  }
+  function encender(){
+    window.camaraActiva = true;
+    try { caja.blur(); } catch (e) {}
+    abrir.hidden = true;
+    panel.hidden = false;
+    recordar(true);
+    cargarLibreria(function(){
+      var F = window.Html5QrcodeSupportedFormats;
+      lector = new Html5Qrcode('lector', {
+        formatsToSupport: [F.QR_CODE, F.CODE_128],
+        useBarCodeDetectorIfSupported: true, verbose: false
+      });
+      lector.start({ facingMode: 'environment' },
+        { fps: 10, qrbox: function(w, h){ return { width: Math.floor(w * 0.85), height: Math.floor(h * 0.5) }; } },
+        function(texto){
+          if (enviado) return;
+          enviado = true;
+          if (navigator.vibrate) navigator.vibrate(120);
+          estado.textContent = texto;
+          caja.value = texto;
+          lector.stop().catch(function(){}).then(function(){ caja.form.submit(); });
+        },
+        function(){ /* sin lectura en este cuadro: es lo normal */ }
+      ).catch(function(){
+        recordar(false);
+        fallo('{% filter escapejs %}{% trans "The camera could not be opened. Allow camera access for this site and try again." %}{% endfilter %}');
+      });
+    });
+  }
+  function apagar(){
+    recordar(false);
+    window.camaraActiva = false;
+    panel.hidden = true;
+    abrir.hidden = false;
+    if (lector) lector.stop().catch(function(){});
+    try { caja.focus(); } catch (e) {}
+  }
+  abrir.addEventListener('click', encender);
+  cerrar.addEventListener('click', apagar);
+  /* Tras cada lectura la pagina vuelve con el contador al dia; si la camara
+     estaba abierta, se abre otra vez para el siguiente bulto. */
+  if (seguiaAbierta()) encender();
 })();
 </script>
 </body>

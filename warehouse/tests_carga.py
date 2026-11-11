@@ -329,6 +329,14 @@ class NadaSeCargaSinPistolearTests(BaseDeCarga):
                          {'escaneo': escaneo.pk})
         self.assertEqual(self.orden.cuadre()['verificados'], 0)
 
+    def test_se_puede_escanear_con_la_camara_del_telefono(self):
+        # La lectura de la camara entra por la misma caja que la pistola, asi
+        # que basta con que el boton y el lector esten en la pantalla.
+        respuesta = self.client.get('/cruces/%d/verify/' % self.tarea.pk)
+        self.assertContains(respuesta, 'id="abrir-camara"')
+        self.assertContains(respuesta, 'html5-qrcode@2.3.8')
+        self.assertContains(respuesta, 'F.CODE_128')
+
     def test_la_pantalla_sale_en_español(self):
         # La interfaz no mezcla idiomas, y menos la del anden: quien carga lee
         # el error de reojo con el bulto en las manos.

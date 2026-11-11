@@ -3698,3 +3698,18 @@ msgstr "Cómo aparece junto a los estados del pedimento, p. ej. Elab Ped - DYSER
 
 msgid "Ped paid"
 msgstr "Pagado"
+
+msgid "Scan with the phone camera"
+msgstr "Escanear con la cámara del teléfono"
+
+msgid "Point the camera at the label"
+msgstr "Apunta la cámara a la etiqueta"
+
+msgid "Close camera"
+msgstr "Cerrar cámara"
+
+msgid "The camera reader could not be loaded. Check the connection."
+msgstr "No se pudo cargar el lector de la cámara. Revisa la conexión."
+
+msgid "The camera could not be opened. Allow camera access for this site and try again."
+msgstr "No se pudo abrir la cámara. Permite el acceso a la cámara para este sitio e inténtalo otra vez."
