@@ -151,6 +151,15 @@
     .btn-off{background:var(--bg-sutil);border-color:var(--bdr);color:var(--soft);
              cursor:not-allowed}
     .motivo{font-size:11px;color:var(--err-ink);margin-top:6px;line-height:1.45}
+    .rem-item + .rem-item{border-top:1px dashed var(--bdr);margin-top:8px;padding-top:8px}
+    .rem-item + details{margin-top:10px}
+    .rem-ped{display:flex;gap:8px;align-items:center;font-size:12px;min-width:0;flex-wrap:wrap}
+    .papel .rem-ped input{width:auto;margin:0}
+    .papel form{min-width:0!important}
+    /* Las remisiones del cliente: las suyas, para imprimir o guardar. */
+    .mis-rem{padding:11px 15px;border-top:1px solid var(--bdr);display:flex;gap:10px;
+             flex-wrap:wrap;align-items:center}
+    .mis-rem .campo span{margin-right:4px}
 
     .historial{padding:9px 15px;border-top:1px dashed var(--bdr);font-size:11px;
                color:var(--soft);line-height:1.6}
@@ -585,8 +594,23 @@
     no deberia tener.
     {% endcomment %}
     {% comment %}
-    El cliente no los ve. Los cuatro son papeles de bodega -- preparar, cargar,
-    escanear y remitir -- y en su pantalla solo eran ruido entre sus embarques.
+    El cliente no ve los papeles de bodega -- preparar, cargar y escanear --;
+    en su pantalla solo eran ruido. Sus remisiones si: las puede imprimir o
+    guardar desde que se emiten. Cada una lleva solo su mercancia.
+    {% endcomment %}
+    {% if es_cliente and t.remisiones_vigentes %}
+    <div class="mis-rem">
+      <span class="campo"><span>{% if t.remisiones_vigentes|length > 1 %}{% trans "Remisions" %}{% else %}{% trans "Remision" %}{% endif %}</span></span>
+      {% for rem in t.remisiones_vigentes %}
+      <span class="mono" style="font-weight:600">{{ rem.custom_id }}</span>
+      <a class="btn btn-sm" href="{% url 'remision_pdf' rem.pk %}" target="_blank">{% trans "Print" %}</a>
+      <a class="btn btn-sm" href="{% url 'remision_pdf' rem.pk %}?descargar=1">↓ {% trans "Download" %}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% comment %}
+    Los papeles de bodega. El cliente no los ve.
     {% endcomment %}
     {% if not es_cliente %}
     <div class="papeles">
@@ -659,21 +683,31 @@
       </div>
 
       <div class="papel">
-        <h4>{% trans "Remision" %}</h4>
-        {% if t.remision %}
-          <div class="mono" style="font-size:15px;font-weight:600">{{ t.remision.custom_id }}</div>
-          <div class="soft" style="font-size:11px">
-            {{ t.remision.bultos_verificados }} / {{ t.remision.bultos_de_la_orden }}
-            {% trans "verified" %}
-            {% if t.remision.con_discrepancia %}
-            <br><span class="mal">{% trans "ISSUED WITH A DIFFERENCE" %}</span>
-            {% endif %}
+        <h4>{% if t.remisiones_vigentes|length > 1 %}{% trans "Remisions" %}{% else %}{% trans "Remision" %}{% endif %}</h4>
+        {% comment %}
+        Una o varias. La orden y el escaneo son uno solo con todo; la remision
+        se reparte por pedimento cuando la mercancia va a distinto
+        transportista o destino en Mexico.
+        {% endcomment %}
+        {% for rem in t.remisiones_vigentes %}
+          <div class="rem-item">
+            <div class="mono" style="font-size:15px;font-weight:600">{{ rem.custom_id }}</div>
+            <div class="soft" style="font-size:11px">
+              {% for p in rem.pedimentos_que_lleva %}{{ p|default:_("no pedimento") }}{% if not forloop.last %}, {% endif %}{% endfor %}
+              · {{ rem.total_bultos }} {% trans "bdl" %}
+              {% if rem.linea_de_enlace %}<br>→ {{ rem.linea_de_enlace }}{% endif %}
+              <br>{{ rem.bultos_verificados }} / {{ rem.bultos_de_la_orden }} {% trans "verified" %}
+              {% if rem.con_discrepancia %}
+              <br><span class="mal">{% trans "ISSUED WITH A DIFFERENCE" %}</span>
+              {% endif %}
+            </div>
+            <a class="btn btn-sm" style="margin-top:6px;display:inline-block"
+               href="{% url 'remision_pdf' rem.pk %}" target="_blank">↓ {% trans "Print" %}</a>
           </div>
-          <a class="btn btn-sm" style="margin-top:8px;display:inline-block"
-             href="{% url 'remision_pdf' t.remision.pk %}" target="_blank">↓ {% trans "Print" %}</a>
-        {% elif not t.orden %}
+        {% endfor %}
+        {% if not t.orden %}
           <div class="soft" style="font-size:12px">{% trans "needs a load order first" %}</div>
-        {% elif not es_cliente %}
+        {% elif t.sin_remision and not es_cliente %}
           {% comment %}
           El boton esta atenuado hasta que el escaneo cuadra. Y tiene salida de
           emergencia, porque si no el candado no sirve: lo que pasa siempre que
@@ -683,15 +717,33 @@
           <details>
             <summary class="btn btn-sm {% if t.cuadre.cuadra %}btn-p{% else %}btn-off{% endif %}"
                      style="display:inline-block">
-              {% if not t.cuadre.cuadra %}🔒 {% endif %}{% trans "Issue the remision" %}
+              {% if not t.cuadre.cuadra %}🔒 {% endif %}{% if t.remisiones_vigentes %}+ {% trans "Another remision" %}{% else %}{% trans "Issue the remision" %}{% endif %}
             </summary>
             <form method="post" action="{% url 'remision_emitir' t.pk %}"
                   style="margin-top:9px;display:grid;gap:6px;text-align:left;min-width:230px">
               {% csrf_token %}
-              <input type="text" name="transfer_empresa" placeholder="{% trans "Transfer company" %}">
-              <input type="text" name="transfer_chofer" placeholder="{% trans "Driver" %}">
-              <input type="text" name="transfer_unidad" placeholder="{% trans "Unit / trailer" %}">
-              <input type="text" name="sello" placeholder="{% trans "Seal" %}">
+              {% comment %}
+              Los pedimentos que lleva. Todos marcados: lo normal es una sola
+              remision. Se desmarca lo que va con otro transportista, y queda
+              para la siguiente.
+              {% endcomment %}
+              <input type="hidden" name="pedimentos_present" value="1">
+              <div class="campo"><span>{% trans "Pedimentos in this remision" %}</span></div>
+              {% for g in t.sin_remision %}
+              <label class="rem-ped">
+                <input type="checkbox" name="pedimentos" value="{{ g.pedimento }}" checked>
+                <span class="mono">{{ g.pedimento|default:_("no pedimento") }}</span>
+                <span class="soft">{{ g.bultos }} {% trans "bdl" %}</span>
+              </label>
+              {% endfor %}
+              <input type="text" name="transfer_empresa" placeholder="{% trans "Transfer company" %}"
+                     value="{{ t.transfer_previo.transfer_empresa|default:'' }}">
+              <input type="text" name="transfer_chofer" placeholder="{% trans "Driver" %}"
+                     value="{{ t.transfer_previo.transfer_chofer|default:'' }}">
+              <input type="text" name="transfer_unidad" placeholder="{% trans "Unit / trailer" %}"
+                     value="{{ t.transfer_previo.transfer_unidad|default:'' }}">
+              <input type="text" name="sello" placeholder="{% trans "Seal" %}"
+                     value="{{ t.transfer_previo.sello|default:'' }}">
               <input type="text" name="linea_de_enlace"
                      value="{{ cliente.linea_de_enlace }}"
                      placeholder="{% trans "Connecting carrier" %}">

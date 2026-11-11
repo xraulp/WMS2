@@ -3973,6 +3973,15 @@ class Remision(models.Model):
                               related_name='remisiones')
     custom_id = models.CharField(max_length=20, blank=True, unique=True)
 
+    # Lo que lleva esta remision. Una tarea puede necesitar mas de una: la
+    # mercancia del mismo cliente, en el mismo cruce, puede ir a distinto
+    # transportista y destino en Mexico. La orden de carga y el escaneo siguen
+    # siendo uno solo con todo; lo que se reparte es la remision, por
+    # pedimento. Vacio quiere decir toda la orden -- las remisiones de antes
+    # de que existiera el reparto --.
+    renglones = models.ManyToManyField('LoadOrderItem', blank=True,
+                                       related_name='remisiones')
+
     # ── Quien cruza ──────────────────────────────────────────────────────────
     transfer_empresa = models.CharField(max_length=200, blank=True, default='')
     transfer_chofer  = models.CharField(max_length=200, blank=True, default='')
@@ -4020,6 +4029,55 @@ class Remision(models.Model):
         ordering = ['-emitida_en']
         verbose_name = 'Remision'
         verbose_name_plural = 'Remisiones'
+
+    def renglones_que_lleva(self):
+        """Los renglones de la orden que van en esta remision."""
+        elegidos = list(self.renglones.select_related('operation').all())
+        if elegidos:
+            return elegidos
+        return list(self.order.renglones.select_related('operation').all())
+
+    @property
+    def pedimentos_que_lleva(self):
+        vistos = []
+        for r in self.renglones_que_lleva():
+            if r.pedimento not in vistos:
+                vistos.append(r.pedimento)
+        return vistos
+
+    @property
+    def total_bultos(self):
+        return sum(r.bultos for r in self.renglones_que_lleva())
+
+    @staticmethod
+    def pendientes_de(orden):
+        """
+        Los renglones de `orden` que todavia no van en ninguna remision.
+
+        Una remision sin reparto lleva la orden entera, asi que con una de
+        esas ya no queda nada.
+        """
+        if orden is None:
+            return []
+        ya = set()
+        for rem in orden.remisiones.prefetch_related('renglones'):
+            ids = [r.pk for r in rem.renglones.all()]
+            if not ids:
+                return []
+            ya.update(ids)
+        return [r for r in orden.renglones.select_related('operation').all()
+                if r.pk not in ya]
+
+    @staticmethod
+    def por_pedimento(renglones):
+        """Los renglones agrupados por su pedimento, en el orden en que salen."""
+        grupos = {}
+        for r in renglones:
+            g = grupos.setdefault(r.pedimento, {'pedimento': r.pedimento,
+                                               'renglones': [], 'bultos': 0})
+            g['renglones'].append(r)
+            g['bultos'] += r.bultos
+        return list(grupos.values())
 
     def __str__(self):
         return self.custom_id or f'RM-{self.pk}'

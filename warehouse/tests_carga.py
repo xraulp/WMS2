@@ -730,3 +730,99 @@ class LosTresPapelesTests(BaseDeCarga):
             fecha_de_cruce=timezone.localdate())
         respuesta = self.client.get('/cruces/%d/picking.pdf' % vacia.pk)
         self.assertEqual(respuesta.status_code, 200)
+
+
+class VariasRemisionesTests(BaseDeCarga):
+    """
+    Una tarea puede necesitar mas de una remision: la mercancia del mismo
+    cliente, en el mismo cruce, puede ir a distinto transportista y destino en
+    Mexico. La orden y el escaneo siguen siendo uno solo con todo; se elige que
+    pedimentos van en cada remision.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.a = self.operacion('ED261111-0001', 2)
+        self.b = self.operacion('ED261111-0002', 1)
+        self.meter(self.a)
+        self.meter(self.b)
+        self.ped_a = self.con_pedimento(self.a, consecutivo='6005001')
+        self.ped_b = self.con_pedimento(self.b, consecutivo='6005002')
+        self.orden = self.emitir()
+        for op, n in ((self.a, 1), (self.a, 2), (self.b, 1)):
+            self.pistolear(op, n)
+        self.texto_a = self.orden.renglones.get(operation=self.a).pedimento
+        self.texto_b = self.orden.renglones.get(operation=self.b).pedimento
+
+    def remision(self, pedimentos, **extra):
+        datos = {'transfer_empresa': 'Transfers Rio Bravo', 'sello': 'MX-1',
+                 'pedimentos_present': '1', 'pedimentos': pedimentos}
+        datos.update(extra)
+        return self.client.post('/cruces/%d/remision/' % self.tarea.pk, datos)
+
+    def test_dos_remisiones_cada_una_con_su_pedimento(self):
+        self.assertEqual(self.remision([self.texto_a],
+                                       linea_de_enlace='Fletes Monterrey').status_code, 302)
+        self.assertEqual(self.remision([self.texto_b],
+                                       linea_de_enlace='Carga Bajio').status_code, 302)
+        primera, segunda = Remision.objects.order_by('emitida_en', 'pk')
+        self.assertEqual([r.operation for r in primera.renglones_que_lleva()], [self.a])
+        self.assertEqual([r.operation for r in segunda.renglones_que_lleva()], [self.b])
+        self.assertEqual(primera.total_bultos, 2)
+        self.assertEqual(segunda.linea_de_enlace, 'Carga Bajio')
+        # Ya no queda nada por remitir.
+        self.assertEqual(Remision.pendientes_de(self.orden), [])
+        self.assertEqual(self.remision([self.texto_a]).status_code, 422)
+
+    def test_un_pedimento_no_va_en_dos_remisiones(self):
+        self.remision([self.texto_a])
+        self.assertEqual(self.remision([self.texto_a]).status_code, 422)
+        self.assertEqual(Remision.objects.count(), 1)
+
+    def test_sin_elegir_nada_no_sale(self):
+        self.assertEqual(self.remision([]).status_code, 422)
+        self.assertFalse(Remision.objects.exists())
+
+    def test_sin_eleccion_va_todo(self):
+        # El formulario de siempre, sin las casillas: una remision con todo.
+        r = self.client.post('/cruces/%d/remision/' % self.tarea.pk,
+                             {'transfer_empresa': 'Transfers Rio Bravo'})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(Remision.objects.get().total_bultos, 3)
+
+    def test_la_segunda_propone_el_mismo_transfer(self):
+        self.remision([self.texto_a], transfer_chofer='Ramon Escobedo')
+        pantalla = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        self.assertContains(pantalla, 'value="Ramon Escobedo"')
+        self.assertContains(pantalla, 'Another remision')
+
+    def test_el_pdf_lleva_solo_lo_suyo(self):
+        from . import papeles
+        self.remision([self.texto_b])
+        rem = Remision.objects.get()
+        self.assertTrue(papeles.remision(rem).startswith(b'%PDF'))
+        self.assertEqual(rem.pedimentos_que_lleva, [self.texto_b])
+
+    def test_el_cliente_puede_imprimir_y_descargar_la_suya(self):
+        self.remision([self.texto_a])
+        rem = Remision.objects.get()
+        self.client.force_login(self.duenio)
+        pantalla = self.client.get('/cruces/')
+        self.assertContains(pantalla, rem.custom_id)
+        self.assertContains(pantalla, '/remision/%d.pdf?descargar=1' % rem.pk)
+        # Ve la suya pero no los papeles de bodega.
+        self.assertNotContains(pantalla, '/verify/')
+        r = self.client.get('/remision/%d.pdf' % rem.pk, {'descargar': '1'})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r['Content-Disposition'].startswith('attachment'))
+
+    def test_otro_cliente_no_puede_bajarla(self):
+        self.remision([self.texto_a])
+        rem = Remision.objects.get()
+        otro = Catalog.objects.create(category='CUSTOMER', name='Otro',
+                                      abbreviation='OTR', tenant=self.tenant)
+        u = User.objects.create_user('otro', password='x')
+        UserProfile.objects.create(user=u, tenant=self.tenant, role='customer',
+                                   customer=otro)
+        self.client.force_login(u)
+        self.assertEqual(self.client.get('/remision/%d.pdf' % rem.pk).status_code, 404)

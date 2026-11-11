@@ -509,8 +509,8 @@ def remision(rem, usuario=None):
         '#', _('Custom ID'), _('PO / Order'), _('Bundles'), _('Type'),
         _('Lbs'), _('Kgs'), _('Pedimento'))]]
     segundas = []
-    for i, renglon in enumerate(
-            rem.order.renglones.select_related('operation').all(), 1):
+    lleva = rem.renglones_que_lleva()
+    for i, renglon in enumerate(lleva, 1):
         datos.append([
             Paragraph(str(i), CELDA),
             Paragraph(renglon.operation.custom_id, CELDA_B),
@@ -529,11 +529,12 @@ def remision(rem, usuario=None):
         datos.append(['', Paragraph(detalle or '—', SEGUNDO)])
         segundas.append(len(datos) - 1)
 
-    kilos = rem.order.total_kilos
-    libras = [r.weight_lbs for r in rem.order.renglones.all() if r.weight_lbs]
+    pesos_kg = [r.weight_kgs for r in lleva if r.weight_kgs]
+    kilos = sum(pesos_kg) if pesos_kg else None
+    libras = [r.weight_lbs for r in lleva if r.weight_lbs]
     datos.append([
         '', Paragraph(_('TOTALS'), CELDA_B), '',
-        Paragraph(str(rem.order.total_bultos), CELDA_R), '',
+        Paragraph(str(sum(r.bultos for r in lleva)), CELDA_R), '',
         Paragraph(f'{sum(libras):,.2f}' if libras else '—', CELDA_R),
         Paragraph(f'{kilos:,.2f}' if kilos else '—', CELDA_R), ''])
 

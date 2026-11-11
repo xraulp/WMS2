@@ -3819,3 +3819,24 @@ msgid "%(n)s order"
 msgid_plural "%(n)s orders"
 msgstr[0] "%(n)s pedido"
 msgstr[1] "%(n)s pedidos"
+
+msgid "Remisions"
+msgstr "Remisiones"
+
+msgid "Another remision"
+msgstr "Otra remisión"
+
+msgid "Pedimentos in this remision"
+msgstr "Pedimentos en esta remisión"
+
+msgid "no pedimento"
+msgstr "sin pedimento"
+
+msgid "Download"
+msgstr "Descargar"
+
+msgid "Everything in this crossing already has its remision."
+msgstr "Todo lo de este cruce ya tiene su remisión."
+
+msgid "Pick the pedimentos that go in this remision."
+msgstr "Elige los pedimentos que van en esta remisión."

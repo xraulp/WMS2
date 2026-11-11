@@ -6542,7 +6542,13 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
         tarea.orden = tarea.ordenes.order_by('-version').first()
         tarea.faltan_para_orden = LoadOrder.faltantes_para_emitir(tarea)
         tarea.cuadre = tarea.orden.cuadre() if tarea.orden else None
-        tarea.remision = tarea.remisiones.order_by('-emitida_en').first()
+        # Las remisiones de la orden vigente, y los pedimentos que todavia no
+        # van en ninguna: con eso se emite la siguiente.
+        tarea.remisiones_vigentes = (list(tarea.orden.remisiones.order_by('emitida_en'))
+                                     if tarea.orden else [])
+        tarea.sin_remision = Remision.por_pedimento(Remision.pendientes_de(tarea.orden))
+        tarea.transfer_previo = (tarea.remisiones_vigentes[-1]
+                                 if tarea.remisiones_vigentes else None)
 
     contexto.update({'tareas': tareas, 'libres': libres})
     return contexto
@@ -7514,11 +7520,29 @@ def remision_emitir(request, pk):
                               % {'cuales': ', '.join(cuadre['sobran'][:8])}))
         diferencia = ' · '.join(partes)
 
+    # Que pedimentos lleva. Lo que ya va en otra remision de esta orden no se
+    # puede repetir; y si el formulario no trae la eleccion, va todo lo que
+    # falta, que es el caso normal de una sola remision.
+    pendientes = Remision.pendientes_de(orden)
+    if not pendientes:
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('Everything in this crossing already has its remision.'))
+    if 'pedimentos_present' in request.POST:
+        elegidos = set(request.POST.getlist('pedimentos'))
+        lleva = [r for r in pendientes if r.pedimento in elegidos]
+        if not lleva:
+            return _cruces_con_error(
+                request, tarea.customer_id,
+                _('Pick the pedimentos that go in this remision.'))
+    else:
+        lleva = pendientes
+
     ultimo = tarea.escaneos.filter(fase=EscaneoDeBulto.CARGA).order_by(
         '-created_at').first()
     cliente = tarea.customer
 
-    Remision.objects.create(
+    rem = Remision.objects.create(
         task=tarea, order=orden,
         custom_id=siguiente_consecutivo(Remision, Remision.PREFIJO),
         transfer_empresa=(request.POST.get('transfer_empresa') or '').strip(),
@@ -7542,19 +7566,23 @@ def remision_emitir(request, pk):
         verificada_por=(ultimo.created_by if ultimo else None),
         verificada_en=(ultimo.created_at if ultimo else None),
         emitida_por=request.user)
+    rem.renglones.set(lleva)
 
-    tarea.estado = CrossingTask.CARGADA
-    tarea.save(update_fields=['estado', 'updated_at'])
+    if tarea.estado in (CrossingTask.ABIERTA, CrossingTask.CON_ORDEN):
+        tarea.estado = CrossingTask.CARGADA
+        tarea.save(update_fields=['estado', 'updated_at'])
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
 
 
 # ── Los tres papeles ─────────────────────────────────────────────────────────
 
-def _pdf(datos, nombre):
+def _pdf(datos, nombre, descargar=False):
     resp = HttpResponse(datos, content_type='application/pdf')
     # `inline` y no `attachment`: esto se abre para imprimirlo, y bajar un
     # archivo para tener que abrirlo despues es un paso de mas en un anden.
-    resp['Content-Disposition'] = f'inline; filename="{nombre}"'
+    # El cliente si lo quiere guardar, y para eso esta `descargar`.
+    modo = 'attachment' if descargar else 'inline'
+    resp['Content-Disposition'] = f'{modo}; filename="{nombre}"'
     return resp
 
 
@@ -7595,4 +7623,5 @@ def remision_pdf(request, pk):
     profile = get_profile(request.user)
     if profile.is_customer() and        rem.task.customer_id != getattr(profile.customer, 'pk', None):
         raise Http404
-    return _pdf(papeles.remision(rem, request.user), f'{rem.custom_id}.pdf')
+    return _pdf(papeles.remision(rem, request.user), f'{rem.custom_id}.pdf',
+                descargar=bool(request.GET.get('descargar')))
