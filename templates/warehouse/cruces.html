@@ -47,7 +47,9 @@
               color:#fff}
     .tarea-sub{font-size:12px;color:var(--soft);margin-top:3px;line-height:1.5}
     .tarea-hd .tarea-sub{color:var(--tb-ink-suave)}
-    .tarea-pedidos{font-size:14px;font-weight:600;margin-left:6px}
+    .tarea-pedidos{font-size:14px;font-weight:600;color:#fff;margin-top:2px}
+    .tarea-der{text-align:right}
+    .tarea-hd .alerta-revision{margin:6px 0 2px}
     .tarea-hd .fase{color:#fff}
 
     /* El aviso de "pedimento para revision". Colores fijos, iguales en tema
@@ -144,6 +146,12 @@
 
     @media (max-width:700px){
       .wrap{padding:0 10px}
+      /* En el telefono el encabezado es una columna: la cuenta atras y el
+         status van en la ultima linea, juntos y a la izquierda. */
+      .tarea-hd{flex-direction:column;gap:4px}
+      .tarea-der{text-align:left;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+      .tarea-der .tarea-sub{margin-top:0}
+      .tarea-acc{margin-top:6px}
       table, thead, tbody, tfoot, tr, td{display:block;width:100%}
       .importe{text-align:right}
       tfoot .sobra{display:none}
@@ -209,26 +217,34 @@
   {% for t in tareas %}
   <div class="tarea{% if forloop.counter|divisibleby:2 %} par{% endif %}" id="tarea-{{ t.pk }}">
     <div class="tarea-hd">
-      <div>
-        <div class="tarea-id">{{ t.custom_id }}{% if t.pedidos %}
-          <span class="tarea-pedidos">· {% trans "Orders:" %} {{ t.pedidos|join:" - " }}</span>{% endif %}</div>
+      {% comment %}
+      Una cosa por linea, en el orden en que se lee en el telefono: el numero,
+      los pedidos, el aviso si lo hay, embarques y dia, quien la creo y en que
+      fase va. La cuenta atras y el status cierran, a la derecha en la PC.
+      {% endcomment %}
+      <div class="tarea-izq">
+        <div class="tarea-id">{{ t.custom_id }}</div>
+        {% if t.pedidos %}
+        <div class="tarea-pedidos">{% trans "Orders:" %} {{ t.pedidos|join:" - " }}</div>
+        {% endif %}
         {% if t.en_revision %}
         <div class="alerta-revision">
           ⚠ {% blocktrans count n=t.en_revision %}{{ n }} pedimento under review{% plural %}{{ n }} pedimentos under review{% endblocktrans %}
         </div>
         {% endif %}
+        <div class="tarea-sub">
+          {% blocktrans count n=t.renglones.count %}{{ n }} shipment{% plural %}{{ n }} shipments{% endblocktrans %}
+          - {% trans "crosses" %} {{ t.fecha_de_cruce|date:"l j F" }}
+        </div>
         {% comment %}
         Quien la creo se enseña siempre. El dia que alguien reclame que se pidio
-        cruzar, esta linea es la respuesta.
+        cruzar, esta linea es la respuesta; la persona y la hora salen al pasar
+        por encima.
         {% endcomment %}
-        <div class="tarea-sub">
-          {{ t.creada_por }} · {{ t.created_at|date:"d/m/y H:i" }}<br>
-          {% blocktrans count n=t.renglones.count %}{{ n }} shipment{% plural %}{{ n }} shipments{% endblocktrans %}
-          · {% trans "crosses" %} {{ t.fecha_de_cruce|date:"l j F" }}
-          · {% trans "Stage:" %} <b class="fase fase-{{ t.fase|lower }}">{{ t.fase_texto }}</b>
-        </div>
+        <div class="tarea-sub" title="{{ t.creada_por_quien }} · {{ t.created_at|date:"d/m/y H:i" }}">{{ t.creada_por|capfirst }}</div>
+        <div class="tarea-sub">{% trans "Stage:" %} <b class="fase fase-{{ t.fase|lower }}">{{ t.fase_texto }}</b></div>
       </div>
-      <div style="text-align:right">
+      <div class="tarea-der">
         {% comment %}
         Lo que manda no es el avance: es el paso contra el calendario. Por eso
         arriba va la cuenta atras y no el estado.

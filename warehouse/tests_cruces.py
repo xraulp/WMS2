@@ -96,7 +96,8 @@ class ComoNaceUnaTareaTests(BaseDeCruces):
                                           'fecha_de_cruce': str(self.viernes)})
         t = CrossingTask.objects.latest('id')
         self.assertEqual(t.origen, CrossingTask.LA_CREO_LA_CASA)
-        self.assertIn('jefa', str(t.creada_por))
+        self.assertIn('DYSER /', str(t.creada_por))
+        self.assertEqual(t.creada_por_quien, 'jefa')
         self.assertIn('Ferreteria Lopez', str(t.creada_por))
         # Y el cliente tiene que decir que si: es la instruccion telefonica
         # puesta por escrito.
@@ -634,7 +635,7 @@ class LaPantallaEnEspañolTests(BaseDeCruces):
         CrossingTaskItem.objects.create(task=t, operation=op, bultos=19)
         respuesta = self.client.get('/cruces/', {'customer': self.cliente.pk})
         for frase in ('Sacar', '>de 20<', 'Lista de preparación', 'Mover el día del cruce al',
-                      'Cancelar este cruce', 'Abierta', 'a nombre de Ferreteria Lopez'):
+                      'Cancelar este cruce', 'Abierta', 'Creada por DYSER / Ferreteria Lopez'):
             self.assertContains(respuesta, frase)
         for frase in ('Take out', 'Picking list', 'Cancel this crossing', 'on behalf of'):
             self.assertNotContains(respuesta, frase)
@@ -915,3 +916,108 @@ class LoQueSeVeEnLaTareaTests(BaseDeCruces):
 
     def test_la_casa_si_puede_sacar(self):
         self.assertContains(self.pantalla(), '/remove/')
+
+
+class NombreSinRegimenTests(TestCase):
+    """En el encabezado de la tarea el cliente va sin "SA de CV"."""
+
+    def test_quita_el_regimen(self):
+        from .models import nombre_sin_regimen
+        casos = {
+            'Cliente Dos, SA de CV': 'Cliente Dos',
+            'Aceros del Norte S.A. de C.V.': 'Aceros del Norte',
+            'Transportes Rio S. de R.L. de C.V.': 'Transportes Rio',
+            'DYSER Group LLC': 'DYSER Group',
+            'Customer Test': 'Customer Test',
+            'Grupo A': 'Grupo A',
+            'SA de CV': 'SA de CV',
+        }
+        for entra, sale in casos.items():
+            self.assertEqual(nombre_sin_regimen(entra), sale, entra)
+
+
+class CrucesRealizadosTests(BaseDeCruces):
+    """
+    La entregada se queda en Cruces el dia de la entrega y al siguiente pasa a
+    Cruces realizados.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.op = self.operacion('ED261110-0009', bundle_qty=2, po_order='IP99/25')
+        self.ped = self.con_pedimento(self.op)
+        self.t = self.tarea(estado=CrossingTask.CRUZADA)
+        CrossingTaskItem.objects.create(task=self.t, operation=self.op)
+
+    def entregar(self, hace_dias):
+        self.t.entregada_en = timezone.now() - timedelta(days=hace_dias)
+        self.t.save(update_fields=['entregada_en'])
+
+    def ids_en_cruces(self):
+        r = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        return [t.pk for t in r.context['tareas']]
+
+    def test_el_dia_de_la_entrega_sigue_en_cruces(self):
+        self.entregar(0)
+        self.assertIn(self.t.pk, self.ids_en_cruces())
+        r = self.client.get('/cruces/done/')
+        self.assertEqual(r.context['tareas'], [])
+
+    def test_al_dia_siguiente_pasa_a_realizados(self):
+        self.entregar(1)
+        self.assertNotIn(self.t.pk, self.ids_en_cruces())
+        r = self.client.get('/cruces/done/')
+        self.assertEqual([t.pk for t in r.context['tareas']], [self.t.pk])
+        self.assertContains(r, self.t.custom_id)
+        self.assertContains(r, 'IP99/25')
+        self.assertContains(r, '&amp;solo=%d' % self.ped.pk)
+
+    def test_la_que_no_se_entrego_no_pasa(self):
+        self.assertIn(self.t.pk, self.ids_en_cruces())
+        self.assertEqual(self.client.get('/cruces/done/').context['tareas'], [])
+
+    def test_se_busca_por_pedido(self):
+        self.entregar(2)
+        r = self.client.get('/cruces/done/', {'q': 'IP99'})
+        self.assertEqual(len(r.context['tareas']), 1)
+        r = self.client.get('/cruces/done/', {'q': 'nada'})
+        self.assertEqual(r.context['tareas'], [])
+
+    def test_el_cliente_solo_ve_las_suyas(self):
+        self.entregar(1)
+        otro = Catalog.objects.create(category='CUSTOMER', name='Otro SA de CV',
+                                      tenant=self.tenant)
+        op = WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='ENTRY', custom_id='ED261110-0010',
+            customer=otro)
+        ajena = CrossingTask.objects.create(
+            tenant=self.tenant, customer=otro, fecha_de_cruce=self.viernes,
+            entregada_en=timezone.now() - timedelta(days=1))
+        CrossingTaskItem.objects.create(task=ajena, operation=op)
+        self.client.force_login(self.duenio)
+        r = self.client.get('/cruces/done/', {'customer': otro.pk})
+        self.assertEqual([t.pk for t in r.context['tareas']], [self.t.pk])
+
+    def test_la_pestaña_esta_en_la_barra(self):
+        r = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        self.assertContains(r, '/cruces/done/')
+
+
+class ElPedimentoNombraSuTareaTests(BaseDeCruces):
+
+    def test_el_encabezado_lleva_la_tarea(self):
+        op = self.operacion('ED261110-0011', bundle_qty=1)
+        ped = self.con_pedimento(op)
+        t = self.tarea()
+        CrossingTaskItem.objects.create(task=t, operation=op)
+        r = self.client.get('/pedimentos/', {'customer': self.cliente.pk,
+                                             'solo': ped.pk})
+        self.assertContains(r, t.custom_id)
+        self.assertContains(r, '#tarea-%d' % t.pk)
+
+    def test_la_cancelada_no_cuenta(self):
+        op = self.operacion('ED261110-0012', bundle_qty=1)
+        ped = self.con_pedimento(op)
+        t = self.tarea(estado=CrossingTask.CANCELADA)
+        CrossingTaskItem.objects.create(task=t, operation=op)
+        self.assertEqual(list(ped.tareas_de_cruce()), [])

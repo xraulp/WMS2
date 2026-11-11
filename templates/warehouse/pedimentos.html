@@ -61,6 +61,8 @@
     .ped-num{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600}
     .ped-sin{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--soft);font-style:italic}
     .ped-sub{font-size:12px;color:var(--soft);margin-top:3px}
+    .ped-tarea{font-size:13px;font-weight:600;margin-top:3px}
+    .ped-tarea a{font-family:'IBM Plex Mono',monospace;color:var(--accent-ink)}
     .estado{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;
             background:var(--asoft);color:var(--accent-ink)}
 
@@ -258,6 +260,15 @@
           <div class="ped-sin">{% trans "no number yet" %}</div>
           <div class="ped-num">Pedimento {{ p.orden }}</div>
         {% endif %}
+        {% comment %}
+        La tarea de cruce a la que pertenece, con enlace para volver a ella. Si
+        sus bultos van en dos camiones, salen las dos.
+        {% endcomment %}
+        {% for tc in p.tareas %}
+        <div class="ped-tarea">{% trans "Crossing task" %}
+          <a href="{% if tc.es_realizada %}{% url 'cruces_realizados' %}?customer={{ cliente.pk }}&amp;q={{ tc.custom_id }}{% else %}{% url 'cruces_panel' %}?customer={{ cliente.pk }}#tarea-{{ tc.pk }}{% endif %}">{{ tc.custom_id }}</a>
+        </div>
+        {% endfor %}
         <div class="ped-sub">
           {% blocktrans count bultos=p.total_bultos %}{{ bultos }} bundle{% plural %}{{ bultos }} bundles{% endblocktrans %}
           {% if p.total_libras %} · {{ p.total_libras }} lbs · {{ p.total_kilos }} kg{% endif %}

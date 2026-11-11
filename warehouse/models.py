@@ -57,6 +57,30 @@ def catalog_scope_of(category):
     """A que pantalla pertenece una categoria."""
     return 'customers' if category in CATALOG_ADMIN_CATEGORIES else 'operational'
 
+# Las palabras con que termina una razon social y que no dicen quien es: "SA de
+# CV", "S. de R.L. de C.V.", "LLC". Las debiles -- "de", "S", "A" -- solo se
+# quitan si con ellas va una fuerte, para que "Grupo A" no se quede en "Grupo".
+_REGIMEN_FUERTE = {'SA', 'CV', 'RL', 'SAPI', 'SAB', 'SC', 'AC', 'SRL', 'LLC',
+                   'INC', 'LTD', 'CORP', 'CO', 'SPR', 'RI'}
+_REGIMEN_DEBIL = {'DE', 'S', 'A', 'C', 'V', 'R', 'L', 'P', 'I', 'B'}
+
+
+def nombre_sin_regimen(nombre):
+    """"Cliente Dos, SA de CV" -> "Cliente Dos". Donde cabe poco, el nombre a secas."""
+    palabras = (nombre or '').split()
+    cola, fuerte = 0, False
+    for palabra in reversed(palabras):
+        limpia = re.sub(r'[.,]', '', palabra).upper()
+        if limpia in _REGIMEN_FUERTE:
+            fuerte = True
+        elif limpia not in _REGIMEN_DEBIL:
+            break
+        cola += 1
+    if not fuerte or cola >= len(palabras):
+        return (nombre or '').strip()
+    return ' '.join(palabras[:len(palabras) - cola]).rstrip(' ,')
+
+
 def siguiente_consecutivo(modelo, prefijo, fecha=None, campo='custom_id'):
     """
     El siguiente numero libre de la forma `PREFIJO` + `AAMMDD` + `-NNNN`.
@@ -2097,6 +2121,13 @@ class Pedimento(models.Model):
         """Como se le nombra en pantalla: su numero si lo tiene, si no su orden."""
         return self.numero or f'Pedimento {self.orden}'
 
+    def tareas_de_cruce(self):
+        """Las tareas de cruce, sin las canceladas, en que van sus embarques."""
+        return (CrossingTask.objects
+                .filter(renglones__operation__renglones_de_pedimento__pedimento=self)
+                .exclude(estado=CrossingTask.CANCELADA)
+                .distinct().order_by('fecha_de_cruce', 'custom_id'))
+
     @property
     def aduana(self):
         return self.ped_aduana or ''
@@ -3229,13 +3260,23 @@ class CrossingTask(models.Model):
 
     @property
     def creada_por(self):
-        """La linea que se enseña siempre, en las palabras del diseno."""
-        quien = self.created_by.get_full_name() or self.created_by.username \
-            if self.created_by else '?'
+        """
+        La linea que se enseña siempre: "creada por DYSER / Cliente Dos". La
+        casa por su nombre corto y el cliente sin el regimen juridico, que en el
+        telefono partia la linea en dos. La persona que la creo va en
+        `creada_por_quien`, que la pantalla enseña al pasar por encima.
+        """
+        cliente = nombre_sin_regimen(self.customer.name)
         if self.origen == self.LA_CREO_EL_CLIENTE:
-            return _('created by %(cliente)s') % {'cliente': self.customer.name}
-        return _('created by %(quien)s on behalf of %(cliente)s') % {
-            'quien': quien, 'cliente': self.customer.name}
+            return _('created by %(cliente)s') % {'cliente': cliente}
+        return _('created by %(casa)s / %(cliente)s') % {
+            'casa': self.tenant.sigla, 'cliente': cliente}
+
+    @property
+    def creada_por_quien(self):
+        if not self.created_by:
+            return ''
+        return self.created_by.get_full_name() or self.created_by.username
 
     @property
     def espera_confirmacion(self):
@@ -3354,6 +3395,19 @@ class CrossingTask(models.Model):
         self.rojo_aduana_por = usuario
         self.save(update_fields=['rojo_aduana_en', 'rojo_aduana_por', 'updated_at'])
         return True
+
+    # Una tarea entregada se queda en la pantalla de cruces el dia en que se
+    # entrego, para que se vea que termino; al dia siguiente pasa a "Cruces
+    # realizados". No se guarda nada al pasar: lo decide la fecha.
+
+    @classmethod
+    def filtro_realizadas(cls):
+        return models.Q(entregada_en__date__lt=timezone.localdate())
+
+    @property
+    def es_realizada(self):
+        return bool(self.entregada_en
+                    and timezone.localdate(self.entregada_en) < timezone.localdate())
 
     def marcar_entregada(self, usuario):
         """Entregada: la tarea termina y queda como cruzada."""

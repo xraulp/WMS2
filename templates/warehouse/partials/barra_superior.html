@@ -90,6 +90,7 @@ tablero ya en esa pestaña. Las tres de aqui son enlaces a su pantalla.
     {% endif %}
     <a href="{{ tablero }}?tab=database">{% trans "Operations" %}</a>
     <a href="{% url 'cruces_panel' %}"{% if activa == 'cruces' %} class="on"{% endif %}>{% trans "Crossings" %}</a>
+    <a href="{% url 'cruces_realizados' %}"{% if activa == 'realizados' %} class="on"{% endif %}>{% trans "Completed crossings" %}</a>
     <a href="{% url 'impuestos_panel' %}"{% if activa == 'impuestos' %} class="on"{% endif %}>{% trans "Duties" %}</a>
     {% if profile|can_see_tab:'catalog' %}
     <a href="{{ tablero }}?tab=catalog">{% trans "Catalog" %}</a>

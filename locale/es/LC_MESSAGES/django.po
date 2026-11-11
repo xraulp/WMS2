@@ -3716,3 +3716,39 @@ msgstr "No se pudo abrir la cámara. Permite el acceso a la cámara para este si
 
 msgid "The reading did not reach the server. Scan it again."
 msgstr "La lectura no llegó al servidor. Escanéala otra vez."
+
+msgid "created by %(casa)s / %(cliente)s"
+msgstr "creada por %(casa)s / %(cliente)s"
+
+msgid "Completed crossings"
+msgstr "Cruces realizados"
+
+msgid "Crossings done"
+msgstr "Realizados"
+
+msgid "Crossing task"
+msgstr "Tarea de cruce"
+
+msgid "Task"
+msgstr "Tarea"
+
+msgid "Orders"
+msgstr "Pedidos"
+
+msgid "Shipments"
+msgstr "Embarques"
+
+msgid "Task, order, shipment or pedimento"
+msgstr "Tarea, pedido, embarque o pedimento"
+
+msgid "A delivered crossing moves here the day after it was delivered."
+msgstr "Un cruce entregado pasa aquí al día siguiente de su entrega."
+
+msgid "Only the most recent 200 are shown. Use the search to find older ones."
+msgstr "Solo se muestran los 200 más recientes. Usa la búsqueda para encontrar los anteriores."
+
+msgid "No completed crossing matches the search."
+msgstr "Ningún cruce realizado coincide con la búsqueda."
+
+msgid "No completed crossings yet."
+msgstr "Todavía no hay cruces realizados."

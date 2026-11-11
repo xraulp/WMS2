@@ -4753,6 +4753,8 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None,
             for clave in PedimentoDocument.RANURAS_POSTERIORES
         ]
         ped.faltan = ped.faltantes_para_revision
+        # La tarea en que va, para nombrarla en su encabezado y volver a ella.
+        ped.tareas = list(ped.tareas_de_cruce())
         # Se calcula una vez aqui y la plantilla solo la lee: si la pantalla
         # decidiera por su cuenta cuando enseñar cada boton, tarde o temprano
         # enseñaria uno que la vista rechaza.
@@ -6444,6 +6446,8 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
     tareas = list(CrossingTask.objects
                   .filter(tenant=tenant, customer=cliente)
                   .exclude(estado=CrossingTask.CANCELADA)
+                  # Las entregadas antes de hoy ya son cruces realizados.
+                  .exclude(CrossingTask.filtro_realizadas())
                   .prefetch_related('renglones__operation__renglon_de_impuestos',
                                     'renglones__operation__renglones_de_pedimento__pedimento',
                                     'cambios_de_dia')
@@ -6529,6 +6533,70 @@ def cruces_panel(request):
     """Las tareas de cruce de un cliente."""
     return render(request, 'warehouse/cruces.html',
                   _contexto_de_cruces(request))
+
+
+@login_required
+def cruces_realizados(request):
+    """
+    Las tareas entregadas, desde el dia siguiente a la entrega. Es el archivo:
+    se consultan, no se trabajan, asi que van en lista y sin botones.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+
+    clientes = Catalog.objects.filter(
+        tenant=tenant, category='CUSTOMER', active=True).order_by('name')
+    tareas = (CrossingTask.objects
+              .filter(tenant=tenant)
+              .filter(CrossingTask.filtro_realizadas())
+              .select_related('customer', 'tenant', 'created_by', 'entregada_por')
+              .prefetch_related('renglones__operation__renglones_de_pedimento__pedimento')
+              .order_by('-entregada_en'))
+    if profile.is_customer():
+        clientes = clientes.filter(pk=getattr(profile.customer, 'pk', None))
+        cliente = clientes.first()
+    else:
+        pedido = request.GET.get('customer')
+        cliente = clientes.filter(pk=pedido).first() if pedido else None
+    if cliente is not None:
+        tareas = tareas.filter(customer=cliente)
+    elif profile.is_customer():
+        tareas = tareas.none()
+
+    buscar = (request.GET.get('q') or '').strip()
+    if buscar:
+        tareas = tareas.filter(
+            Q(custom_id__icontains=buscar)
+            | Q(renglones__operation__po_order__icontains=buscar)
+            | Q(renglones__operation__custom_id__icontains=buscar)
+            | Q(renglones__operation__renglones_de_pedimento__pedimento__ped_consecutivo__icontains=buscar)
+        ).distinct()
+
+    LIMITE = 200
+    tareas = list(tareas[:LIMITE + 1])
+    hay_mas = len(tareas) > LIMITE
+    tareas = tareas[:LIMITE]
+    for t in tareas:
+        filas = list(t.renglones.all())
+        t.n_embarques = len(filas)
+        t.pedidos = []
+        t.lista_pedimentos = []
+        for fila in filas:
+            po = (fila.operation.po_order or '').strip()
+            if po and po not in t.pedidos:
+                t.pedidos.append(po)
+            for enlace in fila.operation.renglones_de_pedimento.all():
+                if enlace.pedimento not in t.lista_pedimentos:
+                    t.lista_pedimentos.append(enlace.pedimento)
+
+    return render(request, 'warehouse/cruces_realizados.html', {
+        'clientes': clientes,
+        'cliente': cliente,
+        'es_cliente': profile.is_customer(),
+        'tareas': tareas,
+        'hay_mas': hay_mas,
+        'buscar': buscar,
+    })
 
 
 def _cruces_con_error(request, cliente_pk, mensaje):

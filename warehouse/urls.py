@@ -177,6 +177,7 @@ urlpatterns = [
     # Las tareas de cruce: un camion, un dia, y la mercancia que va dentro.
     path('cruces/', views.cruces_panel, name='cruces_panel'),
     path('cruces/new/', views.cruce_crear, name='cruce_crear'),
+    path('cruces/done/', views.cruces_realizados, name='cruces_realizados'),
     # Marcar la mercancia y crear el cruce de un solo envio, en PC y en movil.
     path('cruces/mark/', views.cruce_armar, name='cruce_armar'),
     path('cruces/<int:pk>/confirm/', views.cruce_confirmar, name='cruce_confirmar'),

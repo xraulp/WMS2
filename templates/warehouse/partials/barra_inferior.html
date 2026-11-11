@@ -56,6 +56,9 @@ body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
   <a class="nav-btn{% if activa == 'cruces' %} on{% endif %}" href="{% url 'cruces_panel' %}">
     <span class="icon">🚛</span>{% trans "Crossings" %}
   </a>
+  <a class="nav-btn{% if activa == 'realizados' %} on{% endif %}" href="{% url 'cruces_realizados' %}">
+    <span class="icon">✅</span>{% trans "Crossings done" %}
+  </a>
   <a class="nav-btn{% if activa == 'impuestos' %} on{% endif %}" href="{% url 'impuestos_panel' %}">
     <span class="icon">💰</span>{% trans "Duties" %}
   </a>

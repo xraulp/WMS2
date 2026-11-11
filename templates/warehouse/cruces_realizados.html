@@ -1,0 +1,145 @@
+{% load i18n wms_filters %}
+{% get_current_language as idioma_actual %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Completed crossings" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    a{color:inherit}
+    .wrap{max-width:1100px;margin:16px auto 60px;padding:0 14px}
+    .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
+          padding:16px;margin-bottom:14px}
+    .ct{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin:0 0 10px}
+    .mono{font-family:'IBM Plex Mono',monospace}
+    .soft{color:var(--soft)}
+    select,input[type=search]{font-family:inherit;font-size:14px;padding:6px 8px;
+      border:1px solid var(--bdr);border-radius:var(--r);background:var(--surface);
+      color:var(--ink);max-width:100%}
+    .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:var(--r);
+         padding:6px 12px;font-size:13px;font-family:inherit;cursor:pointer;color:var(--ink)}
+    .filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .filtros input[type=search]{flex:1 1 220px}
+
+    table{width:100%;border-collapse:collapse;background:var(--surface);
+          border:1px solid var(--bdr);border-radius:12px;overflow:hidden}
+    th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
+       color:var(--soft);padding:8px 12px;border-bottom:1px solid var(--bdr);
+       background:var(--bg-sutil);white-space:nowrap}
+    td{padding:9px 12px;font-size:13px;border-bottom:1px solid var(--bg);vertical-align:top}
+    .tc{font-family:'IBM Plex Mono',monospace;font-weight:700}
+    .ped-link{display:inline-block;padding:2px 8px;border-radius:6px;margin:0 4px 3px 0;
+              border:1px solid var(--bdr-fuerte);background:var(--surface);
+              color:var(--accent-ink);font-weight:600;text-decoration:none;white-space:nowrap}
+    .ped-link:hover{background:var(--accent);color:#fff}
+    .entregada{display:inline-block;background:#16a34a;color:#fff;padding:1px 7px;
+               border-radius:5px;font-size:12px;font-weight:600;white-space:nowrap}
+
+    /* En el telefono, cada tarea una tarjeta con las mismas lineas que el
+       encabezado de la tarea en la pantalla de cruces. */
+    @media (max-width:700px){
+      .wrap{padding:0 10px}
+      table, thead, tbody, tr, td{display:block;width:100%}
+      table{border:none;background:none}
+      thead{display:none}
+      tr{background:var(--surface);border:1px solid var(--bdr);border-left:6px solid #16a34a;
+         border-radius:12px;margin-bottom:12px;padding:8px 0}
+      td{border:none;padding:3px 14px;display:flex;justify-content:space-between;gap:10px}
+      td::before{content:attr(data-etq);font-size:10px;text-transform:uppercase;
+                 letter-spacing:.05em;color:var(--soft);flex:0 0 auto}
+      td.tc{font-size:16px}
+      td.tc::before{content:none}
+      td > span, td > div{text-align:right}
+    }
+  </style>
+</head>
+<body>
+
+{% include "warehouse/partials/barra_superior.html" with activa='realizados' %}
+
+<div class="wrap">
+
+  {% comment %}
+  El archivo de las tareas entregadas. Pasan aqui el dia siguiente al de la
+  entrega: el mismo dia se quedan en Cruces, para que se vea que terminaron.
+  {% endcomment %}
+  <div class="card">
+    <p class="ct">{% trans "Completed crossings" %}</p>
+    <form method="get" class="filtros">
+      {% if not es_cliente %}
+      <select name="customer" onchange="this.form.submit()">
+        <option value="">— {% trans "All customers" %} —</option>
+        {% for c in clientes %}
+        <option value="{{ c.pk }}" {% if cliente and c.pk == cliente.pk %}selected{% endif %}>
+          {{ c.name }}{% if c.abbreviation %} · {{ c.abbreviation }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      {% endif %}
+      <input type="search" name="q" value="{{ buscar }}"
+             placeholder="{% trans "Task, order, shipment or pedimento" %}">
+      <button class="btn" type="submit">{% trans "Search" %}</button>
+    </form>
+    <p class="soft" style="font-size:12px;margin:10px 0 0">
+      {% trans "A delivered crossing moves here the day after it was delivered." %}
+    </p>
+  </div>
+
+  {% if tareas %}
+  <table>
+    <thead>
+      <tr>
+        <th>{% trans "Task" %}</th>
+        {% if not cliente %}<th>{% trans "Customer" %}</th>{% endif %}
+        <th>{% trans "Orders" %}</th>
+        <th>{% trans "Shipments" %}</th>
+        <th>{% trans "Crossing day" %}</th>
+        <th>{% trans "Delivered" %}</th>
+        <th>{% trans "Pedimentos" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tareas %}
+      <tr>
+        <td class="tc">{{ t.custom_id }}</td>
+        {% if not cliente %}<td data-etq="{% trans "Customer" %}"><span>{{ t.customer.name }}</span></td>{% endif %}
+        <td data-etq="{% trans "Orders" %}"><span>{{ t.pedidos|join:" - "|default:"—" }}</span></td>
+        <td data-etq="{% trans "Shipments" %}"><span>{{ t.n_embarques }}</span></td>
+        <td data-etq="{% trans "Crossing day" %}"><span>{{ t.fecha_de_cruce|date:"d/m/y" }}</span></td>
+        <td data-etq="{% trans "Delivered" %}">
+          <span title="{{ t.creada_por|capfirst }}">
+            <span class="entregada">{{ t.entregada_en|date:"d/m/y" }}</span>
+            {% if t.entregada_por %}<span class="soft" style="font-size:12px"> · {{ t.entregada_por.get_full_name|default:t.entregada_por.username }}</span>{% endif %}
+          </span>
+        </td>
+        <td data-etq="{% trans "Pedimentos" %}">
+          <div>
+          {% for p in t.lista_pedimentos %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ t.customer_id }}&amp;solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% empty %}—{% endfor %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if hay_mas %}
+  <p class="soft" style="font-size:12px">{% trans "Only the most recent 200 are shown. Use the search to find older ones." %}</p>
+  {% endif %}
+  {% else %}
+  <div class="card">
+    <p class="soft" style="margin:0">
+      {% if buscar %}{% trans "No completed crossing matches the search." %}{% else %}{% trans "No completed crossings yet." %}{% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+</div>
+
+{% if es_telefono %}
+{% include "warehouse/partials/barra_inferior.html" with activa='realizados' %}
+{% endif %}
+</body>
+</html>
