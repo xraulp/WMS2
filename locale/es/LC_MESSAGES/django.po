@@ -3972,3 +3972,15 @@ msgstr "todo el camión"
 
 msgid "This crossing is already loaded; it can no longer change trucks."
 msgstr "Esta tarea ya está cargada; ya no puede cambiar de camión."
+
+msgid "The value of the order that stays is not a number."
+msgstr "El valor del pedido que se queda no es un número."
+
+msgid "The value that stays must be less than the entry value (%(v)s USD)."
+msgstr "El valor que se queda debe ser menor que el valor de la entrada (%(v)s USD)."
+
+msgid "Value that stays (USD)"
+msgstr "Valor que se queda (USD)"
+
+msgid "Blank: by bundles"
+msgstr "Vacío: por bultos"

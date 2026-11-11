@@ -691,6 +691,13 @@
                   <input type="number" name="bultos" min="1" max="{{ r.operation.bundle_qty }}" required></label>
                 <label class="campo"><span>{% trans "Weight that stays (lbs)" %}</span>
                   <input type="number" name="peso_lbs" step="0.01" min="0"></label>
+                {% comment %}
+                El valor del pedido que se queda, para recalcular la hoja de
+                impuestos. Vacio: se reparte en proporcion a los bultos.
+                {% endcomment %}
+                <label class="campo"><span>{% trans "Value that stays (USD)" %}</span>
+                  <input type="text" name="valor_usd" inputmode="decimal"
+                         placeholder="{% trans "Blank: by bundles" %}"></label>
                 <label class="campo"><span>{% trans "Rectification pedimento (optional)" %}</span>
                   <input type="text" name="rectificacion" value="{{ g.pedimentos.0.rectificacion }}"></label>
                 <label class="campo"><span>{% trans "Why?" %}</span>

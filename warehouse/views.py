@@ -7318,6 +7318,66 @@ def _siguiente_sufijo(op):
     raise ValueError('sin letras')
 
 
+def _repartir_la_hoja(hoja, nueva, valor_queda, valor_tecleado, n, total, usuario):
+    """
+    La hoja de impuestos, partida igual que la entrada.
+
+    El -A nace con su propio renglon y su valor; a la original se le resta,
+    asi que su estimado se recalcula solo con lo que si cruza. Lo que se
+    tecleo queda escrito como cuenta -- `500+700-300` -- igual que en el resto
+    de la hoja. Fletes e incrementables se reparten por bultos. El impuesto
+    reportado no se toca: es la cifra que la casa le mando al cliente, y
+    cambiarla es decision suya.
+    """
+    def parte(cifra):
+        if cifra is None:
+            return None
+        return (cifra * n / total).quantize(Decimal('0.01'))
+
+    if hoja is None:
+        enlazar_renglon_de_impuestos(nueva, usuario, valor=valor_queda,
+                                     expresion=valor_tecleado)
+        return
+    if valor_queda is None:
+        valor_queda = parte(hoja.valor_mercancia)
+        valor_tecleado = str(valor_queda) if valor_queda is not None else ''
+
+    nuevo = enlazar_renglon_de_impuestos(nueva, usuario, valor=valor_queda,
+                                         expresion=valor_tecleado)
+    fletes_queda, incr_queda = parte(hoja.fletes), parte(hoja.incrementables)
+    if nuevo is not None:
+        nuevo.fletes = fletes_queda
+        nuevo.incrementables = incr_queda
+        nuevo.tasa_igi = hoja.tasa_igi
+        nuevo.aplica_tmec = hoja.aplica_tmec
+        nuevo.save(update_fields=['fletes', 'incrementables', 'tasa_igi',
+                                  'aplica_tmec', 'updated_at'])
+
+    campos = ['updated_by', 'updated_at']
+    if hoja.valor_mercancia is not None and valor_queda is not None:
+        antes = (hoja.valor_expresion or str(hoja.valor_mercancia)).strip()
+        # Lo tecleado si es un numero suelto; si fue una cuenta, su resultado:
+        # `500+700-100+200` diria otra cosa.
+        if re.fullmatch(r'[\d.,]+', valor_tecleado or ''):
+            restado = valor_tecleado.replace(',', '')
+        else:
+            restado = f'{valor_queda:f}'
+            if '.' in restado:
+                restado = restado.rstrip('0').rstrip('.')
+        cuenta = f'{antes}-{restado}'
+        hoja.valor_mercancia = hoja.valor_mercancia - valor_queda
+        hoja.valor_expresion = cuenta if len(cuenta) <= 60 else str(hoja.valor_mercancia)
+        campos += ['valor_mercancia', 'valor_expresion']
+    if fletes_queda is not None:
+        hoja.fletes = hoja.fletes - fletes_queda
+        campos.append('fletes')
+    if incr_queda is not None:
+        hoja.incrementables = hoja.incrementables - incr_queda
+        campos.append('incrementables')
+    hoja.updated_by = usuario
+    hoja.save(update_fields=campos)
+
+
 def _quitar_del_po(po, pedido):
     """El campo de pedidos sin el que se fue al -A."""
     partes = [x.strip() for x in re.split(r'[,;/]', po or '') if x.strip()]
@@ -7381,6 +7441,20 @@ def cruce_sacar_pedido(request, pk):
         return error(_('The weight that stays must be less than the entry weight.'))
     if renglon.bultos is not None and renglon.bultos - n < 1:
         return error(_('Fewer bundles cross than the ones you want to take out.'))
+
+    # El valor del pedido que se queda, para que la hoja de impuestos se
+    # recalcule: la original paga por lo que si cruza y el -A por lo suyo. Se
+    # teclea; si no, se reparte en proporcion a los bultos.
+    hoja = RenglonDeImpuestos.objects.filter(operation=op).first()
+    valor_tecleado = (request.POST.get('valor_usd') or '').strip()
+    try:
+        valor_queda = impuestos.resolver_expresion(valor_tecleado)
+    except impuestos.ExpresionInvalida:
+        return error(_('The value of the order that stays is not a number.'))
+    if valor_queda is not None and hoja and hoja.valor_mercancia is not None \
+            and valor_queda >= hoja.valor_mercancia:
+        return error(_('The value that stays must be less than the entry value '
+                       '(%(v)s USD).') % {'v': hoja.valor_mercancia})
     amparados = sum(e.bultos for e in enlaces)
     if n >= amparados:
         return error(_('The pedimento covers %(n)s bundles of this entry: fewer than '
@@ -7450,7 +7524,8 @@ def cruce_sacar_pedido(request, pk):
                 ped.rectificacion_en = timezone.now()
                 ped.save(update_fields=['rectificacion', 'rectificacion_en', 'updated_at'])
 
-        enlazar_renglon_de_impuestos(nueva, request.user)
+        _repartir_la_hoja(hoja, nueva, valor_queda, valor_tecleado, n, total,
+                          request.user)
         _versionar_orden(tarea, request.user)
 
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}&separada={nueva.pk}#tarea-{tarea.pk}")

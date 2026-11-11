@@ -1626,3 +1626,60 @@ class ElCamionCompartidoTests(BaseDeCruces):
     def test_cargada_ya_no_cambia_de_camion(self):
         CrossingTask.objects.filter(pk=self.a.pk).update(estado=CrossingTask.CARGADA)
         self.assertEqual(self.juntar(self.a, self.b).status_code, 422)
+
+
+class LaHojaDeImpuestosSeParteConElMenosATests(BaseDeCruces):
+    """
+    Al sacar un pedido, la hoja de impuestos se parte igual que la entrada: el
+    -A nace con su renglon y su valor, y a la original se le resta, asi que su
+    estimado se recalcula con lo que si cruza.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from .models import RenglonDeImpuestos
+        self.op = self.operacion('ED261111-0901', bundle_qty=10, po_order='P1, P2')
+        self.hoja = RenglonDeImpuestos.objects.create(
+            tenant=self.tenant, customer=self.cliente, operation=self.op,
+            valor_expresion='500+700', valor_mercancia=Decimal('1200'),
+            fletes=Decimal('100'), tasa_igi=Decimal('0.05'))
+        self.con_pedimento(self.op, consecutivo='6005901')
+        PedimentoBundle.objects.filter(operation=self.op).update(bultos=10)
+        self.t = self.tarea()
+        self.renglon = CrossingTaskItem.objects.create(task=self.t, operation=self.op)
+
+    def sacar(self, **extra):
+        datos = {'renglon': self.renglon.pk, 'pedido': 'P2', 'bultos': '4',
+                 'motivo': 'no cruza'}
+        datos.update(extra)
+        return self.client.post('/cruces/%d/order-out/' % self.t.pk, datos)
+
+    def test_con_valor_tecleado(self):
+        self.assertEqual(self.sacar(valor_usd='300').status_code, 302)
+        a = WarehouseOperation.objects.get(custom_id='ED261111-0901-A')
+        self.assertEqual(a.renglon_de_impuestos.valor_mercancia, Decimal('300'))
+        self.assertEqual(a.renglon_de_impuestos.fletes, Decimal('40.00'))
+        self.assertEqual(a.renglon_de_impuestos.tasa_igi, Decimal('0.05'))
+        self.hoja.refresh_from_db()
+        self.assertEqual(self.hoja.valor_mercancia, Decimal('900'))
+        self.assertEqual(self.hoja.valor_expresion, '500+700-300')
+        self.assertEqual(self.hoja.fletes, Decimal('60.00'))
+
+    def test_sin_valor_se_reparte_por_bultos(self):
+        self.sacar()
+        a = WarehouseOperation.objects.get(custom_id='ED261111-0901-A')
+        self.assertEqual(a.renglon_de_impuestos.valor_mercancia, Decimal('480.00'))
+        self.hoja.refresh_from_db()
+        self.assertEqual(self.hoja.valor_mercancia, Decimal('720.00'))
+
+    def test_no_se_queda_mas_valor_del_que_hay(self):
+        self.assertEqual(self.sacar(valor_usd='1200').status_code, 422)
+        self.assertEqual(self.sacar(valor_usd='abc').status_code, 422)
+        self.hoja.refresh_from_db()
+        self.assertEqual(self.hoja.valor_mercancia, Decimal('1200'))
+        self.assertFalse(WarehouseOperation.objects.filter(subdivision='SUB2').exists())
+
+    def test_los_documentos_no_se_copian(self):
+        self.sacar(valor_usd='300')
+        a = WarehouseOperation.objects.get(custom_id='ED261111-0901-A')
+        self.assertFalse(a.documents.exists())
