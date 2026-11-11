@@ -704,6 +704,11 @@ class WarehouseOperation(models.Model):
     SUBDIVISIONES = [(SUB1, 'sub1'), (SUB2, 'sub2')]
     subdivision = models.CharField(max_length=4, choices=SUBDIVISIONES,
                                    blank=True, default='')
+
+    @property
+    def pedidos_no_cuadran(self):
+        """`(suma, total)` si los bultos de sus pedidos no suman los de la entrada."""
+        return bultos_de_los_pedidos(self)
     dividida_de = models.ForeignKey('self', on_delete=models.SET_NULL,
                                     null=True, blank=True,
                                     related_name='divisiones')
@@ -1023,6 +1028,23 @@ class PedidoDeEntrada(models.Model):
 
     def __str__(self):
         return self.numero
+
+
+def bultos_de_los_pedidos(op):
+    """
+    `(suma, total)` si la lista de pedidos no cuadra con los bultos de la
+    entrada; `None` si cuadra o si no hay con que comparar.
+
+    Solo cuentan los pedidos con bultos tecleados: una lista a medio llenar
+    todavia no dice nada.
+    """
+    if not op or not op.pk or op.bundle_qty is None:
+        return None
+    con_bultos = [p.bultos for p in op.pedidos.all() if p.bultos is not None]
+    if not con_bultos:
+        return None
+    suma = sum(con_bultos)
+    return None if suma == op.bundle_qty else (suma, op.bundle_qty)
 
 
 class DocumentosVivosManager(models.Manager):

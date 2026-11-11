@@ -1463,9 +1463,8 @@ class LosPedidosDeUnaEntradaTests(BaseDeCruces):
         op = self.operacion('ED261111-0601', po_order='X')
         PedidoDeEntrada.objects.create(operation=op, numero='4500999', bultos=2)
         r = self.client.get('/operations/%d/edit/' % op.pk)
-        if r.status_code == 200:
-            self.assertContains(r, 'value="4500999"')
-            self.assertContains(r, 'name="pedidos_present"')
+        self.assertContains(r, 'value="4500999"')
+        self.assertContains(r, 'name="pedidos_present"')
 
     def test_sacar_un_pedido_de_la_lista(self):
         op = self.operacion('ED261111-0602', bundle_qty=10, po_order='A1, A2',
@@ -1492,3 +1491,25 @@ class LosPedidosDeUnaEntradaTests(BaseDeCruces):
         op.refresh_from_db()
         self.assertEqual(op.po_order, 'A1')
         self.assertEqual(list(op.pedidos.all()), [a1])
+
+
+class LosBultosDeLosPedidosCuadranTests(BaseDeCruces):
+
+    def test_avisa_cuando_no_suman_los_de_la_entrada(self):
+        op = self.operacion('ED261111-0701', bundle_qty=10)
+        PedidoDeEntrada.objects.create(operation=op, numero='P1', bultos=6)
+        PedidoDeEntrada.objects.create(operation=op, numero='P2', bultos=3)
+        self.assertEqual(op.pedidos_no_cuadran, (9, 10))
+        r = self.client.get('/operations/%d/edit/' % op.pk)
+        self.assertContains(r, 'The orders add up to 9 bundles, but the entry has 10.')
+
+    def test_cuando_cuadra_no_avisa(self):
+        op = self.operacion('ED261111-0702', bundle_qty=10)
+        PedidoDeEntrada.objects.create(operation=op, numero='P1', bultos=6)
+        PedidoDeEntrada.objects.create(operation=op, numero='P2', bultos=4)
+        self.assertIsNone(op.pedidos_no_cuadran)
+
+    def test_sin_bultos_tecleados_no_dice_nada(self):
+        op = self.operacion('ED261111-0703', bundle_qty=10)
+        PedidoDeEntrada.objects.create(operation=op, numero='P1')
+        self.assertIsNone(op.pedidos_no_cuadran)

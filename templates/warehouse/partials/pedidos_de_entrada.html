@@ -9,7 +9,9 @@ con innerHTML y ahi los scripts no corren. Por eso agregar un renglon es un
 onclick que clona el ultimo.
 {% endcomment %}
 <details class="pedidos-entrada"{% if op and op.pedidos.all %} open{% endif %}
-         style="grid-column:1/-1;font-size:12px">
+         style="grid-column:1/-1;font-size:12px"
+         oninput="window.pedidosCuadran&&pedidosCuadran(this)"
+         ontoggle="window.pedidosCuadran&&pedidosCuadran(this)">
   <summary style="cursor:pointer;color:var(--accent-ink);font-weight:600;padding:4px 0">
     {% trans "Several orders in this entry" %}
   </summary>
@@ -31,5 +33,41 @@ onclick que clona el ultimo.
   </div>
   <button type="button" class="btn btn-sm" style="margin-top:6px"
           onclick="var c=this.previousElementSibling,r=c.lastElementChild.cloneNode(true);r.querySelectorAll('input').forEach(function(i){i.value=''});c.appendChild(r);r.querySelector('input').focus()">+ {% trans "Another order" %}</button>
+  {% comment %}
+  El aviso de que los bultos no cuadran. No impide guardar -- la captura
+  nunca se tumba por esto --, pero se ve: con la lista llena, la suma de sus
+  bultos tiene que dar los de la entrada. Sale ya escrito al editar una
+  entrada que no cuadra, y se recalcula al teclear.
+  {% endcomment %}
+  {% with dif=op.pedidos_no_cuadran %}
+  <div class="pe-aviso" data-texto="{% blocktrans with suma="__S__" total="__T__" %}The orders add up to {{ suma }} bundles, but the entry has {{ total }}.{% endblocktrans %}"
+       style="margin-top:6px;padding:5px 8px;border-radius:6px;background:var(--warn-bg-suave, #fef3c7);color:var(--warn-ink-fuerte, #92400e);font-weight:600"
+       {% if not dif %}hidden{% endif %}>⚠ {% if dif %}{% blocktrans with suma=dif.0 total=dif.1 %}The orders add up to {{ suma }} bundles, but the entry has {{ total }}.{% endblocktrans %}{% endif %}</div>
+  {% endwith %}
   <div style="color:var(--soft);margin-top:4px">{% trans "If you fill this list, the PO field is made from these numbers." %}</div>
 </details>
+<script>
+/* La cuenta del aviso. En la ventana de edicion este script no corre (entra
+   con innerHTML), pero la funcion ya existe porque la definio la pagina que
+   la abre; y el bloque trae el aviso ya escrito desde el servidor. */
+if (!window.pedidosCuadran) {
+  window.pedidosCuadran = function (caja) {
+    var form = caja.closest('form'), aviso = caja.querySelector('.pe-aviso');
+    if (!form || !aviso) return;
+    var total = form.querySelector('[name=bundle_qty]');
+    if (total && !total.dataset.peVigilado) {
+      total.dataset.peVigilado = '1';
+      total.addEventListener('input', function () { pedidosCuadran(caja); });
+    }
+    var n = total ? parseInt(total.value, 10) : NaN, suma = 0, alguno = false;
+    caja.querySelectorAll('[name=pedido_bultos]').forEach(function (i) {
+      var v = parseInt(i.value, 10);
+      if (!isNaN(v)) { suma += v; alguno = true; }
+    });
+    var mal = alguno && !isNaN(n) && suma !== n;
+    aviso.hidden = !mal;
+    if (mal) aviso.textContent = '⚠ ' + aviso.dataset.texto
+      .replace('__S__', suma).replace('__T__', n);
+  };
+}
+</script>

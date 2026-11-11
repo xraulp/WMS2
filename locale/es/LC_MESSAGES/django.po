@@ -3939,3 +3939,6 @@ msgstr "Otro pedido"
 
 msgid "If you fill this list, the PO field is made from these numbers."
 msgstr "Si llenas esta lista, el campo de PO se compone con estos números."
+
+msgid "The orders add up to %(suma)s bundles, but the entry has %(total)s."
+msgstr "Los pedidos suman %(suma)s bultos, pero la entrada tiene %(total)s."
