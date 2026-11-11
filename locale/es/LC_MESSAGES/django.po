@@ -3840,3 +3840,33 @@ msgstr "Todo lo de este cruce ya tiene su remisión."
 
 msgid "Pick the pedimentos that go in this remision."
 msgstr "Elige los pedimentos que van en esta remisión."
+
+msgid "Move this pedimento"
+msgstr "Mover este pedimento"
+
+msgid "New crossing day"
+msgstr "Nuevo día de cruce"
+
+msgid "A new crossing is created with this pedimento on that day."
+msgstr "Se crea un cruce nuevo con este pedimento en ese día."
+
+msgid "Take out of the crossing"
+msgstr "Quitar del cruce"
+
+msgid "Take it out"
+msgstr "Quitarlo"
+
+msgid "Take pedimento %(ped)s out of this crossing? Its orders will be free for another crossing."
+msgstr "¿Quitar el pedimento %(ped)s de este cruce? Sus pedidos quedan libres para otro cruce."
+
+msgid "This crossing is already loaded; its pedimentos can no longer move."
+msgstr "Este cruce ya está cargado; sus pedimentos ya no se pueden mover."
+
+msgid "The load order is already out: say why this pedimento comes out."
+msgstr "La orden de carga ya salió: di por qué sale este pedimento."
+
+msgid "Separated from %(t)s"
+msgstr "Separada de %(t)s"
+
+msgid "Pedimento %(p)s moved out of %(t)s"
+msgstr "Pedimento %(p)s separado de %(t)s"

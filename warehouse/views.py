@@ -7097,8 +7097,132 @@ def cruce_sacar(request, pk):
             request, tarea.customer_id,
             _('The load order is already out: say why this shipment comes out.'))
     renglon.delete()
-    _versionar_orden(tarea, request.user)
+    if not _desaparece_si_quedo_vacia(tarea):
+        _versionar_orden(tarea, request.user)
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+
+# ── Mover o quitar un pedimento ──────────────────────────────────────────────
+#
+# La tarea es un camion; sus renglones son pedimentos y cada pedimento lleva
+# sus pedidos. Un pedimento se puede mover a otro dia -- y entonces nace una
+# tarea nueva solo con el, en su fecha -- o quitar del cruce, y entonces sus
+# pedidos quedan libres para otro. Si era lo ultimo que le quedaba a la tarea,
+# la tarea desaparece: no tiene nada que cruzar.
+
+
+def _se_puede_cambiar(tarea):
+    """Mientras la mercancia no se haya cargado: despues ya va en el camion."""
+    return tarea.estado in (CrossingTask.ABIERTA, CrossingTask.CON_ORDEN)
+
+
+def _renglones_del_pedimento(tarea, pedimento_pk):
+    return [r for r in tarea.renglones.select_related('operation')
+                                      .prefetch_related('operation__renglones_de_pedimento')
+            if any(e.pedimento_id == pedimento_pk
+                   for e in r.operation.renglones_de_pedimento.all())]
+
+
+def _desaparece_si_quedo_vacia(tarea):
+    """
+    Una tarea sin nada dentro no existe mas. Se marca cancelada, que es lo que
+    la saca de todas las pantallas; el registro se queda en la base por si
+    alguien pregunta por su numero.
+    """
+    if tarea.renglones.exists():
+        return False
+    tarea.estado = CrossingTask.CANCELADA
+    tarea.save(update_fields=['estado', 'updated_at'])
+    return True
+
+
+def _pedimento_de_la_tarea(request, tarea):
+    try:
+        pk = int(request.POST.get('pedimento') or 0)
+    except ValueError:
+        pk = 0
+    renglones = _renglones_del_pedimento(tarea, pk) if pk else []
+    if not renglones:
+        raise Http404
+    pedimento = Pedimento.objects.get(pk=pk)
+    return pedimento, renglones
+
+
+@login_required
+@require_POST
+def cruce_mover_pedimento(request, pk):
+    """
+    Mover un solo pedimento a otro dia. Nace una tarea nueva con el, en su
+    fecha, y queda escrito de cual salio y por que.
+    """
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    pedimento, renglones = _pedimento_de_la_tarea(request, tarea)
+    if not _se_puede_cambiar(tarea):
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('This crossing is already loaded; its pedimentos can no longer move.'))
+
+    nuevo = parse_date_or_none(request.POST.get('fecha_de_cruce'))
+    motivo = request.POST.get('motivo') or ''
+    if not nuevo:
+        return _cruces_con_error(request, tarea.customer_id,
+                                 _('Pick the new crossing day.'))
+    if motivo not in dict(CambioDeDiaDeCruce.MOTIVOS):
+        return _cruces_con_error(request, tarea.customer_id,
+                                 _('Say why the day is moving.'))
+    if nuevo == tarea.fecha_de_cruce:
+        return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+
+    # La tarea nueva hereda si el cliente ya habia confirmado: es la misma
+    # instruccion, solo en otro dia.
+    nueva = CrossingTask.objects.create(
+        tenant=tarea.tenant, customer=tarea.customer, fecha_de_cruce=nuevo,
+        origen=tarea.origen,
+        confirmada_por_el_cliente=tarea.confirmada_por_el_cliente,
+        confirmada_en=tarea.confirmada_en,
+        notas=str(_('Separated from %(t)s') % {'t': tarea.custom_id}),
+        created_by=request.user)
+    CrossingTaskItem.objects.filter(pk__in=[r.pk for r in renglones]).update(task=nueva)
+    CambioDeDiaDeCruce.objects.create(
+        task=nueva, fecha_anterior=tarea.fecha_de_cruce, fecha_nueva=nuevo,
+        motivo=motivo,
+        detalle=str(_('Pedimento %(p)s moved out of %(t)s')
+                    % {'p': pedimento.etiqueta, 't': tarea.custom_id}),
+        created_by=request.user)
+
+    if not _desaparece_si_quedo_vacia(tarea):
+        _versionar_orden(tarea, request.user)
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{nueva.pk}")
+
+
+@login_required
+@require_POST
+def cruce_quitar_pedimento(request, pk):
+    """
+    Quitar un pedimento del cruce. Sus pedidos quedan libres para programarlos
+    en otro; si era el ultimo, la tarea desaparece.
+    """
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    pedimento, renglones = _pedimento_de_la_tarea(request, tarea)
+    if not _se_puede_cambiar(tarea):
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('This crossing is already loaded; its pedimentos can no longer move.'))
+    motivo = (request.POST.get('motivo') or '').strip()
+    if tarea.estado != CrossingTask.ABIERTA and not motivo:
+        return _cruces_con_error(
+            request, tarea.customer_id,
+            _('The load order is already out: say why this pedimento comes out.'))
+
+    CrossingTaskItem.objects.filter(pk__in=[r.pk for r in renglones]).delete()
+    if _desaparece_si_quedo_vacia(tarea):
+        return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+    _versionar_orden(tarea, request.user)
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
 
 
 @login_required

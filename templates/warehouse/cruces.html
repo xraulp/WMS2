@@ -131,6 +131,12 @@
     tr.ped-hd.sin td{border-top-style:dashed}
     .ped-hd-in{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px}
     .ped-hd-in .etq{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)}
+    .ped-acc{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+    .ped-acc summary{list-style:none;display:inline-block}
+    .ped-acc details[open]{flex-basis:100%}
+    .ped-acc summary::-webkit-details-marker{display:none}
+    .ped-acc-form{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;
+                  padding:10px;border:1px solid var(--bdr);border-radius:var(--r);background:var(--bg-sutil)}
     tbody tr.pc.hijo td:first-child{padding-left:22px}
 
     .acciones{padding:11px 15px;border-top:1px solid var(--bdr);
@@ -487,6 +493,44 @@
               <span class="soft" style="font-size:12px">
                 {% blocktrans count n=g.filas|length %}{{ n }} order{% plural %}{{ n }} orders{% endblocktrans %} · {{ g.bultos }} {% trans "bdl" %}
               </span>
+              {% comment %}
+              Mover este pedimento a otro dia (nace una tarea nueva con el) o
+              quitarlo del cruce (sus pedidos quedan libres). Solo la casa, y
+              solo mientras la mercancia no se haya cargado.
+              {% endcomment %}
+              {% if g.pedimentos and not es_cliente %}{% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
+              {% with p=g.pedimentos.0 %}
+              <span class="ped-acc">
+                <details>
+                  <summary class="btn btn-sm">&#128197; {% trans "Move this pedimento" %}</summary>
+                  <form method="post" action="{% url 'cruce_mover_pedimento' t.pk %}" class="ped-acc-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="pedimento" value="{{ p.pk }}">
+                    <label class="campo"><span>{% trans "New crossing day" %}</span>
+                      <input type="date" name="fecha_de_cruce" value="{{ t.fecha_de_cruce|date:'Y-m-d' }}" required></label>
+                    <label class="campo"><span>{% trans "Why?" %}</span>
+                      <select name="motivo">{% for valor, etiqueta in motivos %}<option value="{{ valor }}">{{ etiqueta }}</option>{% endfor %}</select></label>
+                    <span class="soft" style="font-size:11px">{% trans "A new crossing is created with this pedimento on that day." %}</span>
+                    <button class="btn btn-sm btn-p" type="submit">{% trans "Move it" %}</button>
+                  </form>
+                </details>
+                <details>
+                  <summary class="btn btn-sm btn-d">{% trans "Take out of the crossing" %}</summary>
+                  <form method="post" action="{% url 'cruce_quitar_pedimento' t.pk %}" class="ped-acc-form"
+                        data-aviso="{% blocktrans with ped=p.etiqueta %}Take pedimento {{ ped }} out of this crossing? Its orders will be free for another crossing.{% endblocktrans %}"
+                        onsubmit="return confirm(this.dataset.aviso)">
+                    {% csrf_token %}
+                    <input type="hidden" name="pedimento" value="{{ p.pk }}">
+                    {% if t.estado != 'ABIERTA' %}
+                    <label class="campo"><span>{% trans "Why?" %}</span>
+                      <input type="text" name="motivo" required></label>
+                    {% endif %}
+                    <button class="btn btn-sm btn-d" type="submit">{% trans "Take it out" %}</button>
+                  </form>
+                </details>
+              </span>
+              {% endwith %}
+              {% endif %}{% endif %}
             </div>
           </td>
         </tr>

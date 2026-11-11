@@ -212,12 +212,25 @@ class LaOrdenSubeDeVersionTests(BaseDeCarga):
         self.assertEqual(nueva.renglones.count(), 2)
 
     def test_sacar_un_embarque_tambien(self):
+        otra = self.operacion('ED260901-0003', 1)
+        self.con_pedimento(otra, consecutivo='6005002')
+        self.client.post('/cruces/%d/add/' % self.tarea.pk,
+                         {'operation': otra.pk, 'motivo': 'x'})
+        renglon = self.tarea.renglones.get(operation=otra)
+        self.client.post('/cruces/%d/remove/' % self.tarea.pk,
+                         {'renglon': renglon.pk, 'motivo': 'se queda'})
+        self.assertEqual(self.tarea.ordenes.count(), 3)
+        self.orden.refresh_from_db()
+        self.assertTrue(self.orden.obsoleta)
+
+    def test_sacar_el_unico_embarque_hace_desaparecer_la_tarea(self):
+        # Sin nada dentro la tarea no existe mas: no sube de version.
         renglon = self.tarea.renglones.get()
         self.client.post('/cruces/%d/remove/' % self.tarea.pk,
                          {'renglon': renglon.pk, 'motivo': 'se queda'})
-        self.assertEqual(self.tarea.ordenes.count(), 2)
-        self.orden.refresh_from_db()
-        self.assertTrue(self.orden.obsoleta)
+        self.tarea.refresh_from_db()
+        self.assertEqual(self.tarea.estado, CrossingTask.CANCELADA)
+        self.assertEqual(self.tarea.ordenes.count(), 1)
 
     def test_el_numero_no_cambia_al_subir_de_version(self):
         otra = self.operacion('ED260901-0003', 1)

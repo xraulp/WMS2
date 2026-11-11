@@ -1209,3 +1209,111 @@ class LaConfirmacionNoDetieneElCruceTests(BaseDeCruces):
         self.assertTrue(t.confirmada_por_el_cliente)
         self.assertIsNotNone(t.confirmada_en)
 
+
+
+class MoverOQuitarUnPedimentoTests(BaseDeCruces):
+    """
+    La tarea es un camion; sus renglones son pedimentos con sus pedidos. Un
+    pedimento se mueve a otro dia (nace una tarea nueva con el) o se quita del
+    cruce (sus pedidos quedan libres). Si era el ultimo, la tarea desaparece.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.a1 = self.operacion('ED261111-0401', bundle_qty=2, po_order='PO-A1')
+        self.a2 = self.operacion('ED261111-0402', bundle_qty=1, po_order='PO-A2')
+        self.b1 = self.operacion('ED261111-0403', bundle_qty=3, po_order='PO-B1')
+        self.ped_a = self.con_pedimento(self.a1, consecutivo='6005401')
+        PedimentoBundle.objects.create(pedimento=self.ped_a, operation=self.a2, bultos=1)
+        self.ped_b = self.con_pedimento(self.b1, consecutivo='6005402')
+        self.t = self.tarea()
+        for op in (self.a1, self.a2, self.b1):
+            CrossingTaskItem.objects.create(task=self.t, operation=op)
+        self.lunes = self.viernes + timedelta(days=3)
+
+    def mover(self, ped, **extra):
+        datos = {'pedimento': ped.pk, 'fecha_de_cruce': self.lunes.isoformat(),
+                 'motivo': CambioDeDiaDeCruce.CLIENTE}
+        datos.update(extra)
+        return self.client.post('/cruces/%d/pedimento/move/' % self.t.pk, datos)
+
+    def quitar(self, ped, **extra):
+        datos = {'pedimento': ped.pk}
+        datos.update(extra)
+        return self.client.post('/cruces/%d/pedimento/remove/' % self.t.pk, datos)
+
+    def test_mover_crea_una_tarea_nueva_con_el_pedimento_y_sus_pedidos(self):
+        self.assertEqual(self.mover(self.ped_a).status_code, 302)
+        nueva = CrossingTask.objects.exclude(pk=self.t.pk).get()
+        self.assertEqual(nueva.fecha_de_cruce, self.lunes)
+        self.assertEqual({r.operation_id for r in nueva.renglones.all()},
+                         {self.a1.pk, self.a2.pk})
+        self.assertEqual([r.operation_id for r in self.t.renglones.all()], [self.b1.pk])
+        cambio = nueva.cambios_de_dia.get()
+        self.assertEqual(cambio.fecha_anterior, self.viernes)
+        self.assertIn(self.t.custom_id, cambio.detalle)
+
+    def test_mover_el_ultimo_hace_desaparecer_la_tarea(self):
+        self.mover(self.ped_b)
+        self.mover(self.ped_a)
+        self.t.refresh_from_db()
+        self.assertEqual(self.t.estado, CrossingTask.CANCELADA)
+        r = self.client.get('/cruces/')
+        self.assertNotIn(self.t.pk, [x.pk for x in r.context['todas']])
+
+    def test_mover_sin_motivo_no_se_puede(self):
+        self.assertEqual(self.mover(self.ped_a, motivo='').status_code, 422)
+        self.assertEqual(CrossingTask.objects.count(), 1)
+
+    def test_quitar_deja_libres_sus_pedidos(self):
+        self.assertEqual(self.quitar(self.ped_a).status_code, 302)
+        self.assertEqual([r.operation_id for r in self.t.renglones.all()], [self.b1.pk])
+        self.assertFalse(CrossingTaskItem.objects.filter(operation=self.a1).exists())
+
+    def test_quitar_el_ultimo_hace_desaparecer_la_tarea(self):
+        self.quitar(self.ped_a)
+        self.quitar(self.ped_b)
+        self.t.refresh_from_db()
+        self.assertEqual(self.t.estado, CrossingTask.CANCELADA)
+
+    def test_con_orden_quitar_pide_motivo_y_sube_la_version(self):
+        Pedimento.objects.update(estado=Pedimento.PAGADO)
+        PedimentoBundle.objects.filter(operation=self.a1).update(bultos=2)
+        PedimentoBundle.objects.filter(operation=self.b1).update(bultos=3)
+        self.client.post('/cruces/%d/order/' % self.t.pk)
+        self.t.refresh_from_db()
+        self.assertEqual(self.t.estado, CrossingTask.CON_ORDEN)
+        self.assertEqual(self.quitar(self.ped_a).status_code, 422)
+        self.assertEqual(self.quitar(self.ped_a, motivo='El cliente lo pide').status_code, 302)
+        self.assertEqual(self.t.ordenes.order_by('-version').first().version, 2)
+
+    def test_ya_cargada_no_se_mueve(self):
+        CrossingTask.objects.filter(pk=self.t.pk).update(estado=CrossingTask.CARGADA)
+        self.assertEqual(self.mover(self.ped_a).status_code, 422)
+        self.assertEqual(self.quitar(self.ped_a).status_code, 422)
+
+    def test_el_cliente_no_puede(self):
+        self.client.force_login(self.duenio)
+        self.assertEqual(self.mover(self.ped_a).status_code, 404)
+        self.assertEqual(self.quitar(self.ped_a).status_code, 404)
+
+    def test_un_pedimento_que_no_esta_en_la_tarea(self):
+        otro = self.operacion('ED261111-0499')
+        ajeno = self.con_pedimento(otro, consecutivo='6005499')
+        self.assertEqual(self.quitar(ajeno).status_code, 404)
+
+    def test_sacar_el_ultimo_pedido_hace_desaparecer_la_tarea(self):
+        t = self.tarea()
+        op = self.operacion('ED261111-0498')
+        r = CrossingTaskItem.objects.create(task=t, operation=op)
+        self.client.post('/cruces/%d/remove/' % t.pk, {'renglon': r.pk})
+        t.refresh_from_db()
+        self.assertEqual(t.estado, CrossingTask.CANCELADA)
+
+    def test_los_botones_salen_en_el_renglon_del_pedimento(self):
+        r = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        self.assertContains(r, '/pedimento/move/')
+        self.assertContains(r, '/pedimento/remove/')
+        self.client.force_login(self.duenio)
+        r = self.client.get('/cruces/')
+        self.assertNotContains(r, '/pedimento/move/')
