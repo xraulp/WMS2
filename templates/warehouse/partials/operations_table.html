@@ -171,7 +171,7 @@ donde se elige el dia y donde se dice lo que no puede ir y por que.
             </span>
             {% endif %}
           </td>
-          <td class="mono" style="white-space:nowrap;">{{ op.custom_id }}</td>
+          <td class="mono" style="white-space:nowrap;">{{ op.custom_id }}{% if op.subdivision %} <span title="{% if op.subdivision == 'SUB2' %}{% trans "What stayed in the warehouse when an order came out of its pedimento" %}{% else %}{% trans "What crossed after an order came out of its pedimento" %}{% endif %}" style="font-size:10px;font-weight:700;padding:0 5px;border-radius:4px;border:1px solid currentColor;opacity:.7">{{ op.get_subdivision_display }}</span>{% endif %}</td>
           <td style="white-space:nowrap;" title="{{ op.entry_dispatched }}">{{ op.entry_dispatched|default:"—"|truncatechars:20 }}</td>
           <td style="white-space:nowrap;">
             <span class="badge {{ op.operation_type|clase_de_tipo }}">{{ op.get_operation_type_display }}</span>

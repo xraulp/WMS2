@@ -12,6 +12,7 @@ mover el dia exige decir por que, y que queda escrito quien pidio cada cosa --
 que es lo unico que se pide de cada decision en todo el diseno.
 """
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -1317,3 +1318,104 @@ class MoverOQuitarUnPedimentoTests(BaseDeCruces):
         self.client.force_login(self.duenio)
         r = self.client.get('/cruces/')
         self.assertNotContains(r, '/pedimento/move/')
+
+
+class SacarUnPedidoDelPedimentoTests(BaseDeCruces):
+    """
+    Raro, pero pasa incluso con el pedimento pagado: un pedido no cruza. Lo
+    que se queda en bodega pasa al -A de la entrada (sub2), libre para otro
+    cruce; la original (sub1) se queda con lo que se fue. El pedimento puede
+    llevar su numero de rectificacion.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.op = self.operacion('ED261111-0501', bundle_qty=10,
+                                 po_order='4500123, 4500124',
+                                 weight_lbs=Decimal('1000'), weight_kgs=Decimal('453.59'))
+        self.ped = self.con_pedimento(self.op, consecutivo='6005501')
+        PedimentoBundle.objects.filter(operation=self.op).update(bultos=10)
+        self.ped.estado = Pedimento.PAGADO
+        self.ped.save()
+        self.t = self.tarea()
+        self.renglon = CrossingTaskItem.objects.create(task=self.t, operation=self.op)
+
+    def sacar(self, **extra):
+        datos = {'renglon': self.renglon.pk, 'pedido': '4500124', 'bultos': '4',
+                 'peso_lbs': '300', 'motivo': 'El cliente lo deja para despues'}
+        datos.update(extra)
+        return self.client.post('/cruces/%d/order-out/' % self.t.pk, datos)
+
+    def test_nace_el_menos_a_con_lo_que_se_queda(self):
+        r = self.sacar(rectificacion='24 1515 6009999')
+        self.assertEqual(r.status_code, 302)
+        a = WarehouseOperation.objects.get(custom_id='ED261111-0501-A')
+        self.assertEqual(a.bundle_qty, 4)
+        self.assertEqual(a.weight_lbs, Decimal('300'))
+        self.assertEqual(a.po_order, '4500124')
+        self.assertEqual(a.subdivision, WarehouseOperation.SUB2)
+        self.assertEqual(a.dividida_de, self.op)
+        self.assertEqual(a.pedimento, '')
+        self.assertFalse(a.renglones_de_pedimento.exists())
+        self.assertFalse(a.cruces.exists())
+
+        self.op.refresh_from_db()
+        self.assertEqual(self.op.bundle_qty, 6)
+        self.assertEqual(self.op.weight_lbs, Decimal('700'))
+        self.assertEqual(self.op.po_order, '4500123')
+        self.assertEqual(self.op.subdivision, WarehouseOperation.SUB1)
+        self.assertEqual(self.op.renglones_de_pedimento.get().bultos, 6)
+
+        self.ped.refresh_from_db()
+        self.assertEqual(self.ped.rectificacion, '24 1515 6009999')
+        self.assertEqual(self.ped.estado, Pedimento.PAGADO)
+
+    def test_el_segundo_es_menos_b(self):
+        self.sacar()
+        self.sacar(pedido='4500123', bultos='2', peso_lbs='')
+        self.assertTrue(WarehouseOperation.objects.filter(custom_id='ED261111-0501-B').exists())
+
+    def test_el_menos_a_no_ocupa_numero_nuevo(self):
+        self.sacar()
+        siguiente = WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='ENTRY', customer=self.cliente,
+            date=self.op.date, created_by=self.jefa)
+        self.assertTrue(siguiente.custom_id.endswith('-0002'), siguiente.custom_id)
+
+    def test_se_puede_pistolear_el_menos_a(self):
+        from . import bultos
+        self.assertEqual(bultos.leer('ED261111-0501-A-3'), ('ED261111-0501-A', 3))
+        self.assertEqual(bultos.leer('ED261111-0501-3'), ('ED261111-0501', 3))
+
+    def test_sin_motivo_o_sin_pedido_no(self):
+        self.assertEqual(self.sacar(motivo='').status_code, 422)
+        self.assertEqual(self.sacar(pedido='').status_code, 422)
+        self.assertFalse(WarehouseOperation.objects.filter(subdivision='SUB2').exists())
+
+    def test_no_se_quedan_mas_de_los_que_ampara_el_pedimento(self):
+        PedimentoBundle.objects.filter(operation=self.op).update(bultos=3)
+        self.assertEqual(self.sacar(bultos='3').status_code, 422)
+        self.assertEqual(self.sacar(bultos='2').status_code, 302)
+
+    def test_no_se_puede_quedar_todo(self):
+        self.assertEqual(self.sacar(bultos='10').status_code, 422)
+        self.assertEqual(self.sacar(bultos='0').status_code, 422)
+
+    def test_cargada_ya_no(self):
+        CrossingTask.objects.filter(pk=self.t.pk).update(estado=CrossingTask.CARGADA)
+        self.assertEqual(self.sacar().status_code, 422)
+
+    def test_el_cliente_no_puede(self):
+        self.client.force_login(self.duenio)
+        self.assertEqual(self.sacar().status_code, 404)
+
+    def test_la_pantalla_avisa_de_las_etiquetas(self):
+        r = self.sacar()
+        a = WarehouseOperation.objects.get(custom_id='ED261111-0501-A')
+        pantalla = self.client.get(r['Location'])
+        self.assertContains(pantalla, '/operations/%d/label/' % a.pk)
+        self.assertContains(pantalla, 'sub1')
+
+    def test_el_boton_sale_solo_en_pedidos_con_pedimento(self):
+        r = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        self.assertContains(r, '/order-out/')

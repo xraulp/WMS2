@@ -187,6 +187,8 @@ urlpatterns = [
          name='cruce_mover_pedimento'),
     path('cruces/<int:pk>/pedimento/remove/', views.cruce_quitar_pedimento,
          name='cruce_quitar_pedimento'),
+    path('cruces/<int:pk>/order-out/', views.cruce_sacar_pedido,
+         name='cruce_sacar_pedido'),
     path('cruces/<int:pk>/day/', views.cruce_cambiar_dia, name='cruce_cambiar_dia'),
     path('cruces/<int:pk>/green-light/', views.cruce_verde, name='cruce_verde'),
     path('cruces/<int:pk>/red-light/', views.cruce_rojo_aduana, name='cruce_rojo_aduana'),

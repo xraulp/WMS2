@@ -32,6 +32,17 @@
     .btn-d{border-color:var(--red);color:var(--red);background:var(--surface)}
     .msg-error{background:var(--rsoft);color:var(--err-ink);padding:9px 12px;
                border-radius:var(--r);font-size:13px;margin-bottom:10px}
+    .msg-ok{background:var(--ok-bg);color:var(--ok-ink-fuerte);padding:9px 12px;
+            border-radius:var(--r);font-size:13px;margin-bottom:10px;display:flex;
+            gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    .sub{display:inline-block;font-size:10px;font-weight:700;padding:0 5px;border-radius:4px;
+         border:1px solid var(--bdr-fuerte);color:var(--soft);margin-left:4px;vertical-align:middle}
+    .sacar-pedido{margin-top:6px}
+    .sacar-pedido summary{list-style:none;display:inline-block}
+    .sacar-pedido input{width:100%}
+    .sacar-pedido summary::-webkit-details-marker{display:none}
+    .sacar-pedido form{display:grid;gap:6px;margin-top:6px;padding:10px;width:200px;max-width:100%;
+                       border:1px solid var(--bdr);border-radius:var(--r);background:var(--bg-sutil)}
 
     /* Cada tarea, una tarjeta que se separa de la siguiente: titulo oscuro,
        mas aire entre ellas y una franja a la izquierda que alterna de color,
@@ -207,6 +218,16 @@
 <div class="wrap">
 
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
+  {% if separada %}
+  {% comment %}
+  El -A acaba de nacer. Sus bultos llevan pegada la etiqueta de la entrada
+  original, y al pistolearlos saldrian como de esa: hay que reetiquetarlos.
+  {% endcomment %}
+  <div class="msg-ok">
+    {% blocktrans with nueva=separada.custom_id original=separada.dividida_de.custom_id %}{{ nueva }} was created with what stays in the warehouse, free for another crossing. {{ original }} keeps what crosses.{% endblocktrans %}
+    <a class="btn btn-sm" href="{% url 'operation_label' separada.pk %}" target="_blank">🏷 {% blocktrans with nueva=separada.custom_id %}Print the labels of {{ nueva }}{% endblocktrans %}</a>
+  </div>
+  {% endif %}
 
   {% if not es_cliente %}
   <div class="card">
@@ -485,7 +506,7 @@
             <div class="ped-hd-in">
               {% if g.pedimentos %}
               <span class="etq">{% trans "Pedimento" %}</span>
-              {% for p in g.pedimentos %}<a class="ped-link mono" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% endfor %}
+              {% for p in g.pedimentos %}<a class="ped-link mono" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% if p.rectificacion %}<span class="estado-ped mono">{% trans "Rect." %} {{ p.rectificacion }}</span>{% endif %}{% endfor %}
               {% for texto, del_cliente in g.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% endfor %}
               {% else %}
               <span class="etq">{% trans "No pedimento yet" %}</span>
@@ -536,7 +557,7 @@
         </tr>
         {% for r in g.filas %}
         <tr class="hijo{% if r.color is not None %} pc pc-{{ r.color }}{% endif %}">
-          <td data-etq="{% trans "Entry" %}" class="mono">{{ r.operation.custom_id }}</td>
+          <td data-etq="{% trans "Entry" %}" class="mono">{{ r.operation.custom_id }}{% if r.operation.subdivision %}<span class="sub">{{ r.operation.get_subdivision_display }}</span>{% endif %}</td>
           <td data-etq="{% trans "PO / Order" %}"><strong>{{ r.operation.po_order|default:"—" }}</strong></td>
           <td data-etq="{% trans "Bundles" %}">
             <span>{{ r.bultos_que_van }}{% if r.es_parcial %}
@@ -597,6 +618,33 @@
               {% endif %}
               <button class="btn btn-sm" type="submit">{% trans "Take out" %}</button>
             </form>
+            {% comment %}
+            Sacar un pedido de su pedimento. Solo cuando el pedido ya esta en
+            un pedimento y la mercancia no se ha cargado. Lo que se queda en
+            bodega pasa al -A de esta entrada.
+            {% endcomment %}
+            {% if g.pedimentos %}{% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
+            <details class="sacar-pedido">
+              <summary class="btn btn-sm btn-d">{% trans "Take an order out of the pedimento" %}</summary>
+              <form method="post" action="{% url 'cruce_sacar_pedido' t.pk %}"
+                    data-aviso="{% trans "A new entry (-A) will be created with what stays. Continue?" %}"
+                    onsubmit="return confirm(this.dataset.aviso)">
+                {% csrf_token %}
+                <input type="hidden" name="renglon" value="{{ r.pk }}">
+                <label class="campo"><span>{% trans "Order that stays" %}</span>
+                  <input type="text" name="pedido" required></label>
+                <label class="campo"><span>{% blocktrans with n=r.operation.bundle_qty %}Bundles that stay (of {{ n }}){% endblocktrans %}</span>
+                  <input type="number" name="bultos" min="1" max="{{ r.operation.bundle_qty }}" required></label>
+                <label class="campo"><span>{% trans "Weight that stays (lbs)" %}</span>
+                  <input type="number" name="peso_lbs" step="0.01" min="0"></label>
+                <label class="campo"><span>{% trans "Rectification pedimento (optional)" %}</span>
+                  <input type="text" name="rectificacion" value="{{ g.pedimentos.0.rectificacion }}"></label>
+                <label class="campo"><span>{% trans "Why?" %}</span>
+                  <input type="text" name="motivo" required></label>
+                <button class="btn btn-sm btn-d" type="submit">{% trans "Take it out and create the -A" %}</button>
+              </form>
+            </details>
+            {% endif %}{% endif %}
             {% endif %}
           </td>
         </tr>

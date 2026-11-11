@@ -3870,3 +3870,60 @@ msgstr "Separada de %(t)s"
 
 msgid "Pedimento %(p)s moved out of %(t)s"
 msgstr "Pedimento %(p)s separado de %(t)s"
+
+msgid "This order is not in a pedimento yet: take it out of the crossing instead."
+msgstr "Este pedido todavía no está en un pedimento: mejor sácalo del cruce."
+
+msgid "Write which order stays in the warehouse."
+msgstr "Escribe qué pedido se queda en bodega."
+
+msgid "Say why the order comes out of the pedimento."
+msgstr "Di por qué sale el pedido del pedimento."
+
+msgid "The bundles that stay must be at least 1 and fewer than %(total)s; if everything stays, take it out of the crossing."
+msgstr "Los bultos que se quedan deben ser al menos 1 y menos de %(total)s; si se queda todo, sácalo del cruce."
+
+msgid "The weight that stays must be less than the entry weight."
+msgstr "El peso que se queda debe ser menor que el peso de la entrada."
+
+msgid "Fewer bundles cross than the ones you want to take out."
+msgstr "Cruzan menos bultos de los que quieres sacar."
+
+msgid "%(nueva)s was created with what stays in the warehouse, free for another crossing. %(original)s keeps what crosses."
+msgstr "Se creó %(nueva)s con lo que se queda en bodega, libre para otro cruce. %(original)s se queda con lo que cruza."
+
+msgid "Print the labels of %(nueva)s"
+msgstr "Imprimir las etiquetas de %(nueva)s"
+
+msgid "Take an order out of the pedimento"
+msgstr "Sacar un pedido del pedimento"
+
+msgid "A new entry (-A) will be created with what stays. Continue?"
+msgstr "Se creará una entrada nueva (-A) con lo que se queda. ¿Continuar?"
+
+msgid "Order that stays"
+msgstr "Pedido que se queda"
+
+msgid "Bundles that stay (of %(n)s)"
+msgstr "Bultos que se quedan (de %(n)s)"
+
+msgid "Weight that stays (lbs)"
+msgstr "Peso que se queda (lbs)"
+
+msgid "Rectification pedimento (optional)"
+msgstr "Pedimento de rectificación (opcional)"
+
+msgid "Take it out and create the -A"
+msgstr "Sacarlo y crear el -A"
+
+msgid "Rect."
+msgstr "Rect."
+
+msgid "What stayed in the warehouse when an order came out of its pedimento"
+msgstr "Lo que se quedó en bodega cuando un pedido salió de su pedimento"
+
+msgid "What crossed after an order came out of its pedimento"
+msgstr "Lo que cruzó después de que un pedido salió de su pedimento"
+
+msgid "The pedimento covers %(n)s bundles of this entry: fewer than that can stay. If the whole order leaves the pedimento, take the pedimento out of the crossing instead."
+msgstr "El pedimento ampara %(n)s bultos de esta entrada: se pueden quedar menos que eso. Si el pedido sale completo del pedimento, mejor quita el pedimento del cruce."

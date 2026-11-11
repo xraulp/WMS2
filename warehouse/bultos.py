@@ -33,7 +33,8 @@ import re
 # `ED260901-0001-3`: el identificador de la operacion, un guion, y el numero de
 # bulto. El identificador ya lleva guiones dentro, asi que el numero se lee del
 # final y no partiendo por guiones.
-_CODIGO = re.compile(r'^\s*([A-Za-z]{2}\d{6}-\d{4})-(\d{1,5})\s*$')
+# Una entrada subdividida lleva una letra al final: `ED260901-0001-A-3`.
+_CODIGO = re.compile(r'^\s*([A-Za-z]{2}\d{6}-\d{4}(?:-[A-Za-z])?)-(\d{1,5})\s*$')
 
 # El QR de la etiqueta. Lo que importa son los dos parametros; el resto de la
 # URL cambia con el dominio del tenant y no se compara.
@@ -79,7 +80,7 @@ def leer(texto):
         return (con_bulto.group(1).upper(), int(con_bulto.group(2)))
 
     # El identificador suelto, tecleado a mano.
-    if re.match(r'^[A-Za-z]{2}\d{6}-\d{4}$', texto):
+    if re.match(r'^[A-Za-z]{2}\d{6}-\d{4}(?:-[A-Za-z])?$', texto):
         return (texto.upper(), None)
 
     return (None, None)

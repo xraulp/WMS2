@@ -6442,6 +6442,10 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
         'motivos': CambioDeDiaDeCruce.MOTIVOS,
         'error': error,
         'hoy': timezone.localdate(),
+        # El -A recien creado, para avisar que necesita sus etiquetas.
+        'separada': (WarehouseOperation.objects
+                     .filter(pk=request.GET.get('separada'), tenant=tenant).first()
+                     if (request.GET.get('separada') or '').isdigit() else None),
     }
     if cliente is None:
         if not profile.is_customer():
@@ -7223,6 +7227,150 @@ def cruce_quitar_pedimento(request, pk):
         return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
     _versionar_orden(tarea, request.user)
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+
+
+# ── Sacar un pedido de un pedimento ──────────────────────────────────────────
+#
+# Muy raro, pero pasa, incluso con el pedimento pagado: el cliente decide que
+# un pedido no cruza. Lo que se queda en bodega pasa a una entrada nueva -- el
+# "-A" de la original --, libre en operaciones para otro cruce; la original se
+# queda con lo que si se fue. Y el pedimento puede llevar su numero de
+# rectificacion.
+
+LBS_A_KGS = Decimal('0.45359237')
+
+
+def _siguiente_sufijo(op):
+    base = re.sub(r'-[A-Z]$', '', op.custom_id)
+    usadas = set(WarehouseOperation.objects
+                 .filter(custom_id__regex=r'^%s-[A-Z]$' % re.escape(base))
+                 .values_list('custom_id', flat=True))
+    for letra in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+        if f'{base}-{letra}' not in usadas:
+            return f'{base}-{letra}'
+    raise ValueError('sin letras')
+
+
+def _quitar_del_po(po, pedido):
+    """El campo de pedidos sin el que se fue al -A."""
+    partes = [x.strip() for x in re.split(r'[,;/]', po or '') if x.strip()]
+    quedan = [x for x in partes if x.upper() != pedido.strip().upper()]
+    return ', '.join(quedan) if len(quedan) != len(partes) else (po or '')
+
+
+@login_required
+@require_POST
+def cruce_sacar_pedido(request, pk):
+    """
+    Sacar un pedido de su pedimento: nace el -A con lo que se queda, y la
+    original se queda con lo que se fue.
+    """
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    renglon = get_object_or_404(CrossingTaskItem, pk=request.POST.get('renglon'),
+                                task=tarea)
+    op = renglon.operation
+    enlaces = list(op.renglones_de_pedimento.select_related('pedimento'))
+
+    def error(texto):
+        return _cruces_con_error(request, tarea.customer_id, texto)
+
+    if not _se_puede_cambiar(tarea):
+        return error(_('This crossing is already loaded; its pedimentos can no longer move.'))
+    if not enlaces:
+        return error(_('This order is not in a pedimento yet: take it out of the crossing instead.'))
+
+    pedido = (request.POST.get('pedido') or '').strip()
+    motivo = (request.POST.get('motivo') or '').strip()
+    rectificacion = (request.POST.get('rectificacion') or '').strip()
+    try:
+        n = int(request.POST.get('bultos') or 0)
+    except ValueError:
+        n = 0
+    try:
+        peso = Decimal((request.POST.get('peso_lbs') or '').strip() or 'x')
+    except (InvalidOperation, ValueError):
+        peso = None
+    if peso is not None and peso <= 0:
+        peso = None
+    total = op.bundle_qty or 0
+
+    if not pedido:
+        return error(_('Write which order stays in the warehouse.'))
+    if not motivo:
+        return error(_('Say why the order comes out of the pedimento.'))
+    if n < 1 or n >= total:
+        return error(_('The bundles that stay must be at least 1 and fewer than '
+                       '%(total)s; if everything stays, take it out of the crossing.')
+                     % {'total': total})
+    if peso is not None and op.weight_lbs is not None and peso >= op.weight_lbs:
+        return error(_('The weight that stays must be less than the entry weight.'))
+    if renglon.bultos is not None and renglon.bultos - n < 1:
+        return error(_('Fewer bundles cross than the ones you want to take out.'))
+    amparados = sum(e.bultos for e in enlaces)
+    if n >= amparados:
+        return error(_('The pedimento covers %(n)s bundles of this entry: fewer than '
+                       'that can stay. If the whole order leaves the pedimento, take '
+                       'the pedimento out of the crossing instead.') % {'n': amparados})
+
+    with transaction.atomic():
+        nueva = WarehouseOperation.objects.get(pk=op.pk)
+        nueva.pk = None
+        nueva.id = None
+        nueva.custom_id = _siguiente_sufijo(op)
+        nueva.po_order = pedido
+        nueva.bundle_qty = n
+        nueva.weight_lbs = peso
+        nueva.weight_kgs = (peso * LBS_A_KGS).quantize(Decimal('0.01')) if peso else None
+        # Ya no esta en el pedimento: su numero no viaja con ella.
+        nueva.pedimento = ''
+        nueva.ped_aduana = nueva.ped_patente = nueva.ped_consecutivo = ''
+        nueva.subdivision = WarehouseOperation.SUB2
+        nueva.dividida_de = op
+        nueva.created_by = request.user
+        nueva.email_sent = False
+        nueva.save()
+
+        op.bundle_qty = total - n
+        if peso is not None and op.weight_lbs is not None:
+            op.weight_lbs = op.weight_lbs - peso
+            if op.weight_kgs is not None:
+                op.weight_kgs = max(op.weight_kgs - nueva.weight_kgs, Decimal('0'))
+        op.po_order = _quitar_del_po(op.po_order, pedido)
+        op.subdivision = WarehouseOperation.SUB1
+        op.save()
+
+        # El reparto del pedimento pierde esos bultos (y ese peso).
+        restan = n
+        for enlace in enlaces:
+            quita = min(enlace.bultos, restan)
+            enlace.bultos -= quita
+            restan -= quita
+            if peso is not None and enlace.weight_lbs is not None and quita:
+                enlace.weight_lbs = max(enlace.weight_lbs - peso, Decimal('0'))
+            if enlace.bultos:
+                enlace.save()
+            else:
+                enlace.delete()
+            if not restan:
+                break
+
+        if renglon.bultos is not None:
+            renglon.bultos -= n
+        renglon.motivo = motivo
+        renglon.save(update_fields=['bultos', 'motivo'])
+
+        if rectificacion:
+            for ped in {e.pedimento for e in enlaces}:
+                ped.rectificacion = rectificacion
+                ped.rectificacion_en = timezone.now()
+                ped.save(update_fields=['rectificacion', 'rectificacion_en', 'updated_at'])
+
+        enlazar_renglon_de_impuestos(nueva, request.user)
+        _versionar_orden(tarea, request.user)
+
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}&separada={nueva.pk}#tarea-{tarea.pk}")
 
 
 @login_required

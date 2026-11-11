@@ -694,6 +694,20 @@ class WarehouseOperation(models.Model):
         default=False,
         verbose_name='Lleva inspeccion de SENASICA')
 
+    # La entrada subdividida. Cuando un cliente saca un pedido de un pedimento
+    # -- raro, pero pasa, incluso ya pagado --, lo que se queda en bodega pasa a
+    # una entrada nueva, el "-A" de la original, libre para otro cruce. La
+    # original queda como SUB1 (lo que se fue) y la nueva como SUB2 (lo que se
+    # quedo), y la nueva apunta a la original para no perder la historia.
+    SUB1 = 'SUB1'
+    SUB2 = 'SUB2'
+    SUBDIVISIONES = [(SUB1, 'sub1'), (SUB2, 'sub2')]
+    subdivision = models.CharField(max_length=4, choices=SUBDIVISIONES,
+                                   blank=True, default='')
+    dividida_de = models.ForeignKey('self', on_delete=models.SET_NULL,
+                                    null=True, blank=True,
+                                    related_name='divisiones')
+
     class Meta:
         ordering = ['-date', '-created_at']
 
@@ -828,9 +842,11 @@ class WarehouseOperation(models.Model):
     def generate_custom_id(self):
         prefix = self.PREFIJO_DEL_TIPO.get(self.operation_type, 'OP')
         date_str = self.date.strftime('%y%m%d')
+        # Los "-A" de una subdivision no cuentan: llevan el numero de su
+        # original y no ocupan uno nuevo.
         count = WarehouseOperation.objects.filter(
             operation_type=self.operation_type, date=self.date
-        ).exclude(pk=self.pk).count()
+        ).exclude(pk=self.pk).exclude(custom_id__regex=r'-[A-Z]$').count()
         return f"{prefix}{date_str}-{str(count+1).zfill(4)}"
 
     # ── El pedimento, leido por dentro ───────────────────────────────────────
@@ -2029,6 +2045,12 @@ class Pedimento(models.Model):
 
     tenant   = models.ForeignKey('Tenant', on_delete=models.CASCADE,
                                  related_name='pedimentos')
+
+    # El pedimento de rectificacion. Cuando se saca un pedido de un pedimento
+    # ya armado -- incluso pagado -- el agente aduanal lo rectifica, y ese
+    # numero se anota aqui, al lado del original.
+    rectificacion    = models.CharField(max_length=30, blank=True, default='')
+    rectificacion_en = models.DateTimeField(null=True, blank=True)
     customer = models.ForeignKey(Catalog, on_delete=models.PROTECT,
                                  related_name='pedimentos',
                                  limit_choices_to={'category': 'CUSTOMER'},
@@ -2208,6 +2230,12 @@ class Pedimento(models.Model):
     @property
     def es_turno_del_cliente(self):
         return self.estado == self.EN_REVISION
+
+    @property
+    def numero_con_rectificacion(self):
+        """El numero, y el de su rectificacion si la tiene."""
+        base = self.etiqueta
+        return f'{base} · R {self.rectificacion}' if self.rectificacion else base
 
     @property
     def le_toca_a_la_casa(self):
