@@ -596,6 +596,7 @@ def operation_create(request):
         ped_consecutivo=pedimentos.solo_digitos(p.get('ped_consecutivo')),
         eta=parse_date_or_none(p.get('eta')),
         has_serial_numbers=bool(p.get('has_serial_numbers')),
+        lleva_inspeccion=bool(p.get('lleva_inspeccion')),
     )
     op.save()
 
@@ -3016,6 +3017,8 @@ def operation_edit(request, pk):
                 op.eta = parse_date_or_none(p.get('eta'))
             if 'has_serial_numbers_present' in p:
                 op.has_serial_numbers = bool(p.get('has_serial_numbers'))
+            if 'lleva_inspeccion_present' in p:
+                op.lleva_inspeccion = bool(p.get('lleva_inspeccion'))
             # Donde queda la mercancia tambien se corrige: hasta ahora solo se
             # podia poner al capturar, asi que una posicion mal elegida se
             # quedaba puesta para siempre. El tipo no se toca al editar, de modo
@@ -6513,6 +6516,21 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
             else:
                 fila.estados = [(Pedimento.texto_corto(
                     Pedimento.ELAB_PED, tenant, cliente), False)]
+        # La tarea se lee por pedimento: cada pedimento es un renglon y sus
+        # pedidos van dentro. Lo que aun no tiene pedimento armado va al
+        # final, en su propio grupo, con el boton para armarlo.
+        grupos = {}
+        for fila in tarea.filas:
+            llave = tuple(p.pk for p in fila.pedimentos) or None
+            if llave not in grupos:
+                grupos[llave] = {'pedimentos': fila.pedimentos,
+                                 'color': fila.color if llave else None,
+                                 'estados': fila.estados if llave else [],
+                                 'filas': [], 'bultos': 0}
+            grupos[llave]['filas'].append(fila)
+            grupos[llave]['bultos'] += fila.bultos_que_van
+        tarea.grupos = ([g for k, g in grupos.items() if k is not None]
+                        + ([grupos[None]] if None in grupos else []))
         armados = {p.pk: p for fila in tarea.filas for p in fila.pedimentos}
         tarea.en_revision = sum(1 for p in armados.values()
                                 if p.estado == Pedimento.EN_REVISION)
@@ -6585,8 +6603,9 @@ def _todos_los_cruces(tenant):
         fase = tarea.fase
         if fase == CrossingTask.FASE_ENTREGADA:
             tarea.me_toca = False
-        elif fase in (CrossingTask.FASE_EN_CRUCE, CrossingTask.FASE_ROJO):
-            # Marcar el rojo o la entrega: solo lo puede hacer la casa.
+        elif fase != CrossingTask.FASE_PEDIMENTOS:
+            # Ya va en el camion: el semaforo, la inspeccion y la entrega solo
+            # los puede marcar la casa.
             tarea.me_toca = True
         else:
             tarea.me_toca = any(not del_cliente for _, del_cliente in estados)
@@ -7090,6 +7109,42 @@ def cruce_rojo_aduana(request, pk):
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
 
 
+def _marcar_fase(request, pk, metodo, error):
+    """Un boton del semaforo. Solo la casa; el error dice por que no se pudo."""
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    if not getattr(tarea, metodo)(request.user):
+        return _cruces_con_error(request, tarea.customer_id,
+                                 error % {'tarea': tarea.custom_id})
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+
+
+@login_required
+@require_POST
+def cruce_verde(request, pk):
+    """Verde en la aduana mexicana. Lo marca la casa."""
+    return _marcar_fase(request, pk, 'marcar_verde',
+                        _('%(tarea)s is not in crossing: issue its remision first.'))
+
+
+@login_required
+@require_POST
+def cruce_liberado(request, pk):
+    """La aduana libera lo que cayo en rojo. Solo despues del rojo."""
+    return _marcar_fase(request, pk, 'marcar_liberado',
+                        _('%(tarea)s can only be released after a red light.'))
+
+
+@login_required
+@require_POST
+def cruce_inspeccion(request, pk):
+    """La mercancia entra a la inspeccion de SENASICA, del lado mexicano."""
+    return _marcar_fase(request, pk, 'marcar_inspeccion',
+                        _('%(tarea)s goes to inspection only after green light or '
+                          'release, and only if one of its orders carries it.'))
+
+
 @login_required
 @require_POST
 def cruce_entregada(request, pk):
@@ -7099,7 +7154,8 @@ def cruce_entregada(request, pk):
     tarea = _cruce_del_tenant(request, pk)
     if not tarea.marcar_entregada(request.user):
         return _cruces_con_error(request, tarea.customer_id,
-            _('%(tarea)s cannot be delivered yet: it is not in crossing.')
+            _('%(tarea)s cannot be delivered yet: customs has not let it go '
+              '(green light or released).')
             % {'tarea': tarea.custom_id})
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
 

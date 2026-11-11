@@ -687,6 +687,13 @@ class WarehouseOperation(models.Model):
         default=False,
         verbose_name='Esta mercancia tiene numeros de serie')
 
+    # La mercancia que del lado mexicano pasa por la inspeccion de SENASICA,
+    # despues de la aduana. Se marca al capturar la entrada, y es lo que hace
+    # aparecer el boton de inspeccion en la tarea de cruce.
+    lleva_inspeccion = models.BooleanField(
+        default=False,
+        verbose_name='Lleva inspeccion de SENASICA')
+
     class Meta:
         ordering = ['-date', '-created_at']
 
@@ -2328,6 +2335,8 @@ class Pedimento(models.Model):
         self.revisado_por = usuario
         self.save(update_fields=['estado', 'aprobado_en', 'revisado_por',
                                  'updated_at'])
+        for tarea in self.tareas_de_cruce():
+            tarea.confirmar_si_aprobo_todo()
         return True
 
     def pedir_correcciones(self, usuario, texto):
@@ -3231,10 +3240,20 @@ class CrossingTask(models.Model):
                                    blank=True, related_name='cruces_creados')
 
     # Lo que pasa del otro lado de la remision y el sistema no puede saber
-    # solo: que a la mercancia le toco rojo en la aduana, y que se entrego. Lo
-    # marca la casa con un boton, y queda quien y cuando.
+    # solo: el semaforo de la aduana mexicana (verde, o rojo y despues
+    # liberado), la inspeccion de SENASICA y la entrega. Lo marca la casa con
+    # un boton, y queda quien y cuando. El cliente lo esta esperando ver.
+    verde_en        = models.DateTimeField(null=True, blank=True)
+    verde_por       = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                        blank=True, related_name='+')
     rojo_aduana_en  = models.DateTimeField(null=True, blank=True)
     rojo_aduana_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                        blank=True, related_name='+')
+    liberado_en     = models.DateTimeField(null=True, blank=True)
+    liberado_por    = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                        blank=True, related_name='+')
+    inspeccion_en   = models.DateTimeField(null=True, blank=True)
+    inspeccion_por  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
                                         blank=True, related_name='+')
     entregada_en    = models.DateTimeField(null=True, blank=True)
     entregada_por   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
@@ -3285,6 +3304,27 @@ class CrossingTask(models.Model):
         if not self.created_by:
             return ''
         return self.created_by.get_full_name() or self.created_by.username
+
+    def confirmar_si_aprobo_todo(self):
+        """
+        Da la tarea por confirmada cuando el cliente aprobo el ultimo de sus
+        pedimentos.
+
+        Si la creo la casa y el cliente nunca toco "Si, es eso", la tarea se
+        quedaba esperando para siempre. Aprobar las revisiones de todos sus
+        pedimentos es confirmarla con hechos, asi que el proceso sigue.
+        """
+        if not self.espera_confirmacion:
+            return False
+        aprobados = (Pedimento.APROBADO, Pedimento.VALIDADO, Pedimento.PAGADO)
+        pedimentos = self.pedimentos
+        if not pedimentos or any(p.estado not in aprobados for p in pedimentos):
+            return False
+        self.confirmada_por_el_cliente = True
+        self.confirmada_en = timezone.now()
+        self.save(update_fields=['confirmada_por_el_cliente', 'confirmada_en',
+                                 'updated_at'])
+        return True
 
     @property
     def espera_confirmacion(self):
@@ -3372,24 +3412,70 @@ class CrossingTask(models.Model):
 
     FASE_PEDIMENTOS = 'PEDIMENTOS'
     FASE_EN_CRUCE   = 'EN_CRUCE'
+    FASE_VERDE      = 'VERDE'
     FASE_ROJO       = 'ROJO_ADUANA'
+    FASE_LIBERADO   = 'LIBERADO'
+    FASE_INSPECCION = 'INSPECCION'
     FASE_ENTREGADA  = 'ENTREGADA'
     FASES = {
         FASE_PEDIMENTOS: _('Pedimentos'),
         FASE_EN_CRUCE:   _('In crossing'),
+        FASE_VERDE:      _('Customs green light'),
         FASE_ROJO:       _('Customs red light'),
+        FASE_LIBERADO:   _('Released by customs'),
+        FASE_INSPECCION: _('SENASICA inspection'),
         FASE_ENTREGADA:  _('Delivered'),
     }
 
+    # El camino: en cruce -> verde, o rojo -> liberado; despues, si la
+    # mercancia lo lleva, la inspeccion de SENASICA (fuera de la aduana, del
+    # lado mexicano); y al final la entrega de la ultima carga.
     @property
     def fase(self):
         if self.entregada_en:
             return self.FASE_ENTREGADA
+        if self.inspeccion_en:
+            return self.FASE_INSPECCION
+        if self.liberado_en:
+            return self.FASE_LIBERADO
         if self.rojo_aduana_en:
             return self.FASE_ROJO
+        if self.verde_en:
+            return self.FASE_VERDE
         if self.estado in (self.CARGADA, self.CRUZADA):
             return self.FASE_EN_CRUCE
         return self.FASE_PEDIMENTOS
+
+    @property
+    def lleva_inspeccion(self):
+        """Si algun pedido de la tarea se capturo con inspeccion de SENASICA."""
+        return any(r.operation.lleva_inspeccion
+                   for r in self.renglones.select_related('operation'))
+
+    def _marcar(self, campo, usuario):
+        setattr(self, f'{campo}_en', timezone.now())
+        setattr(self, f'{campo}_por', usuario)
+        self.save(update_fields=[f'{campo}_en', f'{campo}_por', 'updated_at'])
+        return True
+
+    def marcar_verde(self, usuario):
+        """Verde en la aduana. Solo con la mercancia ya en el camion."""
+        if self.fase != self.FASE_EN_CRUCE:
+            return False
+        return self._marcar('verde', usuario)
+
+    def marcar_liberado(self, usuario):
+        """La aduana libera lo que cayo en rojo. Solo despues del rojo."""
+        if self.fase != self.FASE_ROJO:
+            return False
+        return self._marcar('liberado', usuario)
+
+    def marcar_inspeccion(self, usuario):
+        """En inspeccion de SENASICA: despues del verde o de liberado."""
+        if self.fase not in (self.FASE_VERDE, self.FASE_LIBERADO) \
+                or not self.lleva_inspeccion:
+            return False
+        return self._marcar('inspeccion', usuario)
 
     @property
     def fase_texto(self):
@@ -3418,8 +3504,13 @@ class CrossingTask(models.Model):
                     and timezone.localdate(self.entregada_en) < timezone.localdate())
 
     def marcar_entregada(self, usuario):
-        """Entregada: la tarea termina y queda como cruzada."""
-        if self.fase not in (self.FASE_EN_CRUCE, self.FASE_ROJO):
+        """
+        Entregada: la tarea termina y queda como cruzada. Se pulsa al entregar
+        la ultima carga, y solo cuando la aduana ya la solto: verde, liberado
+        o en inspeccion.
+        """
+        if self.fase not in (self.FASE_VERDE, self.FASE_LIBERADO,
+                             self.FASE_INSPECCION):
             return False
         self.entregada_en = timezone.now()
         self.entregada_por = usuario

@@ -3775,3 +3775,47 @@ msgstr "No hay cruces en curso. Los nuevos aparecen aquí en cuanto cualquier cl
 
 msgid "Nothing matches the filter."
 msgstr "Nada coincide con el filtro."
+
+msgid "Customs green light"
+msgstr "Verde en aduana"
+
+msgid "Released by customs"
+msgstr "Liberado"
+
+msgid "SENASICA inspection"
+msgstr "Inspección SENASICA"
+
+msgid "Green light"
+msgstr "Verde"
+
+msgid "Mark %(cruce)s as customs green light?"
+msgstr "¿Marcar %(cruce)s como verde en aduana?"
+
+msgid "Mark %(cruce)s as released by customs?"
+msgstr "¿Marcar %(cruce)s como liberado por la aduana?"
+
+msgid "Mark %(cruce)s as in SENASICA inspection?"
+msgstr "¿Marcar %(cruce)s como en inspección de SENASICA?"
+
+msgid "%(tarea)s can only be released after a red light."
+msgstr "%(tarea)s solo se puede liberar después de un rojo."
+
+msgid "%(tarea)s goes to inspection only after green light or release, and only if one of its orders carries it."
+msgstr "%(tarea)s pasa a inspección solo después del verde o de liberado, y solo si alguno de sus pedidos la lleva."
+
+msgid "%(tarea)s cannot be delivered yet: customs has not let it go (green light or released)."
+msgstr "%(tarea)s todavía no se puede entregar: la aduana no la ha soltado (verde o liberado)."
+
+msgid "Goes through SENASICA inspection"
+msgstr "Lleva inspección de SENASICA"
+
+msgid "In Mexico, after customs. Marking it adds the inspection button to its crossing."
+msgstr "En México, después de la aduana. Al marcarla, su cruce tendrá el botón de inspección."
+
+msgid "No pedimento yet"
+msgstr "Sin pedimento todavía"
+
+msgid "%(n)s order"
+msgid_plural "%(n)s orders"
+msgstr[0] "%(n)s pedido"
+msgstr[1] "%(n)s pedidos"

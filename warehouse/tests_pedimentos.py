@@ -286,6 +286,12 @@ class CapturaDesdeLaPantallaTests(BaseDeAlmacen):
         self.assertEqual(str(op.eta), '2026-09-10')
         self.assertTrue(op.has_serial_numbers)
 
+    def test_la_inspeccion_de_senasica_se_marca_al_capturar(self):
+        self.assertEqual(self.capturar(lleva_inspeccion='1').status_code, 200)
+        self.assertTrue(WarehouseOperation.objects.latest('id').lleva_inspeccion)
+        self.capturar()
+        self.assertFalse(WarehouseOperation.objects.latest('id').lleva_inspeccion)
+
     def test_un_cero_de_mas_se_caza_antes_de_guardar(self):
         antes = WarehouseOperation.objects.count()
         respuesta = self.capturar(ped_aduana='24', ped_patente='1780',

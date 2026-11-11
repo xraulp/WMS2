@@ -847,12 +847,17 @@ class LoQueSeVeEnLaTareaTests(BaseDeCruces):
         self.assertNotContains(respuesta, 'class="en-revision"')
         self.assertNotContains(respuesta, 'class="alerta-revision"')
 
-    def test_las_cuatro_fases(self):
+    def test_el_camino_del_rojo(self):
         self.assertEqual(self.fase(), CrossingTask.FASE_PEDIMENTOS)
         CrossingTask.objects.filter(pk=self.t.pk).update(estado=CrossingTask.CARGADA)
         self.assertEqual(self.fase(), CrossingTask.FASE_EN_CRUCE)
         self.client.post('/cruces/%d/red-light/' % self.t.pk)
         self.assertEqual(self.fase(), CrossingTask.FASE_ROJO)
+        # En rojo no se entrega: primero la aduana tiene que liberar.
+        self.assertEqual(
+            self.client.post('/cruces/%d/delivered/' % self.t.pk).status_code, 422)
+        self.client.post('/cruces/%d/released/' % self.t.pk)
+        self.assertEqual(self.fase(), CrossingTask.FASE_LIBERADO)
         self.client.post('/cruces/%d/delivered/' % self.t.pk)
         self.assertEqual(self.fase(), CrossingTask.FASE_ENTREGADA)
         self.t.refresh_from_db()
@@ -869,9 +874,12 @@ class LoQueSeVeEnLaTareaTests(BaseDeCruces):
     def test_en_cruce_la_casa_ve_los_botones_y_el_cliente_no(self):
         CrossingTask.objects.filter(pk=self.t.pk).update(estado=CrossingTask.CARGADA)
         self.assertContains(self.pantalla(), '/red-light/')
-        self.assertContains(self.pantalla(), '/delivered/')
+        self.assertContains(self.pantalla(), '/green-light/')
+        # Entregar no sale hasta que la aduana la suelta.
+        self.assertNotContains(self.pantalla(), '/delivered/')
         respuesta = self.pantalla(self.duenio)
         self.assertNotContains(respuesta, '/red-light/')
+        self.assertNotContains(respuesta, '/green-light/')
         self.assertEqual(
             self.client.post('/cruces/%d/delivered/' % self.t.pk).status_code, 404)
 
@@ -1096,3 +1104,108 @@ class LosCrucesDeTodosLosClientesTests(BaseDeCruces):
         gemelo = Catalog(category='CUSTOMER', name='Otro nombre', abbreviation='lbo')
         self.assertEqual(tono_de_cliente(self.cliente), tono_de_cliente(gemelo))
         self.assertTrue(0 <= tono_de_cliente(self.otro) < 360)
+
+
+
+class ElSemaforoDeLaAduanaTests(BaseDeCruces):
+    """
+    Verde, o rojo y despues liberado; la inspeccion de SENASICA si algun
+    pedido la lleva; y la entrega de la ultima carga. Lo marca la casa y el
+    cliente lo ve.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.op = self.operacion('ED261111-0101', bundle_qty=3)
+        self.t = self.tarea(estado=CrossingTask.CARGADA)
+        CrossingTaskItem.objects.create(task=self.t, operation=self.op)
+
+    def fase(self):
+        self.t.refresh_from_db()
+        return self.t.fase
+
+    def pantalla(self, quien=None):
+        if quien:
+            self.client.force_login(quien)
+        return self.client.get('/cruces/', {'customer': self.cliente.pk})
+
+    def test_verde_y_entregada(self):
+        self.client.post('/cruces/%d/green-light/' % self.t.pk)
+        self.assertEqual(self.fase(), CrossingTask.FASE_VERDE)
+        self.assertEqual(self.t.verde_por, self.jefa)
+        # Despues del verde ya no hay rojo.
+        self.assertEqual(
+            self.client.post('/cruces/%d/red-light/' % self.t.pk).status_code, 422)
+        self.assertContains(self.pantalla(), '/delivered/')
+        self.client.post('/cruces/%d/delivered/' % self.t.pk)
+        self.assertEqual(self.fase(), CrossingTask.FASE_ENTREGADA)
+
+    def test_liberado_solo_despues_del_rojo(self):
+        self.assertEqual(
+            self.client.post('/cruces/%d/released/' % self.t.pk).status_code, 422)
+        self.assertNotContains(self.pantalla(), '/released/')
+        self.client.post('/cruces/%d/red-light/' % self.t.pk)
+        self.assertContains(self.pantalla(), '/released/')
+
+    def test_el_cliente_ve_el_verde_pero_no_lo_marca(self):
+        self.client.post('/cruces/%d/green-light/' % self.t.pk)
+        respuesta = self.pantalla(self.duenio)
+        self.assertContains(respuesta, 'Customs green light')
+        self.assertEqual(
+            self.client.post('/cruces/%d/delivered/' % self.t.pk).status_code, 404)
+
+    def test_sin_inspeccion_no_sale_el_boton(self):
+        self.client.post('/cruces/%d/green-light/' % self.t.pk)
+        self.assertNotContains(self.pantalla(), '/inspection/')
+        self.assertEqual(
+            self.client.post('/cruces/%d/inspection/' % self.t.pk).status_code, 422)
+
+    def test_con_inspeccion_despues_del_verde(self):
+        WarehouseOperation.objects.filter(pk=self.op.pk).update(lleva_inspeccion=True)
+        # Antes del verde todavia no.
+        self.assertNotContains(self.pantalla(), '/inspection/')
+        self.client.post('/cruces/%d/green-light/' % self.t.pk)
+        self.assertContains(self.pantalla(), '/inspection/')
+        self.client.post('/cruces/%d/inspection/' % self.t.pk)
+        self.assertEqual(self.fase(), CrossingTask.FASE_INSPECCION)
+        self.client.post('/cruces/%d/delivered/' % self.t.pk)
+        self.assertEqual(self.fase(), CrossingTask.FASE_ENTREGADA)
+
+    def test_con_inspeccion_despues_de_liberado(self):
+        WarehouseOperation.objects.filter(pk=self.op.pk).update(lleva_inspeccion=True)
+        self.client.post('/cruces/%d/red-light/' % self.t.pk)
+        self.client.post('/cruces/%d/released/' % self.t.pk)
+        self.client.post('/cruces/%d/inspection/' % self.t.pk)
+        self.assertEqual(self.fase(), CrossingTask.FASE_INSPECCION)
+
+
+class LaConfirmacionNoDetieneElCruceTests(BaseDeCruces):
+    """
+    La tarea que creo la casa por telefono se da por confirmada cuando el
+    cliente aprueba la revision de su ultimo pedimento, aunque nunca haya
+    tocado "Si, es eso".
+    """
+
+    def test_aprobar_el_ultimo_pedimento_la_confirma(self):
+        op1 = self.operacion('ED261111-0201', bundle_qty=1)
+        op2 = self.operacion('ED261111-0202', bundle_qty=1)
+        p1 = self.con_pedimento(op1, consecutivo='6005201')
+        p2 = self.con_pedimento(op2, consecutivo='6005202')
+        t = self.tarea(origen=CrossingTask.LA_CREO_LA_CASA)
+        CrossingTaskItem.objects.create(task=t, operation=op1)
+        CrossingTaskItem.objects.create(task=t, operation=op2)
+        Pedimento.objects.filter(pk__in=[p1.pk, p2.pk]).update(
+            estado=Pedimento.EN_REVISION)
+        p1.refresh_from_db()
+        p2.refresh_from_db()
+
+        self.assertTrue(p1.aprobar(self.duenio))
+        t.refresh_from_db()
+        self.assertTrue(t.espera_confirmacion)
+
+        self.assertTrue(p2.aprobar(self.duenio))
+        t.refresh_from_db()
+        self.assertFalse(t.espera_confirmacion)
+        self.assertTrue(t.confirmada_por_el_cliente)
+        self.assertIsNotNone(t.confirmada_en)
+

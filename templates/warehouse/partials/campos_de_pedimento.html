@@ -123,6 +123,16 @@ Parametros del include:
       <small>{% trans "Marking it makes the pedimento require serial-number photos before review." %}</small>
     </span>
   </label>
+
+  <label class="pedbox-series">
+    <input type="hidden" name="lleva_inspeccion_present" value="1">
+    <input type="checkbox" name="lleva_inspeccion" value="1"
+           {% if op.lleva_inspeccion %}checked{% endif %}>
+    <span>
+      {% trans "Goes through SENASICA inspection" %}
+      <small>{% trans "In Mexico, after customs. Marking it adds the inspection button to its crossing." %}</small>
+    </span>
+  </label>
 </div>
 
 <script>
