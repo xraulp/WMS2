@@ -168,6 +168,12 @@
     .btn-off{background:var(--bg-sutil);border-color:var(--bdr);color:var(--soft);
              cursor:not-allowed}
     .motivo{font-size:11px;color:var(--err-ink);margin-top:6px;line-height:1.45}
+    .camion-badge{display:inline-block;margin-top:6px;padding:3px 9px;border-radius:6px;
+                  background:#fde68a;color:#78350f;font-size:12px;font-weight:600}
+    .camion-juntar summary{list-style:none;display:inline-block}
+    .camion-juntar summary::-webkit-details-marker{display:none}
+    .camion-form{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;
+                 padding:10px;border-radius:var(--r);background:var(--surface);color:var(--ink)}
     .rem-item + .rem-item{border-top:1px dashed var(--bdr);margin-top:8px;padding-top:8px}
     .rem-item + details{margin-top:10px}
     .rem-ped{display:flex;gap:8px;align-items:center;font-size:12px;min-width:0;flex-wrap:wrap}
@@ -296,6 +302,18 @@
         {% endcomment %}
         <div class="tarea-sub" title="{{ t.creada_por_quien }} · {{ t.created_at|date:"d/m/y H:i" }}">{{ t.creada_por|capfirst }}</div>
         <div class="tarea-sub">{% trans "Stage:" %} <b class="fase fase-{{ t.fase|lower }}">{{ t.fase_texto }}</b></div>
+        {% comment %}
+        El camion compartido. Solo la casa: el cliente nunca se entera de que
+        su mercancia va con la de otro.
+        {% endcomment %}
+        {% if not es_cliente and t.camion %}
+        <div class="camion-badge">
+          🚚 {% blocktrans with c=t.camion.custom_id %}Shared truck {{ c }}{% endblocktrans %}
+          {% if t.companeras_lista %}· {% trans "with" %}
+          {% for o in t.companeras_lista %}<b>{{ o.customer.abbreviation|default:o.customer.name }}</b> <span class="mono">{{ o.custom_id }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}
+          {% else %}· {% trans "no other crossing left in it" %}{% endif %}
+        </div>
+        {% endif %}
       </div>
       <div class="tarea-der">
         {% comment %}
@@ -317,6 +335,30 @@
       botones, y el formulario solo sale al pulsarlos.
       {% endcomment %}
       <div class="tarea-acc">
+        {% if not es_cliente %}
+        {% if t.camion %}{% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
+        <form method="post" action="{% url 'cruce_camion_salir' t.pk %}" style="margin:0"
+              data-aviso="{% blocktrans with c=t.camion.custom_id %}Take this crossing out of truck {{ c }}?{% endblocktrans %}"
+              onsubmit="return confirm(this.dataset.aviso)">
+          {% csrf_token %}
+          <button class="btn btn-sm" type="submit">🚚 {% trans "Leave the truck" %}</button>
+        </form>
+        {% endif %}{% elif t.candidatas_camion %}
+        <details class="camion-juntar">
+          <summary class="btn btn-sm">🚚 {% trans "Share a truck with…" %}</summary>
+          <form method="post" action="{% url 'cruce_camion_juntar' t.pk %}" class="camion-form">
+            {% csrf_token %}
+            <label class="campo"><span>{% trans "Crossings of the same day" %}</span>
+              <select name="otra" required>
+                {% for o in t.candidatas_camion %}
+                <option value="{{ o.pk }}">{{ o.customer.abbreviation|default:o.customer.name }} · {{ o.custom_id }}{% if o.camion %} · 🚚 {{ o.camion.custom_id }}{% endif %}</option>
+                {% endfor %}
+              </select></label>
+            <button class="btn btn-sm btn-p" type="submit">{% trans "Put them in the same truck" %}</button>
+          </form>
+        </details>
+        {% endif %}
+        {% endif %}
         {% if t.libres %}
         <button class="btn btn-sm btn-p" type="button" aria-expanded="false"
                 onclick="abrirPanelDeTarea(this, 'meter-{{ t.pk }}')">+ {% trans "Add shipment" %}</button>
@@ -341,7 +383,7 @@
               data-aviso="{% blocktrans with cruce=t.custom_id %}Mark {{ cruce }} as customs red light?{% endblocktrans %}"
               onsubmit="return confirm(this.dataset.aviso)">
           {% csrf_token %}
-          <button class="btn btn-sm btn-d" type="submit">🚨 {% trans "Customs red light" %}</button>
+          <button class="btn btn-sm btn-d" type="submit">🚨 {% trans "Customs red light" %}{% if t.camion and t.companeras_lista %} · {% trans "whole truck" %}{% endif %}</button>
         </form>
         {% endif %}
         {% if t.fase == 'ROJO_ADUANA' %}
@@ -349,7 +391,7 @@
               data-aviso="{% blocktrans with cruce=t.custom_id %}Mark {{ cruce }} as released by customs?{% endblocktrans %}"
               onsubmit="return confirm(this.dataset.aviso)">
           {% csrf_token %}
-          <button class="btn btn-sm btn-verde" type="submit">✓ {% trans "Released by customs" %}</button>
+          <button class="btn btn-sm btn-verde" type="submit">✓ {% trans "Released by customs" %}{% if t.camion and t.companeras_lista %} · {% trans "whole truck" %}{% endif %}</button>
         </form>
         {% endif %}
         {% if t.lleva_inspeccion and t.fase == 'VERDE' or t.lleva_inspeccion and t.fase == 'LIBERADO' %}

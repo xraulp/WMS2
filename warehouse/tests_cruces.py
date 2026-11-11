@@ -20,7 +20,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .models import (CambioDeDiaDeCruce, Catalog, CrossingTask, CrossingTaskItem,
-                     PedidoDeEntrada,
+                     PedidoDeEntrada, Camion,
                      OperationDocument, Pedimento, PedimentoBundle, Tenant,
                      UserProfile, WarehouseOperation)
 
@@ -1513,3 +1513,116 @@ class LosBultosDeLosPedidosCuadranTests(BaseDeCruces):
         op = self.operacion('ED261111-0703', bundle_qty=10)
         PedidoDeEntrada.objects.create(operation=op, numero='P1')
         self.assertIsNone(op.pedidos_no_cuadran)
+
+
+class ElCamionCompartidoTests(BaseDeCruces):
+    """
+    Tareas de clientes distintos en la misma caja el mismo dia. Comparten el
+    transfer y la suerte en la aduana; cada una conserva lo suyo. El cliente
+    nunca se entera.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.otro = Catalog.objects.create(
+            category='CUSTOMER', name='Textiles del Norte', abbreviation='TXN',
+            tenant=self.tenant)
+        self.u_otro = User.objects.create_user('txn', password='x')
+        UserProfile.objects.create(user=self.u_otro, tenant=self.tenant,
+                                   role='customer', customer=self.otro)
+        self.a = self.tarea_con('ED261111-0801', self.cliente)
+        self.b = self.tarea_con('ED261111-0802', self.otro)
+
+    def tarea_con(self, custom_id, cliente, **extra):
+        op = WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='ENTRY', custom_id=custom_id,
+            customer=cliente, created_by=self.jefa, bundle_qty=2)
+        t = CrossingTask.objects.create(tenant=self.tenant, customer=cliente,
+                                        fecha_de_cruce=self.viernes,
+                                        created_by=self.jefa, **extra)
+        CrossingTaskItem.objects.create(task=t, operation=op)
+        return t
+
+    def juntar(self, t, otra):
+        return self.client.post('/cruces/%d/truck/join/' % t.pk, {'otra': otra.pk})
+
+    def test_juntar_dos_tareas_crea_el_camion(self):
+        self.assertEqual(self.juntar(self.a, self.b).status_code, 302)
+        self.a.refresh_from_db(); self.b.refresh_from_db()
+        self.assertIsNotNone(self.a.camion)
+        self.assertEqual(self.a.camion, self.b.camion)
+        self.assertTrue(self.a.camion.custom_id.startswith('CM'))
+
+    def test_una_tercera_entra_al_mismo_camion(self):
+        self.juntar(self.a, self.b)
+        c = self.tarea_con('ED261111-0803', self.cliente)
+        self.juntar(c, self.b)
+        c.refresh_from_db(); self.b.refresh_from_db()
+        self.assertEqual(c.camion, self.b.camion)
+        self.assertEqual(Camion.objects.count(), 1)
+
+    def test_solo_tareas_del_mismo_dia(self):
+        lunes = self.tarea_con('ED261111-0804', self.otro)
+        CrossingTask.objects.filter(pk=lunes.pk).update(
+            fecha_de_cruce=self.viernes + timedelta(days=3))
+        self.assertEqual(self.juntar(self.a, lunes).status_code, 404)
+
+    def test_mover_el_dia_la_saca_del_camion_y_las_demas_siguen(self):
+        self.juntar(self.a, self.b)
+        c = self.tarea_con('ED261111-0805', self.otro)
+        self.juntar(c, self.a)
+        camion = Camion.objects.get()
+        self.client.post('/cruces/%d/day/' % self.a.pk, {
+            'fecha_de_cruce': (self.viernes + timedelta(days=3)).isoformat(),
+            'motivo': CambioDeDiaDeCruce.CLIENTE})
+        self.a.refresh_from_db()
+        self.assertIsNone(self.a.camion)
+        self.assertEqual(set(camion.tareas_vivas()), {self.b, c})
+
+    def test_el_rojo_de_una_es_rojo_para_todo_el_camion_y_se_liberan_juntas(self):
+        self.juntar(self.a, self.b)
+        CrossingTask.objects.filter(pk__in=[self.a.pk, self.b.pk]).update(
+            estado=CrossingTask.CARGADA)
+        # Una ya habia salido verde: el rojo del camion la alcanza igual.
+        self.client.post('/cruces/%d/green-light/' % self.b.pk)
+        self.client.post('/cruces/%d/red-light/' % self.a.pk)
+        self.a.refresh_from_db(); self.b.refresh_from_db()
+        self.assertEqual(self.a.fase, CrossingTask.FASE_ROJO)
+        self.assertEqual(self.b.fase, CrossingTask.FASE_ROJO)
+        self.client.post('/cruces/%d/released/' % self.b.pk)
+        self.a.refresh_from_db(); self.b.refresh_from_db()
+        self.assertEqual(self.a.fase, CrossingTask.FASE_LIBERADO)
+        self.assertEqual(self.b.fase, CrossingTask.FASE_LIBERADO)
+
+    def test_la_casa_ve_el_camion_en_la_tarea_y_en_la_lista(self):
+        self.juntar(self.a, self.b)
+        camion = Camion.objects.get()
+        r = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        self.assertContains(r, camion.custom_id)
+        self.assertContains(r, 'TXN')
+        r = self.client.get('/cruces/')
+        self.assertContains(r, 'camion-bloque')
+        self.assertContains(r, camion.custom_id)
+
+    def test_el_cliente_no_se_entera(self):
+        self.juntar(self.a, self.b)
+        camion = Camion.objects.get()
+        for usuario in (self.duenio, self.u_otro):
+            self.client.force_login(usuario)
+            r = self.client.get('/cruces/')
+            self.assertNotContains(r, camion.custom_id)
+            self.assertNotContains(r, '/truck/')
+            self.assertNotContains(r, 'Shared truck')
+        self.client.force_login(self.duenio)
+        self.assertNotContains(self.client.get('/cruces/'), 'TXN')
+        self.assertEqual(self.juntar(self.a, self.b).status_code, 404)
+
+    def test_salir_del_camion(self):
+        self.juntar(self.a, self.b)
+        self.client.post('/cruces/%d/truck/leave/' % self.a.pk)
+        self.a.refresh_from_db()
+        self.assertIsNone(self.a.camion)
+
+    def test_cargada_ya_no_cambia_de_camion(self):
+        CrossingTask.objects.filter(pk=self.a.pk).update(estado=CrossingTask.CARGADA)
+        self.assertEqual(self.juntar(self.a, self.b).status_code, 422)

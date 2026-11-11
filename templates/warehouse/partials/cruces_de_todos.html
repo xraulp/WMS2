@@ -54,6 +54,13 @@ la tarea completa, en la pantalla de su cliente.
   .fz-verde, .fz-liberado{background:#15803d;color:#fff;border-color:#15803d}
   .fz-inspeccion{background:#b45309;color:#fff;border-color:#b45309}
   .fz-entregada{background:#16a34a;color:#fff;border-color:#16a34a}
+  .camion-bloque{margin:8px 10px;border:2px solid var(--ink);border-radius:10px;overflow:hidden}
+  .camion-bloque[hidden]{display:none}
+  .camion-bloque .linea:last-child{border-bottom:0}
+  .camion-hd{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:6px 12px;
+             background:var(--ink);color:var(--surface);font-size:12px}
+  .camion-hd b{font-family:'IBM Plex Mono',monospace}
+  .camion-hd .sp{flex:1}
   .marca-metoca{color:var(--warn-ink-fuerte);font-weight:700}
   .vacio{padding:16px 14px;color:var(--soft);font-size:13px}
   @media (max-width:700px){
@@ -89,28 +96,33 @@ la tarea completa, en la pantalla de su cliente.
 </div>
 
 <div class="todas" id="todas">
-  {% regroup todas by fecha_de_cruce as dias %}
   {% for dia in dias %}
-  <div class="dia-hd{% if dia.grouper == hoy %} hoy{% endif %}" data-dia>
+  <div class="dia-hd{% if dia.fecha == hoy %} hoy{% endif %}" data-dia="{{ forloop.counter }}">
     <span>
-      {% if dia.grouper == hoy %}{% trans "Today" %} · {% elif dia.grouper == maniana %}{% trans "Tomorrow" %} · {% endif %}{{ dia.grouper|date:"l j F" }}
+      {% if dia.fecha == hoy %}{% trans "Today" %} · {% elif dia.fecha == maniana %}{% trans "Tomorrow" %} · {% endif %}{{ dia.fecha|date:"l j F" }}
     </span>
-    <span>{% blocktrans count n=dia.list|length %}{{ n }} crossing{% plural %}{{ n }} crossings{% endblocktrans %}</span>
+    <span>{% blocktrans count n=dia.n %}{{ n }} crossing{% plural %}{{ n }} crossings{% endblocktrans %}</span>
   </div>
-  {% for t in dia.list %}
-  <a class="linea" href="{% url 'cruces_panel' %}?customer={{ t.customer_id }}#tarea-{{ t.pk }}"
-     data-c="{{ t.customer_id }}" data-m="{% if t.me_toca %}1{% else %}0{% endif %}"
-     style="--h:{{ t.customer|tono_de_cliente }}">
-    <span class="cli" title="{{ t.customer.name }}">{{ t.customer.abbreviation|default:t.customer.name }}</span>
-    <span class="idpo"><span class="num">{{ t.custom_id }}</span><span class="po">{% if t.pedidos %}{{ t.pedidos|join:" - " }}{% endif %}</span></span>
-    <span class="fz-c"><span class="fz fz-{{ t.fase|lower }}">{{ t.fase_texto }}</span></span>
-    <span class="eds">
-      {% for texto, del_cliente in t.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% empty %}<span class="soft" style="font-size:12px">{% trans "Nothing in this crossing yet." %}</span>{% endfor %}
-      {% if t.espera_confirmacion %}<span class="estado-ped">{% trans "waiting for the customer" %}</span>{% endif %}
-    </span>
-    <span class="bul">{% if t.me_toca %}<span class="marca-metoca" title="{% trans "On us" %}">●</span> {% endif %}{{ t.bultos }} {% trans "bdl" %}</span>
-  </a>
+  {% with d=forloop.counter %}
+  {% for b in dia.bloques %}
+  {% if b.camion %}
+  {% comment %}
+  Las tareas de un camion compartido, juntas en un recuadro. Solo la casa
+  ve esta lista.
+  {% endcomment %}
+  <div class="camion-bloque" data-en-dia="{{ d }}">
+    <div class="camion-hd">🚚 <b>{{ b.camion.custom_id }}</b>
+      {% if b.camion.transfer_empresa %}<span>{{ b.camion.transfer_empresa }}{% if b.camion.sello %} · {% trans "Seal" %} {{ b.camion.sello }}{% endif %}</span>{% endif %}
+      <span class="sp"></span>
+      <span>{% blocktrans count n=b.tareas|length %}{{ n }} crossing{% plural %}{{ n }} crossings{% endblocktrans %} · {{ b.bultos }} {% trans "bdl" %}</span>
+    </div>
+    {% for t in b.tareas %}{% include "warehouse/partials/cruces_linea.html" %}{% endfor %}
+  </div>
+  {% else %}
+  {% for t in b.tareas %}{% include "warehouse/partials/cruces_linea.html" %}{% endfor %}
+  {% endif %}
   {% endfor %}
+  {% endwith %}
   {% empty %}
   <div class="vacio">{% trans "No crossings on the way. New ones show up here as soon as any customer asks to cross." %}</div>
   {% endfor %}
@@ -138,14 +150,21 @@ la tarea completa, en la pantalla de su cliente.
     var prendidos = {};
     chips.forEach(function (c) { prendidos[c.dataset.c] = c.getAttribute('aria-pressed') === 'true'; });
     var soloMios = meToca && meToca.getAttribute('aria-pressed') === 'true';
-    var cabecera = null, conAlgo = false, alguna = false;
+    var alguna = false;
+    lista.querySelectorAll('.linea').forEach(function (el) {
+      var ver = prendidos[el.dataset.c] !== false && (!soloMios || el.dataset.m === '1');
+      el.hidden = !ver;
+      if (ver) alguna = true;
+    });
+    // Un camion sin lineas visibles se esconde; un dia, igual.
+    lista.querySelectorAll('.camion-bloque').forEach(function (c) {
+      c.hidden = !c.querySelector('.linea:not([hidden])');
+    });
+    var cabecera = null, conAlgo = false;
     function cerrar() { if (cabecera) cabecera.hidden = !conAlgo; }
     Array.prototype.forEach.call(lista.children, function (el) {
       if (el.hasAttribute('data-dia')) { cerrar(); cabecera = el; conAlgo = false; return; }
-      if (!el.classList.contains('linea')) return;
-      var ver = prendidos[el.dataset.c] !== false && (!soloMios || el.dataset.m === '1');
-      el.hidden = !ver;
-      if (ver) { conAlgo = true; alguna = true; }
+      if (!el.hidden && (el.classList.contains('linea') || el.classList.contains('camion-bloque'))) conAlgo = true;
     });
     cerrar();
     var nada = document.getElementById('sin-resultado');

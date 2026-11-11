@@ -839,3 +839,50 @@ class VariasRemisionesTests(BaseDeCarga):
                                    customer=otro)
         self.client.force_login(u)
         self.assertEqual(self.client.get('/remision/%d.pdf' % rem.pk).status_code, 404)
+
+
+class ElTransferDelCamionCompartidoTests(BaseDeCarga):
+    """
+    En un camion compartido el transfer se teclea una vez: la primera remision
+    lo deja en el camion y la remision del otro cliente lo propone.
+    """
+
+    def test_la_segunda_remision_propone_el_transfer_del_camion(self):
+        from .models import Camion
+        otro = Catalog.objects.create(category='CUSTOMER', name='Textiles del Norte',
+                                      abbreviation='TXN', tenant=self.tenant)
+        tarea_b = CrossingTask.objects.create(
+            tenant=self.tenant, customer=otro, fecha_de_cruce=self.tarea.fecha_de_cruce,
+            created_by=self.jefa)
+        op_b = WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='ENTRY', custom_id='ED260901-0009',
+            customer=otro, bundle_qty=1)
+        CrossingTaskItem.objects.create(task=tarea_b, operation=op_b)
+        ped = Pedimento.objects.create(
+            tenant=self.tenant, customer=otro, orden=1, ped_aduana='24',
+            ped_patente='1515', ped_consecutivo='6005009', estado=Pedimento.PAGADO)
+        PedimentoBundle.objects.create(pedimento=ped, operation=op_b, bultos=1)
+
+        self.client.post('/cruces/%d/truck/join/' % self.tarea.pk, {'otra': tarea_b.pk})
+        camion = Camion.objects.get()
+
+        # La remision del primer cliente, con el transfer tecleado.
+        op_a = self.tarea_lista()
+        self.emitir()
+        self.pistolear(op_a, 1)
+        self.pistolear(op_a, 2)
+        r = self.client.post('/cruces/%d/remision/' % self.tarea.pk, {
+            'transfer_empresa': 'Transportes Rivera', 'transfer_chofer': 'Ramon Escobedo',
+            'transfer_unidad': 'TRL-4471', 'sello': 'MX-448812'})
+        self.assertEqual(r.status_code, 302)
+        camion.refresh_from_db()
+        self.assertEqual(camion.transfer_empresa, 'Transportes Rivera')
+        self.assertEqual(camion.sello, 'MX-448812')
+
+        # El otro cliente: su remision lo propone.
+        self.client.post('/cruces/%d/order/' % tarea_b.pk)
+        self.client.post('/cruces/%d/verify/scan/' % tarea_b.pk,
+                         {'codigo': bultos.codigo(op_b.custom_id, 1), 'fase': 'CARGA'})
+        pantalla = self.client.get('/cruces/', {'customer': otro.pk})
+        self.assertContains(pantalla, 'value="Transportes Rivera"')
+        self.assertContains(pantalla, 'value="MX-448812"')

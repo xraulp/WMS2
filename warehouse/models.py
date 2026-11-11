@@ -3332,6 +3332,11 @@ class CrossingTask(models.Model):
     inspeccion_por  = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
                                         blank=True, related_name='+')
     entregada_en    = models.DateTimeField(null=True, blank=True)
+
+    # El camion compartido con otras tareas, si va en uno. Nunca se le ensena
+    # al cliente.
+    camion = models.ForeignKey('Camion', on_delete=models.SET_NULL, null=True,
+                               blank=True, related_name='tareas')
     entregada_por   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
                                         blank=True, related_name='+')
 
@@ -3541,10 +3546,25 @@ class CrossingTask(models.Model):
         return self._marcar('verde', usuario)
 
     def marcar_liberado(self, usuario):
-        """La aduana libera lo que cayo en rojo. Solo despues del rojo."""
+        """
+        La aduana libera lo que cayo en rojo. Solo despues del rojo. En un
+        camion compartido se liberan todas a la vez, igual que cayeron.
+        """
         if self.fase != self.FASE_ROJO:
             return False
-        return self._marcar('liberado', usuario)
+        self._marcar('liberado', usuario)
+        for otra in self.companeras():
+            if otra.fase == self.FASE_ROJO:
+                otra._marcar('liberado', usuario)
+        return True
+
+    def companeras(self):
+        """Las otras tareas del mismo camion."""
+        if not self.camion_id:
+            return CrossingTask.objects.none()
+        return (CrossingTask.objects.filter(camion_id=self.camion_id)
+                .exclude(pk=self.pk).exclude(estado=self.CANCELADA)
+                .select_related('customer'))
 
     def marcar_inspeccion(self, usuario):
         """En inspeccion de SENASICA: despues del verde o de liberado."""
@@ -3564,6 +3584,14 @@ class CrossingTask(models.Model):
         self.rojo_aduana_en = timezone.now()
         self.rojo_aduana_por = usuario
         self.save(update_fields=['rojo_aduana_en', 'rojo_aduana_por', 'updated_at'])
+        # En un camion compartido, el rojo de una detiene el camion entero:
+        # todas las tareas y todos sus pedimentos pasan a rojo.
+        for otra in self.companeras():
+            if otra.fase in (self.FASE_EN_CRUCE, self.FASE_VERDE):
+                otra.rojo_aduana_en = self.rojo_aduana_en
+                otra.rojo_aduana_por = usuario
+                otra.save(update_fields=['rojo_aduana_en', 'rojo_aduana_por',
+                                         'updated_at'])
         return True
 
     # Una tarea entregada se queda en la pantalla de cruces el dia en que se
@@ -3621,6 +3649,54 @@ class CrossingTask(models.Model):
             if choca:
                 return choca
         return None
+
+
+class Camion(models.Model):
+    """
+    Un camion que lleva tareas de cruce de varios clientes.
+
+    Cada tarea conserva lo suyo: su cliente, sus pedimentos, su orden de carga,
+    su escaneo y sus remisiones. Lo que comparten es el dia, el transfer y la
+    suerte en la aduana: si a una le toca rojo, se detiene el camion entero.
+
+    **El cliente nunca se entera.** Nada de esto sale en su pantalla ni en sus
+    papeles: su tarea se ve igual que cualquier otra.
+    """
+    PREFIJO = 'CM'
+
+    tenant         = models.ForeignKey('Tenant', on_delete=models.CASCADE,
+                                       related_name='camiones')
+    custom_id      = models.CharField(max_length=20, unique=True, blank=True)
+    fecha_de_cruce = models.DateField()
+
+    # El transfer, tecleado una vez para todo el camion. La remision de cada
+    # cliente lo propone.
+    transfer_empresa = models.CharField(max_length=200, blank=True, default='')
+    transfer_chofer  = models.CharField(max_length=200, blank=True, default='')
+    transfer_unidad  = models.CharField(max_length=100, blank=True, default='')
+    sello            = models.CharField(max_length=100, blank=True, default='')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['fecha_de_cruce', 'custom_id']
+        verbose_name = 'Camion compartido'
+        verbose_name_plural = 'Camiones compartidos'
+
+    def __str__(self):
+        return self.custom_id
+
+    def save(self, *args, **kwargs):
+        if not self.custom_id:
+            self.custom_id = siguiente_consecutivo(Camion, self.PREFIJO,
+                                                   self.fecha_de_cruce)
+        super().save(*args, **kwargs)
+
+    def tareas_vivas(self):
+        return (self.tareas.exclude(estado=CrossingTask.CANCELADA)
+                .select_related('customer').order_by('customer__name', 'custom_id'))
 
 
 class CrossingTaskItem(models.Model):

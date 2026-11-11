@@ -22,7 +22,7 @@ from django.urls import reverse
 from django.utils.text import slugify
 import os, json, zipfile, re, logging
 
-from .models import (WarehouseOperation, PedidoDeEntrada, Catalog, OperationDocument, UserProfile,
+from .models import (WarehouseOperation, PedidoDeEntrada, Camion, Catalog, OperationDocument, UserProfile,
                      ROLE_CHOICES,
                      DeletionLog, DocumentSequence, Tenant, Subscription,
                      NotificationLog, PlatformUser, PLATFORM_ROLE_CHOICES,
@@ -6590,7 +6590,16 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
                                      if tarea.orden else [])
         tarea.sin_remision = Remision.por_pedimento(Remision.pendientes_de(tarea.orden))
         tarea.transfer_previo = (tarea.remisiones_vigentes[-1]
-                                 if tarea.remisiones_vigentes else None)
+                                 if tarea.remisiones_vigentes else
+                                 (tarea.camion if tarea.camion_id else None))
+        # El camion compartido, solo para la casa.
+        if not profile.is_customer():
+            tarea.companeras_lista = list(tarea.companeras())
+            tarea.candidatas_camion = (list(_candidatas_para_camion(tarea))
+                                       if not tarea.camion_id and
+                                       tarea.estado in (CrossingTask.ABIERTA,
+                                                        CrossingTask.CON_ORDEN)
+                                       else [])
 
     contexto.update({'tareas': tareas, 'libres': libres})
     return contexto
@@ -6613,7 +6622,7 @@ def _todos_los_cruces(tenant):
                   .filter(tenant=tenant)
                   .exclude(estado=CrossingTask.CANCELADA)
                   .exclude(CrossingTask.filtro_realizadas())
-                  .select_related('customer', 'tenant')
+                  .select_related('customer', 'tenant', 'camion')
                   .prefetch_related('renglones__operation__renglones_de_pedimento__pedimento')
                   .order_by('fecha_de_cruce', 'customer__name', 'custom_id'))
 
@@ -6664,9 +6673,29 @@ def _todos_los_cruces(tenant):
             clientes_con_tareas.append(tarea.customer)
     clientes_con_tareas.sort(key=lambda c: (c.abbreviation or c.name or '').upper())
 
+    # Por dia, y dentro del dia las tareas de un mismo camion juntas.
+    dias = []
+    for tarea in tareas:
+        if not dias or dias[-1]['fecha'] != tarea.fecha_de_cruce:
+            dias.append({'fecha': tarea.fecha_de_cruce, 'bloques': [], 'n': 0,
+                         '_camiones': {}})
+        dia = dias[-1]
+        dia['n'] += 1
+        if tarea.camion_id and tarea.camion.fecha_de_cruce == tarea.fecha_de_cruce:
+            bloque = dia['_camiones'].get(tarea.camion_id)
+            if bloque is None:
+                bloque = {'camion': tarea.camion, 'tareas': [], 'bultos': 0}
+                dia['_camiones'][tarea.camion_id] = bloque
+                dia['bloques'].append(bloque)
+            bloque['tareas'].append(tarea)
+            bloque['bultos'] += tarea.bultos
+        else:
+            dia['bloques'].append({'camion': None, 'tareas': [tarea]})
+
     hoy = timezone.localdate()
     return {
         'maniana': hoy + timedelta(days=1),
+        'dias': dias,
         'todas': tareas,
         'clientes_con_tareas': clientes_con_tareas,
         'n_me_toca': sum(1 for t in tareas if t.me_toca),
@@ -7427,6 +7456,65 @@ def cruce_sacar_pedido(request, pk):
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}&separada={nueva.pk}#tarea-{tarea.pk}")
 
 
+
+
+# ── El camion compartido ─────────────────────────────────────────────────────
+#
+# Tareas de clientes distintos que salen en la misma caja el mismo dia. Solo
+# la casa lo ve y lo arma; el cliente nunca se entera.
+
+
+def _candidatas_para_camion(tarea):
+    """Lo que puede compartir camion con `tarea`: mismo dia, aun sin cargar."""
+    return (CrossingTask.objects
+            .filter(tenant=tarea.tenant, fecha_de_cruce=tarea.fecha_de_cruce,
+                    estado__in=[CrossingTask.ABIERTA, CrossingTask.CON_ORDEN])
+            .exclude(pk=tarea.pk)
+            .exclude(camion_id__isnull=False, camion_id=tarea.camion_id)
+            .select_related('customer', 'camion')
+            .order_by('customer__name', 'custom_id'))
+
+
+@login_required
+@require_POST
+def cruce_camion_juntar(request, pk):
+    """Meter la tarea en el camion de otra, o en uno nuevo con las dos."""
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    if not _se_puede_cambiar(tarea):
+        return _cruces_con_error(request, tarea.customer_id,
+            _('This crossing is already loaded; it can no longer change trucks.'))
+    otra = get_object_or_404(_candidatas_para_camion(tarea),
+                             pk=request.POST.get('otra'))
+    with transaction.atomic():
+        camion = otra.camion
+        if camion is None:
+            camion = Camion.objects.create(
+                tenant=tarea.tenant, fecha_de_cruce=tarea.fecha_de_cruce,
+                created_by=request.user)
+            otra.camion = camion
+            otra.save(update_fields=['camion', 'updated_at'])
+        tarea.camion = camion
+        tarea.save(update_fields=['camion', 'updated_at'])
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+
+
+@login_required
+@require_POST
+def cruce_camion_salir(request, pk):
+    """Sacar la tarea de su camion. Las demas siguen juntas."""
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    if not _se_puede_cambiar(tarea):
+        return _cruces_con_error(request, tarea.customer_id,
+            _('This crossing is already loaded; it can no longer change trucks.'))
+    tarea.camion = None
+    tarea.save(update_fields=['camion', 'updated_at'])
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+
+
 @login_required
 @require_POST
 def cruce_rojo_aduana(request, pk):
@@ -7522,7 +7610,10 @@ def cruce_cambiar_dia(request, pk):
         motivo=motivo, detalle=(request.POST.get('detalle') or '').strip(),
         created_by=request.user)
     tarea.fecha_de_cruce = nuevo
-    tarea.save(update_fields=['fecha_de_cruce', 'updated_at'])
+    # Si iba en un camion compartido, se separa sola: el camion sigue en su
+    # dia con las demas, y esta queda en el suyo.
+    tarea.camion = None
+    tarea.save(update_fields=['fecha_de_cruce', 'camion', 'updated_at'])
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
 
 
@@ -7893,6 +7984,17 @@ def remision_emitir(request, pk):
         verificada_en=(ultimo.created_at if ultimo else None),
         emitida_por=request.user)
     rem.renglones.set(lleva)
+
+    # El transfer de un camion compartido se teclea una vez: la primera
+    # remision lo deja en el camion y las de los demas clientes lo proponen.
+    camion = tarea.camion
+    if camion and not camion.transfer_empresa and rem.transfer_empresa:
+        camion.transfer_empresa = rem.transfer_empresa
+        camion.transfer_chofer = rem.transfer_chofer
+        camion.transfer_unidad = rem.transfer_unidad
+        camion.sello = rem.sello
+        camion.save(update_fields=['transfer_empresa', 'transfer_chofer',
+                                   'transfer_unidad', 'sello'])
 
     if tarea.estado in (CrossingTask.ABIERTA, CrossingTask.CON_ORDEN):
         tarea.estado = CrossingTask.CARGADA

@@ -3942,3 +3942,33 @@ msgstr "Si llenas esta lista, el campo de PO se compone con estos números."
 
 msgid "The orders add up to %(suma)s bundles, but the entry has %(total)s."
 msgstr "Los pedidos suman %(suma)s bultos, pero la entrada tiene %(total)s."
+
+msgid "Shared truck %(c)s"
+msgstr "Camión compartido %(c)s"
+
+msgid "with"
+msgstr "con"
+
+msgid "no other crossing left in it"
+msgstr "ya no lleva otra tarea"
+
+msgid "Take this crossing out of truck %(c)s?"
+msgstr "¿Sacar esta tarea del camión %(c)s?"
+
+msgid "Leave the truck"
+msgstr "Sacar del camión"
+
+msgid "Share a truck with…"
+msgstr "Compartir camión con…"
+
+msgid "Crossings of the same day"
+msgstr "Tareas del mismo día"
+
+msgid "Put them in the same truck"
+msgstr "Juntarlas en el mismo camión"
+
+msgid "whole truck"
+msgstr "todo el camión"
+
+msgid "This crossing is already loaded; it can no longer change trucks."
+msgstr "Esta tarea ya está cargada; ya no puede cambiar de camión."

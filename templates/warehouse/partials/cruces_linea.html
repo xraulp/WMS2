@@ -1,0 +1,13 @@
+{% load i18n wms_filters %}
+<a class="linea" href="{% url 'cruces_panel' %}?customer={{ t.customer_id }}#tarea-{{ t.pk }}"
+   data-c="{{ t.customer_id }}" data-m="{% if t.me_toca %}1{% else %}0{% endif %}"
+   style="--h:{{ t.customer|tono_de_cliente }}">
+  <span class="cli" title="{{ t.customer.name }}">{{ t.customer.abbreviation|default:t.customer.name }}</span>
+  <span class="idpo"><span class="num">{{ t.custom_id }}</span><span class="po">{% if t.pedidos %}{{ t.pedidos|join:" - " }}{% endif %}</span></span>
+  <span class="fz-c"><span class="fz fz-{{ t.fase|lower }}">{{ t.fase_texto }}</span></span>
+  <span class="eds">
+    {% for texto, del_cliente in t.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% empty %}<span class="soft" style="font-size:12px">{% trans "Nothing in this crossing yet." %}</span>{% endfor %}
+    {% if t.espera_confirmacion %}<span class="estado-ped">{% trans "waiting for the customer" %}</span>{% endif %}
+  </span>
+  <span class="bul">{% if t.me_toca %}<span class="marca-metoca" title="{% trans "On us" %}">●</span> {% endif %}{{ t.bultos }} {% trans "bdl" %}</span>
+</a>
