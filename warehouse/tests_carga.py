@@ -337,6 +337,26 @@ class NadaSeCargaSinPistolearTests(BaseDeCarga):
         self.assertContains(respuesta, 'html5-qrcode@2.3.8')
         self.assertContains(respuesta, 'F.CODE_128')
 
+    def test_la_lectura_de_la_camara_vuelve_con_el_contador_al_dia(self):
+        # La camara no recarga: manda la lectura por detras, sigue la
+        # redireccion y copia de la respuesta los bloques vivos.
+        respuesta = self.client.post(
+            '/cruces/%d/verify/scan/' % self.tarea.pk,
+            {'codigo': bultos.codigo(self.op.custom_id, 1), 'fase': 'CARGA'},
+            follow=True)
+        html = respuesta.content.decode()
+        for bloque in ('id="vivo-msg"', 'id="vivo-arriba"', 'id="vivo-abajo"'):
+            self.assertIn(bloque, html)
+        self.assertIn('<b>1 / 2</b>', html)
+
+    def test_un_error_de_la_camara_llega_en_el_bloque_de_avisos(self):
+        respuesta = self.client.post(
+            '/cruces/%d/verify/scan/' % self.tarea.pk,
+            {'codigo': 'XX999999-9999-1', 'fase': 'CARGA'}, follow=True)
+        html = respuesta.content.decode()
+        inicio = html.index('id="vivo-msg"')
+        self.assertIn('msg-error', html[inicio:html.index('</div>', html.index('msg-error', inicio)) + 6])
+
     def test_la_pantalla_sale_en_español(self):
         # La interfaz no mezcla idiomas, y menos la del anden: quien carga lee
         # el error de reojo con el bulto en las manos.

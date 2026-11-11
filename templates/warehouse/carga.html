@@ -60,7 +60,9 @@
     #lector{width:100%;border-radius:10px;overflow:hidden;background:#000}
     #lector video{width:100% !important;display:block}
     .camara-estado{font-size:12px;text-align:center;margin:8px 0}
-    .camara-estado.mal-camara{color:var(--err-ink-fuerte);font-weight:600}
+    .camara-estado{font-size:14px;padding:8px;border-radius:8px}
+    .camara-estado.mal-camara{color:var(--err-ink-fuerte);background:var(--rsoft);font-weight:600}
+    .camara-estado.bien-camara{color:var(--ok-ink-fuerte);background:var(--ok-bg);font-weight:600}
 
     .op{display:flex;gap:10px;align-items:center;justify-content:space-between;
         padding:10px 0;border-bottom:1px solid var(--bg)}
@@ -94,8 +96,15 @@
 
 <div class="wrap">
 
+  {% comment %}
+  Los bloques `vivo-*` son los que se refrescan sin recargar mientras la camara
+  esta abierta: el lector manda cada lectura por detras y copia estos tres
+  pedazos de la respuesta, asi la camara no se apaga entre bulto y bulto.
+  {% endcomment %}
+  <div id="vivo-msg">
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
   {% if aviso %}<div class="msg-aviso">{{ aviso }}</div>{% endif %}
+  </div>
 
   {% if not orden %}
   <div class="card">
@@ -130,6 +139,7 @@
     <a href="?fase=CARGA" class="{% if fase == 'CARGA' %}on{% endif %}">{% trans "Loading" %}</a>
   </div>
 
+  <div id="vivo-arriba">
   <div class="card contador {% if cuadre.cuadra %}c-cuadra{% else %}c-falta{% endif %}">
     <b>{{ cuadre.verificados }} / {{ cuadre.esperados }}</b>
     <span>{% trans "bundles scanned" %}</span>
@@ -151,6 +161,7 @@
     <span class="codigos">{{ cuadre.repetidos|join:" · " }}</span>
   </div>
   {% endif %}
+  </div>
 
   <div class="card disparo">
     {% comment %}
@@ -172,9 +183,9 @@
     {% comment %}
     La camara del telefono, para cuando no hay pistola a la mano. Lee el QR y
     el codigo de rayas de la etiqueta, y cada lectura entra por la misma caja
-    que la pistola: el servidor no distingue una de otra. Tras cada lectura la
-    pagina se recarga con el contador al dia y la camara vuelve a abrirse sola
-    hasta que se cierra.
+    que la pistola: el servidor no distingue una de otra. La camara se queda
+    abierta: cada lectura se manda por detras y solo se refrescan el contador
+    y las listas.
     {% endcomment %}
     <button type="button" class="btn btn-p camara-btn" id="abrir-camara">
       📷 {% trans "Scan with the phone camera" %}
@@ -186,6 +197,7 @@
     </div>
   </div>
 
+  <div id="vivo-abajo">
   <div class="card">
     <p class="soft" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">
       {% trans "By shipment" %}
@@ -225,6 +237,7 @@
     {% endfor %}
   </div>
   {% endif %}
+  </div>
 
   {% endif %}
 </div>
@@ -249,7 +262,9 @@
   setInterval(enfocar, 1500);
 })();
 
-/* La camara del telefono. La libreria se baja solo cuando se pulsa el boton:
+/* La camara del telefono. Se queda abierta: cada lectura se manda por detras
+   al mismo sitio que la pistola y de la respuesta se copian el contador, los
+   avisos y las listas. La libreria se baja solo cuando se pulsa el boton:
    quien usa la pistola no paga por ella. */
 (function(){
   var caja = document.getElementById('disparo');
@@ -259,7 +274,7 @@
   var cerrar = document.getElementById('cerrar-camara');
   var estado = document.getElementById('camara-estado');
   var CLAVE = 'wms-camara-carga';
-  var lector = null, enviado = false;
+  var lector = null, ocupado = false, ultimo = '', ultimoEn = 0;
 
   function recordar(si){
     try { if (si) sessionStorage.setItem(CLAVE, '1'); else sessionStorage.removeItem(CLAVE); } catch (e) {}
@@ -267,17 +282,54 @@
   function seguiaAbierta(){
     try { return sessionStorage.getItem(CLAVE) === '1'; } catch (e) { return false; }
   }
+  function decir(texto, como){
+    estado.textContent = texto;
+    estado.classList.toggle('mal-camara', como === 'mal');
+    estado.classList.toggle('bien-camara', como === 'bien');
+  }
   function cargarLibreria(listo){
     if (window.Html5Qrcode) return listo();
     var s = document.createElement('script');
     s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
     s.onload = listo;
-    s.onerror = function(){ fallo('{% filter escapejs %}{% trans "The camera reader could not be loaded. Check the connection." %}{% endfilter %}'); };
+    s.onerror = function(){ decir('{% filter escapejs %}{% trans "The camera reader could not be loaded. Check the connection." %}{% endfilter %}', 'mal'); };
     document.head.appendChild(s);
   }
-  function fallo(texto){
-    estado.textContent = texto;
-    estado.classList.add('mal-camara');
+  /* De la pagina que devuelve el servidor se copian los tres bloques vivos. */
+  function refrescar(html){
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    ['vivo-msg', 'vivo-arriba', 'vivo-abajo'].forEach(function(id){
+      var nuevo = doc.getElementById(id), viejo = document.getElementById(id);
+      if (nuevo && viejo) viejo.innerHTML = nuevo.innerHTML;
+    });
+    var err = doc.querySelector('#vivo-msg .msg-error');
+    var avi = doc.querySelector('#vivo-msg .msg-aviso');
+    var cuenta = doc.querySelector('.contador b');
+    return { error: err && err.textContent.trim(), aviso: avi && avi.textContent.trim(),
+             cuenta: cuenta ? cuenta.textContent.trim() : '' };
+  }
+  function enviar(texto){
+    ocupado = true;
+    decir('… ' + texto);
+    var datos = new FormData(caja.form);
+    datos.set('codigo', texto);
+    fetch(caja.form.action, { method: 'POST', body: datos, credentials: 'same-origin' })
+      .then(function(r){ return r.text(); })
+      .then(function(html){
+        var r = refrescar(html);
+        if (r.error) {
+          if (navigator.vibrate) navigator.vibrate([90, 60, 90, 60, 90]);
+          decir(r.error, 'mal');
+        } else {
+          if (navigator.vibrate) navigator.vibrate(120);
+          decir('✓ ' + texto + (r.cuenta ? '  ·  ' + r.cuenta : '') + (r.aviso ? '  ·  ' + r.aviso : ''), 'bien');
+        }
+      })
+      .catch(function(){
+        decir('{% filter escapejs %}{% trans "The reading did not reach the server. Scan it again." %}{% endfilter %}', 'mal');
+        ultimo = '';
+      })
+      .then(function(){ ocupado = false; });
   }
   function encender(){
     window.camaraActiva = true;
@@ -294,17 +346,18 @@
       lector.start({ facingMode: 'environment' },
         { fps: 10, qrbox: function(w, h){ return { width: Math.floor(w * 0.85), height: Math.floor(h * 0.5) }; } },
         function(texto){
-          if (enviado) return;
-          enviado = true;
-          if (navigator.vibrate) navigator.vibrate(120);
-          estado.textContent = texto;
-          caja.value = texto;
-          lector.stop().catch(function(){}).then(function(){ caja.form.submit(); });
+          /* La camara ve la misma etiqueta muchas veces por segundo: la misma
+             lectura no se vuelve a mandar hasta pasados tres segundos, para que
+             un bulto no salga escaneado dos veces por seguir enfocado. */
+          var ahora = Date.now();
+          if (ocupado || (texto === ultimo && ahora - ultimoEn < 3000)) return;
+          ultimo = texto; ultimoEn = ahora;
+          enviar(texto);
         },
         function(){ /* sin lectura en este cuadro: es lo normal */ }
       ).catch(function(){
         recordar(false);
-        fallo('{% filter escapejs %}{% trans "The camera could not be opened. Allow camera access for this site and try again." %}{% endfilter %}');
+        decir('{% filter escapejs %}{% trans "The camera could not be opened. Allow camera access for this site and try again." %}{% endfilter %}', 'mal');
       });
     });
   }
@@ -318,8 +371,8 @@
   }
   abrir.addEventListener('click', encender);
   cerrar.addEventListener('click', apagar);
-  /* Tras cada lectura la pagina vuelve con el contador al dia; si la camara
-     estaba abierta, se abre otra vez para el siguiente bulto. */
+  /* Si la pagina se recargo con la camara abierta -- al deshacer un escaneo,
+     por ejemplo --, se vuelve a abrir. */
   if (seguiaAbierta()) encender();
 })();
 </script>
