@@ -66,6 +66,9 @@
       {% endif %}
     </div>
     {% endfor %}
+    {% if operation.operation_type == 'ENTRY' %}
+    {% include "warehouse/partials/pedidos_de_entrada.html" with op=operation %}
+    {% endif %}
     {% comment %}
     Donde queda la mercancia. Solo lo pinta la entrada, que es el unico tipo que
     la guarda, y solo si la empresa tiene bodegas: hasta ahora la posicion se

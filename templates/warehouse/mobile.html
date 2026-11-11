@@ -338,6 +338,7 @@ contenedor, htmx no encontraba donde pintar las cifras y las pegaba en el
       <div class="form-row">
         <label>{% trans "PO / Order" %}</label>
         <input type="text" name="po_order" id="mob-po-order" class="form-input" placeholder="{% trans "PO / ORD..." %}">
+        {% include "warehouse/partials/pedidos_de_entrada.html" with op=None %}
       </div>
 
       {% comment %}

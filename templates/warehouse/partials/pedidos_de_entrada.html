@@ -1,0 +1,35 @@
+{% load i18n %}
+{% comment %}
+Varios pedidos en una entrada, cada uno con sus bultos y su peso. Va plegado:
+lo normal es un pedido y se teclea en el campo de PO de siempre. Si se llena,
+el PO se compone de estos numeros.
+
+Sin <script>: este bloque tambien entra en la ventana de edicion, que se carga
+con innerHTML y ahi los scripts no corren. Por eso agregar un renglon es un
+onclick que clona el ultimo.
+{% endcomment %}
+<details class="pedidos-entrada"{% if op and op.pedidos.all %} open{% endif %}
+         style="grid-column:1/-1;font-size:12px">
+  <summary style="cursor:pointer;color:var(--accent-ink);font-weight:600;padding:4px 0">
+    {% trans "Several orders in this entry" %}
+  </summary>
+  <input type="hidden" name="pedidos_present" value="1">
+  <div class="pe-filas" style="display:grid;gap:6px;margin-top:6px">
+    {% for x in op.pedidos.all %}
+    <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:6px">
+      <input type="text" name="pedido_numero" value="{{ x.numero }}" placeholder="{% trans "Order" %}" style="min-width:0">
+      <input type="number" name="pedido_bultos" value="{{ x.bultos|default_if_none:'' }}" min="0" placeholder="{% trans "Bundles" %}" style="min-width:0">
+      <input type="number" name="pedido_peso" value="{{ x.peso_lbs|default_if_none:'' }}" step="0.01" min="0" placeholder="{% trans "Lbs" %}" style="min-width:0">
+    </div>
+    {% empty %}
+    <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:6px">
+      <input type="text" name="pedido_numero" placeholder="{% trans "Order" %}" style="min-width:0">
+      <input type="number" name="pedido_bultos" min="0" placeholder="{% trans "Bundles" %}" style="min-width:0">
+      <input type="number" name="pedido_peso" step="0.01" min="0" placeholder="{% trans "Lbs" %}" style="min-width:0">
+    </div>
+    {% endfor %}
+  </div>
+  <button type="button" class="btn btn-sm" style="margin-top:6px"
+          onclick="var c=this.previousElementSibling,r=c.lastElementChild.cloneNode(true);r.querySelectorAll('input').forEach(function(i){i.value=''});c.appendChild(r);r.querySelector('input').focus()">+ {% trans "Another order" %}</button>
+  <div style="color:var(--soft);margin-top:4px">{% trans "If you fill this list, the PO field is made from these numbers." %}</div>
+</details>

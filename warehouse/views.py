@@ -22,7 +22,7 @@ from django.urls import reverse
 from django.utils.text import slugify
 import os, json, zipfile, re, logging
 
-from .models import (WarehouseOperation, Catalog, OperationDocument, UserProfile,
+from .models import (WarehouseOperation, PedidoDeEntrada, Catalog, OperationDocument, UserProfile,
                      ROLE_CHOICES,
                      DeletionLog, DocumentSequence, Tenant, Subscription,
                      NotificationLog, PlatformUser, PLATFORM_ROLE_CHOICES,
@@ -468,6 +468,42 @@ def contexto_de_ubicacion(tenant, op_type):
 
 # ── OPERATION CREATE ──────────────────────────────────────────────────────────
 
+def guardar_pedidos_de_entrada(op, post):
+    """
+    La lista de pedidos de la entrada, si el formulario la trae.
+
+    Se reemplaza entera: es una lista corta que se edita completa en la misma
+    pantalla. Con lista, `po_order` se compone de sus numeros; sin ella se
+    queda como lo tecleo quien capturo, que es el caso normal de un pedido.
+    """
+    if 'pedidos_present' not in post:
+        return
+    numeros = post.getlist('pedido_numero')
+    bultos_ = post.getlist('pedido_bultos')
+    pesos = post.getlist('pedido_peso')
+    filas = []
+    for i, numero in enumerate(numeros):
+        numero = (numero or '').strip()
+        if not numero:
+            continue
+        try:
+            b = int(bultos_[i]) if i < len(bultos_) and bultos_[i].strip() else None
+        except ValueError:
+            b = None
+        try:
+            p = (Decimal(pesos[i].strip()) if i < len(pesos) and pesos[i].strip()
+                 else None)
+        except (InvalidOperation, ValueError):
+            p = None
+        filas.append(PedidoDeEntrada(operation=op, numero=numero[:100], bultos=b,
+                                     peso_lbs=p, orden=len(filas)))
+    op.pedidos.all().delete()
+    if filas:
+        PedidoDeEntrada.objects.bulk_create(filas)
+        op.po_order = ', '.join(f.numero for f in filas)[:200]
+        op.save(update_fields=['po_order'])
+
+
 @login_required
 @require_POST
 def operation_create(request):
@@ -599,6 +635,7 @@ def operation_create(request):
         lleva_inspeccion=bool(p.get('lleva_inspeccion')),
     )
     op.save()
+    guardar_pedidos_de_entrada(op, p)
 
     # Todo nace del embarque: llega la mercancia, se captura la entrada y
     # **entra sola** al reporte de impuestos. Nadie tiene que acordarse de dar
@@ -3026,6 +3063,7 @@ def operation_edit(request, pk):
             # una revision esto deja los dos campos en None, que es lo que valen.
             op.warehouse, op.location = ubicacion_del_post(p, tenant, op.operation_type)
             op.save()
+            guardar_pedidos_de_entrada(op, p)
 
             # El valor de mercancia no vive en la operacion sino en su renglon
             # de la hoja de impuestos, asi que se guarda alli. Se admite una
@@ -7281,7 +7319,13 @@ def cruce_sacar_pedido(request, pk):
     if not enlaces:
         return error(_('This order is not in a pedimento yet: take it out of the crossing instead.'))
 
+    # Si la entrada tiene lista de pedidos, se elige uno de ella.
+    de_la_lista = None
+    if (request.POST.get('pedido_id') or '').isdigit():
+        de_la_lista = op.pedidos.filter(pk=request.POST['pedido_id']).first()
     pedido = (request.POST.get('pedido') or '').strip()
+    if de_la_lista and not pedido:
+        pedido = de_la_lista.numero
     motivo = (request.POST.get('motivo') or '').strip()
     rectificacion = (request.POST.get('rectificacion') or '').strip()
     try:
@@ -7337,8 +7381,18 @@ def cruce_sacar_pedido(request, pk):
             op.weight_lbs = op.weight_lbs - peso
             if op.weight_kgs is not None:
                 op.weight_kgs = max(op.weight_kgs - nueva.weight_kgs, Decimal('0'))
-        op.po_order = _quitar_del_po(op.po_order, pedido)
         op.subdivision = WarehouseOperation.SUB1
+        if de_la_lista:
+            # El pedido se va con su renglon al -A; la original se queda con
+            # los demas, y su campo de pedidos se compone de ellos.
+            de_la_lista.operation = nueva
+            de_la_lista.orden = 0
+            de_la_lista.save(update_fields=['operation', 'orden'])
+            quedan = list(op.pedidos.all())
+            op.po_order = (', '.join(x.numero for x in quedan)[:200] if quedan
+                           else _quitar_del_po(op.po_order, pedido))
+        else:
+            op.po_order = _quitar_del_po(op.po_order, pedido)
         op.save()
 
         # El reparto del pedimento pierde esos bultos (y ese peso).

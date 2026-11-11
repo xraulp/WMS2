@@ -20,6 +20,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .models import (CambioDeDiaDeCruce, Catalog, CrossingTask, CrossingTaskItem,
+                     PedidoDeEntrada,
                      OperationDocument, Pedimento, PedimentoBundle, Tenant,
                      UserProfile, WarehouseOperation)
 
@@ -1419,3 +1420,75 @@ class SacarUnPedidoDelPedimentoTests(BaseDeCruces):
     def test_el_boton_sale_solo_en_pedidos_con_pedimento(self):
         r = self.client.get('/cruces/', {'customer': self.cliente.pk})
         self.assertContains(r, '/order-out/')
+
+
+class LosPedidosDeUnaEntradaTests(BaseDeCruces):
+    """
+    Una entrada puede traer varios pedidos, cada uno con sus bultos y su peso.
+    El PO de la entrada se compone de ellos, y al sacar uno de su pedimento se
+    elige de la lista y se va con su renglon al -A.
+    """
+
+    def capturar(self, **extra):
+        cat = lambda c, n: Catalog.objects.get_or_create(
+            category=c, name=n, tenant=self.tenant)[0].pk
+        datos = {'date': '2026-11-11', 'operation_type': 'ENTRY',
+                 'customer_id': self.cliente.pk, 'bundle_qty': '10',
+                 'shipper_id': cat('SHIPPER', 'ABC LLC'),
+                 'carrier_id': cat('CARRIER', 'XPO'),
+                 'bundle_type_id': cat('BUNDLE_TYPE', 'Pallet'),
+                 'description': 'Cajas',
+                 'weight_lbs': '1000', 'po_order': 'lo que sea',
+                 'pedidos_present': '1'}
+        datos.update(extra)
+        return self.client.post('/operations/create/', datos)
+
+    def test_la_captura_guarda_la_lista_y_compone_el_po(self):
+        r = self.capturar(pedido_numero=['4500123', '4500124', ''],
+                          pedido_bultos=['6', '4', ''],
+                          pedido_peso=['700', '300', ''])
+        self.assertEqual(r.status_code, 200)
+        op = WarehouseOperation.objects.latest('id')
+        self.assertEqual([(x.numero, x.bultos, x.peso_lbs) for x in op.pedidos.all()],
+                         [('4500123', 6, Decimal('700')), ('4500124', 4, Decimal('300'))])
+        self.assertEqual(op.po_order, '4500123, 4500124')
+
+    def test_sin_lista_el_po_se_queda_como_se_tecleo(self):
+        self.capturar(pedido_numero=[''], pedido_bultos=[''], pedido_peso=[''])
+        op = WarehouseOperation.objects.latest('id')
+        self.assertFalse(op.pedidos.exists())
+        self.assertEqual(op.po_order, 'lo que sea')
+
+    def test_la_casilla_sale_en_la_captura_y_en_la_edicion(self):
+        op = self.operacion('ED261111-0601', po_order='X')
+        PedidoDeEntrada.objects.create(operation=op, numero='4500999', bultos=2)
+        r = self.client.get('/operations/%d/edit/' % op.pk)
+        if r.status_code == 200:
+            self.assertContains(r, 'value="4500999"')
+            self.assertContains(r, 'name="pedidos_present"')
+
+    def test_sacar_un_pedido_de_la_lista(self):
+        op = self.operacion('ED261111-0602', bundle_qty=10, po_order='A1, A2',
+                            weight_lbs=Decimal('1000'))
+        a1 = PedidoDeEntrada.objects.create(operation=op, numero='A1', bultos=6,
+                                            peso_lbs=Decimal('700'), orden=0)
+        a2 = PedidoDeEntrada.objects.create(operation=op, numero='A2', bultos=4,
+                                            peso_lbs=Decimal('300'), orden=1)
+        ped = self.con_pedimento(op, consecutivo='6005601')
+        PedimentoBundle.objects.filter(operation=op).update(bultos=10)
+        t = self.tarea()
+        renglon = CrossingTaskItem.objects.create(task=t, operation=op)
+        pantalla = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        self.assertContains(pantalla, 'name="pedido_id"')
+        self.assertContains(pantalla, 'data-bultos="4"')
+
+        r = self.client.post('/cruces/%d/order-out/' % t.pk, {
+            'renglon': renglon.pk, 'pedido_id': a2.pk, 'bultos': '4',
+            'peso_lbs': '300', 'motivo': 'no cruza'})
+        self.assertEqual(r.status_code, 302)
+        menos_a = WarehouseOperation.objects.get(custom_id='ED261111-0602-A')
+        self.assertEqual(menos_a.po_order, 'A2')
+        self.assertEqual(list(menos_a.pedidos.all()), [a2])
+        op.refresh_from_db()
+        self.assertEqual(op.po_order, 'A1')
+        self.assertEqual(list(op.pedidos.all()), [a1])

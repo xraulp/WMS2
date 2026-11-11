@@ -3927,3 +3927,15 @@ msgstr "Lo que cruzó después de que un pedido salió de su pedimento"
 
 msgid "The pedimento covers %(n)s bundles of this entry: fewer than that can stay. If the whole order leaves the pedimento, take the pedimento out of the crossing instead."
 msgstr "El pedimento ampara %(n)s bultos de esta entrada: se pueden quedar menos que eso. Si el pedido sale completo del pedimento, mejor quita el pedimento del cruce."
+
+msgid "Several orders in this entry"
+msgstr "Varios pedidos en esta entrada"
+
+msgid "Order"
+msgstr "Pedido"
+
+msgid "Another order"
+msgstr "Otro pedido"
+
+msgid "If you fill this list, the PO field is made from these numbers."
+msgstr "Si llenas esta lista, el campo de PO se compone con estos números."

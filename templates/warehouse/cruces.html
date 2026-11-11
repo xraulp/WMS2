@@ -631,8 +631,20 @@
                     onsubmit="return confirm(this.dataset.aviso)">
                 {% csrf_token %}
                 <input type="hidden" name="renglon" value="{{ r.pk }}">
+                {% with lista=r.operation.pedidos.all %}
+                {% if lista %}
+                <label class="campo"><span>{% trans "Order that stays" %}</span>
+                  <select name="pedido_id" required
+                          onchange="var o=this.selectedOptions[0],f=this.form;f.pedido.value=o.dataset.numero||'';f.bultos.value=o.dataset.bultos||'';f.peso_lbs.value=o.dataset.peso||''">
+                    <option value="">—</option>
+                    {% for x in lista %}<option value="{{ x.pk }}" data-numero="{{ x.numero }}" data-bultos="{{ x.bultos|default_if_none:'' }}" data-peso="{{ x.peso_lbs|default_if_none:'' }}">{{ x.numero }}{% if x.bultos %} · {{ x.bultos }} {% trans "bdl" %}{% endif %}</option>{% endfor %}
+                  </select></label>
+                <input type="hidden" name="pedido">
+                {% else %}
                 <label class="campo"><span>{% trans "Order that stays" %}</span>
                   <input type="text" name="pedido" required></label>
+                {% endif %}
+                {% endwith %}
                 <label class="campo"><span>{% blocktrans with n=r.operation.bundle_qty %}Bundles that stay (of {{ n }}){% endblocktrans %}</span>
                   <input type="number" name="bultos" min="1" max="{{ r.operation.bundle_qty }}" required></label>
                 <label class="campo"><span>{% trans "Weight that stays (lbs)" %}</span>

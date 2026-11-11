@@ -999,6 +999,32 @@ def ruta_logo(instance, filename):
     return f'logos/{empresa}/{uuid.uuid4().hex[:12]}-{nombre}'
 
 
+class PedidoDeEntrada(models.Model):
+    """
+    Un pedido dentro de una entrada, con sus bultos y su peso.
+
+    Una entrada puede traer varios pedidos. El campo `po_order` de la entrada
+    sigue existiendo -- es el que leen todas las pantallas y los papeles -- y
+    cuando hay lista se compone con sus numeros. La lista es lo que permite
+    sacar un pedido concreto de un pedimento sin teclear sus bultos y su peso.
+    """
+    operation = models.ForeignKey(WarehouseOperation, on_delete=models.CASCADE,
+                                  related_name='pedidos')
+    numero    = models.CharField(max_length=100)
+    bultos    = models.PositiveIntegerField(null=True, blank=True)
+    peso_lbs  = models.DecimalField(max_digits=10, decimal_places=2,
+                                    null=True, blank=True)
+    orden     = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'pk']
+        verbose_name = 'Pedido de la entrada'
+        verbose_name_plural = 'Pedidos de la entrada'
+
+    def __str__(self):
+        return self.numero
+
+
 class DocumentosVivosManager(models.Manager):
     """
     Los documentos que siguen en el expediente.
