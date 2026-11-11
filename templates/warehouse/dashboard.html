@@ -853,6 +853,16 @@ function cerrarAccesoDeCliente() {
   // La cuenta de usuarios de la tabla acaba de cambiar.
   htmx.ajax('GET','{% url "catalog_list" %}?scope=customers',{target:'#customer-table',swap:'innerHTML'});
 }
+// Esc cierra las dos ventanas de clientes, igual que Cancelar o tocar fuera.
+// Solo la que este abierta: si no hay ninguna, la tecla sigue su camino.
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('cat-edit-modal').style.display === 'flex') {
+    closeCatalogEdit();
+  } else if (document.getElementById('cust-access-modal').style.display === 'flex') {
+    cerrarAccesoDeCliente();
+  }
+});
 </script>
 
 {% comment %}
