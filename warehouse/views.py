@@ -6441,6 +6441,8 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
         'hoy': timezone.localdate(),
     }
     if cliente is None:
+        if not profile.is_customer():
+            contexto.update(_todos_los_cruces(tenant))
         return contexto
 
     tareas = list(CrossingTask.objects
@@ -6526,6 +6528,85 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
 
     contexto.update({'tareas': tareas, 'libres': libres})
     return contexto
+
+
+def _todos_los_cruces(tenant):
+    """
+    Las tareas de cruce de todos los clientes, una por linea.
+
+    La casa revisa cruces de varios clientes el mismo dia, y elegir uno en el
+    selector, cerrar y elegir otro era dar una vuelta por cliente. Aqui el
+    cliente deja de ser un paso previo y pasa a ser una columna con su color y
+    un filtro. Cada linea lleva a la tarea completa, en la pantalla del cliente.
+
+    Cada tarea dice tambien si le toca moverse a la casa -- para el interruptor
+    "Solo lo que me toca" --, con la misma regla que ya usa el estado corto
+    del pedimento.
+    """
+    tareas = list(CrossingTask.objects
+                  .filter(tenant=tenant)
+                  .exclude(estado=CrossingTask.CANCELADA)
+                  .exclude(CrossingTask.filtro_realizadas())
+                  .select_related('customer', 'tenant')
+                  .prefetch_related('renglones__operation__renglones_de_pedimento__pedimento')
+                  .order_by('fecha_de_cruce', 'customer__name', 'custom_id'))
+
+    for tarea in tareas:
+        filas = list(tarea.renglones.all())
+        tarea.n_embarques = len(filas)
+        tarea.bultos = sum(f.bultos_que_van for f in filas)
+        tarea.pedidos = []
+        pedimentos = {}
+        sin_pedimento = 0
+        for fila in filas:
+            po = (fila.operation.po_order or '').strip()
+            if po and po not in tarea.pedidos:
+                tarea.pedidos.append(po)
+            enlaces = list(fila.operation.renglones_de_pedimento.all())
+            if not enlaces:
+                sin_pedimento += 1
+            for enlace in enlaces:
+                pedimentos.setdefault(enlace.pedimento.pk, enlace.pedimento)
+        # Los estados de sus pedimentos, sin repetir, con de quien es la
+        # pelota. Lo que aun no tiene pedimento esta en manos de la casa.
+        estados = []
+        for ped in pedimentos.values():
+            par = (ped.estado_corto, not ped.le_toca_a_la_casa)
+            if par not in estados:
+                estados.append(par)
+        if sin_pedimento:
+            par = (Pedimento.texto_corto(Pedimento.ELAB_PED, tenant,
+                                         tarea.customer), False)
+            if par not in estados:
+                estados.append(par)
+        tarea.estados = estados
+        tarea.dias = tarea.dias_para_el_cruce
+
+        fase = tarea.fase
+        if fase == CrossingTask.FASE_ENTREGADA:
+            tarea.me_toca = False
+        elif fase in (CrossingTask.FASE_EN_CRUCE, CrossingTask.FASE_ROJO):
+            # Marcar el rojo o la entrega: solo lo puede hacer la casa.
+            tarea.me_toca = True
+        else:
+            tarea.me_toca = any(not del_cliente for _, del_cliente in estados)
+
+    clientes_con_tareas = []
+    for tarea in tareas:
+        if tarea.customer not in clientes_con_tareas:
+            clientes_con_tareas.append(tarea.customer)
+    clientes_con_tareas.sort(key=lambda c: (c.abbreviation or c.name or '').upper())
+
+    hoy = timezone.localdate()
+    return {
+        'maniana': hoy + timedelta(days=1),
+        'todas': tareas,
+        'clientes_con_tareas': clientes_con_tareas,
+        'n_me_toca': sum(1 for t in tareas if t.me_toca),
+        'n_hoy': sum(1 for t in tareas if t.fecha_de_cruce == hoy),
+        'n_maniana': sum(1 for t in tareas
+                         if t.fecha_de_cruce == hoy + timedelta(days=1)),
+    }
 
 
 @login_required

@@ -1021,3 +1021,78 @@ class ElPedimentoNombraSuTareaTests(BaseDeCruces):
         t = self.tarea(estado=CrossingTask.CANCELADA)
         CrossingTaskItem.objects.create(task=t, operation=op)
         self.assertEqual(list(ped.tareas_de_cruce()), [])
+
+
+class LosCrucesDeTodosLosClientesTests(BaseDeCruces):
+    """
+    La casa revisa cruces de varios clientes a la vez. Sin cliente elegido,
+    la pantalla de cruces enseña las tareas de todos, una por linea, y no un
+    "elige un cliente".
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.otro = Catalog.objects.create(
+            category='CUSTOMER', name='Textiles del Norte', abbreviation='TXN',
+            tenant=self.tenant)
+
+    def tarea_de(self, cliente, custom_id, **extra):
+        op = WarehouseOperation.objects.create(
+            tenant=self.tenant, operation_type='ENTRY', custom_id=custom_id,
+            customer=cliente, created_by=self.jefa, bundle_qty=5, po_order='PO-' + custom_id)
+        t = CrossingTask.objects.create(tenant=self.tenant, customer=cliente,
+                                        fecha_de_cruce=self.viernes,
+                                        created_by=self.jefa, **extra)
+        CrossingTaskItem.objects.create(task=t, operation=op)
+        return t, op
+
+    def test_sin_cliente_salen_las_tareas_de_todos(self):
+        a, _ = self.tarea_de(self.cliente, 'ED261111-0001')
+        b, _ = self.tarea_de(self.otro, 'ED261111-0002')
+        r = self.client.get('/cruces/')
+        self.assertEqual({t.pk for t in r.context['todas']}, {a.pk, b.pk})
+        self.assertContains(r, 'LBO')
+        self.assertContains(r, 'TXN')
+        self.assertContains(r, '?customer=%d#tarea-%d' % (self.otro.pk, b.pk))
+        self.assertContains(r, 'PO-ED261111-0002')
+
+    def test_la_cancelada_no_sale(self):
+        c, _ = self.tarea_de(self.otro, 'ED261111-0003',
+                             estado=CrossingTask.CANCELADA)
+        r = self.client.get('/cruces/')
+        self.assertNotIn(c.pk, [t.pk for t in r.context['todas']])
+
+    def test_me_toca_cuando_el_paso_es_de_la_casa(self):
+        # Sin pedimento: hay que elaborarlo, le toca a la casa.
+        sin_ped, _ = self.tarea_de(self.cliente, 'ED261111-0004')
+        # Pedimento en revision: le toca al cliente.
+        en_rev, op = self.tarea_de(self.otro, 'ED261111-0005')
+        ped = Pedimento.objects.create(
+            tenant=self.tenant, customer=self.otro, orden=1,
+            ped_aduana='24', ped_patente='1515', ped_consecutivo='6005001',
+            estado=Pedimento.EN_REVISION)
+        PedimentoBundle.objects.create(pedimento=ped, operation=op, bultos=1)
+        r = self.client.get('/cruces/')
+        me_toca = {t.pk: t.me_toca for t in r.context['todas']}
+        self.assertTrue(me_toca[sin_ped.pk])
+        self.assertFalse(me_toca[en_rev.pk])
+        self.assertEqual(r.context['n_me_toca'], 1)
+
+    def test_en_cruce_le_toca_a_la_casa(self):
+        t, _ = self.tarea_de(self.cliente, 'ED261111-0006',
+                             estado=CrossingTask.CARGADA)
+        r = self.client.get('/cruces/')
+        self.assertTrue([x for x in r.context['todas'] if x.pk == t.pk][0].me_toca)
+
+    def test_el_cliente_no_ve_las_tareas_de_otros(self):
+        self.tarea_de(self.otro, 'ED261111-0007')
+        self.client.force_login(self.duenio)
+        r = self.client.get('/cruces/')
+        self.assertNotIn('todas', r.context)
+        self.assertNotContains(r, 'TXN')
+
+    def test_el_color_sale_de_la_abreviatura(self):
+        from .templatetags.wms_filters import tono_de_cliente
+        gemelo = Catalog(category='CUSTOMER', name='Otro nombre', abbreviation='lbo')
+        self.assertEqual(tono_de_cliente(self.cliente), tono_de_cliente(gemelo))
+        self.assertTrue(0 <= tono_de_cliente(self.otro) < 360)

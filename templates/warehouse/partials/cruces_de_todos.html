@@ -1,0 +1,167 @@
+{% load i18n wms_filters %}
+{% comment %}
+Las tareas de cruce de todos los clientes, una por linea, agrupadas por dia de
+cruce. El cliente es una columna con su color -- el tono sale de su
+abreviatura -- y un filtro que deja prender varios a la vez. "Solo lo que me
+toca" deja las tareas donde el siguiente paso es de la casa. Cada linea lleva a
+la tarea completa, en la pantalla de su cliente.
+{% endcomment %}
+<style>
+  .cli{--cc:hsl(var(--h,210) var(--cli-s) var(--cli-l));display:inline-flex;align-items:center;
+       gap:6px;font-weight:700;font-size:12px;letter-spacing:.02em;white-space:nowrap}
+  .cli::before{content:"";width:4px;height:15px;border-radius:2px;background:var(--cc)}
+  .ct-fil{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .chip{--cc:hsl(var(--h,210) var(--cli-s) var(--cli-l));display:inline-flex;align-items:center;gap:6px;
+        font-family:inherit;font-size:12px;font-weight:600;border:1px solid var(--bdr-fuerte);
+        border-radius:99px;padding:4px 11px;background:var(--surface);color:var(--ink);cursor:pointer}
+  .chip i{width:9px;height:9px;border-radius:50%;background:var(--cc)}
+  .chip[aria-pressed="true"]{background:var(--asoft);border-color:var(--accent)}
+  .chip[aria-pressed="false"]{opacity:.5}
+  .chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .chip.metoca[aria-pressed="true"]{background:var(--warn-bg-suave);border-color:var(--warn);opacity:1}
+  .chip.metoca[aria-pressed="false"]{opacity:1}
+  .chip b{font-variant-numeric:tabular-nums}
+  .resumen{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:12px}
+  .resumen span{border:1px solid var(--bdr);border-radius:var(--r);padding:3px 9px;color:var(--soft)}
+  .resumen b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+  .todas{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;overflow:hidden;margin-bottom:14px}
+  .dia-hd{padding:7px 14px;background:var(--bg-sutil);border-bottom:1px solid var(--bdr);
+          font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;
+          letter-spacing:.06em;color:var(--soft);display:flex;justify-content:space-between;gap:10px}
+  /* `display:flex` le gana al atributo `hidden`. */
+  .dia-hd[hidden], .vacio[hidden]{display:none}
+  .dia-hd.hoy{background:var(--asoft);color:var(--accent-ink)}
+  /* Una linea por tarea. En la PC es una fila de columnas; en el telefono,
+     dos renglones: cliente y fase arriba, numero, pedido y estado abajo. */
+  .linea{--cc:hsl(var(--h,210) var(--cli-s) var(--cli-l));display:grid;
+         grid-template-columns:110px 118px minmax(0,1.2fr) 120px minmax(0,1.6fr) 64px;
+         gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--bdr);
+         border-left:4px solid var(--cc);text-decoration:none;color:var(--ink);font-size:13px}
+  .linea:hover{background:var(--bg-sutil)}
+  .linea:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .linea[hidden]{display:none}
+  .linea .idpo{display:contents}
+  .linea .num{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600}
+  .linea .po{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .linea .bul{text-align:right;font-variant-numeric:tabular-nums;color:var(--soft);font-size:12px}
+  .linea .eds{display:flex;gap:4px;flex-wrap:wrap;min-width:0}
+  .linea .eds .estado-ped, .linea .eds .en-revision{margin-left:0}
+  .fz{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:5px;
+      white-space:nowrap;background:var(--bg-sutil);color:var(--soft);border:1px solid var(--bdr)}
+  .fz-en_cruce{background:var(--asoft);color:var(--accent-ink);border-color:var(--accent)}
+  .fz-rojo_aduana{background:#dc2626;color:#fff;border-color:#dc2626}
+  .fz-entregada{background:#16a34a;color:#fff;border-color:#16a34a}
+  .marca-metoca{color:var(--warn-ink-fuerte);font-weight:700}
+  .vacio{padding:16px 14px;color:var(--soft);font-size:13px}
+  @media (max-width:700px){
+    .linea{grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:9px 12px}
+    .linea .cli{grid-column:1;grid-row:1}
+    .linea .fz-c{grid-column:2;grid-row:1;justify-self:end}
+    .linea .idpo{display:flex;gap:10px;align-items:baseline;grid-column:1;grid-row:2;min-width:0}
+    .linea .bul{grid-column:2;grid-row:2}
+    .linea .eds{grid-column:1 / -1;grid-row:3}
+  }
+</style>
+
+<div class="card">
+  <div class="ct-fil" id="filtro-clientes">
+    {% for c in clientes_con_tareas %}
+    <button class="chip" type="button" aria-pressed="true" data-c="{{ c.pk }}"
+            style="--h:{{ c|tono_de_cliente }}" title="{{ c.name }}">
+      <i></i>{{ c.abbreviation|default:c.name }}
+    </button>
+    {% endfor %}
+    {% if n_me_toca %}
+    <button class="chip metoca" type="button" aria-pressed="false" id="solo-me-toca">
+      {% trans "Only what is on us" %} <b>{{ n_me_toca }}</b>
+    </button>
+    {% endif %}
+  </div>
+  <div class="resumen">
+    <span>{% trans "Today" %} <b>{{ n_hoy }}</b></span>
+    <span>{% trans "Tomorrow" %} <b>{{ n_maniana }}</b></span>
+    <span>{% trans "On us" %} <b>{{ n_me_toca }}</b></span>
+    <span>{% trans "All" %} <b>{{ todas|length }}</b></span>
+  </div>
+</div>
+
+<div class="todas" id="todas">
+  {% regroup todas by fecha_de_cruce as dias %}
+  {% for dia in dias %}
+  <div class="dia-hd{% if dia.grouper == hoy %} hoy{% endif %}" data-dia>
+    <span>
+      {% if dia.grouper == hoy %}{% trans "Today" %} · {% elif dia.grouper == maniana %}{% trans "Tomorrow" %} · {% endif %}{{ dia.grouper|date:"l j F" }}
+    </span>
+    <span>{% blocktrans count n=dia.list|length %}{{ n }} crossing{% plural %}{{ n }} crossings{% endblocktrans %}</span>
+  </div>
+  {% for t in dia.list %}
+  <a class="linea" href="{% url 'cruces_panel' %}?customer={{ t.customer_id }}#tarea-{{ t.pk }}"
+     data-c="{{ t.customer_id }}" data-m="{% if t.me_toca %}1{% else %}0{% endif %}"
+     style="--h:{{ t.customer|tono_de_cliente }}">
+    <span class="cli" title="{{ t.customer.name }}">{{ t.customer.abbreviation|default:t.customer.name }}</span>
+    <span class="idpo"><span class="num">{{ t.custom_id }}</span><span class="po">{% if t.pedidos %}{{ t.pedidos|join:" - " }}{% endif %}</span></span>
+    <span class="fz-c"><span class="fz fz-{{ t.fase|lower }}">{{ t.fase_texto }}</span></span>
+    <span class="eds">
+      {% for texto, del_cliente in t.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% empty %}<span class="soft" style="font-size:12px">{% trans "Nothing in this crossing yet." %}</span>{% endfor %}
+      {% if t.espera_confirmacion %}<span class="estado-ped">{% trans "waiting for the customer" %}</span>{% endif %}
+    </span>
+    <span class="bul">{% if t.me_toca %}<span class="marca-metoca" title="{% trans "On us" %}">●</span> {% endif %}{{ t.bultos }} {% trans "bdl" %}</span>
+  </a>
+  {% endfor %}
+  {% empty %}
+  <div class="vacio">{% trans "No crossings on the way. New ones show up here as soon as any customer asks to cross." %}</div>
+  {% endfor %}
+  <div class="vacio" id="sin-resultado" hidden>{% trans "Nothing matches the filter." %}</div>
+</div>
+
+<script>
+// El filtro de clientes y "Solo lo que me toca". Se recuerda en este
+// navegador, para que al volver de una tarea la lista siga como se dejo.
+(function () {
+  var caja = document.getElementById('filtro-clientes');
+  if (!caja) return;
+  var chips = caja.querySelectorAll('.chip[data-c]');
+  var meToca = document.getElementById('solo-me-toca');
+  var lista = document.getElementById('todas');
+  var LLAVE = 'wms.cruces.filtro';
+
+  function guardar() {
+    var apagados = [];
+    chips.forEach(function (c) { if (c.getAttribute('aria-pressed') === 'false') apagados.push(c.dataset.c); });
+    try { localStorage.setItem(LLAVE, JSON.stringify({
+      apagados: apagados, meToca: !!(meToca && meToca.getAttribute('aria-pressed') === 'true') })); } catch (e) {}
+  }
+  function aplicar() {
+    var prendidos = {};
+    chips.forEach(function (c) { prendidos[c.dataset.c] = c.getAttribute('aria-pressed') === 'true'; });
+    var soloMios = meToca && meToca.getAttribute('aria-pressed') === 'true';
+    var cabecera = null, conAlgo = false, alguna = false;
+    function cerrar() { if (cabecera) cabecera.hidden = !conAlgo; }
+    Array.prototype.forEach.call(lista.children, function (el) {
+      if (el.hasAttribute('data-dia')) { cerrar(); cabecera = el; conAlgo = false; return; }
+      if (!el.classList.contains('linea')) return;
+      var ver = prendidos[el.dataset.c] !== false && (!soloMios || el.dataset.m === '1');
+      el.hidden = !ver;
+      if (ver) { conAlgo = true; alguna = true; }
+    });
+    cerrar();
+    var nada = document.getElementById('sin-resultado');
+    if (nada) nada.hidden = alguna || !lista.querySelector('.linea');
+  }
+  function alternar(b) {
+    b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+    aplicar(); guardar();
+  }
+  try {
+    var previo = JSON.parse(localStorage.getItem(LLAVE) || 'null');
+    if (previo) {
+      chips.forEach(function (c) { if ((previo.apagados || []).indexOf(c.dataset.c) >= 0) c.setAttribute('aria-pressed', 'false'); });
+      if (meToca && previo.meToca) meToca.setAttribute('aria-pressed', 'true');
+    }
+  } catch (e) {}
+  chips.forEach(function (c) { c.addEventListener('click', function () { alternar(c); }); });
+  if (meToca) meToca.addEventListener('click', function () { alternar(meToca); });
+  aplicar();
+})();
+</script>

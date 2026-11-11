@@ -58,6 +58,9 @@ queda claro cuando todo lo demas se pone oscuro.
      a la superficie para que un uso viejo no pinte un rectangulo blanco. */
   --white:var(--surface);
   --r:6px; --rL:10px;
+  /* El color de cada cliente: el tono sale de su abreviatura; la luz, del
+     tema, para que se lea igual sobre fondo claro y oscuro. */
+  --cli-s:62%; --cli-l:40%;
 }
 
 /* Los tokens oscuros, escritos una sola vez y usados por los dos selectores
@@ -66,7 +69,7 @@ queda claro cuando todo lo demas se pone oscuro.
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --ink:#e6edf6; --ink-fuerte:#f1f5f9; --soft:#a7b4c4; --soft-fuerte:#c3cddb;
-    --faint:#7c8ba1;
+    --faint:#7c8ba1; --cli-s:70%; --cli-l:68%;
     --bg:#0b1220; --bg-sutil:#131c2c; --surface:#16202f;
     --bdr:#2a3648; --bdr-fuerte:#3b4a61;
     --accent:#0ea5e9; --adark:#38bdf8; --asoft:#0c3a52; --accent-ink:#7dd3fc;
@@ -93,7 +96,7 @@ queda claro cuando todo lo demas se pone oscuro.
 
 :root[data-theme="dark"]{
   --ink:#e6edf6; --ink-fuerte:#f1f5f9; --soft:#a7b4c4; --soft-fuerte:#c3cddb;
-  --faint:#7c8ba1;
+  --faint:#7c8ba1; --cli-s:70%; --cli-l:68%;
   --bg:#0b1220; --bg-sutil:#131c2c; --surface:#16202f;
   --bdr:#2a3648; --bdr-fuerte:#3b4a61;
   --accent:#0ea5e9; --adark:#38bdf8; --asoft:#0c3a52; --accent-ink:#7dd3fc;

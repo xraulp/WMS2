@@ -80,3 +80,19 @@ def pesos(valor):
     if n == entero:
         return f'{int(entero):,}'
     return f'{n:,.2f}'
+
+
+# El color de un cliente. Sale de su abreviatura y no se guarda: la misma
+# abreviatura da siempre el mismo tono, en cualquier pantalla y en cualquier
+# dia, que es lo que deja reconocer de quien es una tarea sin leer el nombre.
+# Es solo el tono (0-359); la luz la pone el tema, para que se lea en claro y
+# en oscuro. Sin abreviatura se usa el nombre.
+@register.filter
+def tono_de_cliente(cliente):
+    """Usage: <span style="--h:{{ t.customer|tono_de_cliente }}">"""
+    import hashlib
+    llave = (getattr(cliente, 'abbreviation', '') or
+             getattr(cliente, 'name', '') or str(cliente or '')).strip().upper()
+    if not llave:
+        return 210
+    return int(hashlib.md5(llave.encode('utf-8')).hexdigest()[:6], 16) % 360

@@ -3752,3 +3752,26 @@ msgstr "Ningún cruce realizado coincide con la búsqueda."
 
 msgid "No completed crossings yet."
 msgstr "Todavía no hay cruces realizados."
+
+msgid "Only what is on us"
+msgstr "Solo lo que me toca"
+
+msgid "Tomorrow"
+msgstr "Mañana"
+
+msgid "On us"
+msgstr "Me toca"
+
+msgid "%(n)s crossing"
+msgid_plural "%(n)s crossings"
+msgstr[0] "%(n)s cruce"
+msgstr[1] "%(n)s cruces"
+
+msgid "bdl"
+msgstr "bultos"
+
+msgid "No crossings on the way. New ones show up here as soon as any customer asks to cross."
+msgstr "No hay cruces en curso. Los nuevos aparecen aquí en cuanto cualquier cliente pide cruzar."
+
+msgid "Nothing matches the filter."
+msgstr "Nada coincide con el filtro."

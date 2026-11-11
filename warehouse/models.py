@@ -2203,6 +2203,14 @@ class Pedimento(models.Model):
         return self.estado == self.EN_REVISION
 
     @property
+    def le_toca_a_la_casa(self):
+        """Si el siguiente paso es de la casa, segun `ESTADOS_CORTOS`."""
+        clave = self.clave_corta
+        if clave not in self.ESTADOS_CORTOS:
+            return False
+        return self.ESTADOS_CORTOS[clave][1] == 'casa'
+
+    @property
     def necesita_fotos_de_series(self):
         """
         Si a este pedimento hay que subirle fotos de numeros de serie.
