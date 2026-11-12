@@ -974,11 +974,23 @@ class GuardarDevuelveAlCajonTests(BaseDeLaHoja):
         super().setUp()
         self.client.force_login(self.jefa)
 
-    def test_guardando_desde_el_cajon_se_vuelve_con_el_abierto(self):
+    def test_guardando_desde_el_cajon_se_cierra_y_se_ve_el_estimado(self):
+        """
+        Desde el 12 nov 2026 el cajon no se reabre al guardar bien: se queda
+        cerrado y la hoja baja al renglon y destella su estimado.
+        """
         respuesta = self.client.post(f'/impuestos/{self.r.pk}/save/', {
             'desde': 'cajon', 'valor': '10395', 'tasa_igi': '0.15'})
 
-        self.assertIn(f'abierto={self.r.pk}', respuesta.url)
+        self.assertNotIn('abierto=', respuesta.url)
+        self.assertIn(f'guardado={self.r.pk}', respuesta.url)
+
+    def test_la_hoja_marca_el_renglon_guardado(self):
+        respuesta = self.client.get(
+            f'/impuestos/?customer={self.cliente.pk}&guardado={self.r.pk}')
+        self.assertContains(respuesta, 'data-guardado="%s"' % self.r.pk)
+        self.assertContains(respuesta, 'data-estimado-de="%s"' % self.r.pk)
+        self.assertNotContains(respuesta, 'data-cajon-abierto')
 
     def test_guardando_desde_la_pantalla_se_vuelve_a_la_hoja_sin_mas(self):
         respuesta = self.client.post(f'/impuestos/{self.r.pk}/save/', {

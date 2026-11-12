@@ -224,10 +224,13 @@
   {% if ve_los_calculos %}{% include "warehouse/partials/calculo_estilos.html" %}{% endif %}
 </head>
 {% comment %}
-`data-cajon-abierto` lo pone el guardado: al volver de guardar se reabre el
-cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
+`data-cajon-abierto` lo pone un guardado que fallo (un valor mal escrito): se
+reabre el cajon para corregirlo. `data-guardado` lo pone un guardado bueno:
+el cajon se queda cerrado y la hoja baja a ese renglon y hace destellar su
+estimado, que es lo que se queria ver al guardar (pedido por Diego el 12 nov
+2026; antes el cajon se volvia a abrir siempre).
 {% endcomment %}
-<body{% if abierto %} data-cajon-abierto="{{ abierto }}"{% endif %}>
+<body{% if abierto %} data-cajon-abierto="{{ abierto }}"{% endif %}{% if guardado %} data-guardado="{{ guardado }}"{% endif %}>
 
 {% include "warehouse/partials/barra_superior.html" with activa='impuestos' %}
 
@@ -403,7 +406,7 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
           <td class="mono">{% if r.fecha_reportado %}{{ r.fecha_reportado|date:"d-M" }}{% endif %}</td>
           <td class="mono{% if not r.tiene_factura %} falta{% endif %}">{{ r.pedido|default:"" }}</td>
           <td class="mono">{{ r.pedimento_texto }}</td>
-          <td class="importe">
+          <td class="importe" data-estimado-de="{{ r.pk }}">
             {% if r.estimado %}<span class="signo">$</span>{{ r.estimado|pesos }}
             {% else %}<span class="vacio">—</span>{% endif %}
           </td>
@@ -561,7 +564,7 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
           perseguir, y asi se ve cual es sin leer la ficha entera.
           {% endcomment %}
           <span class="ficha-pedido{% if not r.tiene_factura %} falta{% endif %}">{{ forloop.counter }}. {{ r.pedido|default:"—" }}</span>
-          <span class="ficha-importe">
+          <span class="ficha-importe" data-estimado-de="{{ r.pk }}">
             {% if r.estimado %}${{ r.estimado|pesos }}{% else %}<span class="vacio">—</span>{% endif %}
           </span>
         </div>

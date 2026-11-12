@@ -5842,6 +5842,8 @@ def impuestos_panel(request):
     # al cargar la hoja: sin esto, cada guardado costaria volver a buscar la
     # fila en una hoja de cuarenta embarques.
     abierto = request.GET.get('abierto', '')
+    # El renglon recien guardado: la hoja baja a el y destella su estimado.
+    guardado = request.GET.get('guardado', '')
 
     contexto = {
         'clientes': clientes,
@@ -5850,6 +5852,7 @@ def impuestos_panel(request):
         've_los_calculos': ve_los_calculos,
         'puede_escribir': puede_escribir,
         'abierto': abierto if (abierto.isdigit() and ve_los_calculos) else '',
+        'guardado': guardado if guardado.isdigit() else '',
         'ahora': timezone.localtime(),
         'error': request.session.pop('error_de_impuestos', None),
         'aviso': request.session.pop('aviso_de_impuestos', None),
@@ -6459,16 +6462,23 @@ def impuestos_quitados(request):
 
 @login_required
 @require_POST
-def _de_vuelta_a_la_hoja(request, renglon):
+def _de_vuelta_a_la_hoja(request, renglon, guardado=False):
     """
-    La hoja del cliente, con el cajon de este renglon abierto si venia de el.
+    La hoja del cliente despues de guardar un renglon.
 
-    El `abierto` lo lee el guion de la hoja al cargar. Va en la direccion y no
-    en la sesion para que sea un sitio al que se puede volver: recargar la
-    pagina, o abrirla en otra pestaña, enseña lo mismo.
+    Si se guardo, el cajon **se queda cerrado** y la hoja baja a ese renglon y
+    hace destellar su estimado (`guardado`): es la cifra que se queria ver al
+    darle a Guardar, y con el cajon abierto encima quedaba tapada. Si no se
+    pudo guardar -- un valor mal escrito -- el cajon se reabre (`abierto`) para
+    corregirlo sin tener que buscar la fila.
+
+    Los dos van en la direccion y no en la sesion para que sea un sitio al que
+    se puede volver: recargar la pagina enseña lo mismo.
     """
     destino = f"{reverse('impuestos_panel')}?customer={renglon.customer_id}"
-    if request.POST.get('desde') == 'cajon':
+    if guardado:
+        destino += f'&guardado={renglon.pk}'
+    elif request.POST.get('desde') == 'cajon':
         destino += f'&abierto={renglon.pk}'
     return destino
 
@@ -6532,7 +6542,7 @@ def renglon_guardar(request, pk):
 
     renglon.updated_by = request.user
     renglon.save()
-    return redirect(_de_vuelta_a_la_hoja(request, renglon))
+    return redirect(_de_vuelta_a_la_hoja(request, renglon, guardado=True))
 
 
 # ═══════════════════════════════════════════════════════════════════════════

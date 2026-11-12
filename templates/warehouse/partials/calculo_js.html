@@ -374,9 +374,30 @@ que los identificadores choquen ni haya que numerar funciones.
   // Al volver de guardar, la hoja se pinta de nuevo y el cajon se abre solo en
   // el renglon en el que se estaba: sin esto, cada guardado costaria volver a
   // buscar la fila.
+  // Despues de un guardado bueno el cajon no se reabre: la hoja baja al
+  // renglon y hace destellar su estimado, que es la cifra que se queria ver.
+  // Hay dos -- la de la tabla y la de la ficha del telefono -- y se usa la que
+  // esta en pantalla.
+  function ensenarElGuardado(pk) {
+    const cifras = document.querySelectorAll('[data-estimado-de="' + pk + '"]');
+    let cifra = null;
+    for (const c of cifras) { if (seVe(c)) { cifra = c; break; } }
+    if (!cifra) return;
+    const renglon = cifra.closest('tr, .ficha') || cifra;
+    renglon.scrollIntoView({block: 'center'});
+    renglon.classList.add('cj-recien-guardado');
+    cifra.classList.add('cj-cifra-guardada');
+    setTimeout(function () {
+      renglon.classList.remove('cj-recien-guardado');
+      cifra.classList.remove('cj-cifra-guardada');
+    }, 2600);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     const abierto = document.body.dataset.cajonAbierto;
     if (abierto) abrir(abierto);
+    const guardado = document.body.dataset.guardado;
+    if (guardado) ensenarElGuardado(guardado);
   });
 })();
 </script>

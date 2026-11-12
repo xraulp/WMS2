@@ -98,6 +98,21 @@ prefijo, un `.card` del cajon heredaria el fondo color papel de la hoja y un
   .cj-propuesta b{font-family:'IBM Plex Mono',monospace;color:var(--ink)}
   .cj-propuesta .cj-btn{padding:4px 10px;font-size:11.5px}
 
+  /* El renglon recien guardado: destella y su estimado se agranda un momento.
+     El cajon ya se cerro; esto dice "aqui esta lo que guardaste". */
+  .cj-recien-guardado,.cj-recien-guardado>td{animation:cj-guardado 2.6s ease-out}
+  @keyframes cj-guardado{0%,35%{background:var(--ok-bg)}100%{background:transparent}}
+  /* En la tabla la cifra es la celda misma: solo cambia de color, porque un
+     <td> con inline-block deja de ser celda y descuadra la fila. En la ficha
+     del telefono es un <span>, y ahi ademas crece un momento. */
+  .cj-cifra-guardada{animation:cj-cifra-color 2.6s ease-out}
+  span.cj-cifra-guardada{animation:cj-cifra 2.6s ease-out;display:inline-block}
+  @keyframes cj-cifra-color{0%,45%{color:var(--ok-ink-fuerte);font-weight:700}100%{}}
+  @keyframes cj-cifra{0%{transform:scale(1)}15%,45%{transform:scale(1.18);color:var(--ok-ink-fuerte)}100%{transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){
+    span.cj-cifra-guardada{animation:cj-cifra-color 2.6s ease-out}
+  }
+
   /* El boton que abre el cajon, cuando esta abierto. */
   .mini.cj-abierto{background:var(--accent);border-color:var(--accent);
                    color:var(--on-accent)}
