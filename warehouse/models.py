@@ -2823,6 +2823,17 @@ class ParametrosDeImpuestos(models.Model):
         max_digits=8, decimal_places=6, default=Decimal('0'),
         verbose_name='Tasa del DTA con T-MEC')
 
+    # La cifra que se le propone al cliente es la exacta mas este margen,
+    # subida al siguiente multiplo de `redondeo_estimado`. Es la cuenta que
+    # Diego hacia de cabeza -- "un 15 % mas, a numero cerrado" -- y va con fecha
+    # como lo demas: cambiar el margen no reescribe los estimados ya dados.
+    margen_estimado = models.DecimalField(
+        max_digits=5, decimal_places=4, default=Decimal('0.15'),
+        verbose_name='Margen del estimado (fraccion)')
+    redondeo_estimado = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('500'),
+        verbose_name='Redondear el estimado a (MXN)')
+
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
                                    blank=True, related_name='parametros_creados')
@@ -2834,6 +2845,11 @@ class ParametrosDeImpuestos(models.Model):
 
     def __str__(self):
         return f'{self.tenant} desde {self.vigente_desde}'
+
+    @property
+    def margen_pct(self):
+        """El margen en por ciento, para enseñarlo: 15 y no 0.15."""
+        return (self.margen_estimado or Decimal('0')) * 100
 
     @classmethod
     def vigentes(cls, tenant, fecha=None):
@@ -3220,7 +3236,27 @@ class RenglonDeImpuestos(models.Model):
             tasa_igi=self.tasa_igi or 0,
             prevalidacion=parametros.prevalidacion,
             dta_sin_tmec=parametros.dta_sin_tmec,
-            dta_con_tmec=parametros.dta_con_tmec)
+            dta_con_tmec=parametros.dta_con_tmec,
+            margen=parametros.margen_estimado,
+            paso=parametros.redondeo_estimado)
+
+    def propuesta(self, parametros=None):
+        """La cifra redondeada que se le propone al cliente, o None sin valor."""
+        if not self.valor_mercancia:
+            return None
+        return self.calcular(parametros)['U_estimado']
+
+    def seguir_la_propuesta(self, anterior):
+        """
+        Pone en la casilla del cliente la propuesta nueva, si la casilla la seguia.
+
+        `anterior` es la propuesta de antes de cambiar el valor. La casilla se
+        actualiza cuando estaba vacia o tenia justo esa cifra -- es decir,
+        cuando nadie la habia tocado a mano --. Una cifra tecleada por la casa
+        no la pisa un cambio de valor: el redondeo sigue siendo suyo.
+        """
+        if self.impuesto_reportado is None or self.impuesto_reportado == anterior:
+            self.impuesto_reportado = self.propuesta()
 
     @property
     def impuesto_estimado(self):

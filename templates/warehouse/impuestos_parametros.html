@@ -1,0 +1,173 @@
+{% load i18n l10n wms_filters %}
+{% get_current_language as idioma_actual %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Calculation settings" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  {% comment %}
+  Los numeros del calculo de impuestos que pone la casa.
+
+  Guardar crea una fila nueva con la fecha desde la que vale; no pisa la que
+  hay. Asi un estimado dado en marzo sigue saliendo con lo que valia en marzo.
+  El historico va debajo para que se vea que cambio y cuando.
+
+  Solo la casa: el cliente no entra (la vista le responde 404).
+  {% endcomment %}
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    .wrap{max-width:760px;margin:16px auto 80px;padding:0 16px}
+    h1{font-size:18px;margin:6px 0 4px}
+    .sub{font-size:12.5px;color:var(--soft);margin:0 0 16px;line-height:1.5}
+    .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;padding:16px;margin-bottom:16px}
+    .card h2{font-family:'IBM Plex Mono',monospace;font-size:13px;margin:0 0 12px}
+    .rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+    label{display:block;font-size:12.5px;font-weight:600;margin-bottom:4px}
+    label small{display:block;font-weight:400;color:var(--faint);font-size:11px;margin-top:2px}
+    input{width:100%;font-family:'IBM Plex Mono',monospace;font-size:16px;padding:9px 10px;
+          border:1px solid var(--bdr-fuerte);border-radius:var(--r);background:var(--bg-sutil);color:var(--ink)}
+    input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--asoft)}
+    .ejemplo{grid-column:1/-1;background:var(--bg-sutil);border:1px dashed var(--bdr-fuerte);
+             border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--soft);line-height:1.5}
+    .ejemplo b{color:var(--ink);font-family:'IBM Plex Mono',monospace}
+    .acciones{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+    .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:var(--r);
+         padding:10px 16px;font-size:14px;font-family:inherit;cursor:pointer;color:var(--ink);text-decoration:none}
+    .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+    .msg{padding:10px 12px;border-radius:var(--r);font-size:13px;margin-bottom:12px}
+    .msg-error{background:var(--rsoft);color:var(--err-ink)}
+    .msg-ok{background:var(--ok-bg);color:var(--ok-ink-fuerte)}
+    .tabla{width:100%;border-collapse:collapse;font-size:12.5px}
+    .tabla th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--soft);
+              border-bottom:1px solid var(--bdr);padding:6px 8px;white-space:nowrap}
+    .tabla td{border-bottom:1px solid var(--bdr);padding:7px 8px;font-family:'IBM Plex Mono',monospace;white-space:nowrap}
+    .tabla tr.vigente td{background:var(--ok-bg)}
+    .desliza{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .vacio{color:var(--soft);font-size:12.5px}
+  </style>
+</head>
+<body>
+
+{% include "warehouse/partials/barra_superior.html" with activa='impuestos' %}
+
+<div class="wrap">
+  <a class="bs-volver" href="{% url 'impuestos_panel' %}{% if volver %}?customer={{ volver }}{% endif %}">← {% trans "Back to the sheet" %}</a>
+  <h1>{% trans "Calculation settings" %}</h1>
+  <p class="sub">{% trans "The numbers of the duty calculation that do not come from any formula. Saving creates a new version valid from the date you choose; estimates already given keep the numbers they were made with." %}</p>
+
+  {% if aviso %}<div class="msg msg-ok">&#10003; {{ aviso }}</div>{% endif %}
+  {% for e in errores %}<div class="msg msg-error">&#10007; {{ e }}</div>{% endfor %}
+
+  {% localize off %}
+  <form method="post" class="card">
+    {% csrf_token %}
+    <input type="hidden" name="customer" value="{{ volver }}">
+    <h2>{% trans "New version" %}</h2>
+    <div class="rejilla">
+      <div>
+        <label for="p-tc">{% trans "Working exchange rate" %}
+          <small>{% trans "Typed by hand and deliberately high." %}</small></label>
+        <input id="p-tc" name="tipo_de_cambio" type="number" step="0.0001" inputmode="decimal" required
+               value="{% if datos %}{{ datos.tipo_de_cambio }}{% else %}{{ vigentes.tipo_de_cambio }}{% endif %}">
+      </div>
+      <div>
+        <label for="p-prev">{% trans "Pre-validation MXN" %}</label>
+        <input id="p-prev" name="prevalidacion" type="number" step="0.01" inputmode="decimal" required
+               value="{% if datos %}{{ datos.prevalidacion }}{% else %}{{ vigentes.prevalidacion }}{% endif %}">
+      </div>
+      <div>
+        <label for="p-dta">{% trans "DTA rate without T-MEC" %}
+          <small>{% trans "A fraction: 0.008 is 8 per thousand." %}</small></label>
+        <input id="p-dta" name="dta_sin_tmec" type="number" step="0.000001" inputmode="decimal" required
+               value="{% if datos %}{{ datos.dta_sin_tmec }}{% else %}{{ vigentes.dta_sin_tmec }}{% endif %}">
+      </div>
+      <div>
+        <label for="p-dta-con">{% trans "DTA rate with T-MEC" %}</label>
+        <input id="p-dta-con" name="dta_con_tmec" type="number" step="0.000001" inputmode="decimal" required
+               value="{% if datos %}{{ datos.dta_con_tmec }}{% else %}{{ vigentes.dta_con_tmec }}{% endif %}">
+      </div>
+      <div>
+        <label for="p-margen">{% trans "Estimate margin" %} (%)
+          <small>{% trans "Added to the exact figure before rounding." %}</small></label>
+        <input id="p-margen" name="margen_pct" type="number" step="0.01" inputmode="decimal" required
+               value="{% if datos %}{{ datos.margen_pct }}{% else %}{{ margen_pct|floatformat:'-2' }}{% endif %}">
+      </div>
+      <div>
+        <label for="p-redondeo">{% trans "Round the estimate up to" %}
+          <small>{% trans "The next multiple of this amount, in pesos. 0 means no rounding." %}</small></label>
+        <input id="p-redondeo" name="redondeo_estimado" type="number" step="1" inputmode="numeric" required
+               value="{% if datos %}{{ datos.redondeo_estimado }}{% else %}{{ vigentes.redondeo_estimado|floatformat:'-2' }}{% endif %}">
+      </div>
+      <div>
+        <label for="p-desde">{% trans "Valid from" %}</label>
+        <input id="p-desde" name="vigente_desde" type="date" min="{{ hoy|date:'Y-m-d' }}"
+               value="{% if datos %}{{ datos.vigente_desde }}{% else %}{{ hoy|date:'Y-m-d' }}{% endif %}">
+      </div>
+      <p class="ejemplo" data-papel="ejemplo">{% trans "Example:" %} <span data-papel="ejemplo-texto"></span></p>
+    </div>
+    <div class="acciones">
+      <button class="btn btn-p" type="submit">{% trans "Save" %}</button>
+      <a class="btn" href="{% url 'impuestos_panel' %}{% if volver %}?customer={{ volver }}{% endif %}">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+  {% endlocalize %}
+
+  <div class="card">
+    <h2>{% trans "History" %}</h2>
+    {% if historico %}
+    <div class="desliza">
+      <table class="tabla">
+        <thead><tr>
+          <th>{% trans "Valid from" %}</th><th>{% trans "Exchange rate" %}</th>
+          <th>{% trans "Pre-validation" %}</th><th>DTA</th><th>DTA T-MEC</th>
+          <th>{% trans "Margin" %}</th><th>{% trans "Rounding" %}</th><th>{% trans "By" %}</th>
+        </tr></thead>
+        <tbody>
+        {% for f in historico %}
+          <tr{% if f.pk == vigentes.pk %} class="vigente"{% endif %}>
+            <td>{{ f.vigente_desde|date:"d/m/Y" }}</td>
+            <td>{{ f.tipo_de_cambio|floatformat:4 }}</td>
+            <td>{{ f.prevalidacion|pesos }}</td>
+            <td>{{ f.dta_sin_tmec|floatformat:"-6" }}</td>
+            <td>{{ f.dta_con_tmec|floatformat:"-6" }}</td>
+            <td>{{ f.margen_pct|floatformat:"-2" }}%</td>
+            <td>{{ f.redondeo_estimado|pesos }}</td>
+            <td>{{ f.created_by.username|default:"—" }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="vacio">{% trans "Nothing saved yet: the calculation is using the default values shown above." %}</p>
+    {% endif %}
+  </div>
+</div>
+
+{% comment %}
+El ejemplo se rehace al teclear: con un pedimento exacto de 12,340 se ve que
+cifra le saldria al cliente con el margen y el redondeo puestos.
+{% endcomment %}
+<script>
+(function () {
+  const T_CON = "{% trans "an exact figure of 12,340 is proposed to the customer as" %}";
+  function ejemplo() {
+    const m = parseFloat(document.getElementById('p-margen').value) || 0;
+    const paso = Math.round((parseFloat(document.getElementById('p-redondeo').value) || 0) * 100);
+    const con = 1234000 * (1 + m / 100);
+    const cifra = paso > 0 ? Math.ceil(con / paso - 1e-9) * paso / 100 : Math.round(con) / 100;
+    document.querySelector('[data-papel="ejemplo-texto"]').innerHTML =
+      T_CON + ' <b>' + cifra.toLocaleString('en-US') + '</b>.';
+  }
+  document.getElementById('p-margen').addEventListener('input', ejemplo);
+  document.getElementById('p-redondeo').addEventListener('input', ejemplo);
+  ejemplo();
+})();
+</script>
+
+{% if es_telefono %}{% include "warehouse/partials/barra_inferior.html" with activa='impuestos' %}{% endif %}
+</body>
+</html>

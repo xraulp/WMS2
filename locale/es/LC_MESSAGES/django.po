@@ -4068,3 +4068,110 @@ msgstr "Hasta %(n)s archivos a la vez."
 
 msgid "Exit No."
 msgstr "No. de salida"
+
+msgid "That is not a sum. Type a number, or an addition like 500+700."
+msgstr "Eso no es una cuenta. Escriba un número, o una suma como 500+700."
+
+msgid "The same chain as the spreadsheet, column by column. It updates as you type."
+msgstr "La misma cadena que la hoja de cálculo, columna por columna. Se actualiza mientras escribe."
+
+msgid "The exact figure."
+msgstr "La cifra exacta."
+
+#, python-format
+msgid "Estimate +%(pct)s%% rounded up to %(paso)s"
+msgstr "Estimado +%(pct)s%% redondeado hacia arriba a %(paso)s"
+
+msgid "It fills in by itself with the proposed estimate while you type. You can change it: a figure typed by hand is kept."
+msgstr "Se llena sola con el estimado propuesto mientras escribe. Puede cambiarla: una cifra puesta a mano se respeta."
+
+msgid "This is the figure the customer sees on their sheet."
+msgstr "Es la cifra que el cliente ve en su hoja."
+
+msgid "Proposed:"
+msgstr "Propuesta:"
+
+msgid "Back to the proposal"
+msgstr "Volver a la propuesta"
+
+msgid "Calculation settings"
+msgstr "Parámetros del cálculo"
+
+msgid "The exchange rate has to be a number above zero."
+msgstr "El tipo de cambio tiene que ser un número mayor que cero."
+
+msgid "The pre-validation fee has to be zero or more."
+msgstr "La cuota de prevalidación tiene que ser cero o más."
+
+msgid "The DTA rates are fractions between 0 and 1: 0.008 and not 8."
+msgstr "Las tasas del DTA son fracciones entre 0 y 1: 0.008 y no 8."
+
+msgid "The margin is a percentage between 0 and 100."
+msgstr "El margen es un porcentaje entre 0 y 100."
+
+msgid "The rounding step has to be zero or more."
+msgstr "El redondeo tiene que ser cero o más."
+
+msgid "The date is not valid."
+msgstr "La fecha no es válida."
+
+msgid "The date cannot be in the past: it would change estimates already given."
+msgstr "La fecha no puede ser pasada: cambiaría estimados que ya se dieron."
+
+#, python-format
+msgid "Calculation settings saved, valid from %(fecha)s."
+msgstr "Parámetros del cálculo guardados, vigentes desde el %(fecha)s."
+
+msgid "The numbers of the duty calculation that do not come from any formula. Saving creates a new version valid from the date you choose; estimates already given keep the numbers they were made with."
+msgstr "Los números del cálculo de impuestos que no salen de ninguna fórmula. Guardar crea una versión nueva vigente desde la fecha que elija; los estimados ya dados conservan los números con que se hicieron."
+
+msgid "New version"
+msgstr "Versión nueva"
+
+msgid "Typed by hand and deliberately high."
+msgstr "Se teclea a mano y va alto a propósito."
+
+msgid "DTA rate without T-MEC"
+msgstr "Tasa del DTA sin T-MEC"
+
+msgid "A fraction: 0.008 is 8 per thousand."
+msgstr "Una fracción: 0.008 es 8 al millar."
+
+msgid "DTA rate with T-MEC"
+msgstr "Tasa del DTA con T-MEC"
+
+msgid "Estimate margin"
+msgstr "Margen del estimado"
+
+msgid "Added to the exact figure before rounding."
+msgstr "Se suma a la cifra exacta antes de redondear."
+
+msgid "Round the estimate up to"
+msgstr "Redondear el estimado hacia arriba a"
+
+msgid "The next multiple of this amount, in pesos. 0 means no rounding."
+msgstr "Al siguiente múltiplo de esta cantidad, en pesos. 0 es sin redondeo."
+
+msgid "Valid from"
+msgstr "Vigente desde"
+
+msgid "Example:"
+msgstr "Ejemplo:"
+
+msgid "History"
+msgstr "Histórico"
+
+msgid "Margin"
+msgstr "Margen"
+
+msgid "Rounding"
+msgstr "Redondeo"
+
+msgid "By"
+msgstr "Por"
+
+msgid "Nothing saved yet: the calculation is using the default values shown above."
+msgstr "Todavía no hay nada guardado: el cálculo usa los valores por omisión que se ven arriba."
+
+msgid "an exact figure of 12,340 is proposed to the customer as"
+msgstr "una cifra exacta de 12,340 se le propone al cliente como"

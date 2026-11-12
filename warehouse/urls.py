@@ -167,6 +167,8 @@ urlpatterns = [
     path('impuestos/from-operations/', views.operaciones_a_impuestos,
          name='operaciones_a_impuestos'),
     path('impuestos/pdf/', views.impuestos_pdf, name='impuestos_pdf'),
+    # Los numeros del calculo que pone la casa, con la fecha desde la que valen.
+    path('impuestos/parametros/', views.impuestos_parametros, name='impuestos_parametros'),
     path('impuestos/email/', views.impuestos_email, name='impuestos_email'),
     path('impuestos/<int:pk>/save/', views.renglon_guardar, name='renglon_guardar'),
     # De que se compone la cifra. Pantalla aparte, y no un desplegable dentro

@@ -3099,8 +3099,12 @@ def operation_edit(request, pk):
                     if (valor is not None and renglon.valor_mercancia is not None
                             and valor != renglon.valor_mercancia):
                         renglon.valor_anterior = renglon.valor_mercancia
+                    anterior = renglon.propuesta()
                     renglon.valor_expresion = expresion
                     renglon.valor_mercancia = valor
+                    # La cifra de la hoja del cliente sigue al valor nuevo,
+                    # salvo que la casa la haya tecleado a mano.
+                    renglon.seguir_la_propuesta(anterior)
                     renglon.updated_by = request.user
                     renglon.save()
 
@@ -5771,20 +5775,28 @@ def enlazar_renglon_de_impuestos(op, usuario=None, valor=None,
         # suelto: el de la entrada se escribio con el papel del embarque
         # delante, y el suelto era una previsión.
         if valor is not None:
+            anterior = suelto.propuesta()
             suelto.valor_expresion = expresion or str(valor)
             suelto.valor_mercancia = valor
-            campos += ['valor_expresion', 'valor_mercancia']
+            suelto.seguir_la_propuesta(anterior)
+            campos += ['valor_expresion', 'valor_mercancia', 'impuesto_reportado']
         if tiene_factura is not None:
             suelto.factura_manual = tiene_factura
             campos.append('factura_manual')
         suelto.save(update_fields=campos)
         return suelto
-    return RenglonDeImpuestos.objects.create(
+    renglon = RenglonDeImpuestos.objects.create(
         tenant=op.tenant, customer=op.customer, operation=op,
         po_order=pedido, updated_by=usuario,
         valor_expresion=(expresion or '') if valor is not None else '',
         valor_mercancia=valor,
         factura_manual=tiene_factura)
+    # Nace con valor: la hoja del cliente arranca ya con la cifra propuesta
+    # (la exacta mas el margen, a numero cerrado) en vez de la exacta.
+    if valor:
+        renglon.seguir_la_propuesta(None)
+        renglon.save(update_fields=['impuesto_reportado', 'updated_at'])
+    return renglon
 
 
 @login_required
@@ -6247,7 +6259,10 @@ def renglon_calculo(request, pk):
         pk=pk, tenant=tenant)
 
     parametros = ParametrosDeImpuestos.vigentes(tenant, renglon.fecha_reportado)
-    cuenta = renglon.calcular(parametros) if renglon.valor_mercancia else None
+    # La cuenta se pinta siempre, tambien sin valor: el guion del cajon la
+    # rehace mientras se teclea, y necesita las casillas puestas para
+    # rellenarlas. Sin valor se esconde y se dice que falta el dato.
+    cuenta = renglon.calcular(parametros)
 
     # Lo pide el guion de la hoja, no el navegador: entonces va el cajon solo.
     en_la_hoja = request.headers.get('X-Requested-With') == 'fetch'
@@ -6258,12 +6273,109 @@ def renglon_calculo(request, pk):
         'profile': profile,
         'parametros': parametros,
         'cuenta': cuenta,
+        'hay_valor': bool(renglon.valor_mercancia),
+        # El margen en por ciento, para los textos: "15 %" y no "0.1500".
+        'margen_pct': parametros.margen_estimado * 100,
         'desde': 'cajon' if en_la_hoja else 'pantalla',
     }
     if en_la_hoja:
         return render(request, 'warehouse/partials/calculo.html', contexto)
     contexto['error'] = request.session.pop('error_de_impuestos', None)
     return render(request, 'warehouse/impuestos_calculo.html', contexto)
+
+
+@login_required
+def impuestos_parametros(request):
+    """
+    Los numeros del calculo que pone la casa: tipo de cambio, prevalidacion,
+    las dos tasas del DTA, y el margen y el redondeo del estimado.
+
+    Hasta el 12 nov 2026 no habia donde cambiarlos y todo corria con los
+    valores por omision. Guardar **no pisa** la fila vigente: crea otra que
+    vale desde la fecha que se elija. Es lo que protege los estimados ya dados
+    -- un calculo de marzo sigue con la cuota de marzo --, y por eso tampoco se
+    acepta una fecha pasada: seria reescribir hacia atras lo que ya se le dijo
+    al cliente.
+
+    El cliente no entra: el margen y el tipo de cambio alto son justo lo que
+    no se le enseña.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if profile.is_customer():
+        raise Http404
+
+    hoy = timezone.localdate()
+    vigentes = ParametrosDeImpuestos.vigentes(tenant)
+    volver = (request.GET.get('customer') or request.POST.get('customer') or '').strip()
+    errores = []
+
+    if request.method == 'POST':
+        p = request.POST
+
+        def dec(nombre):
+            try:
+                crudo = (p.get(nombre) or '').strip().replace(',', '')
+                return Decimal(crudo) if crudo else None
+            except InvalidOperation:
+                return None
+
+        tc       = dec('tipo_de_cambio')
+        prev     = dec('prevalidacion')
+        dta_sin  = dec('dta_sin_tmec')
+        dta_con  = dec('dta_con_tmec')
+        margen   = dec('margen_pct')
+        redondeo = dec('redondeo_estimado')
+        try:
+            desde = date.fromisoformat((p.get('vigente_desde') or '').strip()) \
+                if (p.get('vigente_desde') or '').strip() else hoy
+        except ValueError:
+            desde = None
+
+        if tc is None or tc <= 0:
+            errores.append(_('The exchange rate has to be a number above zero.'))
+        if prev is None or prev < 0:
+            errores.append(_('The pre-validation fee has to be zero or more.'))
+        for valor in (dta_sin, dta_con):
+            if valor is None or not (0 <= valor < 1):
+                errores.append(_('The DTA rates are fractions between 0 and 1: 0.008 and not 8.'))
+                break
+        if margen is None or not (0 <= margen <= 100):
+            errores.append(_('The margin is a percentage between 0 and 100.'))
+        if redondeo is None or redondeo < 0:
+            errores.append(_('The rounding step has to be zero or more.'))
+        if desde is None:
+            errores.append(_('The date is not valid.'))
+        elif desde < hoy:
+            errores.append(_('The date cannot be in the past: it would change estimates already given.'))
+
+        if not errores:
+            ParametrosDeImpuestos.objects.create(
+                tenant=tenant, vigente_desde=desde, tipo_de_cambio=tc,
+                prevalidacion=prev, dta_sin_tmec=dta_sin, dta_con_tmec=dta_con,
+                margen_estimado=(margen / 100).quantize(Decimal('0.0001')),
+                redondeo_estimado=redondeo, created_by=request.user)
+            request.session['aviso_de_impuestos'] = str(
+                _('Calculation settings saved, valid from %(fecha)s.')
+                % {'fecha': desde.strftime('%d/%m/%Y')})
+            destino = reverse('impuestos_parametros')
+            if volver:
+                destino += f'?customer={volver}'
+            return redirect(destino)
+
+    historico = (ParametrosDeImpuestos.objects.filter(tenant=tenant)
+                 .select_related('created_by')
+                 .order_by('-vigente_desde', '-created_at')[:30])
+    return render(request, 'warehouse/impuestos_parametros.html', {
+        'vigentes': vigentes,
+        'margen_pct': vigentes.margen_estimado * 100,
+        'historico': historico,
+        'hoy': hoy,
+        'errores': errores,
+        'datos': request.POST if errores else None,
+        'volver': volver,
+        'aviso': request.session.pop('aviso_de_impuestos', None),
+    })
 
 
 @login_required

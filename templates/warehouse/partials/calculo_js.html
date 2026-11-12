@@ -28,6 +28,136 @@ que los identificadores choquen ni haya que numerar funciones.
       {minimumFractionDigits: 2, maximumFractionDigits: 2});
   }
 
+  // Como el filtro `pesos` del servidor: sin centavos cuando no los hay. Una
+  // cifra que cambia de forma al guardar parece otra cifra.
+  function comoEnLaHoja(n) {
+    const centavos = Math.round(n * 100);
+    if (centavos % 100 === 0) return (centavos / 100).toLocaleString('en-US');
+    return (centavos / 100).toLocaleString('en-US',
+      {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
+  // ── La cuenta mientras se teclea ──────────────────────────────────────────
+  //
+  // La misma cadena que `impuestos.calcular` en el servidor, letra por letra
+  // del Excel. Lo que se guarda lo vuelve a calcular el servidor; esto es para
+  // ver la cifra sin tener que guardar.
+
+  // La casilla del valor acepta lo mismo que el servidor: un numero o una
+  // cuenta. La expresion regular es la de `_EXPRESION_VALIDA`, y es lo que
+  // hace seguro evaluarla: solo digitos, operadores, punto, coma y parentesis.
+  const EXPRESION_VALIDA = /^[0-9+\-*/().,\s]+$/;
+
+  function resolverExpresion(texto) {
+    texto = (texto || '').trim();
+    if (!texto) return 0;
+    if (!EXPRESION_VALIDA.test(texto) || texto.replace(/\s/g, '').indexOf('**') !== -1
+        || texto.length > 60) return null;
+    const limpio = texto.replace(/[,\s]/g, '');
+    if (!limpio) return 0;
+    try {
+      const n = Function('"use strict";return (' + limpio + ');')();
+      return (typeof n === 'number' && isFinite(n)) ? n : null;
+    } catch (e) { return null; }
+  }
+
+  function num(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+
+  // El total mas el margen, subido al siguiente multiplo del paso. En
+  // centavos enteros: con flotantes, 14,500 justos podian salir 15,000.
+  function estimadoRedondeado(total, margen, paso) {
+    const centavos = Math.round(total * 100);
+    if (centavos <= 0) return 0;
+    const conMargen = centavos * (1 + margen);
+    const pasoC = Math.round(paso * 100);
+    if (pasoC <= 0) return Math.round(conMargen) / 100;
+    return Math.ceil(conMargen / pasoC - 1e-9) * pasoC / 100;
+  }
+
+  function poner(cj, letra, texto) {
+    cj.querySelectorAll('[data-cifra="' + letra + '"]').forEach(function (e) {
+      e.textContent = texto;
+    });
+  }
+
+  function recalcular(cj) {
+    const p = cj.dataset;
+    const campo = function (nombre) { return cj.querySelector('[name="' + nombre + '"]'); };
+    const casillaValor = campo('valor');
+    const B = resolverExpresion(casillaValor ? casillaValor.value : '');
+    const mal = cj.querySelector('[data-papel="valor-mal"]');
+    if (casillaValor) casillaValor.classList.toggle('cj-mal', B === null);
+    if (mal) mal.hidden = B !== null;
+    if (B === null) return;   // un dedazo: se deja la ultima cuenta buena
+
+    const C = num(campo('fletes') && campo('fletes').value);
+    const D = num(campo('incrementables') && campo('incrementables').value);
+    const L = num(campo('tasa_igi') && campo('tasa_igi').value);
+    const tmec = !!(campo('aplica_tmec') && campo('aplica_tmec').checked);
+    const F = num(p.tc), S = num(p.prevalidacion);
+    const tasaDta = tmec ? num(p.dtaCon) : num(p.dtaSin);
+
+    const E = B + C + D;
+    const G = B ? E / B : 1;
+    const I = E * F;
+    const K = I * tasaDta;
+    const M = I * L;
+    const N = K + M;
+    const Q = (I + N) * 0.16;
+    const T = Math.round((N + Q + S) * 100) / 100;
+    const U = B > 0 ? estimadoRedondeado(T, num(p.margen), num(p.paso)) : 0;
+
+    const hay = B > 0;
+    const salida = cj.querySelector('[data-papel="salida"]');
+    const sinValor = cj.querySelector('[data-papel="sin-valor"]');
+    const propuesta = cj.querySelector('[data-papel="propuesta-texto"]');
+    const colchon = cj.querySelector('.cj-colchon');
+    if (salida) salida.hidden = !hay;
+    if (sinValor) sinValor.hidden = hay;
+    if (propuesta) propuesta.hidden = !hay;
+    if (colchon) colchon.hidden = !hay;
+
+    poner(cj, 'E', comoEnLaHoja(E));
+    poner(cj, 'I', comoEnLaHoja(I));
+    poner(cj, 'K', comoEnLaHoja(K));
+    poner(cj, 'M', comoEnLaHoja(M));
+    poner(cj, 'Q', comoEnLaHoja(Q));
+    poner(cj, 'S', comoEnLaHoja(S));
+    poner(cj, 'T', comoEnLaHoja(T));
+    poner(cj, 'U', comoEnLaHoja(U));
+    poner(cj, 'G', G.toFixed(8));
+    const exacto = cj.querySelector('[data-exacto]');
+    if (exacto) exacto.dataset.exacto = U.toFixed(2);
+    const nota = cj.querySelector('[data-papel="dta-nota"]');
+    if (nota) nota.textContent = tmec ? nota.dataset.con : nota.dataset.sin;
+
+    // La casilla del cliente sigue a la propuesta mientras nadie la toque.
+    const casilla = cj.querySelector('[data-papel="reportado"]');
+    if (casilla && !casilla.dataset.tocada) casilla.value = hay ? U.toFixed(2) : '';
+
+    // El colchon mide sobre la cuenta nueva.
+    if (colchon) {
+      Object.assign(colchon.dataset, {
+        valor: B, fletes: C, incrementables: D, igi: L, dta: tasaDta,
+        prevalidacion: S, tc: F, total: T});
+      const ref = colchon.querySelector('[data-papel="tc-ref"]');
+      if (ref) medirColchon(ref);
+    }
+  }
+
+  // Tocar la casilla del cliente a mano la suelta de la propuesta; ponerle
+  // justo la propuesta la vuelve a enganchar.
+  function marcarTocada(casilla) {
+    const cj = casilla.closest('.cj');
+    const exacto = cj ? cj.querySelector('[data-exacto]') : null;
+    const propuesta = exacto ? num(exacto.dataset.exacto) : null;
+    const igual = casilla.value !== '' && propuesta !== null &&
+                  Math.abs(num(casilla.value) - propuesta) < 0.005;
+    if (igual) delete casilla.dataset.tocada; else casilla.dataset.tocada = '1';
+    const volver = cj ? cj.querySelector('[data-papel="volver"]') : null;
+    if (volver) volver.hidden = igual;
+  }
+
   // ── Abrir y cerrar ────────────────────────────────────────────────────────
   //
   // Solo un cajon abierto a la vez. Con dos abiertos la hoja deja de leerse de
@@ -164,6 +294,10 @@ que los identificadores choquen ni haya que numerar funciones.
     const casilla = caja ? caja.querySelector('[data-papel="reportado"]') : null;
     if (!casilla || valor === null) return;
     casilla.value = valor;
+    // Vuelve a seguir a la propuesta: si despues cambia el valor, cambia ella.
+    delete casilla.dataset.tocada;
+    const volver = caja.querySelector('[data-papel="volver"]');
+    if (volver) volver.hidden = true;
     // Reiniciar la animacion: sin esto el segundo clic no destella y parece
     // que el boton no hizo nada.
     casilla.classList.remove('cj-destacada');
@@ -218,8 +352,23 @@ que los identificadores choquen ni haya que numerar funciones.
     }
   });
 
-  document.addEventListener('input', function (e) {
-    if (e.target.dataset && e.target.dataset.papel === 'tc-ref') medirColchon(e.target);
+  // Lo que mueve la cuenta. El T-MEC es una casilla de palomear: dispara
+  // `change` y no siempre `input`, asi que se escuchan los dos.
+  const MUEVEN_LA_CUENTA = ['valor', 'fletes', 'incrementables', 'tasa_igi', 'aplica_tmec'];
+
+  function alTeclear(e) {
+    const t = e.target;
+    if (!t || !t.dataset) return;
+    if (t.dataset.papel === 'tc-ref') { medirColchon(t); return; }
+    if (t.dataset.papel === 'reportado') { marcarTocada(t); return; }
+    if (MUEVEN_LA_CUENTA.indexOf(t.name) !== -1) {
+      const cj = t.closest('.cj');
+      if (cj) recalcular(cj);
+    }
+  }
+  document.addEventListener('input', alTeclear);
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.type === 'checkbox') alTeclear(e);
   });
 
   // Al volver de guardar, la hoja se pinta de nuevo y el cajon se abre solo en

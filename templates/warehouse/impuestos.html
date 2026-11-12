@@ -291,6 +291,15 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
             &#8635; {% trans "Refresh" %}</a>
           <a class="btn btn-sm" href="{% url 'impuestos_pdf' %}?customer={{ cliente.pk }}">
             &#8681; {% trans "PDF" %}</a>
+          {% if ve_los_calculos %}
+          {% comment %}
+          Los numeros del calculo que no salen de ninguna formula: tipo de
+          cambio, prevalidacion, DTA, y el margen y el redondeo del estimado.
+          Solo la casa; el cliente no ve ni el boton.
+          {% endcomment %}
+          <a class="btn btn-sm" href="{% url 'impuestos_parametros' %}?customer={{ cliente.pk }}">
+            &#9881; {% trans "Calculation settings" %}</a>
+          {% endif %}
           {% comment %}
           Mandar a cruce desde aqui, que es donde se ve que un embarque ya esta
           listo. Lleva a la pantalla de marcar con los listos ya marcados -- el
@@ -606,14 +615,15 @@ cajon del renglon en el que se estaba, en vez de dejar la hoja al principio.
           <span style="display:flex;gap:8px;align-items:center">
             {% if ve_los_calculos %}
             {% comment %}
-            Desactivado a proposito (6 nov 2026): Diego todavia esta disenando
-            como presentar el desglose en el telefono. El boton se queda para
-            que no se mueva la ficha, pero no abre nada. Para volver a
-            encenderlo: un <a> a `renglon_calculo` con `data-abre-cajon`.
+            Encendido de nuevo el 12 nov 2026, con la cuenta en vivo: en el
+            telefono es donde se teclea el valor con la factura delante, y la
+            cifra sale mientras se escribe. Estuvo apagado desde el 6 nov
+            mientras se decidia como presentarlo.
             {% endcomment %}
-            <button class="mini" type="button" disabled aria-disabled="true"
-                    style="opacity:.45;cursor:not-allowed">
-              &#8942; {% trans "Breakdown" %}</button>
+            <a class="mini" href="{% url 'renglon_calculo' r.pk %}"
+               data-abre-cajon="{{ r.pk }}" aria-expanded="false"
+               aria-controls="cajon-f-{{ r.pk }}">
+              &#8942; {% trans "Breakdown" %}</a>
             {% endif %}
             <form method="post" action="{% url 'renglon_quitar' r.pk %}" style="margin:0"
                   onsubmit="return confirm('{% trans "Remove this shipment from the sheet? It is not deleted: the shipment stays in the warehouse and can be put back." %}')">

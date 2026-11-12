@@ -584,8 +584,10 @@ class ElValorSeCorrigeDesdeLaEdicionTests(BaseDeLaHoja):
         self.client.post('/operations/%d/edit/' % self.op.pk,
                          {'date': '2026-09-13', 'valor_mercancia': '10395.00'})
         respuesta = self.client.get('/impuestos/', {'customer': self.cliente.pk})
+        # Desde el 12 nov 2026 la hoja no enseña la exacta (34,376.91) sino la
+        # propuesta: +15 % y al siguiente 500.
         self.assertEqual(str(respuesta.context['renglones'][0].estimado),
-                         '34376.91')
+                         '40000.00')
 
     def test_un_valor_mal_escrito_no_se_guarda_y_avisa(self):
         self.client.force_login(self.jefa)

@@ -32,17 +32,19 @@ Tres cosas que no son evidentes y que valen mas que las formulas:
    valor en aduana entre las facturas de una misma partida del pedimento. Por
    eso se devuelve, y por eso se enseña solo del lado del tenant.
 
-3. **El sistema calcula y propone, nunca decide.** El redondeo es de Diego:
-   siempre hacia arriba y a numero cerrado, a su criterio, porque depende de
-   cosas que el sistema no sabe. Aqui se devuelve la cifra exacta; quien la
-   mande puede subirla, y la pantalla enseña la exacta al lado para que se vea
-   de cuanto es el salto.
+3. **El sistema propone la cifra que se le da al cliente, y la casilla sigue
+   siendo de la casa.** Desde el 12 nov 2026 la propuesta ya no es la exacta:
+   es la exacta mas un margen (15 % por omision) y redondeada hacia arriba al
+   siguiente numero cerrado (500 por omision) -- la cuenta que Diego hacia de
+   cabeza. Margen y paso son parametros del tenant, con fecha. La casilla que
+   se le manda al cliente se llena sola con esa propuesta, pero se puede
+   cambiar, y una cifra tecleada a mano no la pisa nadie.
 
 Los cuatro numeros que no salen de ninguna formula -- el tipo de cambio de
 trabajo, la prevalidacion, y las dos tasas del DTA -- son parametros del
 tenant, con la fecha desde la que valen, y no viven aqui.
 """
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 
 # El IVA. Va como constante y no como parametro porque no es una decision de
 # nadie de la casa: es la tasa general, y el dia que cambie cambia para todos.
@@ -54,6 +56,10 @@ TASA_DE_IVA = Decimal('0.16')
 DTA_SIN_TMEC_POR_OMISION = Decimal('0.008')   # 8 al millar sobre el valor en aduana
 DTA_CON_TMEC_POR_OMISION = Decimal('0')       # con T-MEC no hay derecho de tramite
 PREVALIDACION_POR_OMISION = Decimal('300')    # lo cobra el prevalidador, cambia cada ano
+# Lo que se le suma a la cifra exacta antes de darla, y a que numero cerrado se
+# sube. Van altos a proposito: un estimado corto es un camion que no cruza.
+MARGEN_POR_OMISION  = Decimal('0.15')
+REDONDEO_POR_OMISION = Decimal('500')
 
 CENTAVO = Decimal('0.01')
 
@@ -75,11 +81,36 @@ def _centavos(valor):
     return valor.quantize(CENTAVO, rounding=ROUND_HALF_UP)
 
 
+def estimado_redondeado(total, margen=MARGEN_POR_OMISION,
+                        paso=REDONDEO_POR_OMISION):
+    """
+    La cifra que se le propone al cliente: el total mas el margen, subido al
+    siguiente multiplo de `paso`.
+
+    Siempre hacia arriba, nunca al mas cercano: 14,191 con paso 500 es 14,500,
+    y 14,500 justos se quedan en 14,500. Con paso 500 tambien cae en el mil
+    cuando toca (14,600 -> 15,000), que es lo que se queria.
+
+    Total cero da cero: un renglon sin valor no tiene nada que proponer. Paso
+    cero o negativo deja la cifra con el margen pero sin redondear, a centavos.
+    """
+    total = _dec(total)
+    if total <= 0:
+        return Decimal('0.00')
+    con_margen = total * (Decimal('1') + _dec(margen))
+    paso = _dec(paso)
+    if paso <= 0:
+        return _centavos(con_margen)
+    veces = (con_margen / paso).quantize(Decimal('1'), rounding=ROUND_CEILING)
+    return _centavos(veces * paso)
+
+
 def calcular(valor_mercancia, fletes=0, incrementables=0, tipo_de_cambio=0,
              aplica_tmec=False, tasa_igi=0,
              prevalidacion=PREVALIDACION_POR_OMISION,
              dta_sin_tmec=DTA_SIN_TMEC_POR_OMISION,
-             dta_con_tmec=DTA_CON_TMEC_POR_OMISION):
+             dta_con_tmec=DTA_CON_TMEC_POR_OMISION,
+             margen=MARGEN_POR_OMISION, paso=REDONDEO_POR_OMISION):
     """
     La hoja entera, de los cuatro numeros que se teclean a los once que salen.
 
@@ -141,6 +172,11 @@ def calcular(valor_mercancia, fletes=0, incrementables=0, tipo_de_cambio=0,
         'Q_iva':             _centavos(Q),
         'R_total_impuestos': _centavos(R),
         'T_total_pedimento': _centavos(T),
+        # La propuesta para el cliente: sobre la T ya redondeada a centavos,
+        # que es la que se ve en pantalla, para que la cuenta se pueda seguir.
+        'U_estimado':        estimado_redondeado(_centavos(T), margen, paso),
+        'margen_aplicado':   _dec(margen, MARGEN_POR_OMISION),
+        'paso_aplicado':     _dec(paso, REDONDEO_POR_OMISION),
         # La tasa que se acabo aplicando al DTA, para que se vea por que el
         # derecho de tramite salio en cero cuando salio en cero.
         'tasa_dta_aplicada': tasa_dta,
