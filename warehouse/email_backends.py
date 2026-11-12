@@ -162,22 +162,32 @@ class ResendBackend(BaseEmailBackend):
         """
         adjuntos = []
         for adjunto in getattr(message, 'attachments', None) or []:
+            content_id = ''
             if isinstance(adjunto, (tuple, list)):
                 nombre = adjunto[0] or 'adjunto'
                 contenido = adjunto[1]
             else:
                 nombre = adjunto.get_filename() or 'adjunto'
                 contenido = adjunto.get_payload(decode=True)
+                # Una imagen incrustada -- el logo del encabezado -- trae su
+                # Content-ID, y la plantilla la pide con `cid:`. Resend lo
+                # recibe en `content_id` y sin los `<>` del encabezado MIME;
+                # si se pierde, la imagen llega como adjunto suelto y el
+                # encabezado del correo enseña un recuadro roto.
+                content_id = (adjunto.get('Content-ID') or '').strip().strip('<>')
 
             if contenido is None:
                 continue
             if isinstance(contenido, str):
                 contenido = contenido.encode('utf-8')
 
-            adjuntos.append({
+            pieza = {
                 'filename': nombre,
                 'content': base64.b64encode(contenido).decode('ascii'),
-            })
+            }
+            if content_id:
+                pieza['content_id'] = content_id
+            adjuntos.append(pieza)
         return adjuntos
 
     # ── llamada HTTP ──────────────────────────────────────────────────────────

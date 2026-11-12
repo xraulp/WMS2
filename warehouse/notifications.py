@@ -389,8 +389,77 @@ def _attach_documents(email, operation):
         except Exception:
             logger.warning('No se pudo adjuntar el documento %s (%s)', doc.pk, nombre)
 
+# El Content-ID con el que la plantilla pide el logo: `<img src="cid:...">`.
+LOGO_CID = 'logo-empresa'
+
+
+def logo_para_correo(tenant):
+    """
+    El logo de la empresa listo para ir dentro del correo: `(bytes, nombre)`.
+
+    Va **incrustado** (inline, por Content-ID) y no como enlace porque el
+    almacen es privado: una URL firmada caduca y el correo se queda sin logo en
+    cuanto alguien lo vuelve a abrir una semana despues. Incrustado, ademas,
+    Outlook lo enseña sin que el cliente tenga que pulsar "descargar imagenes".
+
+    Devuelve None sin empresa, sin logo o si el almacen no contesta: un aviso
+    sin logo sale igual.
+    """
+    archivo = getattr(tenant, 'logo', None) if tenant else None
+    if not archivo:
+        return None
+    try:
+        archivo.open('rb')
+        try:
+            contenido = archivo.read()
+        finally:
+            archivo.close()
+    except Exception:
+        logger.warning('No se pudo leer el logo de %s para el correo',
+                       getattr(tenant, 'name', '—'))
+        return None
+    return contenido, (archivo.name or 'logo.png').rsplit('/', 1)[-1]
+
+
+def _adjuntar_logo(email, logo):
+    """Mete el logo como imagen inline con el Content-ID que pide la plantilla."""
+    from email.mime.image import MIMEImage
+    contenido, nombre = logo
+    ext = nombre.rsplit('.', 1)[-1].lower() if '.' in nombre else 'png'
+    imagen = MIMEImage(contenido, _subtype={'jpg': 'jpeg'}.get(ext, ext))
+    imagen.add_header('Content-ID', f'<{LOGO_CID}>')
+    imagen.add_header('Content-Disposition', 'inline', filename=nombre)
+    email.attach(imagen)
+
+
+def _contexto_del_reporte(operation, message_body=''):
+    """
+    Lo que `report_email.html` necesita, y el logo que hay que incrustar.
+
+    Las dos cosas salen juntas porque van atadas: la plantilla solo pide el
+    `cid:` del logo si de verdad se va a adjuntar; un `cid:` sin imagen pinta un
+    recuadro roto en el encabezado.
+
+    En una entrada lleva ademas el enlace para subir la factura y los
+    documentos (ver `carga_por_enlace.py`).
+    """
+    from .carga_por_enlace import dias_de_vigencia, enlace_para_subir
+
+    logo = logo_para_correo(operation.tenant)
+    contexto = {
+        'operation': operation,
+        'message_body': message_body,
+        'logo_cid': LOGO_CID if logo else '',
+    }
+    if operation.operation_type == 'ENTRY' and operation.pk:
+        contexto['enlace_documentos'] = enlace_para_subir(operation)
+        contexto['dias_del_enlace'] = dias_de_vigencia()
+    return contexto, logo
+
+
 def _deliver_email(operation, customer, event, recipients, subject, html_body,
-                   pdf=None, attach_documents=False, triggered_by=None):
+                   pdf=None, attach_documents=False, triggered_by=None,
+                   logo=None):
     """Manda el correo y registra el resultado. Devuelve (enviado, error)."""
     if not recipients:
         log_notification(operation, customer, EMAIL, event, SKIPPED,
@@ -410,6 +479,8 @@ def _deliver_email(operation, customer, event, recipients, subject, html_body,
             reply_to=responder,
         )
         email.content_subtype = 'html'
+        if logo:
+            _adjuntar_logo(email, logo)
         if pdf is not None:
             email.attach(f'{operation.custom_id}.pdf', pdf, 'application/pdf')
         if attach_documents and operation:
@@ -529,9 +600,9 @@ def notify_operation_created(operation, triggered_by=None, message_body='',
         email_error = 'preference_off'
     else:
         with en_el_idioma_de(customer):
+            contexto, logo = _contexto_del_reporte(operation, message_body)
             html_body = render_to_string(
-                'warehouse/email/report_email.html',
-                {'operation': operation, 'message_body': message_body})
+                'warehouse/email/report_email.html', contexto)
             pdf = None
             try:
                 pdf = generate_pdf_report(operation)
@@ -541,7 +612,7 @@ def notify_operation_created(operation, triggered_by=None, message_body='',
         email_sent, email_error = _deliver_email(
             operation, customer, EVENT_CREATED, email_recipients(customer),
             subject, html_body, pdf=pdf, attach_documents=True,
-            triggered_by=triggered_by)
+            triggered_by=triggered_by, logo=logo)
         if email_sent:
             mark_email_sent(operation)
 
@@ -654,8 +725,8 @@ def send_manual_email(operation, recipient, subject, message_body='', triggered_
     Reenvío a mano desde el detalle. Es una orden explícita del operador, así que
     no consulta preferencias; sí queda registrada como cualquier otro envío.
     """
-    html_body = render_to_string('warehouse/email/report_email.html',
-                                 {'operation': operation, 'message_body': message_body})
+    contexto, logo = _contexto_del_reporte(operation, message_body)
+    html_body = render_to_string('warehouse/email/report_email.html', contexto)
     pdf = None
     try:
         pdf = generate_pdf_report(operation)
@@ -665,7 +736,7 @@ def send_manual_email(operation, recipient, subject, message_body='', triggered_
     sent, error = _deliver_email(
         operation, resolve_customer(operation), EVENT_MANUAL, [recipient],
         subject, html_body, pdf=pdf, attach_documents=True,
-        triggered_by=triggered_by)
+        triggered_by=triggered_by, logo=logo)
     if sent:
         mark_email_sent(operation)
     return sent, error

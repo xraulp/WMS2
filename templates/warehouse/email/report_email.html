@@ -42,14 +42,34 @@
           <tr>
             <td style="padding:0;">
               <!-- ========== CONTENIDO EXISTENTE (sin cambios) ========== -->
-              <div class="hdr" style="background:C62034; padding:24px 28px; border-radius:12px 12px 0 0;">
-                <h1 style="color:#fff; font-size:18px; margin:0 0 3px;">Warehouse Management System</h1>
-                <p style="color:#fff; font-size:12px; margin:0;">
-                  {% if operation.operation_type == 'ENTRY' %}Informe operativo: Entrada de Mercancías{% else %}Informe operativo: Envió de Mercancías{% endif %}
-                </p>
-                <span class="badge {% if operation.operation_type == 'ENTRY' %}badge-entry{% else %}badge-exit{% endif %}" style="display:inline-block; padding:4px 14px; border-radius:99px; font-size:12px; font-weight:700; letter-spacing:.06em; margin-top:10px; background:{% if operation.operation_type == 'ENTRY' %}#10b981{% else %}#ef4444{% endif %}; color:#fff;">
-                  {% if operation.operation_type == 'ENTRY' %}Reporte de Entrada{% else %}Reporte de Salida{% endif %}
-                </span>
+              <div class="hdr" style="background:#C62034; padding:24px 28px; border-radius:12px 12px 0 0;">
+                {% comment %}
+                  El logo va a la derecha del titulo, en una celda de tabla y no
+                  con flex: Outlook y varios clientes de correo ignoran flex. El
+                  fondo blanco detras del logo es para que uno oscuro no se
+                  pierda sobre el rojo. Solo se pide el cid: cuando el logo se
+                  adjunta de verdad (ver `_contexto_del_reporte`).
+                {% endcomment %}
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td valign="middle" style="vertical-align:middle;">
+                      <h1 style="color:#fff; font-size:18px; margin:0 0 3px;">Warehouse Management System</h1>
+                      <p style="color:#fff; font-size:12px; margin:0;">
+                        {% if operation.operation_type == 'ENTRY' %}Informe operativo: Entrada de Mercancías{% else %}Informe operativo: Envió de Mercancías{% endif %}
+                      </p>
+                      <span class="badge {% if operation.operation_type == 'ENTRY' %}badge-entry{% else %}badge-exit{% endif %}" style="display:inline-block; padding:4px 14px; border-radius:99px; font-size:12px; font-weight:700; letter-spacing:.06em; margin-top:10px; background:{% if operation.operation_type == 'ENTRY' %}#10b981{% else %}#ef4444{% endif %}; color:#fff;">
+                        {% if operation.operation_type == 'ENTRY' %}Reporte de Entrada{% else %}Reporte de Salida{% endif %}
+                      </span>
+                    </td>
+                    {% if logo_cid %}
+                    <td align="right" valign="middle" width="110" style="vertical-align:middle; padding-left:12px;">
+                      <div style="background:#fff; border-radius:8px; padding:6px 8px; display:inline-block;">
+                        <img src="cid:{{ logo_cid }}" alt="{{ operation.tenant.name }}" style="display:block; max-height:48px; max-width:96px; height:auto; border:0;">
+                      </div>
+                    </td>
+                    {% endif %}
+                  </tr>
+                </table>
               </div>
 
               <div class="body" style="padding:28px;">
@@ -71,7 +91,7 @@
 
                 <div class="fields" style="border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; margin-bottom:20px;">
                   <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#fff;">
-                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase; letter-spacing:.05em;">{% if operation.operation_type == 'ENTRY' %}Entry No.{% else %}Exit No.{% endif %}</div>
+                    <div class="field-label" style="font-weight:600; color:#64748b; width:100px; flex-shrink:0; font-size:11px; text-transform:uppercase; letter-spacing:.05em;">{% if operation.operation_type == 'ENTRY' %}{% trans "Entry No." %}{% else %}{% trans "Exit No." %}{% endif %}</div>
                     <div class="field-value" style="color:#0f172a;"><b>{{ operation.custom_id }}</b></div>
                   </div>
                   <div class="field" style="display:flex; padding:9px 14px; font-size:13px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
@@ -122,8 +142,23 @@
                 </div>
 
                 <div class="greeting" style="font-size:14px; line-height:1.7; color:#334155; margin-bottom:18px;">
-                  {% if operation.operation_type == 'ENTRY' %}
+                  {% if operation.operation_type == 'ENTRY' and not enlace_documentos %}
                   <b>{% trans "*** PLEASE SEND THE INVOICE, BOL AND ANY OTHER DOCUMENTATION NEEDED FOR THIS OPERATION ***" %}</b><br><br>
+                  {% endif %}
+                  {% if enlace_documentos %}
+                  <div style="border:1px solid #bae6fd; background:#f0f9ff; border-radius:8px; padding:16px; margin-bottom:18px; text-align:center;">
+                    <div style="font-size:14px; font-weight:700; color:#0f172a; margin-bottom:6px;">{% trans "Upload the documents of this entry" %}</div>
+                    <div style="font-size:13px; line-height:1.6; color:#334155; margin-bottom:14px;">
+                      {% trans "Upload the <b>commercial invoice</b>, the BOL and any other document here. They go straight into the digital file of this entry, so the invoice is ready when the goods are crossed." %}
+                    </div>
+                    <a href="{{ enlace_documentos }}"
+                       style="display:inline-block; padding:11px 24px; background:#0ea5e9; color:#fff; border-radius:6px; text-decoration:none; font-size:14px; font-weight:600;">
+                      {% trans "Upload invoice and documents" %}
+                    </a>
+                    <div style="font-size:11px; color:#64748b; margin-top:10px;">
+                      {% blocktrans with dias=dias_del_enlace %}The link works only for this entry and is valid for {{ dias }} days.{% endblocktrans %}
+                    </div>
+                  </div>
                   {% endif %}
                   {% trans "Kind regards." %}
                 </div>

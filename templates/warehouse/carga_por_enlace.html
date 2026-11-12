@@ -1,0 +1,130 @@
+{% load i18n %}
+{% get_current_language as idioma_actual %}
+{% comment %}
+La pagina del boton "Subir factura y documentos" del correo de entrada.
+
+No hay sesion, asi que no hay perfil con un tema guardado: los colores salen de
+variables y siguen el tema del sistema. Se piensa primero para el telefono,
+porque es donde se abre un correo.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex, nofollow"/>
+  <title>{% trans "Upload documents" %}{% if operation %} · {{ operation.custom_id }}{% endif %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f1f5f9; --card:#ffffff; --bdr:#e2e8f0; --txt:#0f172a; --muted:#64748b;
+      --accent:#0ea5e9; --accent-h:#0284c7; --brand:#C62034;
+      --ok-bg:#ecfdf5; --ok-bdr:#a7f3d0; --ok-txt:#065f46;
+      --warn-bg:#fffbeb; --warn-bdr:#fde68a; --warn-txt:#92400e;
+      --err-bg:#fef2f2; --err-bdr:#fecaca; --err-txt:#991b1b;
+      --input:#f8fafc;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#0f172a; --card:#1e293b; --bdr:#334155; --txt:#f1f5f9; --muted:#94a3b8;
+        --ok-bg:#052e1a; --ok-bdr:#166534; --ok-txt:#86efac;
+        --warn-bg:#422006; --warn-bdr:#854d0e; --warn-txt:#fde68a;
+        --err-bg:#450a0a; --err-bdr:#7f1d1d; --err-txt:#fca5a5;
+        --input:#0f172a;
+      }
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'IBM Plex Sans',Arial,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;padding:16px}
+    .wrap{max-width:520px;margin:0 auto}
+    .hdr{background:var(--brand);color:#fff;border-radius:14px 14px 0 0;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .hdr h1{font-size:15px;font-weight:600;line-height:1.3}
+    .hdr p{font-size:12px;opacity:.9;margin-top:2px}
+    .hdr .logo{background:#fff;border-radius:8px;padding:6px 8px;flex-shrink:0;display:flex}
+    .hdr .logo img{display:block;max-height:40px;max-width:110px}
+    .card{background:var(--card);border:1px solid var(--bdr);border-top:none;border-radius:0 0 14px 14px;padding:20px}
+    .card.solo{border-top:1px solid var(--bdr);border-radius:14px}
+    .datos{border:1px solid var(--bdr);border-radius:10px;overflow:hidden;margin-bottom:18px}
+    .dato{display:flex;gap:10px;padding:9px 12px;font-size:13px;border-bottom:1px solid var(--bdr)}
+    .dato:last-child{border-bottom:none}
+    .dato span:first-child{width:96px;flex-shrink:0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding-top:1px}
+    .dato span:last-child{word-break:break-word}
+    .aviso{border:1px solid;border-radius:10px;padding:11px 13px;font-size:13px;line-height:1.5;margin-bottom:16px}
+    .aviso.ok{background:var(--ok-bg);border-color:var(--ok-bdr);color:var(--ok-txt)}
+    .aviso.warn{background:var(--warn-bg);border-color:var(--warn-bdr);color:var(--warn-txt)}
+    .aviso.err{background:var(--err-bg);border-color:var(--err-bdr);color:var(--err-txt)}
+    .campo{margin-bottom:18px}
+    .campo label{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px}
+    .campo .ayuda{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.5}
+    .campo input[type=file]{width:100%;font-size:14px;color:var(--txt);background:var(--input);border:1px dashed var(--bdr);border-radius:10px;padding:14px 12px}
+    .boton{width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer}
+    .boton:hover{background:var(--accent-h)}
+    .boton:disabled{opacity:.6;cursor:wait}
+    .pie{font-size:11px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.6}
+  </style>
+</head>
+<body>
+<div class="wrap">
+{% if not operation %}
+  <div class="card solo">
+    <div class="aviso err">
+      {% if motivo == 'expired' %}
+        {% trans "This link has expired. Reply to the email you received and we will send you a new one." %}
+      {% else %}
+        {% trans "This link is not valid. Check that you copied it whole from the email." %}
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  <div class="hdr">
+    <div>
+      <h1>Warehouse Management System</h1>
+      <p>{{ tenant.name }} · {% trans "Upload documents" %}</p>
+    </div>
+    {% if logo %}<div class="logo"><img src="{{ logo }}" alt="{{ tenant.name }}"></div>{% endif %}
+  </div>
+  <div class="card">
+    {% if subidos %}
+    <div class="aviso ok">
+      {% blocktrans count cuantos=subidos %}{{ cuantos }} file was added to the digital file of this entry.{% plural %}{{ cuantos }} files were added to the digital file of this entry.{% endblocktrans %}
+      {% if subio_factura %}{% trans "The commercial invoice is registered." %}{% endif %}
+    </div>
+    {% endif %}
+    {% for e in errores %}<div class="aviso err">{{ e }}</div>{% endfor %}
+
+    <div class="datos">
+      <div class="dato"><span>{% trans "Entry No." %}</span><span><b>{{ operation.custom_id }}</b></span></div>
+      <div class="dato"><span>{% trans "Date" %}</span><span>{{ operation.date|date:"d/m/Y" }}</span></div>
+      <div class="dato"><span>{% trans "Customer" %}</span><span>{{ operation.get_customer_display }}</span></div>
+      {% if operation.po_order %}<div class="dato"><span>{% trans "PO / Order" %}</span><span>{{ operation.po_order }}</span></div>{% endif %}
+      {% if operation.bundle_qty %}<div class="dato"><span>{% trans "Bundle Qty" %}</span><span>{{ operation.bundle_qty }}</span></div>{% endif %}
+    </div>
+
+    {% if factura %}
+    <div class="aviso ok">{% blocktrans with nombre=factura.original_name %}We already have the commercial invoice of this entry ({{ nombre }}). Upload another one only if it replaces it.{% endblocktrans %}</div>
+    {% else %}
+    <div class="aviso warn">{% trans "We do not have the commercial invoice of this entry yet. Please upload it so it is ready for the crossing." %}</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" onsubmit="this.querySelector('button').disabled=true">
+      {% csrf_token %}
+      <div class="campo">
+        <label for="factura">{% trans "Commercial invoice" %}</label>
+        <div class="ayuda">{% trans "One file: the PDF of the invoice (or its XML)." %}</div>
+        <input type="file" id="factura" name="factura" accept="{{ aceptados }}">
+      </div>
+      <div class="campo">
+        <label for="documentos">{% trans "Other documents" %}</label>
+        <div class="ayuda">{% trans "BOL, packing list, certificates… you can pick several." %}</div>
+        <input type="file" id="documentos" name="documentos" multiple accept="{{ aceptados }}">
+      </div>
+      <button type="submit" class="boton">{% trans "Upload" %}</button>
+    </form>
+    <div class="pie">
+      {% blocktrans %}PDF, XML, images or Office files · up to {{ max_mb }} MB each · up to {{ max_archivos }} files at a time.{% endblocktrans %}<br>
+      {% trans "This page only uploads files to this entry; it does not show what is already in it." %}
+    </div>
+  </div>
+{% endif %}
+</div>
+</body>
+</html>

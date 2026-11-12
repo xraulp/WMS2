@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, cuenta, webhooks
+from . import views, cuenta, webhooks, carga_por_enlace
 
 urlpatterns = [
     path('', views.login_view, name='login'),
@@ -45,6 +45,11 @@ urlpatterns = [
     # Digital
     path('digital/search/', views.digital_search, name='digital_search'),
     path('digital/<int:pk>/upload/', views.digital_upload, name='digital_upload'),
+    # La pagina del boton del correo de entrada: sube la factura y los
+    # documentos sin sesion, con un enlace firmado que solo vale para esa
+    # entrada. Ver warehouse/carga_por_enlace.py.
+    path('entrada/documentos/<str:token>/', carga_por_enlace.subir_por_enlace,
+         name='subir_por_enlace'),
     path('digital/file/<int:doc_pk>/reorder/', views.digital_reorder, name='digital_reorder'),
     path('digital/file/<int:doc_pk>/delete/', views.digital_delete_file, name='digital_delete_file'),
     path('digital/delete-multiple/', views.digital_delete_multiple, name='digital_delete_multiple'),

@@ -3987,3 +3987,84 @@ msgstr "Vacío: por bultos"
 
 msgid "Modify"
 msgstr "Modificar"
+
+msgid "Upload the documents of this entry"
+msgstr "Suba los documentos de esta entrada"
+
+msgid "Upload the <b>commercial invoice</b>, the BOL and any other document here. They go straight into the digital file of this entry, so the invoice is ready when the goods are crossed."
+msgstr "Suba aquí la <b>factura comercial</b>, el BOL y cualquier otro documento. Entran directo al expediente digital de esta entrada, así la factura ya está lista cuando se cruce la mercancía."
+
+msgid "Upload invoice and documents"
+msgstr "Subir factura y documentos"
+
+#, python-format
+msgid "The link works only for this entry and is valid for %(dias)s days."
+msgstr "El enlace solo sirve para esta entrada y es válido por %(dias)s días."
+
+msgid "Upload documents"
+msgstr "Subir documentos"
+
+msgid "This link has expired. Reply to the email you received and we will send you a new one."
+msgstr "Este enlace ya venció. Responda al correo que recibió y le mandaremos uno nuevo."
+
+msgid "This link is not valid. Check that you copied it whole from the email."
+msgstr "Este enlace no es válido. Revise que lo haya copiado completo del correo."
+
+#, python-format
+msgid "%(cuantos)s file was added to the digital file of this entry."
+msgid_plural "%(cuantos)s files were added to the digital file of this entry."
+msgstr[0] "Se agregó %(cuantos)s archivo al expediente digital de esta entrada."
+msgstr[1] "Se agregaron %(cuantos)s archivos al expediente digital de esta entrada."
+
+msgid "The commercial invoice is registered."
+msgstr "La factura comercial quedó registrada."
+
+msgid "Entry No."
+msgstr "No. de entrada"
+
+#, python-format
+msgid "We already have the commercial invoice of this entry (%(nombre)s). Upload another one only if it replaces it."
+msgstr "Ya tenemos la factura comercial de esta entrada (%(nombre)s). Suba otra solo si la sustituye."
+
+msgid "We do not have the commercial invoice of this entry yet. Please upload it so it is ready for the crossing."
+msgstr "Todavía no tenemos la factura comercial de esta entrada. Súbala para que esté lista para el cruce."
+
+msgid "Commercial invoice"
+msgstr "Factura comercial"
+
+msgid "One file: the PDF of the invoice (or its XML)."
+msgstr "Un archivo: el PDF de la factura (o su XML)."
+
+msgid "Other documents"
+msgstr "Otros documentos"
+
+msgid "BOL, packing list, certificates… you can pick several."
+msgstr "BOL, packing list, certificados… puede elegir varios."
+
+msgid "Upload"
+msgstr "Subir"
+
+#, python-format
+msgid "PDF, XML, images or Office files · up to %(max_mb)s MB each · up to %(max_archivos)s files at a time."
+msgstr "PDF, XML, imágenes o archivos de Office · hasta %(max_mb)s MB cada uno · hasta %(max_archivos)s archivos a la vez."
+
+msgid "This page only uploads files to this entry; it does not show what is already in it."
+msgstr "Esta página solo sube archivos a esta entrada; no muestra lo que ya tiene."
+
+#, python-format
+msgid "%(nombre)s: this type of file is not accepted."
+msgstr "%(nombre)s: este tipo de archivo no se acepta."
+
+#, python-format
+msgid "%(nombre)s: it is over %(mb)s MB."
+msgstr "%(nombre)s: pasa de %(mb)s MB."
+
+msgid "Pick at least one file."
+msgstr "Elija al menos un archivo."
+
+#, python-format
+msgid "Up to %(n)s files at a time."
+msgstr "Hasta %(n)s archivos a la vez."
+
+msgid "Exit No."
+msgstr "No. de salida"
