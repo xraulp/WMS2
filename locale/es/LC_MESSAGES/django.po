@@ -3984,3 +3984,6 @@ msgstr "Valor que se queda (USD)"
 
 msgid "Blank: by bundles"
 msgstr "Vacío: por bultos"
+
+msgid "Modify"
+msgstr "Modificar"

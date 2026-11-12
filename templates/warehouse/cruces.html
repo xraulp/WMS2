@@ -136,19 +136,23 @@
     td{padding:8px 12px;font-size:13px;border-bottom:1px solid var(--bg)}
     .importe{text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap}
     tfoot td{font-weight:600;border-top:1px solid var(--bdr);border-bottom:none}
-    /* El renglon del pedimento, encima de sus pedidos. */
-    tr.ped-hd td{padding:9px 12px;border-top:2px solid var(--pc, var(--bdr-fuerte));
-                 border-bottom:1px solid var(--bdr);background:var(--surface)}
-    tr.ped-hd.sin td{border-top-style:dashed}
-    .ped-hd-in{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px}
-    .ped-hd-in .etq{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)}
-    .ped-acc{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+    /* Un renglon por pedimento: sus entradas y pedidos, uno debajo del otro. */
+    tbody td{vertical-align:top}
+    .lista{display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+    .ped-acc{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+    /* Cada embarque en una sola linea: las acciones, detras de Modificar. */
+    td.mono .lista, td .lista strong{white-space:nowrap}
+    .td-modificar{text-align:right;white-space:nowrap}
+    tr.acc-fila{display:none}
+    tr.acc-fila.abierta{display:table-row}
+    tr.acc-fila td{border-bottom:1px solid var(--bdr)}
+    .btn[aria-expanded="true"]{box-shadow:0 0 0 2px var(--asoft)}
     .ped-acc summary{list-style:none;display:inline-block}
     .ped-acc details[open]{flex-basis:100%}
     .ped-acc summary::-webkit-details-marker{display:none}
     .ped-acc-form{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;
-                  padding:10px;border:1px solid var(--bdr);border-radius:var(--r);background:var(--bg-sutil)}
-    tbody tr.pc.hijo td:first-child{padding-left:22px}
+                  padding:10px;border:1px solid var(--bdr);border-radius:var(--r);background:var(--bg-sutil);
+                  text-align:left}
 
     .acciones{padding:11px 15px;border-top:1px solid var(--bdr);
               display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
@@ -207,11 +211,13 @@
       td{border:none;display:flex;justify-content:space-between;gap:10px;padding:3px 14px}
       td::before{content:attr(data-etq);font-size:10px;text-transform:uppercase;
                  letter-spacing:.05em;color:var(--soft);flex:0 0 auto}
-      td.vacia{display:none}
-      tr.ped-hd{padding:0;border-left:5px solid var(--pc, var(--bdr-fuerte))}
-      tr.ped-hd td{display:block;border-top:none}
-      tr.ped-hd td::before{content:none}
-      tbody tr.pc.hijo td:first-child{padding-left:14px}
+      .lista{align-items:flex-end;text-align:right}
+      td.td-modificar{justify-content:flex-end}
+      td.td-modificar::before{content:none}
+      tr.con-acc:has(+ tr.acc-fila.abierta){border-bottom:none;padding-bottom:0}
+      tr.acc-fila.abierta{display:block}
+      tr.acc-fila td{background:none;border-bottom:none}
+      tr.acc-fila td::before{content:none}
       .acciones{flex-direction:column;align-items:stretch}
       .campo, .acciones form{width:100%}
     }
@@ -292,7 +298,7 @@
         </div>
         {% endif %}
         <div class="tarea-sub">
-          {% blocktrans count n=t.renglones.count %}{{ n }} shipment{% plural %}{{ n }} shipments{% endblocktrans %}
+          {% blocktrans count n=t.grupos|length %}{{ n }} shipment{% plural %}{{ n }} shipments{% endblocktrans %}
           - {% trans "crosses" %} {{ t.fecha_de_cruce|date:"l j F" }}
         </div>
         {% comment %}
@@ -539,140 +545,119 @@
       <tbody>
         {% for g in t.grupos %}
         {% comment %}
-        El renglon del pedimento: su numero, su estado y cuantos pedidos y
-        bultos lleva. Debajo, sus pedidos. Lo que no tiene pedimento armado
-        va al final, cada pedido con su boton para armarlo.
+        Un renglon por pedimento. Sus entradas y sus pedidos van juntos en la
+        misma celda, uno debajo del otro; los bultos y el impuesto, sumados.
+        Las acciones del pedimento van al final del renglon.
         {% endcomment %}
-        <tr class="ped-hd{% if g.color is not None %} pc-{{ g.color }}{% else %} sin{% endif %}">
-          <td colspan="8">
-            <div class="ped-hd-in">
-              {% if g.pedimentos %}
-              <span class="etq">{% trans "Pedimento" %}</span>
-              {% for p in g.pedimentos %}<a class="ped-link mono" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% if p.rectificacion %}<span class="estado-ped mono">{% trans "Rect." %} {{ p.rectificacion }}</span>{% endif %}{% endfor %}
-              {% for texto, del_cliente in g.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% endfor %}
-              {% else %}
-              <span class="etq">{% trans "No pedimento yet" %}</span>
-              {% endif %}
-              <span class="soft" style="font-size:12px">
-                {% blocktrans count n=g.filas|length %}{{ n }} order{% plural %}{{ n }} orders{% endblocktrans %} · {{ g.bultos }} {% trans "bdl" %}
-              </span>
-              {% comment %}
-              Mover este pedimento a otro dia (nace una tarea nueva con el) o
-              quitarlo del cruce (sus pedidos quedan libres). Solo la casa, y
-              solo mientras la mercancia no se haya cargado.
-              {% endcomment %}
-              {% if g.pedimentos and not es_cliente %}{% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
-              {% with p=g.pedimentos.0 %}
-              <span class="ped-acc">
-                <details>
-                  <summary class="btn btn-sm">&#128197; {% trans "Move this pedimento" %}</summary>
-                  <form method="post" action="{% url 'cruce_mover_pedimento' t.pk %}" class="ped-acc-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="pedimento" value="{{ p.pk }}">
-                    <label class="campo"><span>{% trans "New crossing day" %}</span>
-                      <input type="date" name="fecha_de_cruce" value="{{ t.fecha_de_cruce|date:'Y-m-d' }}" required></label>
-                    <label class="campo"><span>{% trans "Why?" %}</span>
-                      <select name="motivo">{% for valor, etiqueta in motivos %}<option value="{{ valor }}">{{ etiqueta }}</option>{% endfor %}</select></label>
-                    <span class="soft" style="font-size:11px">{% trans "A new crossing is created with this pedimento on that day." %}</span>
-                    <button class="btn btn-sm btn-p" type="submit">{% trans "Move it" %}</button>
-                  </form>
-                </details>
-                <details>
-                  <summary class="btn btn-sm btn-d">{% trans "Take out of the crossing" %}</summary>
-                  <form method="post" action="{% url 'cruce_quitar_pedimento' t.pk %}" class="ped-acc-form"
-                        data-aviso="{% blocktrans with ped=p.etiqueta %}Take pedimento {{ ped }} out of this crossing? Its orders will be free for another crossing.{% endblocktrans %}"
-                        onsubmit="return confirm(this.dataset.aviso)">
-                    {% csrf_token %}
-                    <input type="hidden" name="pedimento" value="{{ p.pk }}">
-                    {% if t.estado != 'ABIERTA' %}
-                    <label class="campo"><span>{% trans "Why?" %}</span>
-                      <input type="text" name="motivo" required></label>
-                    {% endif %}
-                    <button class="btn btn-sm btn-d" type="submit">{% trans "Take it out" %}</button>
-                  </form>
-                </details>
-              </span>
-              {% endwith %}
-              {% endif %}{% endif %}
-            </div>
+        <tr class="{% if g.color is not None %}pc pc-{{ g.color }}{% endif %}{% if not es_cliente %} con-acc{% endif %}">
+          <td data-etq="{% trans "Entry" %}" class="mono">
+            <span class="lista">{% for r in g.filas %}<span>{{ r.operation.custom_id }}{% if r.operation.subdivision %}<span class="sub">{{ r.operation.get_subdivision_display }}</span>{% endif %}</span>{% endfor %}</span>
           </td>
-        </tr>
-        {% for r in g.filas %}
-        <tr class="hijo{% if r.color is not None %} pc pc-{{ r.color }}{% endif %}">
-          <td data-etq="{% trans "Entry" %}" class="mono">{{ r.operation.custom_id }}{% if r.operation.subdivision %}<span class="sub">{{ r.operation.get_subdivision_display }}</span>{% endif %}</td>
-          <td data-etq="{% trans "PO / Order" %}"><strong>{{ r.operation.po_order|default:"—" }}</strong></td>
+          <td data-etq="{% trans "PO / Order" %}">
+            <span class="lista">{% for r in g.filas %}<strong>{{ r.operation.po_order|default:"—" }}</strong>{% endfor %}</span>
+          </td>
           <td data-etq="{% trans "Bundles" %}">
-            <span>{{ r.bultos_que_van }}{% if r.es_parcial %}
-            <span class="soft">{% trans "of" %} {{ r.operation.bundle_qty }}</span>{% endif %}</span>
+            <span>{{ g.bultos }}{% if g.es_parcial %}
+            <span class="soft">{% trans "of" %} {{ g.de }}</span>{% endif %}</span>
           </td>
           {% comment %}
           El estado del pedimento con la abreviatura de quien tiene la pelota.
-          Cuando le toca al cliente revisar, sale con el estilo de alarma. En el
-          movil cae justo debajo de los bultos.
+          Cuando le toca al cliente revisar, sale con el estilo de alarma.
           {% endcomment %}
-          {% if g.pedimentos %}
-          <td class="vacia"></td><td class="vacia"></td>
-          {% else %}
           <td data-etq="{% trans "State" %}">
-            <span>{% for texto, del_cliente in r.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% endfor %}</span>
+            <span>{% for texto, del_cliente in g.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% endfor %}</span>
           </td>
           {% comment %}
           A cada pedimento se entra desde aqui: no hay pestana de Pedimentos.
           El armado lleva a su tarjeta; el que solo trae el numero tecleado en
-          la entrada, a los pedimentos del cliente, que es donde se arma.
+          la entrada abre uno con esa entrada dentro, listo para armarlo.
           {% endcomment %}
           <td data-etq="{% trans "Pedimento" %}" class="mono">
-            <span>
-            {% for p in r.pedimentos %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% empty %}
+            <span class="lista">
+            {% for p in g.pedimentos %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% if p.rectificacion %}<span class="estado-ped">{% trans "Rect." %} {{ p.rectificacion }}</span>{% endif %}{% empty %}
             {% if not es_cliente %}
-            {% comment %}
-            Un POST y no un enlace: abre un pedimento con este embarque dentro,
-            listo para teclearle el numero y subirle sus documentos.
-            {% endcomment %}
             <form method="post" action="{% url 'pedimento_create' %}" style="margin:0">
               {% csrf_token %}
               <input type="hidden" name="customer" value="{{ cliente.pk }}">
-              <input type="hidden" name="operation" value="{{ r.operation.pk }}">
-              <button class="ped-link" type="submit">{% if r.pedimento_texto %}{{ r.pedimento_texto }} ›{% else %}+ {% trans "Make the pedimento" %}{% endif %}</button>
+              <input type="hidden" name="operation" value="{{ g.operation.pk }}">
+              <button class="ped-link" type="submit">{% if g.pedimento_texto %}{{ g.pedimento_texto }} ›{% else %}+ {% trans "Make the pedimento" %}{% endif %}</button>
             </form>
-            {% elif r.pedimento_texto %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}">{{ r.pedimento_texto }} ›</a>
+            {% elif g.pedimento_texto %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}">{{ g.pedimento_texto }} ›</a>
             {% else %}<span class="soft">—</span>{% endif %}
             {% endfor %}
             </span>
           </td>
-          {% endif %}
           <td data-etq="{% trans "Approx. taxes" %}" class="importe">
-            {% if r.impuesto %}${{ r.impuesto|pesos }}{% else %}<span class="soft">—</span>{% endif %}
+            {% if g.impuesto %}${{ g.impuesto|pesos }}{% else %}<span class="soft">—</span>{% endif %}
           </td>
           <td data-etq="{% trans "Added" %}" class="soft" style="font-size:11px">
-            {{ r.added_by.username|default:"—" }} · {{ r.added_at|date:"d/m H:i" }}
-            {% if r.motivo %}<br>{{ r.motivo }}{% endif %}
+            {{ g.ultima.added_by.username|default:"—" }} · {{ g.ultima.added_at|date:"d/m H:i" }}
+            {% for r in g.filas %}{% if r.motivo %}<br>{{ r.motivo }}{% endif %}{% endfor %}
           </td>
-          <td data-etq="">
+          {% comment %}
+          Las acciones van escondidas detras de Modificar, para que cada
+          embarque quepa en una sola linea; abren en un renglon debajo, con el
+          color de su pedimento. En el telefono, al pie de su tarjeta.
+          {% endcomment %}
+          <td data-etq="" class="td-modificar">
             {% if not es_cliente %}
-            <form method="post" action="{% url 'cruce_sacar' t.pk %}" style="margin:0;display:flex;gap:6px"
-                  data-aviso="{% blocktrans with embarque=r.operation.po_order|default:r.operation.custom_id %}Take {{ embarque }} out of this crossing? It will be available for another crossing.{% endblocktrans %}"
-                  onsubmit="return confirm(this.dataset.aviso)">
-              {% csrf_token %}
-              <input type="hidden" name="renglon" value="{{ r.pk }}">
-              {% if t.estado != 'ABIERTA' %}
-              <input type="text" name="motivo" placeholder="{% trans "Why?" %}" required style="width:130px">
-              {% endif %}
-              <button class="btn btn-sm" type="submit">{% trans "Take out" %}</button>
-            </form>
+            <button type="button" class="btn btn-sm" aria-expanded="false"
+                    onclick="var f=this.closest('tr').nextElementSibling,a=f.classList.toggle('abierta');this.setAttribute('aria-expanded',a)">{% trans "Modify" %}</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% if not es_cliente %}
+        <tr class="acc-fila{% if g.color is not None %} pc pc-{{ g.color }}{% endif %}">
+          <td colspan="8">
+            <span class="ped-acc">
+            {% if g.pedimentos and t.estado == 'ABIERTA' or g.pedimentos and t.estado == 'CON_ORDEN' %}
+            {% with p=g.pedimentos.0 %}
             {% comment %}
-            Sacar un pedido de su pedimento. Solo cuando el pedido ya esta en
-            un pedimento y la mercancia no se ha cargado. Lo que se queda en
-            bodega pasa al -A de esta entrada.
+            Mover este pedimento a otro dia (nace una tarea nueva con el) o
+            quitarlo del cruce (sus pedidos quedan libres). Solo la casa, y
+            solo mientras la mercancia no se haya cargado.
             {% endcomment %}
-            {% if g.pedimentos %}{% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
+            <details>
+              <summary class="btn btn-sm">&#128197; {% trans "Move this pedimento" %}</summary>
+              <form method="post" action="{% url 'cruce_mover_pedimento' t.pk %}" class="ped-acc-form">
+                {% csrf_token %}
+                <input type="hidden" name="pedimento" value="{{ p.pk }}">
+                <label class="campo"><span>{% trans "New crossing day" %}</span>
+                  <input type="date" name="fecha_de_cruce" value="{{ t.fecha_de_cruce|date:'Y-m-d' }}" required></label>
+                <label class="campo"><span>{% trans "Why?" %}</span>
+                  <select name="motivo">{% for valor, etiqueta in motivos %}<option value="{{ valor }}">{{ etiqueta }}</option>{% endfor %}</select></label>
+                <span class="soft" style="font-size:11px">{% trans "A new crossing is created with this pedimento on that day." %}</span>
+                <button class="btn btn-sm btn-p" type="submit">{% trans "Move it" %}</button>
+              </form>
+            </details>
+            <details>
+              <summary class="btn btn-sm btn-d">{% trans "Take out of the crossing" %}</summary>
+              <form method="post" action="{% url 'cruce_quitar_pedimento' t.pk %}" class="ped-acc-form"
+                    data-aviso="{% blocktrans with ped=p.etiqueta %}Take pedimento {{ ped }} out of this crossing? Its orders will be free for another crossing.{% endblocktrans %}"
+                    onsubmit="return confirm(this.dataset.aviso)">
+                {% csrf_token %}
+                <input type="hidden" name="pedimento" value="{{ p.pk }}">
+                {% if t.estado != 'ABIERTA' %}
+                <label class="campo"><span>{% trans "Why?" %}</span>
+                  <input type="text" name="motivo" required></label>
+                {% endif %}
+                <button class="btn btn-sm btn-d" type="submit">{% trans "Take it out" %}</button>
+              </form>
+            </details>
+            {% comment %}
+            Sacar un pedido de su pedimento. Lo que se queda en bodega pasa al
+            -A de esa entrada. Con varias entradas, se elige de cual; y si la
+            entrada trae su lista de pedidos, se elige el que se queda.
+            {% endcomment %}
             <details class="sacar-pedido">
               <summary class="btn btn-sm btn-d">{% trans "Take an order out of the pedimento" %}</summary>
-              <form method="post" action="{% url 'cruce_sacar_pedido' t.pk %}"
+              {% for r in g.filas %}
+              <form method="post" action="{% url 'cruce_sacar_pedido' t.pk %}" class="ped-acc-form"
                     data-aviso="{% trans "A new entry (-A) will be created with what stays. Continue?" %}"
                     onsubmit="return confirm(this.dataset.aviso)">
                 {% csrf_token %}
                 <input type="hidden" name="renglon" value="{{ r.pk }}">
+                {% if g.filas|length > 1 %}<strong class="mono" style="flex-basis:100%">{{ r.operation.custom_id }} · {{ r.operation.po_order|default:"—" }}</strong>{% endif %}
                 {% with lista=r.operation.pedidos.all %}
                 {% if lista %}
                 <label class="campo"><span>{% trans "Order that stays" %}</span>
@@ -699,22 +684,41 @@
                   <input type="text" name="valor_usd" inputmode="decimal"
                          placeholder="{% trans "Blank: by bundles" %}"></label>
                 <label class="campo"><span>{% trans "Rectification pedimento (optional)" %}</span>
-                  <input type="text" name="rectificacion" value="{{ g.pedimentos.0.rectificacion }}"></label>
+                  <input type="text" name="rectificacion" value="{{ p.rectificacion }}"></label>
                 <label class="campo"><span>{% trans "Why?" %}</span>
                   <input type="text" name="motivo" required></label>
                 <button class="btn btn-sm btn-d" type="submit">{% trans "Take it out and create the -A" %}</button>
               </form>
+              {% endfor %}
             </details>
-            {% endif %}{% endif %}
+            {% endwith %}
+            {% else %}
+            {% comment %}
+            Sin pedimento armado, o ya cargado: se saca la entrada del cruce.
+            Con varias entradas en el mismo pedimento, un boton por cada una.
+            {% endcomment %}
+            {% for r in g.filas %}
+            <form method="post" action="{% url 'cruce_sacar' t.pk %}" style="margin:0;display:flex;gap:6px;flex-wrap:wrap"
+                  data-aviso="{% blocktrans with embarque=r.operation.po_order|default:r.operation.custom_id %}Take {{ embarque }} out of this crossing? It will be available for another crossing.{% endblocktrans %}"
+                  onsubmit="return confirm(this.dataset.aviso)">
+              {% csrf_token %}
+              <input type="hidden" name="renglon" value="{{ r.pk }}">
+              {% if t.estado != 'ABIERTA' %}
+              <input type="text" name="motivo" placeholder="{% trans "Why?" %}" required style="width:130px">
+              {% endif %}
+              <button class="btn btn-sm" type="submit">{% trans "Take out" %}{% if g.filas|length > 1 %} {{ r.operation.po_order|default:r.operation.custom_id }}{% endif %}</button>
+            </form>
+            {% endfor %}
             {% endif %}
+            </span>
           </td>
         </tr>
-        {% endfor %}
+        {% endif %}
         {% empty %}
         <tr><td colspan="8" class="soft">{% trans "Nothing in this crossing yet." %}</td></tr>
         {% endfor %}
       </tbody>
-      {% if t.filas|length > 1 %}
+      {% if t.grupos|length > 1 %}
       <tfoot>
         <tr class="total">
           <td colspan="5" class="total-etq">

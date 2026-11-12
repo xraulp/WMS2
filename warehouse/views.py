@@ -6558,21 +6558,39 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
             else:
                 fila.estados = [(Pedimento.texto_corto(
                     Pedimento.ELAB_PED, tenant, cliente), False)]
-        # La tarea se lee por pedimento: cada pedimento es un renglon y sus
-        # pedidos van dentro. Lo que aun no tiene pedimento armado va al
-        # final, en su propio grupo, con el boton para armarlo.
+        # La tarea se lee por pedimento: cada pedimento es UN renglon, y sus
+        # pedidos van todos en la misma celda. El pedimento es el armado; si
+        # no lo hay, el numero tecleado en la entrada. Solo la entrada sin
+        # ninguno de los dos va sola en su renglon.
         grupos = {}
         for fila in tarea.filas:
-            llave = tuple(p.pk for p in fila.pedimentos) or None
+            if fila.pedimentos:
+                llave = ('armado',) + tuple(p.pk for p in fila.pedimentos)
+            elif fila.pedimento_texto:
+                llave = ('tecleado', fila.pedimento_texto)
+            else:
+                llave = ('solo', fila.pk)
             if llave not in grupos:
                 grupos[llave] = {'pedimentos': fila.pedimentos,
-                                 'color': fila.color if llave else None,
-                                 'estados': fila.estados if llave else [],
-                                 'filas': [], 'bultos': 0}
-            grupos[llave]['filas'].append(fila)
-            grupos[llave]['bultos'] += fila.bultos_que_van
-        tarea.grupos = ([g for k, g in grupos.items() if k is not None]
-                        + ([grupos[None]] if None in grupos else []))
+                                 'pedimento_texto': fila.pedimento_texto,
+                                 'operation': fila.operation,
+                                 'color': fila.color,
+                                 'estados': fila.estados,
+                                 'filas': [], 'bultos': 0, 'de': 0,
+                                 'impuesto': None}
+            g = grupos[llave]
+            g['filas'].append(fila)
+            g['bultos'] += fila.bultos_que_van
+            g['de'] += fila.operation.bundle_qty or 0
+            if fila.impuesto:
+                g['impuesto'] = (g['impuesto'] or Decimal('0')) + fila.impuesto
+        for g in grupos.values():
+            g['es_parcial'] = g['bultos'] < g['de']
+            g['ultima'] = max(g['filas'], key=lambda f: f.added_at or timezone.now())
+        tarea.grupos = list(grupos.values())
+        # El embarque es el pedimento: los que aun no tienen cifra se cuentan
+        # por renglon, no por entrada.
+        tarea.sin_impuesto = sum(1 for g in tarea.grupos if not g['impuesto'])
         armados = {p.pk: p for fila in tarea.filas for p in fila.pedimentos}
         tarea.en_revision = sum(1 for p in armados.values()
                                 if p.estado == Pedimento.EN_REVISION)
