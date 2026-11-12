@@ -1261,11 +1261,17 @@ def generar_pdf_hoja_de_impuestos(tenant, cliente, renglones, total, parametros)
     `renglones` llega ya ordenado por la vista, y con `estimado` puesto: el
     papel y la pantalla salen de la misma lista a proposito, para que no puedan
     decir cosas distintas.
+
+    Va en carta **vertical** (pedido por Diego el 12 nov 2026; antes salia
+    apaisada). Las columnas son las mismas y en el mismo orden -- el cliente
+    lleva meses leyendola asi --; lo que cambia es el reparto del ancho y que
+    la letra baja medio punto para que el status quepa en dos lineas.
     """
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter),
-                            rightMargin=0.4 * inch, leftMargin=0.4 * inch,
-                            topMargin=0.35 * inch, bottomMargin=0.45 * inch,
+    pagina = letter
+    doc = SimpleDocTemplate(buffer, pagesize=pagina,
+                            rightMargin=0.45 * inch, leftMargin=0.45 * inch,
+                            topMargin=0.45 * inch, bottomMargin=0.5 * inch,
                             title=_('Shipment report and duty estimate'))
     SS = getSampleStyleSheet()
 
@@ -1285,7 +1291,11 @@ def generar_pdf_hoja_de_impuestos(tenant, cliente, renglones, total, parametros)
           alignment=TA_LEFT, spaceBefore=3))
 
     ahora = timezone.localtime(timezone.now())
-    cuantos = _('%(n)s shipments') % {'n': len(renglones)}
+    # Con plural: la cadena suelta "%(n)s shipments" no tenia traduccion y la
+    # hoja en español decia "5 shipments". La del plural si la tiene.
+    from django.utils.translation import ngettext
+    cuantos = ngettext('%(n)s shipment', '%(n)s shipments',
+                       len(renglones)) % {'n': len(renglones)}
     sello = Paragraph(
         '%s<br/>%s<br/>%s' % (ahora.strftime('%d/%m/%Y'),
                               ahora.strftime('%H:%M'), cuantos),
@@ -1293,14 +1303,16 @@ def generar_pdf_hoja_de_impuestos(tenant, cliente, renglones, total, parametros)
           alignment=TA_RIGHT, leading=12))
 
     logo = logo_de(tenant, ancho=1.1 * inch, alto=0.6 * inch)
-    ancho = landscape(letter)[0] - doc.leftMargin - doc.rightMargin
+    # El marco de la pagina tiene 6 pt de relleno por lado: sin descontarlos,
+    # la tabla se salia un poco del ancho de la raya de arriba.
+    ancho = pagina[0] - doc.leftMargin - doc.rightMargin - 12
     izquierda = [titulo, quien]
     if logo:
         cabecera = Table([[logo, izquierda, sello]],
-                         colWidths=[1.3 * inch, ancho - 3.1 * inch, 1.8 * inch])
+                         colWidths=[1.3 * inch, ancho - 2.7 * inch, 1.4 * inch])
     else:
         cabecera = Table([[izquierda, sello]],
-                         colWidths=[ancho - 1.8 * inch, 1.8 * inch])
+                         colWidths=[ancho - 1.4 * inch, 1.4 * inch])
     cabecera.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 0),
@@ -1312,12 +1324,12 @@ def generar_pdf_hoja_de_impuestos(tenant, cliente, renglones, total, parametros)
                             spaceBefore=2, spaceAfter=10))
 
     # ── La tabla, columna por columna y en su orden ─────────────────────────
-    cab = S('th', fontName='Helvetica-Bold', fontSize=7.5, textColor=colors.white,
-            alignment=TA_CENTER, leading=9)
-    celda = S('td', fontName='Helvetica', fontSize=8, alignment=TA_CENTER,
-              leading=10)
-    celda_st = S('st', fontName='Helvetica-Bold', fontSize=8,
-                 textColor=HOJA_INK, alignment=TA_CENTER, leading=10)
+    cab = S('th', fontName='Helvetica-Bold', fontSize=6.8, textColor=colors.white,
+            alignment=TA_CENTER, leading=8.2)
+    celda = S('td', fontName='Helvetica', fontSize=7.5, alignment=TA_CENTER,
+              leading=9.2)
+    celda_st = S('st', fontName='Helvetica-Bold', fontSize=7.5,
+                 textColor=HOJA_INK, alignment=TA_CENTER, leading=9.2)
     celda_num = S('num', fontName='Helvetica-Bold', fontSize=8.5,
                   alignment=TA_RIGHT, leading=10)
 
@@ -1355,7 +1367,11 @@ def generar_pdf_hoja_de_impuestos(tenant, cliente, renglones, total, parametros)
                     alignment=TA_RIGHT)),
     ])
 
-    anchos = [0.35, 2.05, 0.7, 1.25, 1.35, 1.0, 1.25, 1.05, 1.2]
+    # Reparto para carta vertical (7.6" utiles). El status es lo mas largo
+    # ("LISTO PARA VALIDACION Y PAGO · ACME") y va en dos lineas; el importe no
+    # se parte nunca, asi que conserva su ancho.
+    # El numero de entrada (ED261112-9001) no se parte nunca.
+    anchos = [0.26, 1.7, 0.55, 1.0, 0.78, 0.68, 0.95, 0.85, 0.95]
     escala = ancho / (sum(anchos) * inch)
     tabla = Table(filas, colWidths=[a * inch * escala for a in anchos],
                   repeatRows=1)
@@ -1366,6 +1382,10 @@ def generar_pdf_hoja_de_impuestos(tenant, cliente, renglones, total, parametros)
         ('GRID', (0, 0), (-1, -2), 0.75, colors.white),
         ('TOPPADDING', (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        # En vertical cada punto cuenta: con el relleno de 6 pt por lado el
+        # numero de entrada y el encabezado "Factura" se partian en dos.
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
         # La fila del total: sin rejilla y con la raya de arriba, como el papel.
         ('BACKGROUND', (0, -1), (-1, -1), HOJA_FILA),
         ('LINEABOVE', (0, -1), (-1, -1), 1.5, HOJA_FUERTE),
