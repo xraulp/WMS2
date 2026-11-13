@@ -4175,3 +4175,7 @@ msgstr "Todavía no hay nada guardado: el cálculo usa los valores por omisión 
 
 msgid "an exact figure of 12,340 is proposed to the customer as"
 msgstr "una cifra exacta de 12,340 se le propone al cliente como"
+
+#: templates/warehouse/pedimentos.html
+msgid "Uploading"
+msgstr "Subiendo"
