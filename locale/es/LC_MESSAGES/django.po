@@ -4179,3 +4179,7 @@ msgstr "una cifra exacta de 12,340 se le propone al cliente como"
 #: templates/warehouse/pedimentos.html
 msgid "Uploading"
 msgstr "Subiendo"
+
+#: templates/warehouse/pedimentos.html
+msgid "Upload the pedimento documents to send it to the customer for review. Those marked with * are required."
+msgstr "Favor de cargar los documentos del pedimento para enviarlo a revisión del cliente. Los marcados con * son obligatorios."

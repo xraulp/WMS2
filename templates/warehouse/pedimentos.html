@@ -89,6 +89,10 @@
     .ranura{border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;
             background:var(--surface)}
     .ranura.vacia{border-style:dashed}
+    /* Lo que hay que hacer aqui, dicho arriba de las ranuras. Ocupa la fila
+       entera de la cuadricula. */
+    .ranuras .instruccion{grid-column:1/-1;margin:0;font-size:13px;font-weight:600;
+                          color:var(--accent-ink)}
     .ranura.pide{border-color:var(--red);background:var(--rsoft)}
     .ranura h4{margin:0 0 5px;font-size:11px;text-transform:uppercase;
                letter-spacing:.04em;color:var(--soft);font-weight:600}
@@ -412,6 +416,11 @@
     no aparece atenuada ni con un "no aplica" que alguien tenga que marcar.
     {% endcomment %}
     <div class="ranuras">
+      {% if puede_editar and p.editable %}
+      <p class="instruccion">
+        📎 {% trans "Upload the pedimento documents to send it to the customer for review. Those marked with * are required." %}
+      </p>
+      {% endif %}
       {% for clave, etiqueta, archivos, obligatoria in p.ranuras_envio %}
       <div class="ranura{% if not archivos %} vacia pide{% endif %}">
         <h4>{{ etiqueta }}{% if obligatoria and not archivos %} *{% endif %}</h4>
