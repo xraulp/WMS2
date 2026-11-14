@@ -447,13 +447,13 @@ class PantallaDeArmarPedimentosTests(BaseDeAlmacen):
         ped = self.nuevo_pedimento()
         self.client.post('/pedimentos/%d/assign/' % ped.pk,
                          {'operation': self.entrada.pk, 'bultos': '6',
-                          'weight_lbs': '748'})
+                          'weight_kgs': '339.29'})
         renglon = ped.renglones.get()
         self.assertEqual(renglon.bultos, 6)
-        # Los kilos los pone el sistema: se teclea en libras porque asi llegan
-        # los embarques, y nadie convierte a mano.
-        self.assertEqual(str(renglon.weight_lbs), '748.00')
+        # Desde el 14 nov 2026 se teclean kilos, y se guardan tal cual.
+        self.assertIsNone(renglon.weight_lbs)
         self.assertEqual(str(renglon.weight_kgs), '339.29')
+        self.assertEqual(str(renglon.kilos), '339.29')
 
     def test_el_peso_es_opcional(self):
         # Quien reparte a veces todavia no lo tiene, y no dejar guardar por eso

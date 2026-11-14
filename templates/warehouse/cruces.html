@@ -101,6 +101,13 @@
     button.ped-link{font-family:inherit;font-size:inherit;cursor:pointer}
     .ped-link:hover{background:var(--pc, var(--accent));color:#fff}
     .ped-link + .ped-link{margin-left:4px}
+    /* El boton que dice a que se entra tocando el pedimento: sus documentos y
+       su revision. Sin el, el numero parecia un dato y no una puerta. */
+    .ped-docs{display:inline-block;margin-top:4px;padding:3px 9px;border-radius:6px;
+              font-size:11.5px;font-weight:600;text-decoration:none;white-space:nowrap;
+              background:var(--pc, var(--accent));color:#fff;border:1px solid var(--pc, var(--accent))}
+    .ped-docs:hover{filter:brightness(.92)}
+    .ped-ayuda{padding:7px 15px;font-size:12px;color:var(--soft);border-bottom:1px solid var(--bdr)}
     /* Las acciones de la tarea, en su titulo. Ocupan su propia linea debajo
        del numero y la cuenta atras, para que no compitan con ellos. */
     .tarea-acc{flex:1 0 100%;display:flex;gap:8px;flex-wrap:wrap}
@@ -529,6 +536,9 @@
     </div>
     {% endif %}
 
+    {% if t.con_pedimento_armado and not es_cliente %}
+    <div class="ped-ayuda">👉 {% trans "Tap the pedimento number to upload its documents and send it to the customer for review." %}</div>
+    {% endif %}
     <table>
       <thead>
         <tr>
@@ -574,7 +584,8 @@
           {% endcomment %}
           <td data-etq="{% trans "Pedimento" %}" class="mono">
             <span class="lista">
-            {% for p in g.pedimentos %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% if p.rectificacion %}<span class="estado-ped">{% trans "Rect." %} {{ p.rectificacion }}</span>{% endif %}{% empty %}
+            {% for p in g.pedimentos %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% if p.rectificacion %}<span class="estado-ped">{% trans "Rect." %} {{ p.rectificacion }}</span>{% endif %}
+            <a class="ped-docs" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{% if es_cliente %}{% if p.estado == 'EN_REVISION' %}{% trans "Review pedimento" %}{% else %}{% trans "See pedimento" %}{% endif %}{% else %}📂 {% trans "Documents and review" %}{% endif %} ›</a>{% empty %}
             {% if not es_cliente %}
             <form method="post" action="{% url 'pedimento_create' %}" style="margin:0">
               {% csrf_token %}

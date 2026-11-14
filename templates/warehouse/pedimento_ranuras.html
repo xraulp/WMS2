@@ -1,0 +1,125 @@
+{% load i18n %}
+{% get_current_language as idioma_actual %}
+<!DOCTYPE html>
+<html lang="{{ idioma_actual }}"{% if tema_usuario %} data-theme="{{ tema_usuario }}"{% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "Pedimento slots" %} — WMS</title>
+  {% include "warehouse/partials/tema.html" %}
+  {% comment %}
+  Las ranuras de envio del pedimento, como las quiere el tenant: cuales salen,
+  cuales son obligatorias y en que orden, mas las propias que agregue.
+
+  Un solo formulario: las flechas, quitar y agregar tambien guardan las
+  casillas. Tarjetas apiladas porque se usa sobre todo desde el telefono.
+  {% endcomment %}
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    .wrap{max-width:640px;margin:16px auto 80px;padding:0 16px}
+    h1{font-size:18px;margin:6px 0 4px}
+    .sub{font-size:12.5px;color:var(--soft);margin:0 0 16px;line-height:1.5}
+    .lista{display:flex;flex-direction:column;gap:8px}
+    .ranura{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
+            padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+    .ranura.obligatoria{border-color:var(--red);background:var(--rsoft)}
+    .ranura.apagada{opacity:.6;border-style:dashed}
+    .fila{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .nombre{flex:1;min-width:0;font-weight:600;font-size:14px}
+    .tag{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--soft);
+         border:1px solid var(--bdr);border-radius:5px;padding:1px 6px}
+    .casilla{display:flex;align-items:center;gap:6px;font-size:13.5px;cursor:pointer;
+             padding:6px 10px;border:1px solid var(--bdr);border-radius:var(--r);background:var(--surface)}
+    .casilla input{width:18px;height:18px;margin:0}
+    input[type=text]{flex:1;min-width:0;font-size:16px;padding:9px 10px;border:1px solid var(--bdr-fuerte);
+                     border-radius:var(--r);background:var(--bg-sutil);color:var(--ink);font-family:inherit}
+    .btn{border:1px solid var(--bdr-fuerte);background:var(--surface);border-radius:var(--r);
+         padding:9px 14px;font-size:14px;font-family:inherit;cursor:pointer;color:var(--ink);text-decoration:none}
+    .btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+    .btn-d{border-color:var(--red);color:var(--red)}
+    .flechas{display:flex;gap:6px;margin-left:auto}
+    .flechas .btn{padding:6px 12px}
+    .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;padding:14px;margin-top:16px}
+    .card h2{font-size:13px;margin:0 0 10px}
+    .acciones{position:sticky;bottom:0;background:var(--bg);padding:12px 0;margin-top:16px;
+              display:flex;gap:8px;flex-wrap:wrap}
+    .msg{padding:10px 12px;border-radius:var(--r);font-size:13px;margin-bottom:12px}
+    .msg-error{background:var(--rsoft);color:var(--err-ink)}
+    .msg-ok{background:var(--ok-bg);color:var(--ok-ink-fuerte)}
+    .nota{font-size:12px;color:var(--soft);margin-top:12px;line-height:1.5}
+  </style>
+</head>
+<body>
+
+{% include "warehouse/partials/barra_superior.html" with activa='cruces' %}
+
+<div class="wrap">
+  <a class="bs-volver" href="{{ regreso }}">← {% trans "Back" %}</a>
+  <h1>{% trans "Pedimento slots" %}</h1>
+  <p class="sub">{% trans "Choose which documents each pedimento carries before it goes to the customer for review. The required ones block sending it to review while they are empty, and are shown with a light red background." %}</p>
+
+  {% if aviso %}<div class="msg msg-ok">&#10003; {{ aviso }}</div>{% endif %}
+  {% for e in errores %}<div class="msg msg-error">&#10007; {{ e }}</div>{% endfor %}
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="customer" value="{{ volver }}">
+    <input type="hidden" name="solo" value="{{ solo }}">
+    {# Enter en cualquier casilla guarda, y no mueve la primera ranura. #}
+    <button type="submit" style="position:absolute;left:-9999px" tabindex="-1" aria-hidden="true"></button>
+
+    <div class="lista">
+      {% for r in ranuras %}
+      <div class="ranura{% if r.activa and r.obligatoria %} obligatoria{% endif %}{% if not r.activa %} apagada{% endif %}">
+        <div class="fila">
+          {% if r.propia %}
+          <input type="text" name="nombre_{{ r.pk }}" value="{{ r.nombre }}" maxlength="60"
+                 aria-label="{% trans "Slot name" %}">
+          {% else %}
+          <span class="nombre">{{ r.etiqueta }}</span>
+          {% endif %}
+          {% if r.propia %}<span class="tag">{% trans "own" %}</span>{% endif %}
+        </div>
+        <div class="fila">
+          <label class="casilla">
+            <input type="checkbox" name="activa_{{ r.pk }}" {% if r.activa %}checked{% endif %}>
+            {% trans "Shown" %}
+          </label>
+          <label class="casilla">
+            <input type="checkbox" name="obligatoria_{{ r.pk }}" {% if r.obligatoria %}checked{% endif %}>
+            {% trans "Required" %}
+          </label>
+          <span class="flechas">
+            {% if not forloop.first %}<button class="btn" type="submit" name="mover" value="{{ r.pk }}:arriba" aria-label="{% trans "Move up" %}">↑</button>{% endif %}
+            {% if not forloop.last %}<button class="btn" type="submit" name="mover" value="{{ r.pk }}:abajo" aria-label="{% trans "Move down" %}">↓</button>{% endif %}
+            {% if r.propia %}<button class="btn btn-d" type="submit" name="quitar" value="{{ r.pk }}" aria-label="{% trans "Remove" %}">✕</button>{% endif %}
+          </span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="card">
+      <h2>{% trans "Add a slot" %}</h2>
+      <div class="fila">
+        <input type="text" name="nueva" maxlength="60" placeholder="{% trans "e.g. Bill of lading" %}"
+               aria-label="{% trans "Slot name" %}">
+        <label class="casilla">
+          <input type="checkbox" name="nueva_obligatoria">
+          {% trans "Required" %}
+        </label>
+        <button class="btn" type="submit" name="agregar" value="1">+ {% trans "Add" %}</button>
+      </div>
+    </div>
+
+    <p class="nota">{% trans "The serial-number photos slot is not configured here: it appears, and is required, only when the goods carry serial numbers." %}</p>
+
+    <div class="acciones">
+      <button class="btn btn-p" type="submit">{% trans "Save" %}</button>
+      <a class="btn" href="{{ regreso }}">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+</div>
+</body>
+</html>

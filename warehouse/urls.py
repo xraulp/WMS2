@@ -118,6 +118,7 @@ urlpatterns = [
     # factura comercial, sin que exista ninguna tarea programada.
     path('pedimentos/', views.pedimentos_panel, name='pedimentos_panel'),
     path('pedimentos/new/', views.pedimento_create, name='pedimento_create'),
+    path('pedimentos/slots/', views.pedimento_ranuras, name='pedimento_ranuras'),
     path('pedimentos/<int:pk>/number/', views.pedimento_numero, name='pedimento_numero'),
     path('pedimentos/<int:pk>/assign/', views.pedimento_asignar, name='pedimento_asignar'),
     path('pedimentos/<int:pk>/unassign/', views.pedimento_quitar, name='pedimento_quitar'),

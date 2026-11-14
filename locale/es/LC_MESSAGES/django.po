@@ -4183,3 +4183,61 @@ msgstr "Subiendo"
 #: templates/warehouse/pedimentos.html
 msgid "Upload the pedimento documents to send it to the customer for review. Those marked with * are required."
 msgstr "Favor de cargar los documentos del pedimento para enviarlo a revisión del cliente. Los marcados con * son obligatorios."
+
+msgid "Pedimento slots"
+msgstr "Ranuras del pedimento"
+
+msgid "Choose which documents each pedimento carries before it goes to the customer for review. The required ones block sending it to review while they are empty, and are shown with a light red background."
+msgstr "Elige qué documentos lleva cada pedimento antes de ir a revisión del cliente. Las obligatorias impiden mandarlo a revisión mientras estén vacías y se ven con fondo rojo claro."
+
+msgid "Slot name"
+msgstr "Nombre de la ranura"
+
+msgid "own"
+msgstr "propia"
+
+msgid "Shown"
+msgstr "Se muestra"
+
+msgid "Required"
+msgstr "Obligatoria"
+
+msgid "Move up"
+msgstr "Subir"
+
+msgid "Move down"
+msgstr "Bajar"
+
+msgid "Add a slot"
+msgstr "Agregar una ranura"
+
+msgid "e.g. Bill of lading"
+msgstr "p. ej. Carta porte"
+
+msgid "The serial-number photos slot is not configured here: it appears, and is required, only when the goods carry serial numbers."
+msgstr "La ranura de fotos de números de serie no se configura aquí: aparece, y es obligatoria, solo cuando la mercancía trae números de serie."
+
+msgid "Configure slots"
+msgstr "Configurar ranuras"
+
+msgid "Review pedimento"
+msgstr "Revisar pedimento"
+
+msgid "See pedimento"
+msgstr "Ver pedimento"
+
+msgid "Documents and review"
+msgstr "Documentos y revisión"
+
+msgid "Tap the pedimento number to upload its documents and send it to the customer for review."
+msgstr "Toca el número de pedimento para cargar sus documentos y mandarlo a revisión del cliente."
+
+msgid "Type the name of the new slot."
+msgstr "Escribe el nombre de la ranura nueva."
+
+msgid "Slots saved."
+msgstr "Ranuras guardadas."
+
+#, python-format
+msgid "\"%(nombre)s\" already has files, so it was turned off instead of removed."
+msgstr "«%(nombre)s» ya tiene archivos, así que se apagó en vez de quitarse."

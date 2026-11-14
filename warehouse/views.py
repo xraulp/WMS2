@@ -29,7 +29,7 @@ from .models import (WarehouseOperation, PedidoDeEntrada, Camion, Catalog, Opera
                      CATALOG_SCOPES, catalog_scope_of, Invoice,
                      Conversation, ConversationRead, Message,
                      Warehouse, Location, Pedimento, PedimentoBundle,
-                     PedimentoDocument, ParametrosDeImpuestos,
+                     PedimentoDocument, ParametrosDeImpuestos, RanuraDePedimento,
                      RenglonDeImpuestos, CrossingTask, CrossingTaskItem,
                      CambioDeDiaDeCruce, LoadOrder, LoadOrderItem,
                      EscaneoDeBulto, Remision, siguiente_consecutivo,
@@ -4710,6 +4710,7 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None,
         'cliente': cliente,
         'profile': profile,
         'puede_editar': not profile.is_customer(),
+        'is_home': profile.is_home(),
         'aduanas': sorted(pedimentos.ADUANAS.items()),
         'error': error,
         # Lo que se acababa de teclear cuando el candado lo rechazo. Vuelve a
@@ -4780,19 +4781,27 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None,
     # boton de enviar a revision tiene que decir **que** falta, y una plantilla
     # que calcula eso a base de `{% if %}` deja de poder explicarlo.
     etiquetas = dict(PedimentoDocument.RANURAS)
+    # Cuales ranuras hay y cuales son obligatorias lo configura el tenant.
+    configuradas = RanuraDePedimento.de_envio(get_tenant_or_404(request))
     for ped in lista:
         cajones = ped.documentos_por_ranura()
-        ped.ranuras_envio = [
-            (clave, etiquetas[clave], cajones.get(clave, []),
-             clave in PedimentoDocument.RANURAS_PARA_REVISION
-             # Cuando aparece es porque hace falta: tambien lleva asterisco.
-             or clave == PedimentoDocument.FOTOS_SERIES)
-            for clave in PedimentoDocument.RANURAS_DE_ENVIO
-            # La de fotos de series aparece o no aparece segun la mercancia. No
-            # es una casilla de "no aplica" que alguien marque cada vez.
-            if clave != PedimentoDocument.FOTOS_SERIES
-            or ped.necesita_fotos_de_series
-        ]
+        ped.ranuras_envio = []
+        for r in configuradas:
+            ped.ranuras_envio.append(
+                (r.clave, r.etiqueta, cajones.get(r.clave, []), r.obligatoria))
+            # La de fotos de series aparece o no aparece segun la mercancia, y
+            # cuando aparece es porque hace falta: va tras la carta 318.
+            if r.clave == PedimentoDocument.CARTA_318                     and ped.necesita_fotos_de_series:
+                ped.ranuras_envio.append(
+                    (PedimentoDocument.FOTOS_SERIES,
+                     etiquetas[PedimentoDocument.FOTOS_SERIES],
+                     cajones.get(PedimentoDocument.FOTOS_SERIES, []), True))
+        if ped.necesita_fotos_de_series and not any(
+                c == PedimentoDocument.FOTOS_SERIES for c, *_ in ped.ranuras_envio):
+            ped.ranuras_envio.append(
+                (PedimentoDocument.FOTOS_SERIES,
+                 etiquetas[PedimentoDocument.FOTOS_SERIES],
+                 cajones.get(PedimentoDocument.FOTOS_SERIES, []), True))
         ped.ranuras_posteriores = [
             (clave, etiquetas[clave], cajones.get(clave, []))
             for clave in PedimentoDocument.RANURAS_POSTERIORES
@@ -4972,7 +4981,7 @@ def _operaciones_del_pedimento(ped):
     return [r.operation for r in ped.renglones.select_related('operation')]
 
 
-def _meter_bultos(ped, op, cuantos, libras=None):
+def _meter_bultos(ped, op, cuantos, kilos=None):
     """
     Mete bultos de `op` en `ped`. Devuelve el aviso del candado si no se pudo.
 
@@ -5004,16 +5013,16 @@ def _meter_bultos(ped, op, cuantos, libras=None):
 
     renglon, creado = PedimentoBundle.objects.get_or_create(
         pedimento=ped, operation=op,
-        defaults={'bultos': cuantos, 'weight_lbs': libras})
+        defaults={'bultos': cuantos, 'weight_kgs': kilos})
     if adopta:
         ped.ped_aduana, ped.ped_patente, ped.ped_consecutivo = adopta
         ped.save(update_fields=['ped_aduana', 'ped_patente', 'ped_consecutivo',
                                 'updated_at'])
     if not creado:
         renglon.bultos += cuantos
-        if libras is not None:
-            renglon.weight_lbs = (renglon.weight_lbs or Decimal('0')) + libras
-        # `save()` sin `update_fields` para que los kilos se recalculen.
+        if kilos is not None:
+            renglon.weight_lbs = None
+            renglon.weight_kgs = (renglon.weight_kgs or Decimal('0')) + kilos
         renglon.save()
     # Si acaba de adoptar un numero, tambien les toca a los que ya iban dentro.
     _numero_a_las_operaciones(_operaciones_del_pedimento(ped))
@@ -5154,15 +5163,16 @@ def pedimento_asignar(request, pk):
             _('%(op)s has %(libres)d bundles left to assign.')
             % {'op': op.custom_id, 'libres': libres})
 
-    # El peso de estos bultos se teclea, en libras. Es opcional: quien reparte
-    # a veces todavia no lo tiene, y no dejar guardar por eso pararia el
-    # trabajo por un dato que llega despues.
+    # El peso de estos bultos se teclea, en kilos, que es con lo que se trabaja
+    # de este lado. Es opcional: si el renglon lleva la entrada completa, los
+    # kilos salen del registro de la entrada (`PedimentoBundle.kilos`); solo
+    # cuando la entrada se parte hace falta decir cuanto pesa esta parte.
     try:
-        libras = Decimal(request.POST.get('weight_lbs') or '')
+        kilos = Decimal(request.POST.get('weight_kgs') or '')
     except (InvalidOperation, TypeError):
-        libras = None
+        kilos = None
 
-    aviso = _meter_bultos(ped, op, cuantos, libras)
+    aviso = _meter_bultos(ped, op, cuantos, kilos)
     if aviso:
         return _error_en_pedimento(request, ped, aviso)
     return _volver_al_pedimento(ped)
@@ -5252,7 +5262,9 @@ def pedimento_subir(request, pk):
     ped = _pedimento_del_tenant(request, pk)
 
     ranura = request.POST.get('ranura', '')
-    if ranura not in dict(PedimentoDocument.RANURAS):
+    propias = {r.clave for r in RanuraDePedimento.objects.filter(
+        tenant=ped.tenant, propia=True, activa=True)}
+    if ranura not in dict(PedimentoDocument.RANURAS) and ranura not in propias:
         raise Http404
 
     if profile.is_customer():
@@ -5262,7 +5274,7 @@ def pedimento_subir(request, pk):
         if ped.customer_id != getattr(profile.customer, 'pk', None):
             raise Http404
 
-    if ranura in PedimentoDocument.RANURAS_DE_ENVIO and not ped.se_puede_armar:
+    if (ranura in PedimentoDocument.RANURAS_DE_ENVIO or ranura in propias)             and not ped.se_puede_armar:
         return _error_en_pedimento(request, ped,
             _('%(ped)s is already with the customer; its documents cannot be '
               'changed.') % {'ped': ped.etiqueta})
@@ -5684,7 +5696,7 @@ def pedimento_zip(request, pk):
        ped.customer_id != getattr(profile.customer, 'pk', None):
         return HttpResponse(_('Permission denied.'), status=403)
 
-    etiquetas = dict(PedimentoDocument.RANURAS)
+    etiquetas = RanuraDePedimento.etiquetas(tenant)
     base = ped.numero or ('pedimento-%d' % ped.orden)
     base = base.replace('/', '_')
 
@@ -6288,6 +6300,114 @@ def renglon_calculo(request, pk):
 
 
 @login_required
+def pedimento_ranuras(request):
+    """
+    Las ranuras de envio del pedimento, como las quiere este tenant.
+
+    Que ranuras hay, cuales son obligatorias -- frenan el envio a revision y
+    se pintan en rojo mientras estan vacias -- y en que orden salen. Tambien
+    se agregan ranuras propias para papeles que su agente aduanal pide y que
+    no estan entre las de fabrica.
+
+    Todo vive en un solo formulario: las flechas, quitar y agregar guardan
+    tambien las casillas, para que nadie pierda lo marcado por mover una.
+
+    Solo la casa de nivel gerente para arriba; el staff y el cliente, 404.
+    """
+    tenant  = get_tenant_or_404(request)
+    profile = get_profile(request.user)
+    if not profile.is_home():
+        raise Http404
+
+    volver = (request.GET.get('customer') or request.POST.get('customer') or '').strip()
+    solo = (request.GET.get('solo') or request.POST.get('solo') or '').strip()
+    ranuras = RanuraDePedimento.de_tenant(tenant)
+    errores = []
+
+    if request.method == 'POST':
+        p = request.POST
+        for r in ranuras:
+            r.activa = bool(p.get(f'activa_{r.pk}'))
+            r.obligatoria = r.activa and bool(p.get(f'obligatoria_{r.pk}'))
+            if r.propia:
+                nombre = (p.get(f'nombre_{r.pk}') or '').strip()[:60]
+                if nombre:
+                    r.nombre = nombre
+            r.save(update_fields=['activa', 'obligatoria', 'nombre'])
+
+        mover = p.get('mover', '')
+        if ':' in mover:
+            pk, hacia = mover.split(':', 1)
+            idx = next((i for i, r in enumerate(ranuras) if str(r.pk) == pk), None)
+            otro = None if idx is None else idx + (-1 if hacia == 'arriba' else 1)
+            if idx is not None and 0 <= otro < len(ranuras):
+                ranuras[idx], ranuras[otro] = ranuras[otro], ranuras[idx]
+            for i, r in enumerate(ranuras):
+                if r.orden != i:
+                    r.orden = i
+                    r.save(update_fields=['orden'])
+
+        quitar = p.get('quitar', '')
+        if quitar:
+            r = next((r for r in ranuras if str(r.pk) == quitar and r.propia), None)
+            if r is not None:
+                # Si ya tiene archivos no se borra: se apaga. Borrarla dejaria
+                # esos archivos en una ranura sin nombre.
+                if PedimentoDocument.objects.filter(
+                        pedimento__tenant=tenant, ranura=r.clave).exists():
+                    r.activa = r.obligatoria = False
+                    r.save(update_fields=['activa', 'obligatoria'])
+                    request.session['aviso_de_ranuras'] = str(
+                        _('"%(nombre)s" already has files, so it was turned off instead of removed.')
+                        % {'nombre': r.nombre})
+                else:
+                    r.delete()
+
+        # Un nombre escrito se agrega aunque se pulse Guardar o Enter: dejarlo
+        # tecleado y perderlo seria peor que agregarlo.
+        nombre = (p.get('nueva') or '').strip()[:60]
+        if 'agregar' in p or nombre:
+            if not nombre:
+                errores.append(_('Type the name of the new slot.'))
+            else:
+                n = 1
+                claves = set(RanuraDePedimento.objects.filter(tenant=tenant)
+                             .values_list('clave', flat=True))
+                while f'EXTRA_{n}' in claves:
+                    n += 1
+                RanuraDePedimento.objects.create(
+                    tenant=tenant, clave=f'EXTRA_{n}', nombre=nombre, propia=True,
+                    obligatoria=bool(p.get('nueva_obligatoria')),
+                    orden=len(ranuras))
+
+        if not errores:
+            request.session.setdefault(
+                'aviso_de_ranuras', str(_('Slots saved.')))
+            destino = reverse('pedimento_ranuras')
+            params = '&'.join(f'{k}={v}' for k, v in
+                              (('customer', volver), ('solo', solo)) if v)
+            if params:
+                destino += '?' + params
+            return redirect(destino)
+        ranuras = RanuraDePedimento.de_tenant(tenant)
+
+    if volver:
+        regreso = f"{reverse('pedimentos_panel')}?customer={volver}"
+        if solo:
+            regreso += f'&solo={solo}#ped-{solo}'
+    else:
+        regreso = reverse('cruces_panel')
+    return render(request, 'warehouse/pedimento_ranuras.html', {
+        'ranuras': ranuras,
+        'errores': errores,
+        'volver': volver,
+        'solo': solo,
+        'regreso': regreso,
+        'aviso': request.session.pop('aviso_de_ranuras', None),
+    })
+
+
+@login_required
 def impuestos_parametros(request):
     """
     Los numeros del calculo que pone la casa: tipo de cambio, prevalidacion,
@@ -6710,6 +6830,8 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
             g['es_parcial'] = g['bultos'] < g['de']
             g['ultima'] = max(g['filas'], key=lambda f: f.added_at or timezone.now())
         tarea.grupos = list(grupos.values())
+        # Para la linea que explica que al pedimento se entra tocando su numero.
+        tarea.con_pedimento_armado = any(g.get('pedimentos') for g in tarea.grupos)
         # El embarque es el pedimento: los que aun no tienen cifra se cuentan
         # por renglon, no por entrada.
         tarea.sin_impuesto = sum(1 for g in tarea.grupos if not g['impuesto'])

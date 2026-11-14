@@ -94,6 +94,8 @@
     .ranuras .instruccion{grid-column:1/-1;margin:0;font-size:13px;font-weight:600;
                           color:var(--accent-ink)}
     .ranura.pide{border-color:var(--red);background:var(--rsoft)}
+    .instruccion .config-ranuras{font-weight:400;font-size:12px;margin-left:6px;
+                                 color:var(--accent-ink);white-space:nowrap}
     .ranura h4{margin:0 0 5px;font-size:11px;text-transform:uppercase;
                letter-spacing:.04em;color:var(--soft);font-weight:600}
     .ranura .archivo{display:flex;justify-content:space-between;align-items:center;
@@ -291,7 +293,7 @@
         {% endfor %}
         <div class="ped-sub">
           {% blocktrans count bultos=p.total_bultos %}{{ bultos }} bundle{% plural %}{{ bultos }} bundles{% endblocktrans %}
-          {% if p.total_libras %} · {{ p.total_libras }} lbs · {{ p.total_kilos }} kg{% endif %}
+          {% if p.total_kilos %} · {{ p.total_kilos }} kg{% endif %}
           {% if p.necesita_fotos_de_series %} · {% trans "needs serial-number photos" %}{% endif %}
         </div>
       </div>
@@ -338,7 +340,6 @@
           <th>{% trans "PO / Order" %}</th>
           <th>{% trans "Type" %}</th>
           <th>{% trans "Shipper" %}</th>
-          <th class="num">{% trans "Lbs" %}</th>
           <th class="num">{% trans "Kgs" %}</th>
           <th></th>
         </tr>
@@ -346,7 +347,11 @@
       <tbody>
         {% for r in p.renglones.all %}
         <tr>
-          <td data-etq="{% trans "Bundles" %}" class="mono">{{ r.bultos }} {% trans "of" %} {{ r.operation.bundle_qty|default:"?" }}</td>
+          {% comment %}
+          "2 de 5" solo cuando la entrada va partida, igual que en la tarea de
+          cruce. Con la entrada completa, "2 de 2" solo hacia dudar.
+          {% endcomment %}
+          <td data-etq="{% trans "Bundles" %}" class="mono">{{ r.bultos }}{% if not r.lleva_la_entrada_completa %} <span class="soft">{% trans "of" %} {{ r.operation.bundle_qty|default:"?" }}</span>{% endif %}</td>
           <td data-etq="{% trans "Entry no." %}" class="mono">{{ r.operation.custom_id }}</td>
           {% comment %}
           El numero de pedido es con lo que el cliente identifica su embarque,
@@ -357,13 +362,12 @@
           <td data-etq="{% trans "Type" %}">{{ r.operation.get_bundle_type_display_name|default:"—" }}</td>
           <td data-etq="{% trans "Shipper" %}">{{ r.operation.get_shipper_display|default:"—" }}</td>
           {% comment %}
-          El peso de estos bultos, no el de la operacion entera. Cuando una
-          entrada se parte entre dos pedimentos, enseñar aqui el peso completo
-          seria decir que los seis bultos de este renglon pesan lo que pesan
-          los diez que llegaron.
+          El peso de estos bultos, en kilos. Con la entrada completa son los
+          que se capturaron al registrarla; partida, los que se teclearon al
+          asignar. Nunca el peso entero de una entrada partida: seria decir que
+          los seis bultos de este renglon pesan lo que pesan los diez.
           {% endcomment %}
-          <td data-etq="{% trans "Lbs" %}" class="num">{{ r.weight_lbs|default:"—" }}</td>
-          <td data-etq="{% trans "Kgs" %}" class="num">{{ r.weight_kgs|default:"—" }}</td>
+          <td data-etq="{% trans "Kgs" %}" class="num">{{ r.kilos|default:"—" }}</td>
           <td data-etq="">
             {% if puede_editar and p.editable %}
             <form method="post" action="{% url 'pedimento_quitar' p.pk %}" style="margin:0">
@@ -375,7 +379,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="soft">{% trans "Nothing assigned to this pedimento yet." %}</td></tr>
+        <tr><td colspan="7" class="soft">{% trans "Nothing assigned to this pedimento yet." %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -395,13 +399,13 @@
         <input type="number" name="bultos" min="1" value="1" style="width:76px"
                aria-label="{% trans "Bundles" %}" placeholder="{% trans "Bundles" %}">
         {% comment %}
-        El peso se teclea en libras, que es como llegan los embarques, y el
-        sistema pone los kilos. No se sugiere ninguno: repartir el peso de la
-        entrada por partes iguales seria inventarselo, porque los bultos de un
-        embarque no pesan lo mismo.
+        El peso se teclea en kilos, y solo hace falta si la entrada se parte:
+        con la entrada completa salen los de su registro. No se sugiere
+        ninguno: repartir el peso por partes iguales seria inventarselo,
+        porque los bultos de un embarque no pesan lo mismo.
         {% endcomment %}
-        <input type="number" name="weight_lbs" step="0.01" min="0" style="width:104px"
-               aria-label="{% trans "Lbs" %}" placeholder="{% trans "Lbs" %}">
+        <input type="number" name="weight_kgs" step="0.01" min="0" style="width:104px"
+               aria-label="{% trans "Kgs" %}" placeholder="{% trans "Kgs" %}">
         <button class="btn btn-sm btn-p" type="submit">{% trans "Assign bundles" %}</button>
       </form>
     </div>
@@ -419,10 +423,11 @@
       {% if puede_editar and p.editable %}
       <p class="instruccion">
         📎 {% trans "Upload the pedimento documents to send it to the customer for review. Those marked with * are required." %}
+        {% if is_home %}<a class="config-ranuras" href="{% url 'pedimento_ranuras' %}?customer={{ cliente.pk }}&amp;solo={{ p.pk }}">⚙ {% trans "Configure slots" %}</a>{% endif %}
       </p>
       {% endif %}
       {% for clave, etiqueta, archivos, obligatoria in p.ranuras_envio %}
-      <div class="ranura{% if not archivos %} vacia pide{% endif %}">
+      <div class="ranura{% if not archivos %} vacia{% if obligatoria %} pide{% endif %}{% endif %}">
         <h4>{{ etiqueta }}{% if obligatoria and not archivos %} *{% endif %}</h4>
         {% comment %}
         Las fotos de series se eligen del expediente del embarque aqui mismo,

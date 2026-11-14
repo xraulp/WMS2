@@ -2228,8 +2228,9 @@ class Pedimento(models.Model):
 
     @property
     def total_kilos(self):
-        """Los kilos, que salen de las libras y nunca se teclean."""
-        pesos = [r.weight_kgs for r in self.renglones.all() if r.weight_kgs]
+        """Los kilos que van dentro, con los de la entrada si va completa."""
+        pesos = [r.kilos for r in self.renglones.select_related('operation')
+                 if r.kilos]
         return sum(pesos) if pesos else None
 
     # ── El estado corto, con de quien es la pelota ───────────────────────────
@@ -2366,11 +2367,12 @@ class Pedimento(models.Model):
         # para el expediente -- lo enseña `operaciones_sin_factura`, que la
         # pantalla usa para avisar --, pero ya no frena la revision.
 
+        # Cuales ranuras se exigen lo decide cada tenant (`RanuraDePedimento`).
         cajones = self.documentos_por_ranura()
         etiquetas = dict(PedimentoDocument.RANURAS)
-        for ranura in PedimentoDocument.RANURAS_PARA_REVISION:
-            if not cajones.get(ranura):
-                faltan.append(etiquetas[ranura])
+        for ranura in RanuraDePedimento.de_envio(self.tenant):
+            if ranura.obligatoria and not cajones.get(ranura.clave):
+                faltan.append(ranura.etiqueta)
         # Las fotos de series solo se exigen cuando la mercancia las trae. La
         # ranura no esta y no se pide: no es una casilla de "no aplica" que
         # alguien marque cada vez, es que no aparece.
@@ -2665,15 +2667,34 @@ class PedimentoBundle(models.Model):
     KILOS_POR_LIBRA = Decimal('0.45359237')
 
     def save(self, *args, **kwargs):
-        # Los kilos salen de las libras siempre que haya libras. Si alguien
-        # borra las libras, los kilos se van con ellas: un peso en kilos sin su
-        # original no se puede comprobar el dia que no cuadre.
+        # Si el renglon trae libras -- los viejos, de cuando se tecleaban asi --
+        # los kilos salen de ellas. Desde el 14 nov 2026 se teclean kilos
+        # directamente, y entonces se respetan tal cual.
         if self.weight_lbs is not None:
             self.weight_kgs = (self.weight_lbs * self.KILOS_POR_LIBRA
                                ).quantize(Decimal('0.01'))
-        else:
-            self.weight_kgs = None
         super().save(*args, **kwargs)
+
+    @property
+    def lleva_la_entrada_completa(self):
+        total = self.operation.bundle_qty or 0
+        return total > 0 and self.bultos >= total
+
+    @property
+    def kilos(self):
+        """
+        Los kilos de estos bultos, para la pantalla.
+
+        Los tecleados, si los hay. Si no, y el renglon lleva todos los bultos
+        de la entrada, los que se capturaron al registrarla: son el mismo peso
+        y pedir que se teclee otra vez era escribirlo dos veces. Si la entrada
+        va partida y nadie tecleo el peso de esta parte, no se inventa.
+        """
+        if self.weight_kgs is not None:
+            return self.weight_kgs
+        if self.lleva_la_entrada_completa:
+            return self.operation.weight_kgs
+        return None
 
     def __str__(self):
         return f'{self.bultos} de {self.operation.custom_id} a {self.pedimento.etiqueta}'
@@ -2758,7 +2779,9 @@ class PedimentoDocument(models.Model):
         verbose_name_plural = 'Documentos del pedimento'
 
     def __str__(self):
-        return f'{self.get_ranura_display()} de {self.pedimento.etiqueta}'
+        etiqueta = RanuraDePedimento.etiquetas(self.pedimento.tenant).get(
+            self.ranura, self.ranura)
+        return f'{etiqueta} de {self.pedimento.etiqueta}'
 
     @property
     def nombre(self):
@@ -2774,6 +2797,83 @@ class PedimentoDocument(models.Model):
         if self.documento_de_operacion_id:
             return self.documento_de_operacion.file
         return self.file
+
+
+class RanuraDePedimento(models.Model):
+    """
+    Como tiene cada tenant las ranuras de envio de sus pedimentos.
+
+    Cada casa trabaja con su agente aduanal y su agente pide sus papeles: a una
+    le hace falta el M3 para mandar a revision y a otra no, y otra pide un
+    documento que aqui ni existia. Por eso cuales son obligatorias -- las que
+    frenan el boton de enviar a revision y se pintan en rojo mientras estan
+    vacias -- lo decide el tenant, y tambien puede agregar ranuras propias.
+
+    Las de fabrica se siembran la primera vez con lo que habia antes de esto
+    (`PedimentoDocument.RANURAS_PARA_REVISION`), asi que un tenant que nunca
+    entra a configurarlas sigue igual que siempre.
+
+    La de fotos de numeros de serie no esta aqui a proposito: aparece, y es
+    obligatoria, solo cuando la mercancia trae series. Y las que llegan
+    despues de la revision tampoco, porque no son del armado.
+    """
+
+    tenant      = models.ForeignKey('Tenant', on_delete=models.CASCADE,
+                                    related_name='ranuras_de_pedimento')
+    # La de `PedimentoDocument.RANURAS` en las de fabrica; `EXTRA_<n>` en las
+    # propias. Es lo que se guarda en `PedimentoDocument.ranura`.
+    clave       = models.CharField(max_length=20)
+    # Vacio en las de fabrica, que usan su etiqueta traducida.
+    nombre      = models.CharField(max_length=60, blank=True, default='')
+    propia      = models.BooleanField(default=False)
+    activa      = models.BooleanField(default=True)
+    obligatoria = models.BooleanField(default=False)
+    orden       = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'pk']
+        unique_together = [('tenant', 'clave')]
+        verbose_name = 'Ranura de pedimento'
+        verbose_name_plural = 'Ranuras de pedimento'
+
+    # Las configurables de fabrica, en su orden. Sin las fotos de series.
+    DE_FABRICA = (PedimentoDocument.M3, PedimentoDocument.PROFORMA,
+                  PedimentoDocument.COVE, PedimentoDocument.CARTA_318,
+                  PedimentoDocument.OTROS)
+
+    def __str__(self):
+        return f'{self.etiqueta} ({self.tenant_id})'
+
+    @property
+    def etiqueta(self):
+        if self.nombre:
+            return self.nombre
+        return dict(PedimentoDocument.RANURAS).get(self.clave, self.clave)
+
+    @classmethod
+    def de_tenant(cls, tenant):
+        """Todas las del tenant, sembrando las de fabrica si no hay ninguna."""
+        if not cls.objects.filter(tenant=tenant).exists():
+            cls.objects.bulk_create([
+                cls(tenant=tenant, clave=clave, orden=i,
+                    obligatoria=clave in PedimentoDocument.RANURAS_PARA_REVISION)
+                for i, clave in enumerate(cls.DE_FABRICA)
+            ], ignore_conflicts=True)
+        return list(cls.objects.filter(tenant=tenant))
+
+    @classmethod
+    def de_envio(cls, tenant):
+        """Las activas, en el orden en que se enseñan."""
+        return [r for r in cls.de_tenant(tenant) if r.activa]
+
+    @classmethod
+    def etiquetas(cls, tenant):
+        """Clave -> nombre en pantalla, de fabrica y propias juntas."""
+        nombres = dict(PedimentoDocument.RANURAS)
+        if tenant is not None:
+            for r in cls.objects.filter(tenant=tenant, propia=True):
+                nombres[r.clave] = r.nombre
+        return nombres
 
 
 class ParametrosDeImpuestos(models.Model):
