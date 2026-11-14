@@ -4220,17 +4220,9 @@ msgstr "La ranura de fotos de números de serie no se configura aquí: aparece, 
 msgid "Configure slots"
 msgstr "Configurar ranuras"
 
-msgid "Review pedimento"
-msgstr "Revisar pedimento"
 
-msgid "See pedimento"
-msgstr "Ver pedimento"
 
-msgid "Documents and review"
-msgstr "Documentos y revisión"
 
-msgid "Tap the pedimento number to upload its documents and send it to the customer for review."
-msgstr "Toca el número de pedimento para cargar sus documentos y mandarlo a revisión del cliente."
 
 msgid "Type the name of the new slot."
 msgstr "Escribe el nombre de la ranura nueva."
@@ -4241,3 +4233,9 @@ msgstr "Ranuras guardadas."
 #, python-format
 msgid "\"%(nombre)s\" already has files, so it was turned off instead of removed."
 msgstr "«%(nombre)s» ya tiene archivos, así que se apagó en vez de quitarse."
+
+msgid "Go in"
+msgstr "Ingresar"
+
+msgid "Tap Go in to upload the pedimento documents and send it to the customer for review."
+msgstr "Toca Ingresar para cargar los documentos del pedimento y mandarlo a revisión del cliente."
