@@ -7,6 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% trans "Crossings" %} — WMS</title>
   {% include "warehouse/partials/tema.html" %}
+  {% include "warehouse/partials/documentos_de_entrega_css.html" %}
   <style>
     *{box-sizing:border-box}
     body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ink)}
@@ -246,6 +247,7 @@
 <div class="wrap">
 
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
+  {% if aviso %}<div class="msg-ok">&#10003; {{ aviso }}</div>{% endif %}
   {% if separada %}
   {% comment %}
   El -A acaba de nacer. Sus bultos llevan pegada la etiqueta de la entrada
@@ -947,6 +949,8 @@
       </div>
     </div>
     {% endif %}
+
+    {% include "warehouse/partials/documentos_de_entrega.html" %}
 
     {% if t.cambios_de_dia.all %}
     <div class="historial">

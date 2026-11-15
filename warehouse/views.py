@@ -32,14 +32,15 @@ from .models import (WarehouseOperation, PedidoDeEntrada, Camion, Catalog, Opera
                      PedimentoDocument, ParametrosDeImpuestos, RanuraDePedimento,
                      RenglonDeImpuestos, CrossingTask, CrossingTaskItem,
                      CambioDeDiaDeCruce, LoadOrder, LoadOrderItem,
-                     EscaneoDeBulto, Remision, siguiente_consecutivo,
+                     EscaneoDeBulto, Remision, DocumentoDeEntrega,
+                     siguiente_consecutivo,
                      LADO_TENANT, LADO_CLIENTE)
 from .utils import (generate_pdf_report, generate_label_pdf, generar_pdf_factura,
                     nombre_corto)
 from .almacen import url_firmada
 from .cuenta import revisar_el_correo
 from .context_processors import es_telefono
-from . import notifications, pedimentos, impuestos, bultos, papeles
+from . import notifications, pedimentos, impuestos, bultos, papeles, entrega
 
 logger = logging.getLogger(__name__)
 
@@ -6714,10 +6715,16 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
         pedido = cliente_pk if cliente_pk is not None else request.GET.get('customer')
         cliente = clientes.filter(pk=pedido).first() if pedido else None
 
+    # Lo que dejo dicho una accion de los documentos de entrega al volver.
+    if error is None:
+        error = request.session.pop('error_de_cruces', None)
+    aviso = request.session.pop('aviso_de_cruces', None)
+
     contexto = {
         'clientes': clientes,
         'cliente': cliente,
         'profile': profile,
+        'aviso': aviso,
         'es_cliente': profile.is_customer(),
         'motivos': CambioDeDiaDeCruce.MOTIVOS,
         'error': error,
@@ -6841,6 +6848,7 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
         tarea.sin_factura = tarea.operaciones_sin_factura
         tarea.dias = tarea.dias_para_el_cruce
         tarea.dias_de_atraso = max(-tarea.dias, 0)
+        preparar_entrega(tarea, request.user)
         tarea.libres = libres
         # La orden de carga vigente y lo que impide emitirla. El boton se pinta
         # atenuado con el motivo escrito al lado, no encendido dando error.
@@ -8379,6 +8387,214 @@ def orden_de_carga_pdf(request, pk):
         raise Http404('La tarea no tiene orden de carga')
     return _pdf(papeles.orden_de_carga(orden, request.user),
                 f'{orden.custom_id}-v{orden.version}.pdf')
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  LOS DOCUMENTOS DE ENTREGA DEL CRUCE
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Lo que el cliente recibe al final, todo junto: pedimentos pagados, remision
+# original, shipper, fotos de la carga y la remision firmada. Se suben en la
+# tarea -- una vez, y no pedimento por pedimento -- y desde la tarea se
+# descargan o se le mandan por correo, todos o uno por uno. La lista la arma
+# `warehouse.entrega`.
+
+# Lo que se puede subir desde la tarea, y que archivos acepta cada ranura.
+EXT_DE_IMAGEN = ('.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp')
+SUBIBLES_DE_ENTREGA = {
+    DocumentoDeEntrega.SHIPPER:          ('.pdf',),
+    DocumentoDeEntrega.FOTOS_CARGA:      EXT_DE_IMAGEN,
+    DocumentoDeEntrega.REMISION_FIRMADA: EXT_DE_IMAGEN + ('.pdf',),
+}
+
+
+def preparar_entrega(tarea, usuario):
+    """Le cuelga a `tarea` lo que pinta la caja de documentos de entrega."""
+    tarea.archivos_de_entrega = entrega.archivos(tarea, usuario)
+    tarea.entrega = entrega.por_grupo(tarea.archivos_de_entrega)
+    tarea.pagados_faltan = entrega.pedimentos_sin_pagado(tarea)
+    return tarea
+
+
+def _volver_a_la_entrega(request, tarea, aviso=None, error=None):
+    if aviso:
+        request.session['aviso_de_cruces'] = str(aviso)
+    if error:
+        request.session['error_de_cruces'] = str(error)
+    if request.POST.get('volver') == 'pagina':
+        return redirect(reverse('cruce_documentos', args=[tarea.pk]))
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}"
+                    f"#entrega-{tarea.pk}")
+
+
+@login_required
+@require_GET
+def cruce_documentos(request, pk):
+    """
+    Los documentos de entrega de una tarea, en su propia pantalla.
+
+    Es la puerta para las tareas que ya pasaron a cruces realizados, que es
+    justo cuando llegan los ultimos papeles, y la que abre el correo.
+    """
+    tarea = _cruce_del_tenant(request, pk)
+    profile = get_profile(request.user)
+    preparar_entrega(tarea, request.user)
+    return render(request, 'warehouse/cruce_documentos.html', {
+        't': tarea,
+        'cliente': tarea.customer,
+        'es_cliente': profile.is_customer(),
+        'en_pagina': True,
+        'aviso': request.session.pop('aviso_de_cruces', None),
+        'error': request.session.pop('error_de_cruces', None),
+    })
+
+
+@login_required
+@require_POST
+def cruce_entrega_subir(request, pk):
+    """Subir uno o varios archivos a una ranura de la entrega. Solo la casa."""
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    tipo = request.POST.get('tipo', '')
+    if tipo not in SUBIBLES_DE_ENTREGA:
+        raise Http404
+    archivos = request.FILES.getlist('archivo')
+    if not archivos:
+        return _volver_a_la_entrega(request, tarea, error=_('Pick a file first.'))
+
+    aceptadas = SUBIBLES_DE_ENTREGA[tipo]
+    rechazados = []
+    for f in archivos:
+        ext = os.path.splitext(f.name or '')[1].lower()
+        tipo_mime = (getattr(f, 'content_type', '') or '').lower()
+        # La camara del telefono a veces manda la foto sin extension.
+        es_foto = (tipo != DocumentoDeEntrega.SHIPPER
+                   and tipo_mime.startswith('image/'))
+        if ext not in aceptadas and not es_foto:
+            rechazados.append(f.name)
+            continue
+        DocumentoDeEntrega.objects.create(task=tarea, tipo=tipo, file=f,
+                                          original_name=f.name,
+                                          uploaded_by=request.user)
+    if rechazados:
+        return _volver_a_la_entrega(request, tarea, error=(
+            _('These files are not the right type and were not uploaded: %(n)s')
+            % {'n': ', '.join(rechazados)}))
+    return _volver_a_la_entrega(request, tarea)
+
+
+@login_required
+@require_POST
+def cruce_entrega_quitar(request, pk):
+    """Quitar un archivo de la entrega. Solo la casa."""
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    doc = get_object_or_404(DocumentoDeEntrega, pk=request.POST.get('documento'),
+                            task=tarea)
+    doc.delete()
+    return _volver_a_la_entrega(request, tarea)
+
+
+@login_required
+@require_GET
+def cruce_entrega_archivo(request, pk):
+    """
+    Entrega un archivo de la entrega del cruce.
+
+    La misma puerta que `pedimento_archivo`: hay que estar dentro, ser de la
+    empresa o el cliente de la tarea, y el enlace firmado caduca en minutos.
+    """
+    tenant = get_tenant_or_404(request)
+    doc = get_object_or_404(DocumentoDeEntrega.objects.select_related('task'),
+                            pk=pk, task__tenant=tenant)
+    profile = get_profile(request.user)
+    if profile.is_customer() and \
+       doc.task.customer_id != getattr(profile.customer, 'pk', None):
+        raise Http404
+    descargar = request.GET.get('download') == '1'
+    nombre = doc.nombre
+    firmada = url_firmada(doc.file, descargar_como=nombre if descargar else None)
+    if firmada:
+        respuesta = redirect(firmada)
+        respuesta['Cache-Control'] = 'private, no-store'
+        return respuesta
+    try:
+        contenido = doc.file.open('rb')
+    except Exception as e:
+        logger.warning('No se pudo abrir el documento de entrega %s: %s', doc.pk, e)
+        raise Http404('El archivo no esta disponible')
+    return FileResponse(contenido, as_attachment=descargar, filename=nombre)
+
+
+@login_required
+@require_POST
+def cruce_entrega_zip(request, pk):
+    """Los documentos de entrega elegidos -- o todos -- en un ZIP."""
+    tarea = _cruce_del_tenant(request, pk)
+    lista = entrega.elegidos(entrega.archivos(tarea, request.user),
+                             request.POST.getlist('sel'))
+    buf = BytesIO()
+    metidos, usados = 0, set()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for archivo in lista:
+            nombre = entrega.nombre_en_el_zip(tarea, archivo, usados)
+            try:
+                zf.writestr(nombre, archivo.leer())
+                metidos += 1
+            except Exception as e:
+                logger.warning('No se pudo agregar %s al ZIP de %s: %s',
+                               archivo.clave, tarea.custom_id, e)
+    if not metidos:
+        return _volver_a_la_entrega(request, tarea,
+                                    error=_('There are no documents to download.'))
+    buf.seek(0)
+    resp = HttpResponse(buf.read(), content_type='application/zip')
+    resp['Content-Disposition'] = (
+        f'attachment; filename="{tarea.custom_id} - documentos.zip"')
+    return resp
+
+
+@login_required
+@require_POST
+def cruce_entrega_correo(request, pk):
+    """
+    Mandarle al cliente los documentos de entrega, a los correos de su ficha.
+
+    Todos los marcados, o uno solo si se pulso el sobre de un archivo.
+    """
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tarea = _cruce_del_tenant(request, pk)
+    todos = entrega.archivos(tarea, request.user)
+    solo = (request.POST.get('solo') or '').strip()
+    lista = entrega.elegidos(todos, [solo] if solo else request.POST.getlist('sel'))
+    if solo and not lista:
+        raise Http404
+    if not lista:
+        return _volver_a_la_entrega(request, tarea,
+                                    error=_('There are no documents to send.'))
+
+    enviado, error, fuera = notifications.enviar_documentos_de_entrega(
+        tarea, lista, triggered_by=request.user)
+    if not enviado:
+        if error == 'no_email':
+            mensaje = (_('%(cliente)s has no email on file; add one in its customer card.')
+                       % {'cliente': tarea.customer.name})
+        elif error == 'nothing_fits':
+            mensaje = _('The selected files are too large to send by email.')
+        else:
+            mensaje = _('The email could not be sent: %(e)s') % {'e': error}
+        return _volver_a_la_entrega(request, tarea, error=mensaje)
+
+    destinos = ', '.join(notifications.email_recipients(tarea.customer))
+    aviso = (_('%(n)d document(s) sent to %(a)s.')
+             % {'n': len(lista) - len(fuera), 'a': destinos})
+    if fuera:
+        aviso += ' ' + (_('Too large to attach (listed in the email): %(f)s')
+                        % {'f': ', '.join(fuera)})
+    return _volver_a_la_entrega(request, tarea, aviso=aviso)
 
 
 @login_required

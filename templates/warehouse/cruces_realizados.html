@@ -100,6 +100,7 @@
         <th>{% trans "Crossing day" %}</th>
         <th>{% trans "Delivered" %}</th>
         <th>{% trans "Pedimentos" %}</th>
+        <th>{% trans "Documents" %}</th>
       </tr>
     </thead>
     <tbody>
@@ -120,6 +121,10 @@
           <div>
           {% for p in t.lista_pedimentos %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ t.customer_id }}&amp;solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% empty %}—{% endfor %}
           </div>
+        </td>
+        {# Los papeles de entrega llegan al final: se ven y se mandan desde aqui. #}
+        <td data-etq="{% trans "Documents" %}">
+          <span><a class="ped-link" href="{% url 'cruce_documentos' t.pk %}">📦 {% trans "Delivery documents" %} ›</a></span>
         </td>
       </tr>
       {% endfor %}

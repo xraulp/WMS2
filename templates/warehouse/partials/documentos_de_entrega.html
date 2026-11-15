@@ -1,0 +1,92 @@
+{% load i18n %}
+{% comment %}
+Los documentos de entrega de la tarea `t`: pedimentos pagados, remision
+original, shipper, fotos de la carga y la remision firmada. Se incluye en la
+tarjeta de la tarea (cruces.html) y en su pantalla propia
+(cruce_documentos.html); `en_pagina` dice a cual volver despues de cada
+accion.
+
+Una sola forma de elegir: las casillas pertenecen al formulario de abajo
+(atributo `form`), que descarga el ZIP o manda el correo con lo marcado. El
+sobre de cada archivo manda solo ese. Los formularios de subir y quitar van
+aparte, porque un formulario no puede ir dentro de otro.
+
+La casa sube, quita y manda; el cliente solo ve y descarga, y la caja no le
+sale mientras no haya nada.
+{% endcomment %}
+{% if not es_cliente or t.archivos_de_entrega %}
+<div class="entrega" id="entrega-{{ t.pk }}">
+  <div class="ent-hd">
+    <h4>📦 {% trans "Delivery documents" %}</h4>
+    {% if not es_cliente %}<span class="soft ent-ayuda">{% trans "Tick what you want and download it or send it to the customer. ✉ sends just that file." %}</span>{% endif %}
+  </div>
+  <div class="ent-grupos">
+    {% for grupo, titulo, lista in t.entrega %}
+    <div class="ent-grupo{% if not lista %} vacio{% endif %}">
+      <div class="ent-tit">{{ titulo }}{% if lista %} <span class="soft">· {{ lista|length }}</span>{% endif %}</div>
+      {% for a in lista %}
+      <div class="ent-arch">
+        <label>
+          <input type="checkbox" name="sel" value="{{ a.clave }}" form="ent-form-{{ t.pk }}" checked>
+          <a href="{{ a.url }}" target="_blank">{{ a.nombre }}</a>
+        </label>
+        {% if not es_cliente %}
+        <span class="ent-acc">
+          <button class="btn btn-sm" type="submit" form="ent-form-{{ t.pk }}"
+                  formaction="{% url 'cruce_entrega_correo' t.pk %}" name="solo" value="{{ a.clave }}"
+                  title="{% trans "Send only this file to the customer" %}">✉</button>
+          {% if a.quitable %}
+          <form method="post" action="{% url 'cruce_entrega_quitar' t.pk %}" style="margin:0">
+            {% csrf_token %}
+            {% if en_pagina %}<input type="hidden" name="volver" value="pagina">{% endif %}
+            <input type="hidden" name="documento" value="{{ a.quitable.pk }}">
+            <button class="btn btn-sm" type="submit" title="{% trans "Take out" %}">✕</button>
+          </form>
+          {% endif %}
+        </span>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      {% if grupo == 'PAGADOS' %}
+        {% if t.pagados_faltan %}
+        <div class="nada">
+          {% trans "Missing:" %}
+          {% for p in t.pagados_faltan %}<span class="mono">{{ p.numero|default:p.etiqueta }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}
+          {% if not es_cliente %}<br>{% trans "It is uploaded in the paid pedimento slot of each pedimento (Go in)." %}{% endif %}
+        </div>
+        {% elif not lista %}<div class="nada">{% trans "empty" %}</div>{% endif %}
+      {% elif grupo == 'REMISION' %}
+        {% if not lista %}<div class="nada">{% trans "Issued in the Remision box." %}</div>{% endif %}
+      {% else %}
+        {% if not lista %}<div class="nada">{% trans "empty" %}</div>{% endif %}
+        {% if not es_cliente %}
+        <form method="post" enctype="multipart/form-data"
+              action="{% url 'cruce_entrega_subir' t.pk %}" class="ent-subir">
+          {% csrf_token %}
+          {% if en_pagina %}<input type="hidden" name="volver" value="pagina">{% endif %}
+          <input type="hidden" name="tipo" value="{{ grupo }}">
+          <label class="btn btn-sm">
+            {% if grupo == 'SHIPPER' %}📎 {% trans "Upload PDFs" %}{% else %}📷 {% trans "Take or upload photos" %}{% endif %}
+            <input type="file" name="archivo" multiple hidden onchange="this.form.submit()"
+                   accept="{% if grupo == 'SHIPPER' %}.pdf,application/pdf{% elif grupo == 'REMISION_FIRMADA' %}image/*,.pdf,application/pdf{% else %}image/*{% endif %}">
+          </label>
+        </form>
+        {% endif %}
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if t.archivos_de_entrega %}
+  <form id="ent-form-{{ t.pk }}" method="post" action="{% url 'cruce_entrega_zip' t.pk %}" class="ent-botones">
+    {% csrf_token %}
+    {% if en_pagina %}<input type="hidden" name="volver" value="pagina">{% endif %}
+    <button class="btn btn-sm" type="submit">↓ {% trans "Download the ticked ones (ZIP)" %}</button>
+    {% if not es_cliente %}
+    <button class="btn btn-sm btn-p" type="submit" formaction="{% url 'cruce_entrega_correo' t.pk %}">✉ {% trans "Send the ticked ones to the customer" %}</button>
+    {% endif %}
+  </form>
+  {% endif %}
+</div>
+{% endif %}

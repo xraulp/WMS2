@@ -4247,3 +4247,94 @@ msgstr[1] "atrasada %(n)s días"
 
 msgid "No number yet"
 msgstr "Sin número todavía"
+
+msgid "Paid pedimentos"
+msgstr "Pedimentos pagados"
+
+msgid "Original remision"
+msgstr "Remisión original"
+
+msgctxt "delivery document"
+msgid "Shipper"
+msgstr "Shipper"
+
+msgid "Photos of the loaded goods"
+msgstr "Fotos de la mercancía cargada"
+
+msgid "Signed remision"
+msgstr "Remisión firmada de recibido"
+
+msgid "Crossing documents"
+msgstr "Documentos del cruce"
+
+msgid "Delivery documents"
+msgstr "Documentos de entrega"
+
+msgid "Tick what you want and download it or send it to the customer. ✉ sends just that file."
+msgstr "Marca lo que quieras y descárgalo o mándaselo al cliente. ✉ manda solo ese archivo."
+
+msgid "Send only this file to the customer"
+msgstr "Mandar solo este archivo al cliente"
+
+msgid "It is uploaded in the paid pedimento slot of each pedimento (Go in)."
+msgstr "Se sube en la ranura de pedimento pagado de cada pedimento (Ingresar)."
+
+msgid "Issued in the Remision box."
+msgstr "Se emite en la caja de Remisión."
+
+msgid "Upload PDFs"
+msgstr "Subir PDF"
+
+msgid "Take or upload photos"
+msgstr "Tomar o subir fotos"
+
+msgid "Download the ticked ones (ZIP)"
+msgstr "Descargar los marcados (ZIP)"
+
+msgid "Send the ticked ones to the customer"
+msgstr "Enviar los marcados al cliente"
+
+msgid "There are no documents for this crossing yet."
+msgstr "Este cruce todavía no tiene documentos."
+
+#, python-format
+msgid "These files are not the right type and were not uploaded: %(n)s"
+msgstr "Estos archivos no son del tipo correcto y no se subieron: %(n)s"
+
+msgid "There are no documents to download."
+msgstr "No hay documentos para descargar."
+
+msgid "There are no documents to send."
+msgstr "No hay documentos para enviar."
+
+#, python-format
+msgid "%(cliente)s has no email on file; add one in its customer card."
+msgstr "%(cliente)s no tiene correo registrado; agrégalo en su ficha de cliente."
+
+msgid "The selected files are too large to send by email."
+msgstr "Los archivos elegidos son demasiado grandes para mandarse por correo."
+
+#, python-format
+msgid "The email could not be sent: %(e)s"
+msgstr "No se pudo enviar el correo: %(e)s"
+
+#, python-format
+msgid "%(n)d document(s) sent to %(a)s."
+msgstr "%(n)d documento(s) enviado(s) a %(a)s."
+
+#, python-format
+msgid "Too large to attach (listed in the email): %(f)s"
+msgstr "Demasiado grandes para adjuntar (van listados en el correo): %(f)s"
+
+msgid "Attached"
+msgstr "Adjuntos"
+
+msgid "These files were too large to attach; download them from the system:"
+msgstr "Estos archivos eran demasiado grandes para adjuntarse; descárgalos desde el sistema:"
+
+msgid "See the crossing documents"
+msgstr "Ver los documentos del cruce"
+
+#, python-format
+msgid "<b>%(cliente)s</b>, attached are the documents of this crossing."
+msgstr "<b>%(cliente)s</b>, te mandamos adjuntos los documentos de este cruce."

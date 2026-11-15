@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 # `gettext_lazy` y no `gettext`: las etiquetas de un modelo se evaluan al
 # importar el modulo, cuando todavia no hay peticion ni idioma que aplicar.
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, pgettext_lazy
 
 logger = logging.getLogger(__name__)
 
@@ -956,6 +956,9 @@ def ruta_documento(instance, filename):
         # El documento puede llegar sin tenant propio; el de su operacion es el
         # mismo, y vale mas que mandarlo todo al cajon de los huerfanos.
         tenant = getattr(instance.operation, 'tenant', None)
+    if tenant is None and getattr(instance, 'task_id', None):
+        # Los documentos de entrega cuelgan de la tarea de cruce.
+        tenant = getattr(instance.task, 'tenant', None)
     if tenant is None and getattr(instance, 'pedimento_id', None):
         # Los archivos de las ranuras del pedimento no tienen ni tenant ni
         # operacion propios: cuelgan del pedimento, que si tiene empresa. Sin
@@ -1742,6 +1745,9 @@ class NotificationLog(models.Model):
         # El cruce que la casa creo en nombre del cliente, para que lo confirme.
         ('CROSSING_TO_CONFIRM', _('Crossing to confirm')),
         ('CROSSING_CONFIRMED', _('Crossing confirmed')),
+        # Los papeles de entrega del cruce: pedimentos pagados, remisiones,
+        # shipper y fotos, mandados al cliente desde la tarea.
+        ('CROSSING_DOCUMENTS', _('Crossing documents')),
     ]
     # SENT quiere decir que el proveedor **acepto** el correo, no que llego.
     # Lo que paso despues lo cuenta Resend por su webhook (`webhooks.py`) y
@@ -2750,8 +2756,11 @@ class PedimentoDocument(models.Model):
 
     # Las que se mandan, en el orden en que se enseñan.
     RANURAS_DE_ENVIO = (M3, PROFORMA, COVE, CARTA_318, FOTOS_SERIES, OTROS)
-    # Las que llegan despues.
-    RANURAS_POSTERIORES = (MANIFESTACION, ACUSE, PEDIMENTO_PAGADO, SHIPPER)
+    # Las que llegan despues. El shipper ya no esta aqui: desde el 15 nov 2026
+    # vive en la tarea de cruce (`DocumentoDeEntrega`), porque llega un solo
+    # archivo con los de todos los pedimentos del camion. La clave se conserva
+    # para no dejar sin nombre los que se hubieran subido antes.
+    RANURAS_POSTERIORES = (MANIFESTACION, ACUSE, PEDIMENTO_PAGADO)
 
     pedimento = models.ForeignKey('Pedimento', on_delete=models.CASCADE,
                                   related_name='documentos')
@@ -4236,6 +4245,54 @@ class EscaneoDeBulto(models.Model):
     def __str__(self):
         from . import bultos as _bultos
         return _bultos.codigo(self.operation.custom_id, self.numero_de_bulto)
+
+
+class DocumentoDeEntrega(models.Model):
+    """
+    Un archivo de la entrega de un cruce, que vive en la tarea y no en un
+    pedimento.
+
+    Son los papeles que llegan al final y que el cliente recibe todos juntos:
+    el shipper -- uno por pedimento, pero llega un solo PDF con los de todo el
+    camion --, las fotos de la mercancia cargada y la foto de la remision
+    firmada de recibido por el transporte mexicano, que manda el chofer al
+    entregar. Subirlos en la tarea es subirlos una vez y no pedimento por
+    pedimento.
+
+    Los pedimentos pagados no estan aqui: siguen en su ranura del pedimento,
+    porque es lo que deja marcarlo pagado. La tarea solo los junta para
+    descargarlos o mandarlos.
+    """
+
+    SHIPPER          = 'SHIPPER'
+    FOTOS_CARGA      = 'FOTOS_CARGA'
+    REMISION_FIRMADA = 'REMISION_FIRMADA'
+    TIPOS = [
+        (SHIPPER,          pgettext_lazy('delivery document', 'Shipper')),
+        (FOTOS_CARGA,      _('Photos of the loaded goods')),
+        (REMISION_FIRMADA, _('Signed remision')),
+    ]
+
+    task  = models.ForeignKey('CrossingTask', on_delete=models.CASCADE,
+                              related_name='documentos_de_entrega')
+    tipo  = models.CharField(max_length=20, choices=TIPOS)
+    file  = models.FileField(upload_to=ruta_documento, max_length=255)
+    original_name = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                    blank=True, related_name='documentos_de_entrega')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['tipo', 'uploaded_at', 'pk']
+        verbose_name = 'Documento de entrega'
+        verbose_name_plural = 'Documentos de entrega'
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} de {self.task.custom_id}'
+
+    @property
+    def nombre(self):
+        return self.original_name or os.path.basename(self.file.name or '')
 
 
 class Remision(models.Model):

@@ -1309,3 +1309,100 @@ def avisar_cruce_confirmado(tarea, triggered_by=None):
                            tarea.custom_id, e)
             primer_error = primer_error or str(e)
     return enviado, primer_error
+
+
+# ── LOS PAPELES DE ENTREGA DEL CRUCE ──────────────────────────────────────────
+
+EVENT_CRUCE_DOCUMENTOS = 'CROSSING_DOCUMENTS'
+
+# Lo que cabe en un correo. Resend acepta hasta 40 MB en total; se deja margen
+# porque los adjuntos viajan en base64, que engorda un tercio. Lo que no cabe
+# no se pierde: va listado en el cuerpo, para bajarlo del sistema.
+MAX_ADJUNTO_DE_ENTREGA_MB = 15
+MAX_TOTAL_DE_ENTREGA_MB = 25
+
+
+@_never_breaks(lambda e: (False, str(e), []))
+def enviar_documentos_de_entrega(tarea, lista, triggered_by=None):
+    """
+    Le manda al cliente los papeles de entrega del cruce que se eligieron.
+
+    `lista` son `entrega.Archivo`. Van adjuntos con el nombre de la tarea
+    delante; los que pasan del tope de tamaño se quedan fuera y se nombran en
+    el cuerpo, con el enlace a la tarea.
+
+    Devuelve `(enviado, error, fuera)`, con `fuera` los nombres que no cupieron.
+    """
+    from . import entrega
+
+    customer = tarea.customer
+    tenant   = tarea.tenant
+    empresa  = tenant.name if tenant else 'WMS'
+    destinatarios = email_recipients(customer)
+    _renglones, pedidos, _total = _lo_que_va_en_el_cruce(tarea)
+
+    por_archivo = MAX_ADJUNTO_DE_ENTREGA_MB * 1024 * 1024
+    tope = MAX_TOTAL_DE_ENTREGA_MB * 1024 * 1024
+
+    with en_el_idioma_de(customer):
+        adjuntos, fuera, usados, total = [], [], set(), 0
+        for archivo in lista:
+            nombre = entrega.nombre_en_el_zip(tarea, archivo, usados)
+            if archivo.tamano and archivo.tamano > por_archivo:
+                fuera.append(nombre)
+                continue
+            try:
+                contenido = archivo.leer()
+            except Exception:
+                logger.warning('No se pudo leer %s para el correo de %s',
+                               archivo.clave, tarea.custom_id)
+                fuera.append(nombre)
+                continue
+            if len(contenido) > por_archivo or total + len(contenido) > tope:
+                fuera.append(nombre)
+                continue
+            total += len(contenido)
+            adjuntos.append((nombre, contenido))
+
+        partes = [_('Crossing documents')]
+        if pedidos:
+            partes.append('PO ' + ', '.join(pedidos))
+        partes += [nombre_corto(customer.name), nombre_corto(empresa),
+                   '%s · %s' % (tarea.custom_id,
+                                tarea.fecha_de_cruce.strftime('%d/%m/%Y'))]
+        subject = ' | '.join(p for p in partes if p)
+
+        cuerpo = render_to_string('warehouse/email/cruce_documentos_email.html', {
+            'tarea':       tarea,
+            'tenant_name': empresa,
+            'cliente':     customer.name,
+            'pedidos':     pedidos,
+            'adjuntos':    [n for n, _c in adjuntos],
+            'fuera':       fuera,
+            'url':         (f"{tenant_public_url(tenant)}/cruces/"
+                            f"{tarea.pk}/documents/"),
+        })
+
+    if not destinatarios:
+        log_notification(None, customer, EMAIL, EVENT_CRUCE_DOCUMENTOS, SKIPPED,
+                         subject=subject, detail='no_recipient',
+                         triggered_by=triggered_by, tenant=tenant)
+        return False, 'no_email', fuera
+    if not adjuntos:
+        return False, 'nothing_fits', fuera
+
+    de, responder = remitente_de(tenant)
+    correo = EmailMessage(subject=subject, body=cuerpo, to=destinatarios,
+                          cc=get_cc_emails(tenant), from_email=de,
+                          reply_to=responder)
+    correo.content_subtype = 'html'
+    for nombre, contenido in adjuntos:
+        correo.attach(nombre, contenido)
+    try:
+        enviar_y_registrar(correo, EVENT_CRUCE_DOCUMENTOS, tenant=tenant,
+                           customer=customer, triggered_by=triggered_by)
+    except Exception as e:
+        logger.warning('Fallo el envio de documentos de %s: %s',
+                       tarea.custom_id, e)
+        return False, str(e), fuera
+    return True, None, fuera

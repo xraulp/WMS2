@@ -54,6 +54,10 @@ def leer_po(ruta):
         clave = acumulado.get('msgid')
         if clave is None:
             return
+        # Con contexto (`msgctxt`, lo que escribe `pgettext`), gettext busca
+        # la clave como contexto + EOT + msgid.
+        if 'msgctxt' in acumulado:
+            clave = acumulado['msgctxt'] + '\x04' + clave
         if 'msgid_plural' in acumulado:
             clave = clave + '\x00' + acumulado['msgid_plural']
             formas = [acumulado[k] for k in sorted(acumulado)
@@ -80,10 +84,10 @@ def leer_po(ruta):
                 if desnuda.startswith('#,') and 'fuzzy' in desnuda:
                     difusa = True
                 continue
-            m = re.match(r'^(msgid_plural|msgid|msgstr(?:\[\d+\])?)\s+(.*)$', desnuda)
+            m = re.match(r'^(msgctxt|msgid_plural|msgid|msgstr(?:\[\d+\])?)\s+(.*)$', desnuda)
             if m:
                 campo = m.group(1)
-                if campo == 'msgid' and 'msgid' in acumulado:
+                if campo in ('msgid', 'msgctxt') and 'msgid' in acumulado:
                     cerrar()
                 acumulado[campo] = _sin_comillas(m.group(2))
             elif campo:

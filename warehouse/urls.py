@@ -226,4 +226,16 @@ urlpatterns = [
     path('cruces/<int:pk>/order.pdf', views.orden_de_carga_pdf,
          name='orden_de_carga_pdf'),
     path('remision/<int:pk>.pdf', views.remision_pdf, name='remision_pdf'),
+    # Los documentos de entrega del cruce: pagados, remision, shipper y fotos.
+    path('cruces/<int:pk>/documents/', views.cruce_documentos, name='cruce_documentos'),
+    path('cruces/<int:pk>/documents/upload/', views.cruce_entrega_subir,
+         name='cruce_entrega_subir'),
+    path('cruces/<int:pk>/documents/remove/', views.cruce_entrega_quitar,
+         name='cruce_entrega_quitar'),
+    path('cruces/<int:pk>/documents/zip/', views.cruce_entrega_zip,
+         name='cruce_entrega_zip'),
+    path('cruces/<int:pk>/documents/email/', views.cruce_entrega_correo,
+         name='cruce_entrega_correo'),
+    path('cruces/documents/file/<int:pk>/', views.cruce_entrega_archivo,
+         name='cruce_entrega_archivo'),
 ]
