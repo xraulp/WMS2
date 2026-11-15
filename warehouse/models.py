@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.db import connection, models, transaction
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.functional import cached_property
 from django.utils.text import slugify
 # `gettext_lazy` y no `gettext`: las etiquetas de un modelo se evaluan al
 # importar el modulo, cuando todavia no hay peticion ni idioma que aplicar.
@@ -3721,6 +3722,21 @@ class CrossingTask(models.Model):
     @property
     def fase_texto(self):
         return self.FASES[self.fase]
+
+    @cached_property
+    def ya_cruzo(self):
+        """
+        Si la mercancia ya paso la aduana, para no llamarla atrasada. Cuenta
+        cualquier marca de la aduana -- verde, rojo (el camion si llego ese
+        dia; lo que falta es la liberacion), liberado, inspeccion --, la
+        entrega, y la remision firmada subida aunque nadie haya marcado nada:
+        el chofer solo la trae de vuelta cuando ya entrego.
+        """
+        if (self.estado == self.CRUZADA or self.entregada_en or self.verde_en
+                or self.rojo_aduana_en or self.liberado_en or self.inspeccion_en):
+            return True
+        return self.documentos_de_entrega.filter(
+            tipo=DocumentoDeEntrega.REMISION_FIRMADA).exists()
 
     def marcar_rojo_aduana(self, usuario):
         """Rojo en la aduana. Solo con la mercancia ya en el camion."""

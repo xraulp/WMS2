@@ -19,7 +19,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
-from .models import (CambioDeDiaDeCruce, Catalog, CrossingTask, CrossingTaskItem,
+from .models import (CambioDeDiaDeCruce, DocumentoDeEntrega, Catalog, CrossingTask, CrossingTaskItem,
                      PedidoDeEntrada, Camion,
                      OperationDocument, Pedimento, PedimentoBundle, Tenant,
                      UserProfile, WarehouseOperation)
@@ -1179,6 +1179,40 @@ class ElSemaforoDeLaAduanaTests(BaseDeCruces):
         self.client.post('/cruces/%d/released/' % self.t.pk)
         self.client.post('/cruces/%d/inspection/' % self.t.pk)
         self.assertEqual(self.fase(), CrossingTask.FASE_INSPECCION)
+
+
+class AtrasadaOYaCruzoTests(BaseDeCruces):
+    """
+    Que el dia ya paso no quiere decir que cruzo, pero cualquier marca de la
+    aduana, la entrega o la remision firmada si lo dicen.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.t = self.tarea(estado=CrossingTask.CARGADA,
+                            fecha_de_cruce=timezone.localdate() - timedelta(days=2))
+
+    def cuenta(self):
+        return self.client.get('/cruces/', {'customer': self.cliente.pk})
+
+    def test_cargada_sin_marca_va_atrasada(self):
+        self.assertContains(self.cuenta(), '2 days overdue')
+
+    def test_el_rojo_cuenta_como_ya_cruzo(self):
+        self.client.post('/cruces/%d/red-light/' % self.t.pk)
+        r = self.cuenta()
+        self.assertContains(r, 'already crossed')
+        self.assertNotContains(r, 'days overdue')
+
+    def test_el_verde_cuenta_como_ya_cruzo(self):
+        self.client.post('/cruces/%d/green-light/' % self.t.pk)
+        self.assertContains(self.cuenta(), 'already crossed')
+
+    def test_la_remision_firmada_cuenta_como_ya_cruzo(self):
+        DocumentoDeEntrega.objects.create(
+            task=self.t, tipo=DocumentoDeEntrega.REMISION_FIRMADA,
+            file=SimpleUploadedFile('remision.jpg', b'x', 'image/jpeg'))
+        self.assertContains(self.cuenta(), 'already crossed')
 
 
 class LaConfirmacionNoDetieneElCruceTests(BaseDeCruces):

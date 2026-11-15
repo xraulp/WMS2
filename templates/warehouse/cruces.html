@@ -349,8 +349,8 @@
         verdad cruzo; si no, la tarea va atrasada y se dice en rojo, con los
         dias, para que alguien mueva el dia o la saque.
         {% endcomment %}
-        <span class="cuenta {% if t.dias < 0 and t.estado == 'CRUZADA' or t.dias < 0 and t.entregada_en %}c-paso{% elif t.dias <= 3 %}c-cerca{% else %}c-lejos{% endif %}">
-          {% if t.dias < 0 and t.estado == 'CRUZADA' or t.dias < 0 and t.entregada_en %}{% trans "already crossed" %}
+        <span class="cuenta {% if t.dias < 0 and t.ya_cruzo %}c-paso{% elif t.dias <= 3 %}c-cerca{% else %}c-lejos{% endif %}">
+          {% if t.dias < 0 and t.ya_cruzo %}{% trans "already crossed" %}
           {% elif t.dias < 0 %}⚠ {% blocktrans count n=t.dias_de_atraso %}{{ n }} day overdue{% plural %}{{ n }} days overdue{% endblocktrans %}
           {% elif t.dias == 0 %}{% trans "crosses today" %}
           {% else %}{% blocktrans count n=t.dias %}{{ n }} day left{% plural %}{{ n }} days left{% endblocktrans %}{% endif %}
