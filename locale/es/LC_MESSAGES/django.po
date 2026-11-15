@@ -4244,3 +4244,6 @@ msgid "%(n)s day overdue"
 msgid_plural "%(n)s days overdue"
 msgstr[0] "atrasada %(n)s día"
 msgstr[1] "atrasada %(n)s días"
+
+msgid "No number yet"
+msgstr "Sin número todavía"

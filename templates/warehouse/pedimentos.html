@@ -63,8 +63,16 @@
     .ped-sub{font-size:12px;color:var(--soft);margin-top:3px}
     .ped-tarea{font-size:13px;font-weight:600;margin-top:3px}
     .ped-tarea a{font-family:'IBM Plex Mono',monospace;color:var(--accent-ink)}
-    .estado{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;
-            background:var(--asoft);color:var(--accent-ink)}
+    /* El estado corto, igual que en la tarea de cruce (cruces.html). Los
+       colores de "en revision" son fijos, iguales en tema claro y oscuro. */
+    :root{--rev-bg:#fb923c;--rev-ink:#7f1d1d;--rev-bdr:#facc15}
+    .estado-ped{display:inline-block;padding:2px 8px;font-size:12px;font-weight:600;
+                border:1px solid var(--bdr-fuerte);border-radius:6px;white-space:nowrap;
+                background:var(--surface)}
+    .en-revision{display:inline-block;padding:2px 8px;font-size:12px;
+                 background:var(--rev-bg);color:var(--rev-ink);border:2px solid var(--rev-bdr);
+                 font-weight:800;text-transform:uppercase;letter-spacing:.03em;
+                 border-radius:6px;white-space:nowrap}
 
     table{width:100%;border-collapse:collapse}
     th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
@@ -275,12 +283,14 @@
   <div class="ped" id="ped-{{ p.pk }}">
     <div class="ped-hd">
       <div>
+        {% comment %}
+        Solo el numero. "Pedimento 5" era el consecutivo de pedimentos del
+        cliente, no su lugar en la tarea, y al lado del numero confundia.
+        {% endcomment %}
         {% if p.tiene_numero %}
           <div class="ped-num">{{ p.numero }}</div>
-          <div class="ped-sub">Pedimento {{ p.orden }}</div>
         {% else %}
-          <div class="ped-sin">{% trans "no number yet" %}</div>
-          <div class="ped-num">Pedimento {{ p.orden }}</div>
+          <div class="ped-num ped-sin">{% trans "No number yet" %}</div>
         {% endif %}
         {% comment %}
         La tarea de cruce a la que pertenece, con enlace para volver a ella. Si
@@ -298,7 +308,12 @@
         </div>
       </div>
       <div style="text-align:right">
-        <span class="estado">{{ p.get_estado_display }}</span>
+        {% comment %}
+        El mismo estado corto de la tarea de cruce, con la abreviatura de quien
+        tiene la pelota, para que las dos pantallas digan lo mismo. Cuando le
+        toca al cliente, con el estilo de alarma.
+        {% endcomment %}
+        <span class="{% if p.es_turno_del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ p.estado_corto }}</span>
         {% if puede_editar and p.editable %}
         <form method="post" action="{% url 'pedimento_numero' p.pk %}"
               style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">

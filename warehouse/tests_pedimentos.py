@@ -1097,7 +1097,9 @@ class ElClienteContestaLaRevisionTests(BaseDeAlmacen):
         self.como(self.lopez)
         respuesta = self.pantalla()
         for frase in ('Aprobar este pedimento', 'Pedir correcciones',
-                      'En revisión del cliente', 'Embarques en bodega',
+                      # El encabezado lleva el estado corto, el mismo de
+                      # la tarea de cruce.
+                      'En revisión', 'Embarques en bodega',
                       'Proforma del pedimento'):
             self.assertContains(respuesta, frase)
         for frase in ('Approve this pedimento', 'Request corrections',
