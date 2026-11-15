@@ -8404,7 +8404,8 @@ EXT_DE_IMAGEN = ('.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp')
 SUBIBLES_DE_ENTREGA = {
     DocumentoDeEntrega.SHIPPER:          ('.pdf',),
     DocumentoDeEntrega.FOTOS_CARGA:      EXT_DE_IMAGEN,
-    DocumentoDeEntrega.REMISION_FIRMADA: EXT_DE_IMAGEN + ('.pdf',),
+    # La remision firmada es la foto que manda el chofer al entregar.
+    DocumentoDeEntrega.REMISION_FIRMADA: EXT_DE_IMAGEN,
 }
 
 

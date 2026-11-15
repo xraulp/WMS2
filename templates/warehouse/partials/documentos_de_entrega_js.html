@@ -37,6 +37,28 @@ aviso se quedaria girando.
     if (accion.indexOf('/email/') === -1) return;
     aviso(form, ENVIANDO);
   }, true);
-  window.addEventListener('pageshow', function (e) { if (e.persisted) limpiar(); });
+  // Cuantos van marcados, en los dos botones; sin ninguno, se apagan.
+  function contar(formId) {
+    var n = document.querySelectorAll('input[name=sel][form="' + formId + '"]:checked').length;
+    var form = document.getElementById(formId);
+    if (!form) return;
+    form.querySelectorAll('.ent-cuenta').forEach(function (c) { c.textContent = n; });
+    form.querySelectorAll('[data-requiere-marca]').forEach(function (b) { b.disabled = !n; });
+  }
+  document.addEventListener('change', function (e) {
+    var c = e.target;
+    if (c.matches && c.matches('input[name=sel]')) contar(c.getAttribute('form'));
+  });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-marcar]');
+    if (!b) return;
+    var id = 'ent-form-' + b.dataset.tarea, si = b.dataset.marcar === '1';
+    document.querySelectorAll('input[name=sel][form="' + id + '"]').forEach(function (c) { c.checked = si; });
+    contar(id);
+  });
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) limpiar();
+    document.querySelectorAll('form[id^="ent-form-"]').forEach(function (f) { contar(f.id); });
+  });
 })();
 </script>

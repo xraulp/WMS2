@@ -100,6 +100,10 @@ class DocumentosDeEntregaTests(BaseDeAlmacen):
         self.subir(DocumentoDeEntrega.REMISION_FIRMADA, foto('firma.jpg'))
         self.assertEqual(self.tarea.documentos_de_entrega.count(), 3)
 
+    def test_la_remision_firmada_es_solo_foto(self):
+        self.subir(DocumentoDeEntrega.REMISION_FIRMADA, pdf('firma.pdf'))
+        self.assertFalse(self.tarea.documentos_de_entrega.exists())
+
     def test_quitar(self):
         self.subir(DocumentoDeEntrega.SHIPPER, pdf('s1.pdf'))
         doc = self.tarea.documentos_de_entrega.get()

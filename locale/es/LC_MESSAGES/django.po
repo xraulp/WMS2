@@ -4344,3 +4344,15 @@ msgstr "Enviando"
 
 msgid "Photo or PDF"
 msgstr "Foto o PDF"
+
+msgid "Tick the files and download them."
+msgstr "Marca los archivos y descárgalos."
+
+msgid "Tick the files to send or download. ✉ sends just that file."
+msgstr "Marca los archivos que quieras enviar o descargar. ✉ manda solo ese archivo."
+
+msgid "Tick all"
+msgstr "Marcar todos"
+
+msgid "Untick all"
+msgstr "Quitar todos"
