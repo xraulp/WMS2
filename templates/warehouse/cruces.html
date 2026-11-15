@@ -101,6 +101,10 @@
     button.ped-link{font-family:inherit;font-size:inherit;cursor:pointer}
     .ped-link:hover{background:var(--pc, var(--accent));color:#fff}
     .ped-link + .ped-link{margin-left:4px}
+    /* El numero del pedimento ya armado es solo un dato: se entra con el
+       boton Ingresar de al lado, no tocando el numero. */
+    .ped-num{display:inline-block;padding:2px 0;font-weight:600;white-space:nowrap;
+             color:var(--pc-ink, var(--ink))}
     /* El boton chico para entrar al pedimento -- a sus documentos y su
        revision --, en su propia columna para que el renglon siga en una
        sola linea. Sin el, el numero parecia un dato y no una puerta. */
@@ -338,8 +342,14 @@
         Lo que manda no es el avance: es el paso contra el calendario. Por eso
         arriba va la cuenta atras y no el estado.
         {% endcomment %}
-        <span class="cuenta {% if t.dias < 0 %}c-paso{% elif t.dias <= 3 %}c-cerca{% else %}c-lejos{% endif %}">
-          {% if t.dias < 0 %}{% trans "already crossed" %}
+        {% comment %}
+        Que el dia ya paso no quiere decir que cruzo. "Ya cruzo" solo cuando de
+        verdad cruzo; si no, la tarea va atrasada y se dice en rojo, con los
+        dias, para que alguien mueva el dia o la saque.
+        {% endcomment %}
+        <span class="cuenta {% if t.dias < 0 and t.estado == 'CRUZADA' or t.dias < 0 and t.entregada_en %}c-paso{% elif t.dias <= 3 %}c-cerca{% else %}c-lejos{% endif %}">
+          {% if t.dias < 0 and t.estado == 'CRUZADA' or t.dias < 0 and t.entregada_en %}{% trans "already crossed" %}
+          {% elif t.dias < 0 %}⚠ {% blocktrans count n=t.dias_de_atraso %}{{ n }} day overdue{% plural %}{{ n }} days overdue{% endblocktrans %}
           {% elif t.dias == 0 %}{% trans "crosses today" %}
           {% else %}{% blocktrans count n=t.dias %}{{ n }} day left{% plural %}{{ n }} days left{% endblocktrans %}{% endif %}
         </span>
@@ -590,7 +600,7 @@
           {% endcomment %}
           <td data-etq="{% trans "Pedimento" %}" class="mono">
             <span class="lista">
-            {% for p in g.pedimentos %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{{ p.etiqueta }} ›</a>{% if p.rectificacion %}<span class="estado-ped">{% trans "Rect." %} {{ p.rectificacion }}</span>{% endif %}{% empty %}
+            {% for p in g.pedimentos %}<span class="ped-num">{{ p.etiqueta }}</span>{% if p.rectificacion %}<span class="estado-ped">{% trans "Rect." %} {{ p.rectificacion }}</span>{% endif %}{% empty %}
             {% if not es_cliente %}
             <form method="post" action="{% url 'pedimento_create' %}" style="margin:0">
               {% csrf_token %}

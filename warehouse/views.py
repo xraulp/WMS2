@@ -6840,6 +6840,7 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
                                 if p.estado == Pedimento.EN_REVISION)
         tarea.sin_factura = tarea.operaciones_sin_factura
         tarea.dias = tarea.dias_para_el_cruce
+        tarea.dias_de_atraso = max(-tarea.dias, 0)
         tarea.libres = libres
         # La orden de carga vigente y lo que impide emitirla. El boton se pinta
         # atenuado con el motivo escrito al lado, no encendido dando error.
@@ -6918,6 +6919,7 @@ def _todos_los_cruces(tenant):
                 estados.append(par)
         tarea.estados = estados
         tarea.dias = tarea.dias_para_el_cruce
+        tarea.dias_de_atraso = max(-tarea.dias, 0)
 
         fase = tarea.fase
         if fase == CrossingTask.FASE_ENTREGADA:

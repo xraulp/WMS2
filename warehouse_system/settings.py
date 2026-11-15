@@ -201,6 +201,12 @@ LANGUAGES = [
 ]
 LOCALE_PATHS = [BASE_DIR / 'locale']
 
+# Los numeros con punto decimal tambien en espanol. Django usa por omision la
+# convencion de Espana -- 22,23 --, pero en Mexico, y en esta bodega, la coma
+# solo separa miles y el decimal es punto: 1,234.50. Solo se pisan los
+# separadores; fechas y lo demas siguen siendo los del espanol de Django.
+FORMAT_MODULE_PATH = ['warehouse_system.formatos']
+
 TIME_ZONE = 'America/Chicago'
 USE_I18N = True
 USE_TZ = True

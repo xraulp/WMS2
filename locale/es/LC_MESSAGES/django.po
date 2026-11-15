@@ -4239,3 +4239,8 @@ msgstr "Ingresar"
 
 msgid "Tap Go in to upload the pedimento documents and send it to the customer for review."
 msgstr "Toca Ingresar para cargar los documentos del pedimento y mandarlo a revisión del cliente."
+
+msgid "%(n)s day overdue"
+msgid_plural "%(n)s days overdue"
+msgstr[0] "atrasada %(n)s día"
+msgstr[1] "atrasada %(n)s días"
