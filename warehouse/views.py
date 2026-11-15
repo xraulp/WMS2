@@ -8410,9 +8410,12 @@ SUBIBLES_DE_ENTREGA = {
 
 def preparar_entrega(tarea, usuario):
     """Le cuelga a `tarea` lo que pinta la caja de documentos de entrega."""
-    tarea.archivos_de_entrega = entrega.archivos(tarea, usuario)
+    # Los pedimentos se leen una sola vez y sirven para las dos listas.
+    pedimentos = tarea.pedimentos
+    tarea.archivos_de_entrega = entrega.archivos(tarea, usuario, pedimentos)
     tarea.entrega = entrega.por_grupo(tarea.archivos_de_entrega)
-    tarea.pagados_faltan = entrega.pedimentos_sin_pagado(tarea)
+    tarea.pagados_faltan = entrega.pedimentos_sin_pagado(
+        tarea, tarea.archivos_de_entrega, pedimentos)
     return tarea
 
 

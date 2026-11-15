@@ -49,7 +49,7 @@ class Archivo:
     """Uno de los archivos de la entrega, venga de donde venga."""
 
     def __init__(self, clave, grupo, nombre, url, leer, quitable=None,
-                 tamano=None):
+                 campo=None):
         self.clave = clave
         self.grupo = grupo
         self.nombre = nombre
@@ -58,7 +58,22 @@ class Archivo:
         # El `DocumentoDeEntrega` si se puede quitar desde la tarea; los
         # pagados se quitan en su pedimento y la remision no se quita.
         self.quitable = quitable
-        self.tamano = tamano
+        self._campo = campo
+
+    @property
+    def tamano(self):
+        """
+        El tamaño, solo cuando se pide -- al armar el correo --. Con los
+        archivos en R2 cada consulta es una vuelta por internet, y pedirlo
+        para cada archivo al pintar la tarea hacia que la caja tardara en
+        salir.
+        """
+        if self._campo is None:
+            return None
+        try:
+            return self._campo.size
+        except Exception:
+            return None
 
     def leer(self):
         return self._leer()
@@ -74,29 +89,22 @@ def _leer_campo(campo):
     return leer
 
 
-def _tamano(campo):
-    try:
-        return campo.size
-    except Exception:
-        return None
-
-
 def remisiones_vigentes(tarea):
     orden = tarea.ordenes.order_by('-version').first()
     return list(orden.remisiones.order_by('emitida_en')) if orden else []
 
 
-def archivos(tarea, usuario=None):
+def archivos(tarea, usuario=None, pedimentos=None):
     """Todos los archivos de la entrega de `tarea`, en el orden de `GRUPOS`."""
     from . import papeles
 
     salida = []
-    for ped in tarea.pedimentos:
+    for ped in (tarea.pedimentos if pedimentos is None else pedimentos):
         etiqueta = ped.numero or ped.etiqueta
-        docs = ped.documentos.filter(
+        docs = list(ped.documentos.filter(
             ranura=PedimentoDocument.PEDIMENTO_PAGADO
-        ).select_related('documento_de_operacion')
-        varios = docs.count() > 1
+        ).select_related('documento_de_operacion'))
+        varios = len(docs) > 1
         for i, doc in enumerate(docs, 1):
             archivo = doc.archivo
             if not archivo or not archivo.name:
@@ -107,7 +115,7 @@ def archivos(tarea, usuario=None):
             salida.append(Archivo(
                 f'pag:{doc.pk}', PAGADOS, nombre,
                 reverse('pedimento_archivo', args=[doc.pk]),
-                _leer_campo(archivo), tamano=_tamano(archivo)))
+                _leer_campo(archivo), campo=archivo))
 
     for rem in remisiones_vigentes(tarea):
         def leer(rem=rem):
@@ -120,16 +128,23 @@ def archivos(tarea, usuario=None):
         salida.append(Archivo(
             f'ent:{doc.pk}', doc.tipo, doc.nombre,
             reverse('cruce_entrega_archivo', args=[doc.pk]),
-            _leer_campo(doc.file), quitable=doc, tamano=_tamano(doc.file)))
+            _leer_campo(doc.file), quitable=doc, campo=doc.file))
 
     orden = {g: i for i, g in enumerate(GRUPOS)}
     salida.sort(key=lambda a: orden[a.grupo])
     return salida
 
 
-def pedimentos_sin_pagado(tarea):
+def pedimentos_sin_pagado(tarea, lista=None, pedimentos=None):
     """Los pedimentos de la tarea a los que todavia no se les sube el pagado."""
-    return [p for p in tarea.pedimentos
+    pedimentos = tarea.pedimentos if pedimentos is None else pedimentos
+    if lista is not None:
+        # Con la lista ya armada no hace falta volver a preguntar a la base.
+        con_pagado = {int(a.clave.split(':')[1]) for a in lista if a.grupo == PAGADOS}
+        con_pagado = set(PedimentoDocument.objects.filter(
+            pk__in=con_pagado).values_list('pedimento_id', flat=True))
+        return [p for p in pedimentos if p.pk not in con_pagado]
+    return [p for p in pedimentos
             if not p.documentos.filter(
                 ranura=PedimentoDocument.PEDIMENTO_PAGADO).exists()]
 

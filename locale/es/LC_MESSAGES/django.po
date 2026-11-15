@@ -4338,3 +4338,9 @@ msgstr "Ver los documentos del cruce"
 #, python-format
 msgid "<b>%(cliente)s</b>, attached are the documents of this crossing."
 msgstr "<b>%(cliente)s</b>, te mandamos adjuntos los documentos de este cruce."
+
+msgid "Sending"
+msgstr "Enviando"
+
+msgid "Photo or PDF"
+msgstr "Foto o PDF"

@@ -1,0 +1,42 @@
+{% load i18n %}
+{% comment %}
+El aviso de "Subiendo…" y "Enviando…" de la caja de documentos de entrega,
+igual al de las ranuras del pedimento. Se incluye una vez, al final de la
+pagina. Al subir, el aviso sale en la ranura; al mandar el correo, junto a
+los botones. La descarga del ZIP no lleva aviso: no sale de la pagina y el
+aviso se quedaria girando.
+{% endcomment %}
+{% trans "Uploading" as txt_subiendo %}{% trans "Sending" as txt_enviando %}
+<script>
+(function () {
+  var SUBIENDO = "{{ txt_subiendo|escapejs }}", ENVIANDO = "{{ txt_enviando|escapejs }}";
+  function aviso(donde, texto, nombres) {
+    var a = document.createElement('div');
+    a.className = 'aviso-subiendo';
+    a.setAttribute('role', 'status');
+    a.innerHTML = '<span class="giro" aria-hidden="true"></span><span></span><span class="nombre"></span>';
+    a.children[1].textContent = texto + '…';
+    a.children[2].textContent = nombres || '';
+    donde.appendChild(a);
+    document.body.classList.add('subiendo');
+  }
+  function limpiar() {
+    document.body.classList.remove('subiendo');
+    document.querySelectorAll('.entrega .aviso-subiendo').forEach(function (a) { a.remove(); });
+  }
+  document.addEventListener('change', function (e) {
+    var input = e.target;
+    if (!input.matches || !input.matches('.entrega input[type=file]') || !input.files.length) return;
+    var nombres = Array.prototype.map.call(input.files, function (f) { return f.name; }).join(', ');
+    aviso(input.form, SUBIENDO, nombres);
+  }, true);
+  document.addEventListener('submit', function (e) {
+    var form = e.target, boton = e.submitter;
+    if (!form.id || form.id.indexOf('ent-form-') !== 0) return;
+    var accion = (boton && boton.getAttribute('formaction')) || form.getAttribute('action') || '';
+    if (accion.indexOf('/email/') === -1) return;
+    aviso(form, ENVIANDO);
+  }, true);
+  window.addEventListener('pageshow', function (e) { if (e.persisted) limpiar(); });
+})();
+</script>

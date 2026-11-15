@@ -1,28 +1,51 @@
 <style>
   /* La caja de documentos de entrega de una tarea de cruce. Se incluye una
-     vez por pantalla, en cruces.html y en cruce_documentos.html. */
-  .entrega{padding:12px 15px;border-top:1px solid var(--bdr);background:var(--bg-sutil)}
-  .ent-hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+     vez por pantalla, en cruces.html y en cruce_documentos.html. Las ranuras
+     van compactas: son cinco y no deben empujar la tarea siguiente fuera de
+     la pantalla. */
+  .entrega{padding:10px 15px;border-top:1px solid var(--bdr);background:var(--bg-sutil)}
+  .ent-hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
   .ent-hd h4{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.05em;
              color:var(--ink);font-weight:700}
-  .ent-ayuda{font-size:11.5px}
-  .ent-grupos{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
-  .ent-grupo{border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;background:var(--surface)}
+  .ent-ayuda{font-size:11px}
+  .ent-grupos{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px}
+  .ent-grupo{border:1px solid var(--bdr);border-radius:8px;padding:6px 8px;background:var(--surface);
+             min-width:0}
   .ent-grupo.vacio{border-style:dashed}
-  .ent-tit{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--soft);
-           font-weight:600;margin-bottom:5px}
-  .ent-arch{display:flex;justify-content:space-between;align-items:center;gap:6px;
-            font-size:12px;padding:2px 0}
-  .ent-arch label{display:flex;align-items:center;gap:6px;min-width:0;cursor:pointer}
-  .ent-arch input[type=checkbox]{width:16px;height:16px;margin:0;flex:0 0 auto}
-  .ent-arch a{font-family:'IBM Plex Mono',monospace;word-break:break-all;color:var(--accent-ink)}
-  .ent-acc{display:flex;gap:4px;flex:0 0 auto}
-  .ent-acc .btn{padding:2px 7px}
-  .entrega .nada{font-size:12px;color:var(--soft);font-style:italic}
-  .ent-subir{margin-top:7px}
-  .ent-botones{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .ent-tit{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--soft);
+           font-weight:600;margin-bottom:3px}
+  .ent-arch{display:flex;justify-content:space-between;align-items:center;gap:4px;
+            font-size:11.5px;padding:1px 0}
+  .ent-arch label{display:flex;align-items:center;gap:5px;min-width:0;cursor:pointer}
+  .ent-arch input[type=checkbox]{width:14px;height:14px;margin:0;flex:0 0 auto}
+  .ent-arch a{font-family:'IBM Plex Mono',monospace;color:var(--accent-ink);
+              overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .ent-acc{display:flex;gap:3px;flex:0 0 auto}
+  .ent-acc .btn{padding:1px 6px;font-size:11px}
+  .entrega .nada{font-size:11px;color:var(--soft);font-style:italic}
+  .ent-subir{margin-top:5px}
+  .ent-subir .btn{padding:3px 8px;font-size:11.5px}
+  .ent-botones{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+
+  /* Mientras sube o mientras manda el correo: el mismo aviso que en las
+     ranuras del pedimento. Subir un PDF o una foto tarda segundos en llegar
+     al almacen, y mandar el correo otro tanto; sin aviso parecia que no habia
+     pasado nada y se volvia a pulsar. */
+  .aviso-subiendo{display:flex;align-items:center;gap:7px;margin-top:6px;
+                  font-size:12px;color:var(--accent-ink);font-weight:600}
+  .aviso-subiendo .nombre{font-family:'IBM Plex Mono',monospace;font-weight:400;
+                          color:var(--soft);word-break:break-all}
+  .giro{width:13px;height:13px;flex:none;border-radius:50%;
+        border:2px solid var(--bdr);border-top-color:var(--accent);
+        animation:girar .8s linear infinite}
+  @keyframes girar{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.giro{animation-duration:2.4s}}
+  body.subiendo .entrega input[type=file],
+  body.subiendo .entrega label.btn,
+  body.subiendo .entrega button{pointer-events:none;opacity:.45}
+
   @media (max-width:700px){
-    .ent-grupos{grid-template-columns:1fr}
+    .ent-grupos{grid-template-columns:1fr 1fr}
     .ent-botones .btn{flex:1 1 100%;text-align:center}
   }
 </style>

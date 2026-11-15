@@ -67,9 +67,9 @@ sale mientras no haya nada.
           {% if en_pagina %}<input type="hidden" name="volver" value="pagina">{% endif %}
           <input type="hidden" name="tipo" value="{{ grupo }}">
           <label class="btn btn-sm">
-            {% if grupo == 'SHIPPER' %}📎 {% trans "Upload PDFs" %}{% else %}📷 {% trans "Take or upload photos" %}{% endif %}
+            {% if grupo == 'SHIPPER' %}📎 {% trans "Upload PDFs" %}{% elif grupo == 'REMISION_FIRMADA' %}📷 {% trans "Photo or PDF" %}{% else %}📷 {% trans "Take or upload photos" %}{% endif %}
             <input type="file" name="archivo" multiple hidden onchange="this.form.submit()"
-                   accept="{% if grupo == 'SHIPPER' %}.pdf,application/pdf{% elif grupo == 'REMISION_FIRMADA' %}image/*,.pdf,application/pdf{% else %}image/*{% endif %}">
+                   accept="{% if grupo == 'SHIPPER' %}.pdf,application/pdf{% elif grupo == 'REMISION_FIRMADA' %}image/*,.jpg,.jpeg,.png,.heic,.heif,.webp,.pdf{% else %}image/*,.jpg,.jpeg,.png,.heic,.heif,.webp{% endif %}">
           </label>
         </form>
         {% endif %}
