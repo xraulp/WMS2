@@ -5662,13 +5662,16 @@ def pedimento_archivo(request, pk):
         raise Http404('El documento no tiene archivo')
 
     descargar = request.GET.get('download') == '1'
-    nombre = doc.original_name or os.path.basename(doc.file.name)
+    # El nombre armado con los datos del embarque y el tipo, al bajarlo y al
+    # verlo: guardado desde el navegador sale igual.
+    nombre = doc.nombre_de_descarga()
 
     logger.info('Documento de pedimento %s (%s) abierto por %s en %s%s',
                 doc.pk, doc.file.name, request.user.username, tenant.subdomain,
                 ' [descarga]' if descargar else '')
 
-    firmada = url_firmada(doc.file, descargar_como=nombre if descargar else None)
+    firmada = url_firmada(doc.file, descargar_como=nombre if descargar else None,
+                          ver_como=None if descargar else nombre)
     if firmada:
         respuesta = redirect(firmada)
         respuesta['Cache-Control'] = 'private, no-store'
@@ -5704,9 +5707,7 @@ def pedimento_zip(request, pk):
        ped.customer_id != getattr(profile.customer, 'pk', None):
         return HttpResponse(_('Permission denied.'), status=403)
 
-    etiquetas = RanuraDePedimento.etiquetas(tenant)
-    base = ped.numero or ('pedimento-%d' % ped.orden)
-    base = base.replace('/', '_')
+    base = ped.base_de_descarga
 
     buf = BytesIO()
     metidos = 0
@@ -5718,19 +5719,17 @@ def pedimento_zip(request, pk):
             por_ranura.setdefault(doc.ranura, []).append(doc)
 
         for ranura, docs in por_ranura.items():
-            nombre_ranura = str(etiquetas.get(ranura, ranura)).replace('/', '_')
             ancho = _ancho_de_numeracion(len(docs))
             for idx, doc in enumerate(docs, 1):
                 archivo = doc.archivo
                 if not archivo or not archivo.name:
                     continue
-                ext = os.path.splitext(doc.nombre or archivo.name)[1].lower()
                 sufijo = f' {idx:0{ancho}d}' if len(docs) > 1 else ''
                 # Guion normal y no raya: el nombre viaja dentro de un ZIP
                 # que se abre en la maquina de quien lo recibe, y los
                 # descompresores viejos de Windows todavia leen los nombres en
                 # cp437. Un caracter que no este ahi sale como basura.
-                destino = f'{base} - {nombre_ranura}{sufijo}{ext}'
+                destino = doc.nombre_de_descarga(base=base, sufijo=sufijo)
                 try:
                     archivo.open('rb')
                     try:

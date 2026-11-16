@@ -60,7 +60,8 @@ def _almacen_que_firma(almacen):
     return firmante
 
 
-def url_firmada(archivo, descargar_como=None, segundos=SEGUNDOS_DE_VIDA):
+def url_firmada(archivo, descargar_como=None, segundos=SEGUNDOS_DE_VIDA,
+                ver_como=None):
     """
     URL temporal para un `FieldFile`, o `None` si el almacen no sabe firmar.
 
@@ -69,6 +70,9 @@ def url_firmada(archivo, descargar_como=None, segundos=SEGUNDOS_DE_VIDA):
     nombre de la ruta, que lleva un identificador aleatorio por delante. El
     atributo `download` del enlace no sirve para esto: el navegador lo ignora
     cuando el archivo viene de otro dominio, que es siempre el caso aqui.
+
+    `ver_como` hace lo mismo pero para abrirlo en el navegador: el archivo se
+    ve en la pestaña y, si se guarda desde ahi, sale con ese nombre.
     """
     if not archivo or not archivo.name:
         return None
@@ -78,8 +82,9 @@ def url_firmada(archivo, descargar_como=None, segundos=SEGUNDOS_DE_VIDA):
         return None
 
     parametros = {}
-    if descargar_como:
-        cabecera = content_disposition_header(True, descargar_como)
+    if descargar_como or ver_como:
+        cabecera = content_disposition_header(bool(descargar_como),
+                                              descargar_como or ver_como)
         if cabecera:
             parametros['ResponseContentDisposition'] = cabecera
 

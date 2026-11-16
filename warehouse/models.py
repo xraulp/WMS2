@@ -66,6 +66,12 @@ _REGIMEN_FUERTE = {'SA', 'CV', 'RL', 'SAPI', 'SAB', 'SC', 'AC', 'SRL', 'LLC',
 _REGIMEN_DEBIL = {'DE', 'S', 'A', 'C', 'V', 'R', 'L', 'P', 'I', 'B'}
 
 
+def limpiar_nombre_de_archivo(nombre):
+    """Quita lo que Windows no deja en un nombre de archivo."""
+    nombre = re.sub(r'[\\/:*?"<>|]+', '_', nombre or '')
+    return re.sub(r'\s+', ' ', nombre).strip(' .')
+
+
 def nombre_sin_regimen(nombre):
     """"Cliente Dos, SA de CV" -> "Cliente Dos". Donde cabe poco, el nombre a secas."""
     palabras = (nombre or '').split()
@@ -2189,6 +2195,42 @@ class Pedimento(models.Model):
         return bool(self.numero)
 
     @property
+    def base_de_descarga(self):
+        """
+        El nombre con que salen sus archivos al descargarlos, sin el tipo:
+        ABREV-PEDIDO-FACTURA-ENTRADA-REFAA-REFDYS-PEDIMENTO.
+
+        Lo pidio Diego el 15 nov 2026. Con varias entradas, los datos de cada
+        una van separados por espacio; un dato vacio se salta; y el numero de
+        pedimento va sin guiones, porque el guion es el separador.
+        """
+        ops = [r.operation for r in
+               self.renglones.select_related('operation').order_by('pk')]
+
+        def juntos(valores):
+            vistos = []
+            for v in valores:
+                v = (v or '').strip()
+                if v and v not in vistos:
+                    vistos.append(v)
+            return ' '.join(vistos)
+
+        cliente = self.customer
+        abrev = ((getattr(cliente, 'abbreviation', '') or '').strip()
+                 or (getattr(cliente, 'name', '') or '').strip())
+        numero = (''.join([self.ped_aduana, self.ped_patente, self.ped_consecutivo])
+                  if self.tiene_numero else '')
+        partes = [abrev,
+                  juntos(o.po_order for o in ops),
+                  juntos(o.invoice for o in ops),
+                  juntos(o.custom_id for o in ops),
+                  juntos(o.ref_aa for o in ops),
+                  juntos(o.ref_dys for o in ops),
+                  numero]
+        base = '-'.join(p for p in partes if p) or 'pedimento-%d' % self.orden
+        return limpiar_nombre_de_archivo(base)
+
+    @property
     def se_puede_armar(self):
         """
         Si todavia se le pueden mover los bultos, el numero y los archivos.
@@ -2817,6 +2859,30 @@ class PedimentoDocument(models.Model):
             doc = self.documento_de_operacion
             return doc.original_name or os.path.basename(doc.file.name or '')
         return self.original_name or os.path.basename(self.file.name or '')
+
+    # El tipo con que acaba el nombre de descarga. Fijo y corto, no la
+    # etiqueta de pantalla: no cambia con el idioma de quien descarga.
+    TIPO_EN_EL_NOMBRE = {
+        'M3': 'M3', 'PROFORMA': 'PEDIMENTO', 'COVE': 'COVE', 'CARTA_318': '318',
+        'FOTOS_SERIES': 'SERIES', 'OTROS': 'OTRO', 'MANIFESTACION': 'MV',
+        'ACUSE': 'ACUSE MV', 'PEDIMENTO_PAGADO': 'PEDIMENTO PAGADO',
+        'SHIPPER': 'SHIPPER',
+    }
+
+    def nombre_de_descarga(self, base=None, sufijo=''):
+        """
+        ABREV-PEDIDO-FACTURA-ENTRADA-REFAA-REFDYS-PEDIMENTO-TIPO.ext. `base` se
+        pasa ya hecha cuando se nombran varios del mismo pedimento (el ZIP);
+        `sufijo` numera los que comparten ranura.
+        """
+        base = base or self.pedimento.base_de_descarga
+        tipo = self.TIPO_EN_EL_NOMBRE.get(self.ranura)
+        if not tipo:
+            propia = RanuraDePedimento.objects.filter(
+                tenant=self.pedimento.tenant, clave=self.ranura).first()
+            tipo = (propia.nombre if propia and propia.nombre else self.ranura)
+        ext = os.path.splitext(self.nombre or (self.archivo.name or ''))[1].lower()
+        return limpiar_nombre_de_archivo(f'{base}-{tipo}{sufijo}') + ext
 
     @property
     def archivo(self):

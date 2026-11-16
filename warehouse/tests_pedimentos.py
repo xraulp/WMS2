@@ -1439,11 +1439,33 @@ class ZipDelPedimentoTests(BaseDeAlmacen):
         self.subir(PedimentoDocument.CARTA_318, 'escaneo002.pdf')
         respuesta, zf = self.descargar()
         self.assertEqual(respuesta.status_code, 200)
-        nombres = zf.namelist()
-        self.assertTrue(any('COVE' in n for n in nombres), nombres)
-        self.assertTrue(any('318' in n for n in nombres), nombres)
-        # Y el numero de pedimento delante, para saber de cual es sin abrirlo.
-        self.assertTrue(all(n.startswith('24-1515-6005000') for n in nombres))
+        nombres = sorted(zf.namelist())
+        # ABREV-...-PEDIMENTO-TIPO: el cliente delante y el tipo al final.
+        self.assertEqual(nombres, ['Acme-2415156005000-318.pdf',
+                                   'Acme-2415156005000-COVE.pdf'])
+
+    def test_el_nombre_lleva_los_datos_de_cada_entrada(self):
+        self.cliente.abbreviation = 'LBO'
+        self.cliente.save()
+        a = self.operacion('ED261111-0004', bundle_qty=2, po_order='PO1849',
+                           invoice='F-77', ref_aa='AA1', ref_dys='DYS9')
+        b = self.operacion('ED261111-0005', bundle_qty=1, po_order='PO1850',
+                           invoice='F-78')
+        PedimentoBundle.objects.create(pedimento=self.ped, operation=a, bultos=2)
+        PedimentoBundle.objects.create(pedimento=self.ped, operation=b, bultos=1)
+        self.subir(PedimentoDocument.PROFORMA, 'scan.pdf')
+        _respuesta, zf = self.descargar()
+        self.assertEqual(zf.namelist(), [
+            'LBO-PO1849 PO1850-F-77 F-78-ED261111-0004 ED261111-0005'
+            '-AA1-DYS9-2415156005000-PEDIMENTO.pdf'])
+
+    def test_el_archivo_suelto_sale_con_el_mismo_nombre(self):
+        self.subir(PedimentoDocument.CARTA_318, 'x.pdf')
+        doc = self.ped.documentos.get()
+        r = self.client.get('/pedimentos/file/%d/?download=1' % doc.pk)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('Acme-2415156005000-318.pdf', r['Content-Disposition'])
+        self.assertIn('attachment', r['Content-Disposition'])
 
     def test_dos_archivos_de_la_misma_ranura_no_se_pisan(self):
         self.subir(PedimentoDocument.OTROS, 'a.pdf')
