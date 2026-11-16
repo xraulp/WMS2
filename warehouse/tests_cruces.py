@@ -1591,7 +1591,7 @@ class ElCamionCompartidoTests(BaseDeCruces):
         self.a.refresh_from_db(); self.b.refresh_from_db()
         self.assertIsNotNone(self.a.camion)
         self.assertEqual(self.a.camion, self.b.camion)
-        self.assertTrue(self.a.camion.custom_id.startswith('CM'))
+        self.assertTrue(self.a.camion.custom_id.startswith('TCC'))
 
     def test_una_tercera_entra_al_mismo_camion(self):
         self.juntar(self.a, self.b)

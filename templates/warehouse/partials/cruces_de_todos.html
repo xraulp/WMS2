@@ -109,7 +109,7 @@ la tarea completa, en la pantalla de su cliente.
   Las tareas de un camion compartido, juntas en un recuadro. Solo la casa
   ve esta lista.
   {% endcomment %}
-  <div class="camion-bloque" data-en-dia="{{ d }}">
+  <div class="camion-bloque" id="camion-{{ b.camion.pk }}" data-en-dia="{{ d }}">
     <div class="camion-hd">🚚 <b>{{ b.camion.custom_id }}</b>
       {% if b.camion.transfer_empresa %}<span>{{ b.camion.transfer_empresa }}{% if b.camion.sello %} · {% trans "Seal" %} {{ b.camion.sello }}{% endif %}</span>{% endif %}
       <span class="sp"></span>

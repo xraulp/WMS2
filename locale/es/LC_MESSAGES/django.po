@@ -4466,3 +4466,14 @@ msgstr "Más"
 
 msgid "Does not cover goods"
 msgstr "No ampara mercancía"
+
+msgid "See the whole truck"
+msgstr "Ver el camión completo"
+
+msgid "Shipment to send"
+msgid_plural "Shipments to send"
+msgstr[0] "Embarque a mandar"
+msgstr[1] "Embarques a mandar"
+
+msgid "None of the selected shipments can cross."
+msgstr "Ninguno de los embarques seleccionados puede cruzar."

@@ -7151,6 +7151,12 @@ def _contexto_de_armar(request, cliente_pk=None, marcados=None, error=None):
         crudo = request.GET.get('ops') or ''
         marcados = [int(p) for p in re.split(r'[,\s]+', crudo) if p.isdigit()]
 
+    # Si llega con lo seleccionado en Operaciones, la pantalla es solo eso y
+    # el dia: ni la lista entera del cliente, ni el selector de cliente, ni
+    # las tareas abiertas. Sin seleccion sigue siendo la lista para marcar.
+    solo = (request.POST.get('solo') == '1' if request.method == 'POST'
+            else bool(marcados))
+
     if profile.is_customer():
         clientes = clientes.filter(pk=getattr(profile.customer, 'pk', None))
         cliente = clientes.first()
@@ -7173,6 +7179,7 @@ def _contexto_de_armar(request, cliente_pk=None, marcados=None, error=None):
         'error': error,
         'hoy': timezone.localdate(),
         'marcados_crudo': ','.join(str(p) for p in marcados),
+        'solo': solo,
         'desde': _desde_valido(request.GET.get('desde') or request.POST.get('desde'),
                                CrossingTaskItem.DESDE_LA_TAREA),
     }
@@ -7182,6 +7189,8 @@ def _contexto_de_armar(request, cliente_pk=None, marcados=None, error=None):
     libres = _libres_del_cliente(tenant, cliente)
     pks_libres = {op.pk for op in libres}
     marcados = set(marcados)
+    if solo:
+        libres = [op for op in libres if op.pk in marcados]
     for op in libres:
         op.marcado = op.pk in marcados
         op.bultos_pedidos = request.POST.get('bultos_%d' % op.pk, '')

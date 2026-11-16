@@ -92,7 +92,9 @@
 
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
 
-  {% if not es_cliente %}
+  {% if not es_cliente and solo and cliente %}
+  <p class="ct" style="margin:6px 0 12px">{{ cliente.name }}{% if cliente.abbreviation %} · {{ cliente.abbreviation }}{% endif %}</p>
+  {% elif not es_cliente %}
   <div class="card">
     <form method="get" style="margin:0">
       <label class="lbl" for="sel-cliente">{% trans "Customer" %}</label>
@@ -132,15 +134,18 @@
     {% csrf_token %}
     <input type="hidden" name="customer" value="{{ cliente.pk }}">
     <input type="hidden" name="desde" value="{{ desde }}">
+    <input type="hidden" name="solo" value="{% if solo %}1{% endif %}">
 
     <div class="card">
-      <p class="ct">1 · {% trans "Mark what crosses" %}</p>
+      <p class="ct">1 · {% if solo %}{% blocktrans count n=libres|length %}Shipment to send{% plural %}Shipments to send{% endblocktrans %}{% else %}{% trans "Mark what crosses" %}{% endif %}</p>
       {% if libres %}
+      {% if not solo %}
       <div class="buscar">
         <input type="search" id="buscar" placeholder="{% trans "Search PO, entry, shipper..." %}"
                autocomplete="off" aria-label="{% trans "Search" %}">
         <button type="button" class="btn btn-sm" id="todos">{% trans "Mark all" %}</button>
       </div>
+      {% endif %}
 
       {% for op in libres %}
       <label class="emb{% if op.marcado %} on{% endif %}"
@@ -177,6 +182,8 @@
       </label>
       {% endfor %}
       <p class="soft" id="sin-resultados" style="display:none;font-size:13px">{% trans "Nothing matches the search." %}</p>
+      {% elif solo %}
+      <p class="soft" style="margin:0">{% trans "None of the selected shipments can cross." %}</p>
       {% else %}
       <p class="soft" style="margin:0">{% trans "This customer has nothing in the warehouse that can cross: every entry is released or already in a crossing." %}</p>
       {% endif %}
@@ -184,15 +191,16 @@
 
     {% if libres %}
     <div class="card destino">
-      <p class="ct">2 · {% trans "Which truck" %}</p>
-      <label>
-        <input type="radio" name="tarea" value="0"{% if not destino %} checked{% endif %}>
-        <span style="flex:1">{% trans "A new crossing on" %}
+      <p class="ct">2 · {% if solo %}{% trans "Crossing day" %}{% else %}{% trans "Which truck" %}{% endif %}</p>
+      <label{% if solo %} style="cursor:default"{% endif %}>
+        <input type="radio" name="tarea" value="0"{% if not destino or solo %} checked{% endif %}{% if solo %} hidden{% endif %}>
+        <span style="flex:1">{% if not solo %}{% trans "A new crossing on" %}{% endif %}
           <input type="date" name="fecha_de_cruce" value="{{ fecha_pedida }}" min="{{ hoy|date:'Y-m-d' }}"
                  style="display:block;margin-top:6px;width:100%"
                  onfocus="document.querySelector('input[name=tarea][value=\'0\']').checked=true;pintarMotivo()">
         </span>
       </label>
+      {% if not solo %}
       {% for t in abiertas %}
       <label>
         <input type="radio" name="tarea" value="{{ t.pk }}" data-con-orden="{% if t.estado != 'ABIERTA' %}1{% endif %}"{% if destino == t.pk %} checked{% endif %}>
@@ -206,6 +214,7 @@
         </span>
       </label>
       {% endfor %}
+      {% endif %}
       <div id="motivo" style="display:none;padding-top:8px">
         <label class="lbl" for="motivo-in" style="padding:0;border:none">{% trans "The load order is already out: why do these go in?" %}</label>
         <input type="text" id="motivo-in" name="motivo" value="{{ motivo_pedido }}" style="width:100%">

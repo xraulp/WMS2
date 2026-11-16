@@ -210,12 +210,11 @@
              flex-wrap:wrap;align-items:center}
     .mis-rem .campo span{margin-right:4px}
 
-    /* El menu ⋯ de la tarea: lo que se usa menos. */
-    .tarea-mas{position:relative}
-    .tarea-mas > summary{list-style:none;cursor:pointer;display:inline-flex}
-    .tarea-mas > summary::-webkit-details-marker{display:none}
-    .tarea-mas-caja{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
     .tarea-hd .tarea-acc .btn{padding:4px 9px;font-size:12px}
+    .tarea-acc{align-items:flex-start}
+    /* El nombre corto del cliente, primera columna de la tabla. */
+    .td-cli{font-weight:700;white-space:nowrap}
+    .camion-badge a{color:inherit}
     /* El avance de la tarea (partials/avance_de_cruce.html). */
   .avance{flex:1 0 100%;margin-top:2px}
   .avance ol{list-style:none;margin:0;padding:0;display:flex;gap:6px}
@@ -287,6 +286,15 @@
 {% include "warehouse/partials/barra_superior.html" with activa='cruces' %}
 
 <div class="wrap">
+
+  {% comment %}
+  De la tarea de un cliente se regresa a la lista de todos los cruces, donde
+  las tareas de un camion compartido salen juntas. Igual que el boton de
+  regreso del pedimento.
+  {% endcomment %}
+  {% if cliente and not es_cliente %}
+  <a class="bs-volver" style="margin-bottom:10px" href="{% url 'cruces_panel' %}">← {% trans "Crossings" %}</a>
+  {% endif %}
 
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
   {% if aviso %}<div class="msg-ok">&#10003; {{ aviso }}</div>{% endif %}
@@ -369,7 +377,7 @@
         {% endcomment %}
         {% if not es_cliente and t.camion %}
         <div class="camion-badge">
-          🚚 {% blocktrans with c=t.camion.custom_id %}Shared truck {{ c }}{% endblocktrans %}
+          🚚 <a href="{% url 'cruces_panel' %}#camion-{{ t.camion_id }}" title="{% trans "See the whole truck" %}">{% blocktrans with c=t.camion.custom_id %}Shared truck {{ c }}{% endblocktrans %} ›</a>
           {% if t.companeras_lista %}· {% trans "with" %}
           {% for o in t.companeras_lista %}<b>{{ o.customer.abbreviation|default:o.customer.name }}</b> <span class="mono">{{ o.custom_id }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}
           {% else %}· {% trans "no other crossing left in it" %}{% endif %}
@@ -447,12 +455,10 @@
         {% endif %}
         {% endif %}
         {% comment %}
-        Lo que se usa menos -- agregar un embarque, mover el dia, el camion
-        compartido -- va en el menu ⋯ para que el encabezado no crezca.
+        Agregar un embarque, mover el dia y el camion compartido van a la
+        vista, en la misma linea: el menu ⋯ costaba un toque de mas y no
+        ahorraba espacio.
         {% endcomment %}
-        <details class="tarea-mas">
-          <summary class="btn btn-sm" title="{% trans "More actions" %}">⋯ {% trans "More" %}</summary>
-          <div class="tarea-mas-caja">
         {% if not es_cliente %}
         {% if t.camion %}{% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
         <form method="post" action="{% url 'cruce_camion_salir' t.pk %}" style="margin:0"
@@ -483,8 +489,6 @@
         {% endif %}
         <button class="btn btn-sm" type="button" aria-expanded="false"
                 onclick="abrirPanelDeTarea(this, 'dia-{{ t.pk }}')">&#128197; {% trans "Move the day" %}</button>
-          </div>
-        </details>
       </div>
     </div>
 
@@ -603,6 +607,7 @@
     <table>
       <thead>
         <tr>
+          <th>{% trans "Customer" %}</th>
           <th>{% trans "Entry" %}</th>
           <th>{% trans "PO / Order" %}</th>
           <th>{% trans "Bundles" %}</th>
@@ -622,6 +627,7 @@
         Las acciones del pedimento van al final del renglon.
         {% endcomment %}
         <tr class="{% if g.color is not None %}pc pc-{{ g.color }}{% endif %}{% if not es_cliente %} con-acc{% endif %}">
+          <td data-etq="{% trans "Customer" %}" class="td-cli" title="{{ t.customer.name }}">{{ t.customer.abbreviation|default:t.customer.name }}</td>
           <td data-etq="{% trans "Entry" %}" class="mono">
             <span class="lista">{% for r in g.filas %}<span>{{ r.operation.custom_id }}{% if r.operation.subdivision %}<span class="sub">{{ r.operation.get_subdivision_display }}</span>{% endif %}</span>{% endfor %}</span>
           </td>
@@ -681,7 +687,7 @@
         </tr>
         {% if not es_cliente %}
         <tr class="acc-fila{% if g.color is not None %} pc pc-{{ g.color }}{% endif %}">
-          <td colspan="9">
+          <td colspan="10">
             <span class="ped-acc">
             {% if g.pedimentos and t.estado == 'ABIERTA' or g.pedimentos and t.estado == 'CON_ORDEN' %}
             {% with p=g.pedimentos.0 %}
@@ -788,13 +794,13 @@
         </tr>
         {% endif %}
         {% empty %}
-        <tr><td colspan="9" class="soft">{% trans "Nothing in this crossing yet." %}</td></tr>
+        <tr><td colspan="10" class="soft">{% trans "Nothing in this crossing yet." %}</td></tr>
         {% endfor %}
       </tbody>
       {% if t.grupos|length > 1 %}
       <tfoot>
         <tr class="total">
-          <td colspan="6" class="total-etq">
+          <td colspan="7" class="total-etq">
             {% trans "Approx. taxes total" %}
             {% if t.sin_impuesto %}<span class="soft">· {% blocktrans count n=t.sin_impuesto %}{{ n }} shipment without an amount yet{% plural %}{{ n }} shipments without an amount yet{% endblocktrans %}</span>{% endif %}
           </td>

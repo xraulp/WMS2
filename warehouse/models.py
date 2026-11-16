@@ -4072,7 +4072,7 @@ class Camion(models.Model):
     **El cliente nunca se entera.** Nada de esto sale en su pantalla ni en sus
     papeles: su tarea se ve igual que cualquier otra.
     """
-    PREFIJO = 'CM'
+    PREFIJO = 'TCC'  # tarea de cruce compartida (cruce consolidado)
 
     tenant         = models.ForeignKey('Tenant', on_delete=models.CASCADE,
                                        related_name='camiones')
