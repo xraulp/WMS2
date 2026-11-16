@@ -3486,6 +3486,12 @@ class CrossingTask(models.Model):
     entregada_por   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
                                         blank=True, related_name='+')
 
+    # La salida (SD) que nacio sola al subir la foto de la mercancia cargada.
+    # Una por tarea: con ella puesta, las fotos siguientes ya no generan otra.
+    salida = models.ForeignKey('WarehouseOperation', on_delete=models.SET_NULL,
+                               null=True, blank=True,
+                               related_name='tareas_que_salieron')
+
     class Meta:
         ordering = ['fecha_de_cruce', 'custom_id']
         verbose_name = 'Tarea de cruce'

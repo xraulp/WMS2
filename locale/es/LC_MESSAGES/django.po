@@ -4356,3 +4356,13 @@ msgstr "Marcar todos"
 
 msgid "Untick all"
 msgstr "Quitar todos"
+
+msgid "Exit report"
+msgstr "Reporte de salida"
+
+msgid "The first photo generates the exit report (SD) and sends it to the customer with the photos."
+msgstr "La primera foto genera el reporte de salida (SD) y se lo manda al cliente con las fotos."
+
+#, python-format
+msgid "Exit report %(sd)s generated; it is being sent to the customer with the photos."
+msgstr "Se generó el reporte de salida %(sd)s; se le está mandando al cliente con las fotos."

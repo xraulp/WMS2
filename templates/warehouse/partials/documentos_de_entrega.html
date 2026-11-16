@@ -66,6 +66,14 @@ sale mientras no haya nada.
         {% if not lista %}<div class="nada">{% trans "Issued in the Remision box." %}</div>{% endif %}
       {% else %}
         {% if not lista %}<div class="nada">{% trans "empty" %}</div>{% endif %}
+        {% if grupo == 'FOTOS_CARGA' %}
+          {% if t.salida %}
+          <div class="nada">{% trans "Exit report" %}
+            <a class="mono" href="{% url 'operation_pdf' t.salida.pk %}" target="_blank">{{ t.salida.custom_id }}</a></div>
+          {% elif not es_cliente %}
+          <div class="nada">{% trans "The first photo generates the exit report (SD) and sends it to the customer with the photos." %}</div>
+          {% endif %}
+        {% endif %}
         {% if not es_cliente %}
         <form method="post" enctype="multipart/form-data"
               action="{% url 'cruce_entrega_subir' t.pk %}" class="ent-subir">

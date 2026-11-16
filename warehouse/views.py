@@ -8468,7 +8468,7 @@ def cruce_entrega_subir(request, pk):
         return _volver_a_la_entrega(request, tarea, error=_('Pick a file first.'))
 
     aceptadas = SUBIBLES_DE_ENTREGA[tipo]
-    rechazados = []
+    rechazados, nuevos = [], []
     for f in archivos:
         ext = os.path.splitext(f.name or '')[1].lower()
         tipo_mime = (getattr(f, 'content_type', '') or '').lower()
@@ -8478,14 +8478,24 @@ def cruce_entrega_subir(request, pk):
         if ext not in aceptadas and not es_foto:
             rechazados.append(f.name)
             continue
-        DocumentoDeEntrega.objects.create(task=tarea, tipo=tipo, file=f,
-                                          original_name=f.name,
-                                          uploaded_by=request.user)
+        nuevos.append(DocumentoDeEntrega.objects.create(
+            task=tarea, tipo=tipo, file=f, original_name=f.name,
+            uploaded_by=request.user))
+
+    # La foto de la mercancia cargada es la salida de bodega: la primera hace
+    # nacer la SD y se la manda al cliente con las fotos.
+    aviso = None
+    if tipo == DocumentoDeEntrega.FOTOS_CARGA and nuevos:
+        from . import salidas
+        salida = salidas.al_subir_fotos_de_carga(tarea, nuevos, request.user)
+        if salida:
+            aviso = (_('Exit report %(sd)s generated; it is being sent to the '
+                       'customer with the photos.') % {'sd': salida.custom_id})
     if rechazados:
-        return _volver_a_la_entrega(request, tarea, error=(
+        return _volver_a_la_entrega(request, tarea, aviso=aviso, error=(
             _('These files are not the right type and were not uploaded: %(n)s')
             % {'n': ', '.join(rechazados)}))
-    return _volver_a_la_entrega(request, tarea)
+    return _volver_a_la_entrega(request, tarea, aviso=aviso)
 
 
 @login_required
