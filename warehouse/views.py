@@ -6929,15 +6929,9 @@ def _todos_los_cruces(tenant):
         tarea.dias = tarea.dias_para_el_cruce
         tarea.dias_de_atraso = max(-tarea.dias, 0)
 
-        fase = tarea.fase
-        if fase == CrossingTask.FASE_ENTREGADA:
-            tarea.me_toca = False
-        elif fase != CrossingTask.FASE_PEDIMENTOS:
-            # Ya va en el camion: el semaforo, la inspeccion y la entrega solo
-            # los puede marcar la casa.
-            tarea.me_toca = True
-        else:
-            tarea.me_toca = any(not del_cliente for _, del_cliente in estados)
+        # Lo mismo que dice el avance: si hay paso pendiente y no es del
+        # cliente, es de la casa.
+        tarea.me_toca = bool(tarea.paso_actual) and not tarea.le_toca_al_cliente
 
     clientes_con_tareas = []
     for tarea in tareas:
@@ -8491,6 +8485,11 @@ def cruce_entrega_subir(request, pk):
         if salida:
             aviso = (_('Exit report %(sd)s generated; it is being sent to the '
                        'customer with the photos.') % {'sd': salida.custom_id})
+    # La remision firmada es la entrega: la tarea termina sola.
+    if tipo == DocumentoDeEntrega.REMISION_FIRMADA and nuevos:
+        if tarea.marcar_entregada_por_remision(request.user):
+            aviso = _('Signed remision received: %(t)s is delivered.') % {
+                't': tarea.custom_id}
     if rechazados:
         return _volver_a_la_entrega(request, tarea, aviso=aviso, error=(
             _('These files are not the right type and were not uploaded: %(n)s')

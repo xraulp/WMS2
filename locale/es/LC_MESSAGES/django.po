@@ -4366,3 +4366,60 @@ msgstr "La primera foto genera el reporte de salida (SD) y se lo manda al client
 #, python-format
 msgid "Exit report %(sd)s generated; it is being sent to the customer with the photos."
 msgstr "Se generó el reporte de salida %(sd)s; se le está mandando al cliente con las fotos."
+
+msgctxt "crossing step"
+msgid "Paid"
+msgstr "Pagado"
+
+msgid "Left the warehouse"
+msgstr "Salió de bodega"
+
+msgid "SENASICA"
+msgstr "SENASICA"
+
+msgid "prepare the pedimentos"
+msgstr "preparar los pedimentos"
+
+msgid "pay the pedimentos"
+msgstr "pagar los pedimentos"
+
+msgid "load the goods"
+msgstr "cargar la mercancía y subir la foto"
+
+msgid "cross customs"
+msgstr "cruzar la aduana"
+
+msgid "deliver and upload the signed remision"
+msgstr "entregar y subir la remisión firmada"
+
+msgid "Red light, released"
+msgstr "Rojo, liberado"
+
+msgid "Red light"
+msgstr "Rojo"
+
+msgid "confirm the crossing"
+msgstr "confirmar el cruce"
+
+msgid "review and approve the pedimentos"
+msgstr "revisar y aprobar los pedimentos"
+
+msgid "customs release"
+msgstr "liberación de la aduana"
+
+msgid "Your turn:"
+msgstr "Te toca:"
+
+#, python-format
+msgid "%(c)s's turn:"
+msgstr "Le toca a %(c)s:"
+
+msgid "Our turn:"
+msgstr "Nos toca:"
+
+msgid "Delivered. Nothing left to do."
+msgstr "Entregada. No queda nada pendiente."
+
+#, python-format
+msgid "Signed remision received: %(t)s is delivered."
+msgstr "Remisión firmada recibida: %(t)s quedó entregada."

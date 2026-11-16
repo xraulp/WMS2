@@ -637,9 +637,11 @@ class LaPantallaEnEspañolTests(BaseDeCruces):
         CrossingTaskItem.objects.create(task=t, operation=op, bultos=19)
         respuesta = self.client.get('/cruces/', {'customer': self.cliente.pk})
         for frase in ('Sacar', '>de 20<', 'Lista de preparación', 'Mover el día del cruce al',
-                      'Cancelar este cruce', 'Abierta', 'Creada por DYSER / Ferreteria Lopez'):
+                      'Cancelar este cruce', 'Salió de bodega', 'Nos toca:',
+                      'Creada por DYSER / Ferreteria Lopez'):
             self.assertContains(respuesta, frase)
-        for frase in ('Take out', 'Picking list', 'Cancel this crossing', 'on behalf of'):
+        for frase in ('Take out', 'Picking list', 'Cancel this crossing', 'on behalf of',
+                      'Status:', 'Left the warehouse'):
             self.assertNotContains(respuesta, frase)
 
 
@@ -1152,7 +1154,7 @@ class ElSemaforoDeLaAduanaTests(BaseDeCruces):
     def test_el_cliente_ve_el_verde_pero_no_lo_marca(self):
         self.client.post('/cruces/%d/green-light/' % self.t.pk)
         respuesta = self.pantalla(self.duenio)
-        self.assertContains(respuesta, 'Customs green light')
+        self.assertContains(respuesta, 'Green light')
         self.assertEqual(
             self.client.post('/cruces/%d/delivered/' % self.t.pk).status_code, 404)
 
@@ -1184,7 +1186,8 @@ class ElSemaforoDeLaAduanaTests(BaseDeCruces):
 class AtrasadaOYaCruzoTests(BaseDeCruces):
     """
     Que el dia ya paso no quiere decir que cruzo, pero cualquier marca de la
-    aduana, la entrega o la remision firmada si lo dicen.
+    aduana, la entrega o la remision firmada si lo dicen. Despues de cruzar ya
+    no hay cuenta de dias: habla el avance.
     """
 
     def setUp(self):
@@ -1198,21 +1201,24 @@ class AtrasadaOYaCruzoTests(BaseDeCruces):
     def test_cargada_sin_marca_va_atrasada(self):
         self.assertContains(self.cuenta(), '2 days overdue')
 
-    def test_el_rojo_cuenta_como_ya_cruzo(self):
+    def test_el_rojo_ya_no_es_atraso_y_el_avance_lo_dice(self):
         self.client.post('/cruces/%d/red-light/' % self.t.pk)
         r = self.cuenta()
-        self.assertContains(r, 'already crossed')
         self.assertNotContains(r, 'days overdue')
+        self.assertContains(r, 'Red light')
+        self.assertContains(r, 'customs release')
 
-    def test_el_verde_cuenta_como_ya_cruzo(self):
+    def test_el_verde_ya_no_es_atraso(self):
         self.client.post('/cruces/%d/green-light/' % self.t.pk)
-        self.assertContains(self.cuenta(), 'already crossed')
+        r = self.cuenta()
+        self.assertNotContains(r, 'days overdue')
+        self.assertContains(r, 'Green light')
 
-    def test_la_remision_firmada_cuenta_como_ya_cruzo(self):
+    def test_la_remision_firmada_ya_no_es_atraso(self):
         DocumentoDeEntrega.objects.create(
             task=self.t, tipo=DocumentoDeEntrega.REMISION_FIRMADA,
             file=SimpleUploadedFile('remision.jpg', b'x', 'image/jpeg'))
-        self.assertContains(self.cuenta(), 'already crossed')
+        self.assertNotContains(self.cuenta(), 'days overdue')
 
 
 class LaConfirmacionNoDetieneElCruceTests(BaseDeCruces):

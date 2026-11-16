@@ -3744,6 +3744,162 @@ class CrossingTask(models.Model):
         return self.documentos_de_entrega.filter(
             tipo=DocumentoDeEntrega.REMISION_FIRMADA).exists()
 
+    # ── El avance: lo unico que se le enseña al cliente ──────────────────────
+    #
+    # Una sola linea de pasos en vez de fase, status y cuenta atras, que se
+    # contradecian. Cada paso lo prende una evidencia que la casa ya sube o
+    # marca -- el pedimento pagado, la foto de la carga, el verde, la remision
+    # firmada --, no un boton aparte. El `estado` interno (abierta, con orden,
+    # cargada) sigue por dentro para los candados, pero ya no sale en pantalla.
+
+    PASO_PEDIMENTOS = 'PEDIMENTOS'
+    PASO_PAGADO     = 'PAGADO'
+    PASO_SALIO      = 'SALIO'
+    PASO_ADUANA     = 'ADUANA'
+    PASO_INSPECCION = 'INSPECCION'
+    PASO_ENTREGADO  = 'ENTREGADO'
+    PASOS = {
+        PASO_PEDIMENTOS: _('Pedimentos'),
+        PASO_PAGADO:     pgettext_lazy('crossing step', 'Paid'),
+        PASO_SALIO:      _('Left the warehouse'),
+        PASO_ADUANA:     _('Customs'),
+        PASO_INSPECCION: _('SENASICA'),
+        PASO_ENTREGADO:  _('Delivered'),
+    }
+    # Lo que falta para pasar el paso, dicho como tarea de alguien.
+    LO_QUE_SIGUE = {
+        PASO_PEDIMENTOS: _('prepare the pedimentos'),
+        PASO_PAGADO:     _('pay the pedimentos'),
+        PASO_SALIO:      _('load the goods'),
+        PASO_ADUANA:     _('cross customs'),
+        PASO_INSPECCION: _('SENASICA inspection'),
+        PASO_ENTREGADO:  _('deliver and upload the signed remision'),
+    }
+
+    @cached_property
+    def avance(self):
+        """
+        Los pasos de la tarea, cada uno un dict con `clave`, `texto`, `hecho`,
+        `cuando`, `detalle`, `alerta` y `actual`. Un paso posterior hecho da
+        por hechos los anteriores: si ya se entrego, ya se pago.
+        """
+        peds = self.pedimentos if self.todo_con_pedimento else []
+        aprobados = (Pedimento.APROBADO, Pedimento.VALIDADO, Pedimento.PAGADO)
+        fotos = (self.documentos_de_entrega
+                 .filter(tipo=DocumentoDeEntrega.FOTOS_CARGA)
+                 .order_by('uploaded_at').first())
+        salida = self.salida if self.salida_id else None
+
+        pasos = []
+
+        def paso(clave, hecho, cuando=None, detalle='', alerta=False):
+            pasos.append({'clave': clave, 'texto': self.PASOS[clave],
+                          'hecho': bool(hecho), 'cuando': cuando,
+                          'detalle': detalle, 'alerta': alerta,
+                          'actual': False})
+
+        paso(self.PASO_PEDIMENTOS,
+             peds and all(p.estado in aprobados for p in peds),
+             max((p.validado_en for p in peds if p.validado_en), default=None))
+        paso(self.PASO_PAGADO,
+             peds and all(p.estado == Pedimento.PAGADO for p in peds),
+             max((p.pagado_en for p in peds if p.pagado_en), default=None))
+        paso(self.PASO_SALIO, salida or fotos,
+             salida.created_at if salida else (fotos.uploaded_at if fotos else None),
+             salida.custom_id if salida else '')
+
+        en_rojo = bool(self.rojo_aduana_en and not self.liberado_en)
+        if self.verde_en:
+            aduana_cuando, aduana_detalle = self.verde_en, _('Green light')
+        elif self.liberado_en:
+            aduana_cuando, aduana_detalle = self.liberado_en, _('Red light, released')
+        elif en_rojo:
+            aduana_cuando, aduana_detalle = self.rojo_aduana_en, _('Red light')
+        else:
+            aduana_cuando, aduana_detalle = None, ''
+        paso(self.PASO_ADUANA,
+             self.verde_en or self.liberado_en or self.inspeccion_en,
+             aduana_cuando, aduana_detalle, alerta=en_rojo)
+        if self.lleva_inspeccion:
+            paso(self.PASO_INSPECCION, self.inspeccion_en, self.inspeccion_en)
+        paso(self.PASO_ENTREGADO, self.entregada_en, self.entregada_en)
+
+        # Lo de despues manda: si un paso esta hecho -- o ya se llego a el,
+        # como el rojo, que tiene el camion en la aduana --, los de antes
+        # tambien.
+        hecho_despues = False
+        for p in reversed(pasos):
+            if p['hecho'] or p['alerta']:
+                hecho_despues = True
+            elif hecho_despues:
+                p['hecho'] = True
+        for p in pasos:
+            if not p['hecho']:
+                p['actual'] = True
+                break
+        return pasos
+
+    @cached_property
+    def todo_con_pedimento(self):
+        """Si cada embarque de la tarea ya cayo en algun pedimento."""
+        renglones = list(self.renglones.select_related('operation'))
+        return bool(renglones) and all(
+            r.operation.renglones_de_pedimento.exists() for r in renglones)
+
+    @property
+    def paso_actual(self):
+        """El primer paso sin hacer, o None si ya se entrego."""
+        return next((p for p in self.avance if p['actual']), None)
+
+    @property
+    def le_toca_al_cliente(self):
+        """
+        Si lo que sigue es del cliente: revisar sus pedimentos o confirmar la
+        tarea. Lo que tenga pendiente la casa en los pedimentos va primero:
+        mientras falte preparar uno, le toca a la casa aunque el cliente
+        tampoco haya confirmado.
+        """
+        actual = self.paso_actual
+        if actual is None:
+            return False
+        if actual['clave'] == self.PASO_PEDIMENTOS:
+            if not self.todo_con_pedimento:
+                return False
+            peds = self.pedimentos
+            return bool(peds) and not any(p.le_toca_a_la_casa for p in peds)
+        return bool(self.espera_confirmacion)
+
+    @property
+    def lo_que_sigue(self):
+        actual = self.paso_actual
+        if actual is None:
+            return ''
+        if self.le_toca_al_cliente:
+            if actual['clave'] == self.PASO_PEDIMENTOS and not self.espera_confirmacion:
+                return _('review and approve the pedimentos')
+            if actual['clave'] == self.PASO_PEDIMENTOS and any(
+                    p.es_turno_del_cliente for p in self.pedimentos):
+                return _('review and approve the pedimentos')
+            return _('confirm the crossing')
+        if actual['clave'] == self.PASO_ADUANA and actual['alerta']:
+            return _('customs release')
+        return self.LO_QUE_SIGUE[actual['clave']]
+
+    def marcar_entregada_por_remision(self, usuario):
+        """
+        La remision firmada es la entrega: el chofer solo la trae cuando ya
+        entrego. No pide el verde antes -- si llego firmada, la aduana la
+        solto aunque nadie lo haya marcado.
+        """
+        if self.entregada_en or self.estado == self.CANCELADA:
+            return False
+        self.entregada_en = timezone.now()
+        self.entregada_por = usuario
+        self.estado = self.CRUZADA
+        self.save(update_fields=['entregada_en', 'entregada_por', 'estado',
+                                 'updated_at'])
+        return True
+
     def marcar_rojo_aduana(self, usuario):
         """Rojo en la aduana. Solo con la mercancia ya en el camion."""
         if self.fase != self.FASE_EN_CRUCE:

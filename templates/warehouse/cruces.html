@@ -202,6 +202,29 @@
              flex-wrap:wrap;align-items:center}
     .mis-rem .campo span{margin-right:4px}
 
+    /* El avance de la tarea (partials/avance_de_cruce.html). */
+  .avance{flex:1 0 100%;margin-top:4px}
+  .avance ol{list-style:none;margin:0;padding:0;display:flex;gap:6px}
+  .avance li{flex:1 1 0;min-width:0;position:relative;padding-top:16px;
+             font-size:11px;line-height:1.25;color:var(--tb-ink-suave)}
+  /* La raya que une los pasos, y el punto de cada uno encima. */
+  .avance li::before{content:"";position:absolute;top:5px;left:0;right:-6px;height:3px;
+                     background:rgba(255,255,255,.22);border-radius:2px}
+  .avance li::after{content:"";position:absolute;top:0;left:0;width:13px;height:13px;
+                    border-radius:50%;background:#64748b;border:2px solid rgba(255,255,255,.5);
+                    box-sizing:border-box}
+  .avance li.hecho::before{background:#16a34a}
+  .avance li.hecho::after{background:#16a34a;border-color:#16a34a}
+  .avance li.actual::after{background:#fff;border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.3)}
+  .avance li.alerta::after{background:#dc2626;border-color:#fff}
+  .avance .p-txt{display:block;font-weight:700;color:#fff;hyphens:manual}
+  .avance li:not(.hecho):not(.actual) .p-txt{font-weight:500;color:var(--tb-ink-suave)}
+  .avance .p-det{display:block;overflow-wrap:anywhere}
+  .avance li.alerta .p-det{color:#fecaca;font-weight:700}
+  .avance .toca{margin-top:8px;font-size:13px;color:#fff}
+  .avance .toca b{background:rgba(255,255,255,.16);padding:1px 7px;border-radius:5px}
+  .avance .toca.del-cliente b{background:var(--rev-bg);color:var(--rev-ink)}
+
     .historial{padding:9px 15px;border-top:1px dashed var(--bdr);font-size:11px;
                color:var(--soft);line-height:1.6}
 
@@ -213,6 +236,11 @@
       .tarea-der{text-align:left;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
       .tarea-der .tarea-sub{margin-top:0}
       .tarea-acc{margin-top:6px}
+      /* Cinco pasos en 360 px: la letra baja un punto para que "Pedimentos"
+         quepa entera, y el numero de la SD puede partirse. */
+      .avance ol{gap:5px}
+      .avance li{font-size:10px;flex:1 1 auto}
+      .avance .p-det{font-size:9.5px}
       table, thead, tbody, tfoot, tr, td{display:block;width:100%}
       .importe{text-align:right}
       tfoot .sobra{display:none}
@@ -325,7 +353,6 @@
         por encima.
         {% endcomment %}
         <div class="tarea-sub" title="{{ t.creada_por_quien }} · {{ t.created_at|date:"d/m/y H:i" }}">{{ t.creada_por|capfirst }}</div>
-        <div class="tarea-sub">{% trans "Stage:" %} <b class="fase fase-{{ t.fase|lower }}">{{ t.fase_texto }}</b></div>
         {% comment %}
         El camion compartido. Solo la casa: el cliente nunca se entera de que
         su mercancia va con la de otro.
@@ -341,22 +368,20 @@
       </div>
       <div class="tarea-der">
         {% comment %}
-        Lo que manda no es el avance: es el paso contra el calendario. Por eso
-        arriba va la cuenta atras y no el estado.
+        La cuenta atras solo antes de cruzar: es el paso contra el calendario.
+        Que el dia ya paso no quiere decir que cruzo; si no hay marca de la
+        aduana ni entrega, va atrasada y se dice en rojo, con los dias, para
+        que alguien mueva el dia o la saque. Despues de cruzar habla el avance.
         {% endcomment %}
-        {% comment %}
-        Que el dia ya paso no quiere decir que cruzo. "Ya cruzo" solo cuando de
-        verdad cruzo; si no, la tarea va atrasada y se dice en rojo, con los
-        dias, para que alguien mueva el dia o la saque.
-        {% endcomment %}
-        <span class="cuenta {% if t.dias < 0 and t.ya_cruzo %}c-paso{% elif t.dias <= 3 %}c-cerca{% else %}c-lejos{% endif %}">
-          {% if t.dias < 0 and t.ya_cruzo %}{% trans "already crossed" %}
-          {% elif t.dias < 0 %}⚠ {% blocktrans count n=t.dias_de_atraso %}{{ n }} day overdue{% plural %}{{ n }} days overdue{% endblocktrans %}
+        {% if not t.ya_cruzo %}
+        <span class="cuenta {% if t.dias <= 3 %}c-cerca{% else %}c-lejos{% endif %}">
+          {% if t.dias < 0 %}⚠ {% blocktrans count n=t.dias_de_atraso %}{{ n }} day overdue{% plural %}{{ n }} days overdue{% endblocktrans %}
           {% elif t.dias == 0 %}{% trans "crosses today" %}
           {% else %}{% blocktrans count n=t.dias %}{{ n }} day left{% plural %}{{ n }} days left{% endblocktrans %}{% endif %}
         </span>
-        <div class="tarea-sub">{% trans "Status:" %} {{ t.get_estado_display }}</div>
+        {% endif %}
       </div>
+      {% include "warehouse/partials/avance_de_cruce.html" %}
       {% comment %}
       El titulo de la tarea es donde se la reconoce y tambien donde se actua
       sobre ella. Agregar un embarque y mover el dia eran dos formularios

@@ -1,0 +1,30 @@
+{% load i18n %}
+{% comment %}
+El avance de la tarea `t`: una sola linea de pasos, cada uno con su fecha, y
+debajo a quien le toca moverse. Es lo mismo para la casa y para el cliente;
+solo cambia como se nombra a quien le toca. Va dentro del encabezado oscuro de
+la tarea, a todo lo ancho.
+{% endcomment %}
+<div class="avance">
+  <ol>
+    {% for p in t.avance %}
+    <li class="{% if p.hecho %}hecho{% endif %}{% if p.actual %} actual{% endif %}{% if p.alerta %} alerta{% endif %}">
+      <span class="p-txt">{{ p.texto }}</span>
+      {% if p.detalle %}<span class="p-det{% if p.clave == 'SALIO' %} mono{% endif %}">{{ p.detalle }}</span>{% endif %}
+      {% if p.cuando %}<span class="p-det">{{ p.cuando|date:"d/m H:i" }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% if t.paso_actual %}
+  <div class="toca{% if t.le_toca_al_cliente %} del-cliente{% endif %}">
+    {% if t.le_toca_al_cliente %}
+      {% if es_cliente %}{% trans "Your turn:" %}{% else %}{% blocktrans with c=t.customer.abbreviation|default:t.customer.name %}{{ c }}'s turn:{% endblocktrans %}{% endif %}
+    {% else %}
+      {% if es_cliente %}{% blocktrans with c=t.tenant.short_name|default:t.tenant.name %}{{ c }}'s turn:{% endblocktrans %}{% else %}{% trans "Our turn:" %}{% endif %}
+    {% endif %}
+    <b>{{ t.lo_que_sigue }}</b>
+  </div>
+  {% else %}
+  <div class="toca">✓ {% trans "Delivered. Nothing left to do." %}</div>
+  {% endif %}
+</div>
