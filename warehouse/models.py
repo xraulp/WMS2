@@ -2203,7 +2203,7 @@ class Pedimento(models.Model):
         Lo pidio Diego el 15 nov 2026: todo separado por espacios, sin guiones
         entre los datos. Con varias entradas, los datos de cada una van
         tambien separados por espacio; un dato vacio se salta; y el numero de
-        pedimento va sin guiones.
+        pedimento va como se escribe, con guiones: 24-1780-6004444.
         """
         ops = [r.operation for r in
                self.renglones.select_related('operation').order_by('pk')]
@@ -2219,8 +2219,7 @@ class Pedimento(models.Model):
         cliente = self.customer
         abrev = ((getattr(cliente, 'abbreviation', '') or '').strip()
                  or (getattr(cliente, 'name', '') or '').strip())
-        numero = (''.join([self.ped_aduana, self.ped_patente, self.ped_consecutivo])
-                  if self.tiene_numero else '')
+        numero = self.numero if self.tiene_numero else ''
         partes = [abrev,
                   juntos(o.po_order for o in ops),
                   juntos(o.invoice for o in ops),
