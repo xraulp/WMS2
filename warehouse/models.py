@@ -2198,11 +2198,12 @@ class Pedimento(models.Model):
     def base_de_descarga(self):
         """
         El nombre con que salen sus archivos al descargarlos, sin el tipo:
-        ABREV-PEDIDO-FACTURA-ENTRADA-REFAA-REFDYS-PEDIMENTO.
+        ABREV PEDIDO FACTURA ENTRADA REFAA REFDYS PEDIMENTO.
 
-        Lo pidio Diego el 15 nov 2026. Con varias entradas, los datos de cada
-        una van separados por espacio; un dato vacio se salta; y el numero de
-        pedimento va sin guiones, porque el guion es el separador.
+        Lo pidio Diego el 15 nov 2026: todo separado por espacios, sin guiones
+        entre los datos. Con varias entradas, los datos de cada una van
+        tambien separados por espacio; un dato vacio se salta; y el numero de
+        pedimento va sin guiones.
         """
         ops = [r.operation for r in
                self.renglones.select_related('operation').order_by('pk')]
@@ -2227,7 +2228,7 @@ class Pedimento(models.Model):
                   juntos(o.ref_aa for o in ops),
                   juntos(o.ref_dys for o in ops),
                   numero]
-        base = '-'.join(p for p in partes if p) or 'pedimento-%d' % self.orden
+        base = ' '.join(p for p in partes if p) or 'pedimento %d' % self.orden
         return limpiar_nombre_de_archivo(base)
 
     @property
@@ -2871,7 +2872,7 @@ class PedimentoDocument(models.Model):
 
     def nombre_de_descarga(self, base=None, sufijo=''):
         """
-        ABREV-PEDIDO-FACTURA-ENTRADA-REFAA-REFDYS-PEDIMENTO-TIPO.ext. `base` se
+        ABREV PEDIDO FACTURA ENTRADA REFAA REFDYS PEDIMENTO TIPO.ext. `base` se
         pasa ya hecha cuando se nombran varios del mismo pedimento (el ZIP);
         `sufijo` numera los que comparten ranura.
         """
@@ -2882,7 +2883,7 @@ class PedimentoDocument(models.Model):
                 tenant=self.pedimento.tenant, clave=self.ranura).first()
             tipo = (propia.nombre if propia and propia.nombre else self.ranura)
         ext = os.path.splitext(self.nombre or (self.archivo.name or ''))[1].lower()
-        return limpiar_nombre_de_archivo(f'{base}-{tipo}{sufijo}') + ext
+        return limpiar_nombre_de_archivo(f'{base} {tipo}{sufijo}') + ext
 
     @property
     def archivo(self):

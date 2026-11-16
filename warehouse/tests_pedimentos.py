@@ -1440,9 +1440,9 @@ class ZipDelPedimentoTests(BaseDeAlmacen):
         respuesta, zf = self.descargar()
         self.assertEqual(respuesta.status_code, 200)
         nombres = sorted(zf.namelist())
-        # ABREV-...-PEDIMENTO-TIPO: el cliente delante y el tipo al final.
-        self.assertEqual(nombres, ['Acme-2415156005000-318.pdf',
-                                   'Acme-2415156005000-COVE.pdf'])
+        # ABREV ... PEDIMENTO TIPO: el cliente delante y el tipo al final.
+        self.assertEqual(nombres, ['Acme 2415156005000 318.pdf',
+                                   'Acme 2415156005000 COVE.pdf'])
 
     def test_el_nombre_lleva_los_datos_de_cada_entrada(self):
         self.cliente.abbreviation = 'LBO'
@@ -1456,15 +1456,15 @@ class ZipDelPedimentoTests(BaseDeAlmacen):
         self.subir(PedimentoDocument.PROFORMA, 'scan.pdf')
         _respuesta, zf = self.descargar()
         self.assertEqual(zf.namelist(), [
-            'LBO-PO1849 PO1850-F-77 F-78-ED261111-0004 ED261111-0005'
-            '-AA1-DYS9-2415156005000-PEDIMENTO.pdf'])
+            'LBO PO1849 PO1850 F-77 F-78 ED261111-0004 ED261111-0005'
+            ' AA1 DYS9 2415156005000 PEDIMENTO.pdf'])
 
     def test_el_archivo_suelto_sale_con_el_mismo_nombre(self):
         self.subir(PedimentoDocument.CARTA_318, 'x.pdf')
         doc = self.ped.documentos.get()
         r = self.client.get('/pedimentos/file/%d/?download=1' % doc.pk)
         self.assertEqual(r.status_code, 200)
-        self.assertIn('Acme-2415156005000-318.pdf', r['Content-Disposition'])
+        self.assertIn('Acme 2415156005000 318.pdf', r['Content-Disposition'])
         self.assertIn('attachment', r['Content-Disposition'])
 
     def test_dos_archivos_de_la_misma_ranura_no_se_pisan(self):
