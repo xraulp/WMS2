@@ -283,7 +283,7 @@ def dashboard(request):
     ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
         'customer', 'shipper', 'carrier', 'bundle_type', 'created_by',
         'tenant', 'warehouse', 'location'
-    ).order_by('-date')
+    ).order_by('-date', '-created_at', '-id')
 
 ###072526 12:40
 
@@ -1332,7 +1332,7 @@ def free_entries(request):
     ops = WarehouseOperation.objects.filter(
         tenant=tenant, ##### 072526 13:00 3.3. free_entries
         operation_type='ENTRY', customer_id=cid,
-    ).filter(Q(entry_dispatched__isnull=True)|Q(entry_dispatched='')).order_by('-date')
+    ).filter(Q(entry_dispatched__isnull=True)|Q(entry_dispatched='')).order_by('-date', '-created_at', '-id')
     return JsonResponse(
         [{'custom_id': op.custom_id, 'date': str(op.date), 'po_order': op.po_order or ''} for op in ops[:100]],
         safe=False)
@@ -2210,7 +2210,7 @@ def report_generator(request):
             # lo tienen las entradas -- a una salida la tabla le pinta un guion
             # en esa columna, de modo que no puede colarse en ninguno de los dos
             # estados. Es el mismo criterio que la pantalla de Operaciones.
-            results_list = list(ops.order_by('-date')[:500])
+            results_list = list(ops.order_by('-date', '-created_at', '-id')[:500])
             if status_f in ('Released Goods', 'In Warehouse'):
                 results_list = [o for o in results_list
                                 if o.operation_type == 'ENTRY' and o.status == status_f]
@@ -2264,7 +2264,7 @@ def report_generator_email(request):
         return HttpResponse(msg_error(_('No records selected.')))
 
     ops = WarehouseOperation.objects.filter(pk__in=pk_list, tenant=tenant).select_related(
-        'customer', 'shipper', 'carrier', 'bundle_type', 'created_by').order_by('-date')
+        'customer', 'shipper', 'carrier', 'bundle_type', 'created_by').order_by('-date', '-created_at', '-id')
     ops = customer_ops_filter(request.user, ops)
     ops_list = list(ops)
 
@@ -3196,7 +3196,7 @@ def report_generator_excel(request):
     tenant = get_tenant_or_404(request)
     ops_ids = request.GET.get('ids','').split(',')
     ops = WarehouseOperation.objects.filter(pk__in=[i for i in ops_ids if i], tenant=tenant).select_related(
-        'customer','shipper','carrier','bundle_type').order_by('-date')
+        'customer','shipper','carrier','bundle_type').order_by('-date', '-created_at', '-id')
     ops = customer_ops_filter(request.user, ops)
 
     wb = openpyxl.Workbook()
