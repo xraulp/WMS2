@@ -3,25 +3,27 @@
      vez por pantalla, en cruces.html y en cruce_documentos.html. Las ranuras
      van compactas: son cinco y no deben empujar la tarea siguiente fuera de
      la pantalla. */
-  .entrega{padding:10px 15px;border-top:1px solid var(--bdr);background:var(--bg-sutil)}
+  .entrega{padding:8px 10px;border-top:1px solid var(--bdr);background:var(--bg-sutil)}
   .ent-hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
   .ent-hd h4{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.05em;
              color:var(--ink);font-weight:700}
   .ent-ayuda{font-size:11px}
-  .ent-grupos{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px}
-  .ent-grupo{border:1px solid var(--bdr);border-radius:8px;padding:6px 8px;background:var(--surface);
-             min-width:0}
-  .ent-grupo.vacio{border-style:dashed}
-  .ent-tit{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--soft);
-           font-weight:600;margin-bottom:3px}
+  /* Una fila por ranura: nombre, archivos (recortados) y el boton de subir. */
+  .ent-grupos{display:block;border:1px solid var(--bdr);border-radius:8px;
+              background:var(--surface);overflow:hidden}
+  .ent-grupo{display:flex;align-items:center;gap:6px 8px;padding:5px 10px;min-height:38px;
+             border-top:1px solid var(--bdr);min-width:0}
+  .ent-grupo:first-child{border-top:none}
+  .ent-tit{flex:0 0 96px;font-size:12px;font-weight:600;color:var(--ink);line-height:1.2}
+  .ent-archs{flex:1 1 auto;min-width:0}
   .ent-arch{display:flex;justify-content:space-between;align-items:center;gap:4px;
-            font-size:11.5px;padding:1px 0}
+            font-size:11.5px;padding:1px 0;min-width:0}
   .ent-arch label{display:flex;align-items:center;gap:5px;min-width:0;cursor:pointer}
   /* La casilla es la que decide que se manda: grande y con el color de la
      casa, para que se vea que se puede desmarcar. */
   .ent-arch input[type=checkbox]{width:18px;height:18px;margin:0;flex:0 0 auto;
                                  accent-color:var(--accent);cursor:pointer}
-  .ent-arch:has(input:not(:checked)) a{opacity:.5;text-decoration:line-through}
+  .ent-arch:has(input[type=checkbox]:not(:checked)) a{opacity:.5;text-decoration:line-through}
   .ent-todos{font-size:11.5px;color:var(--soft);margin-left:auto}
   .ent-link{background:none;border:none;padding:0;font:inherit;color:var(--accent-ink);
             cursor:pointer;text-decoration:underline}
@@ -29,9 +31,9 @@
               overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .ent-acc{display:flex;gap:3px;flex:0 0 auto}
   .ent-acc .btn{padding:1px 6px;font-size:11px}
-  .entrega .nada{font-size:11px;color:var(--soft);font-style:italic}
-  .ent-subir{margin-top:5px}
-  .ent-subir .btn{padding:3px 8px;font-size:11.5px}
+  .entrega .nada{font-size:11px;color:var(--faint);font-style:italic;line-height:1.35}
+  .ent-subir{margin:0;flex:0 0 auto}
+  .ent-subir .btn{padding:3px 8px;font-size:11.5px;cursor:pointer}
   .ent-botones{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 
   /* Mientras sube o mientras manda el correo: el mismo aviso que en las
@@ -52,7 +54,7 @@
   body.subiendo .entrega button{pointer-events:none;opacity:.45}
 
   @media (max-width:700px){
-    .ent-grupos{grid-template-columns:1fr 1fr}
+    .ent-tit{flex-basis:84px;font-size:11.5px}
     .ent-botones .btn{flex:1 1 100%;text-align:center}
   }
 </style>

@@ -126,6 +126,14 @@ class ElAvanceDeLaTareaTests(BaseDeAlmacen):
         self.assertContains(r, "ACM's turn:")
 
 
+    def test_el_aviso_de_ingresar_solo_si_hay_que_mandar(self):
+        ped = self.con_pedimento(Pedimento.BORRADOR)
+        url = f'/cruces/?customer={self.cliente.pk}'
+        self.assertContains(self.client.get(url), 'Tap Go in')
+        Pedimento.objects.filter(pk=ped.pk).update(estado=Pedimento.PAGADO)
+        self.assertNotContains(self.client.get(url), 'Tap Go in')
+
+
 @STORAGE_LOCAL
 class LaMigracionEntregaLasQueYaTenianRemisionTests(BaseDeAlmacen):
 

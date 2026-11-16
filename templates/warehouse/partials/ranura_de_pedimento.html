@@ -1,0 +1,34 @@
+{% load i18n %}
+{% comment %}
+Lo de dentro de una fila de ranura del pedimento `p`: sus archivos con el
+nombre recortado y el boton de subir. `envio` dice si es de las que se mandan
+a revision, que se cierran cuando el pedimento sale de borrador; `quitar` y
+`subir` dicen que puede hacer quien mira. El boton de subir es propio y en el
+idioma de la pantalla: el selector nativo decia "Choose File" en ingles.
+{% endcomment %}
+<div class="archivos">
+  {% for d in archivos %}
+  <div class="archivo">
+    <a href="{% url 'pedimento_archivo' d.pk %}" target="_blank" title="{{ d.nombre }}">{{ d.nombre }}</a>
+    {% if quitar and envio and p.editable %}
+    <form method="post" action="{% url 'pedimento_quitar_documento' p.pk %}" style="margin:0">
+      {% csrf_token %}
+      <input type="hidden" name="documento" value="{{ d.pk }}">
+      <button class="btn btn-sm btn-ico" type="submit" title="{% trans "Take out" %}">✕</button>
+    </form>
+    {% endif %}
+  </div>
+  {% empty %}
+  <span class="nada">{% if envio %}{% trans "empty" %}{% else %}{% trans "pending" %}{% endif %}</span>
+  {% endfor %}
+</div>
+{% if subir %}{% if not envio or p.editable %}
+<form class="subir" method="post" enctype="multipart/form-data"
+      action="{% url 'pedimento_subir' p.pk %}">
+  {% csrf_token %}
+  <input type="hidden" name="ranura" value="{{ clave }}">
+  <label class="btn btn-sm">📎 {% if archivos %}{% trans "Add" %}{% else %}{% trans "Upload" %}{% endif %}
+    <input type="file" name="archivo" multiple hidden onchange="this.form.submit()">
+  </label>
+</form>
+{% endif %}{% endif %}

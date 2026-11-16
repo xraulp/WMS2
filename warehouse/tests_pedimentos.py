@@ -948,6 +948,13 @@ class ElClienteContestaLaRevisionTests(BaseDeAlmacen):
     def pantalla(self):
         return self.client.get('/pedimentos/', {'customer': self.cliente.pk})
 
+    def subir_mv(self):
+        for ranura in PedimentoDocument.RANURAS_DEL_CLIENTE:
+            PedimentoDocument.objects.create(
+                pedimento=self.ped, ranura=ranura, original_name='mv.pdf',
+                file=SimpleUploadedFile('mv.pdf', b'%PDF-1.4 x',
+                                        content_type='application/pdf'))
+
     # -- Aprobar -------------------------------------------------------------
 
     def test_el_cliente_aprueba(self):
@@ -1020,6 +1027,7 @@ class ElClienteContestaLaRevisionTests(BaseDeAlmacen):
         from django.utils import timezone
         self.ped.estado = Pedimento.APROBADO
         self.ped.save()
+        self.subir_mv()
         self.como(self.jefa)
         self.post('validated')
         self.assertEqual(self.estado(), Pedimento.VALIDADO)
@@ -1027,6 +1035,51 @@ class ElClienteContestaLaRevisionTests(BaseDeAlmacen):
                          timezone.localdate().strftime('%y'))
         self.assertTrue(self.ped.numero_completo.startswith(
             timezone.localdate().strftime('%y')))
+
+    # -- La manifestacion de valor, del cliente y antes de validar ----------
+
+    def test_no_se_valida_sin_la_mv_y_su_acuse(self):
+        self.ped.estado = Pedimento.APROBADO
+        self.ped.save()
+        self.como(self.jefa)
+        self.assertContains(self.pantalla(), 'Missing: the statement of value')
+        self.assertEqual(self.post('validated').status_code, 422)
+        self.assertEqual(self.estado(), Pedimento.APROBADO)
+        # Con una sola de las dos tampoco.
+        PedimentoDocument.objects.create(
+            pedimento=self.ped, ranura=PedimentoDocument.MANIFESTACION,
+            original_name='mv.pdf',
+            file=SimpleUploadedFile('mv.pdf', b'%PDF-1.4 x',
+                                    content_type='application/pdf'))
+        self.assertEqual(self.post('validated').status_code, 422)
+
+    def test_sin_mv_le_toca_al_cliente_y_con_ella_a_la_casa(self):
+        self.ped.estado = Pedimento.APROBADO
+        self.ped.save()
+        self.assertEqual(self.ped.clave_corta, Pedimento.FALTA_MV)
+        self.assertFalse(self.ped.le_toca_a_la_casa)
+        self.subir_mv()
+        self.assertEqual(self.ped.clave_corta, Pedimento.APROBADO)
+        self.assertTrue(self.ped.le_toca_a_la_casa)
+
+    def test_el_cliente_sube_la_mv_en_revision(self):
+        self.como(self.lopez)
+        r = self.pantalla()
+        self.assertContains(r, 'From the customer')
+        for ranura in PedimentoDocument.RANURAS_DEL_CLIENTE:
+            self.client.post('/pedimentos/%d/upload/' % self.ped.pk, {
+                'ranura': ranura,
+                'archivo': SimpleUploadedFile('mv.pdf', b'%PDF-1.4 x',
+                                              content_type='application/pdf')})
+        self.assertTrue(self.ped.tiene_mv)
+
+    def test_el_cliente_no_sube_a_las_ranuras_de_la_casa(self):
+        self.como(self.lopez)
+        r = self.client.post('/pedimentos/%d/upload/' % self.ped.pk, {
+            'ranura': PedimentoDocument.PEDIMENTO_PAGADO,
+            'archivo': SimpleUploadedFile('p.pdf', b'%PDF-1.4 x',
+                                          content_type='application/pdf')})
+        self.assertEqual(r.status_code, 404)
 
     def test_no_se_valida_sin_la_aprobacion(self):
         self.como(self.jefa)

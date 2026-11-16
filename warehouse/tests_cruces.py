@@ -894,7 +894,7 @@ class LoQueSeVeEnLaTareaTests(BaseDeCruces):
             (Pedimento.EN_REVISION, 0, 'Under review - LBO'),
             (Pedimento.CORRECCIONES, 1, 'Corr - DYSER'),
             (Pedimento.EN_REVISION, 1, 'Corr review - LBO'),
-            (Pedimento.APROBADO, 1, 'Approval - LBO'),
+            (Pedimento.APROBADO, 1, 'MV pending - LBO'),
             (Pedimento.VALIDADO, 0, 'Validated - DYSER'),
             (Pedimento.PAGADO, 0, 'Ped paid - DYSER'),
         ]

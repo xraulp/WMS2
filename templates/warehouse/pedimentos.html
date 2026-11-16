@@ -89,28 +89,43 @@
                  padding:9px 0;border-bottom:1px solid var(--err-bdr)}
     .fila-suelta:last-child{border-bottom:none}
 
-    /* Las ranuras. Cada una es una caja con nombre, porque lo que el cliente
-       revisa es una lista concreta y no "los archivos del pedimento". Una
-       ranura vacia se ve vacia: es la mitad de la informacion. */
-    .ranuras{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
-             gap:8px;padding:12px 14px;border-top:1px solid var(--bdr)}
-    .ranura{border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;
-            background:var(--surface)}
-    .ranura.vacia{border-style:dashed}
-    /* Lo que hay que hacer aqui, dicho arriba de las ranuras. Ocupa la fila
-       entera de la cuadricula. */
-    .ranuras .instruccion{grid-column:1/-1;margin:0;font-size:13px;font-weight:600;
+    /* Las ranuras, una fila cada una: estado, nombre, archivo y botones. Una
+       ranura vacia se ve vacia (○), y la obligatoria que falta, en rojo (*). */
+    details.bultos > summary{padding:7px 14px;font-size:12px;color:var(--accent-ink);
+                             cursor:pointer;border-bottom:1px solid var(--bdr)}
+    details.bultos:not([open]) > summary{border-bottom:none}
+    .ranuras{border-top:1px solid var(--bdr);background:var(--surface)}
+    .ranuras-hd{display:flex;justify-content:space-between;align-items:center;gap:8px;
+                padding:7px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+                color:var(--soft);font-weight:600;background:var(--bg-sutil);
+                border-bottom:1px solid var(--bdr)}
+    .ranuras .instruccion{margin:0;padding:7px 12px 2px;font-size:12px;font-weight:600;
                           color:var(--accent-ink)}
-    .ranura.pide{border-color:var(--red);background:var(--rsoft)}
-    .instruccion .config-ranuras{font-weight:400;font-size:12px;margin-left:6px;
-                                 color:var(--accent-ink);white-space:nowrap}
-    .ranura h4{margin:0 0 5px;font-size:11px;text-transform:uppercase;
-               letter-spacing:.04em;color:var(--soft);font-weight:600}
-    .ranura .archivo{display:flex;justify-content:space-between;align-items:center;
-                     gap:8px;font-size:12px;padding:2px 0}
-    .ranura .archivo a{font-family:'IBM Plex Mono',monospace;word-break:break-all}
-    .ranura .nada{font-size:12px;color:var(--soft);font-style:italic}
-    .subir{margin-top:6px}
+    .config-ranuras{font-weight:400;font-size:11.5px;text-transform:none;letter-spacing:0;
+                    color:var(--accent-ink);white-space:nowrap}
+    .ranuras-grupo{padding:6px 12px 3px;font-size:10.5px;text-transform:uppercase;
+                   letter-spacing:.05em;color:var(--soft);font-weight:600;
+                   background:var(--bg-sutil);border-top:1px solid var(--bdr)}
+    .falta-mv{margin-left:6px;color:var(--err-ink);text-transform:none;letter-spacing:0}
+    .ranura{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:5px 12px;
+            min-height:38px;border-top:1px solid var(--bdr)}
+    .ranuras-hd + .ranura, .instruccion + .ranura, .ranuras-grupo + .ranura{border-top:none}
+    .ranura.pide{background:var(--rsoft);box-shadow:inset 3px 0 0 var(--red)}
+    .ranura .est{flex:0 0 14px;text-align:center;font-size:13px;color:var(--faint)}
+    .ranura:not(.vacia) .est{color:var(--green-dark)}
+    .ranura.pide .est{color:var(--red);font-weight:700}
+    .ranura h4{margin:0;flex:0 0 112px;font-size:12.5px;font-weight:600;color:var(--ink);
+               line-height:1.2}
+    .ranura .archivos{flex:1 1 120px;min-width:0}
+    .ranura .archivo{display:flex;align-items:center;gap:6px;font-size:12px;min-width:0}
+    .ranura .archivo + .archivo{margin-top:2px}
+    .ranura .archivo a{font-family:'IBM Plex Mono',monospace;font-size:11.5px;min-width:0;
+                       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ranura .nada{font-size:12px;color:var(--faint);font-style:italic}
+    .ranura .subir{margin:0;flex:0 0 auto}
+    .ranura .subir label.btn{cursor:pointer}
+    .ranura .series{flex:1 0 100%;padding:2px 0 4px 22px}
+    .btn-ico{padding:2px 7px;line-height:1.2}
     .subir input[type=file]{font-size:11px;max-width:100%}
 
     /* Mientras sube un archivo. Un PDF grande tarda segundos en llegar al
@@ -127,6 +142,7 @@
     @keyframes girar{to{transform:rotate(360deg)}}
     @media (prefers-reduced-motion:reduce){.giro{animation-duration:2.4s}}
     body.subiendo input[type=file],
+    body.subiendo .subir label.btn,
     body.subiendo .series label.btn{pointer-events:none;opacity:.45}
     .series .ayuda{font-size:12px;color:var(--soft);margin-bottom:6px}
     .series .fotos{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
@@ -347,6 +363,12 @@
       </div>
     </div>
 
+    {% comment %}
+    Los bultos del pedimento. Mientras se arma se ven abiertos, porque ahi se
+    asignan y se sacan; despues se pliegan: el encabezado ya dice bultos y kg.
+    {% endcomment %}
+    <details class="bultos"{% if puede_editar and p.editable %} open{% endif %}>
+    <summary>{% trans "Bundles and orders" %} · {{ p.renglones.all|length }}</summary>
     <table>
       <thead>
         <tr>
@@ -398,6 +420,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </details>
 
     {% if puede_editar and p.editable and sin_repartir %}
     <div style="padding:10px 14px;border-top:1px solid var(--bdr);background:var(--bg-sutil)">
@@ -427,29 +450,31 @@
     {% endif %}
 
     {% comment %}
-    Lo que el cliente revisa. Seis ranuras con nombre, no "los archivos del
-    pedimento": la lista concreta es lo que permite decir que falta, y lo que
-    permite que el boton de abajo se encienda solo.
+    Las ranuras del pedimento, una fila cada una: si tiene archivo, su nombre
+    recortado y los botones de icono. La lista concreta es lo que permite decir
+    que falta y que el boton de revision se encienda solo. La de fotos de
+    numeros de serie no esta cuando la mercancia no las trae.
 
-    La de fotos de numeros de serie no esta cuando la mercancia no las trae --
-    no aparece atenuada ni con un "no aplica" que alguien tenga que marcar.
+    Tres grupos, en el orden en que se llenan: lo que manda la casa a
+    revision; lo del cliente -- la manifestacion de valor y su acuse --, que
+    hace falta antes de validar; y el pedimento pagado.
     {% endcomment %}
     <div class="ranuras">
+      <div class="ranuras-hd">
+        <span>{% trans "Pedimento documents" %}</span>
+        {% if puede_editar and is_home and p.editable %}<a class="config-ranuras" href="{% url 'pedimento_ranuras' %}?customer={{ cliente.pk }}&amp;solo={{ p.pk }}">⚙ {% trans "Configure slots" %}</a>{% endif %}
+      </div>
       {% if puede_editar and p.editable %}
-      <p class="instruccion">
-        📎 {% trans "Upload the pedimento documents to send it to the customer for review. Those marked with * are required." %}
-        {% if is_home %}<a class="config-ranuras" href="{% url 'pedimento_ranuras' %}?customer={{ cliente.pk }}&amp;solo={{ p.pk }}">⚙ {% trans "Configure slots" %}</a>{% endif %}
-      </p>
+      <p class="instruccion">📎 {% trans "Upload the pedimento documents to send it to the customer for review. Those marked with * are required." %}</p>
       {% endif %}
       {% for clave, etiqueta, archivos, obligatoria in p.ranuras_envio %}
       <div class="ranura{% if not archivos %} vacia{% if obligatoria %} pide{% endif %}{% endif %}">
-        <h4>{{ etiqueta }}{% if obligatoria and not archivos %} *{% endif %}</h4>
+        <span class="est">{% if archivos %}✓{% elif obligatoria %}*{% else %}○{% endif %}</span>
+        <h4>{{ etiqueta }}</h4>
         {% comment %}
-        Las fotos de series se eligen del expediente del embarque aqui mismo,
-        dentro de su ranura, y si la foto todavia no esta en el expediente se
-        toma o se sube desde aqui: entra al expediente y queda elegida. Antes el
-        selector vivia debajo de las ranuras y, con una foto cualquiera en el
-        expediente, la ranura se quedaba sin nada que hacer.
+        Las fotos de series se eligen del expediente del embarque aqui mismo, y
+        si la foto todavia no esta se toma o se sube desde aqui: entra al
+        expediente y queda elegida.
         {% endcomment %}
         {% if clave == 'FOTOS_SERIES' and puede_editar and p.editable %}
         <form class="series" method="post" enctype="multipart/form-data"
@@ -486,32 +511,32 @@
           </div>
         </form>
         {% else %}
-        {% for d in archivos %}
-        <div class="archivo">
-          <a href="{% url 'pedimento_archivo' d.pk %}" target="_blank">{{ d.nombre }}</a>
-          {% if puede_editar and p.editable %}
-          <form method="post" action="{% url 'pedimento_quitar_documento' p.pk %}" style="margin:0">
-            {% csrf_token %}
-            <input type="hidden" name="documento" value="{{ d.pk }}">
-            <button class="btn btn-sm" type="submit" title="{% trans "Take out" %}">✕</button>
-          </form>
-          {% endif %}
-        </div>
-        {% empty %}
-        <div class="nada">{% trans "empty" %}</div>
-        {% endfor %}
-
-        {% if puede_editar and p.editable %}
-        <form class="subir" method="post" enctype="multipart/form-data"
-              action="{% url 'pedimento_subir' p.pk %}">
-          {% csrf_token %}
-          <input type="hidden" name="ranura" value="{{ clave }}">
-          <input type="file" name="archivo" multiple onchange="this.form.submit()">
-        </form>
-        {% endif %}
+        {% include "warehouse/partials/ranura_de_pedimento.html" with quitar=puede_editar subir=puede_editar envio=True %}
         {% endif %}
       </div>
       {% endfor %}
+
+      {% if p.estado != 'BORRADOR' %}
+      <div class="ranuras-grupo">
+        {% trans "From the customer · before validation" %}
+        {% if p.estado == 'APROBADO' and not p.tiene_mv %}<span class="falta-mv">{% trans "missing" %}</span>{% endif %}
+      </div>
+      {% for clave, etiqueta, archivos in p.ranuras_del_cliente %}
+      <div class="ranura{% if not archivos %} vacia{% if p.estado == 'APROBADO' %} pide{% endif %}{% endif %}">
+        <span class="est">{% if archivos %}✓{% elif p.estado == 'APROBADO' %}*{% else %}○{% endif %}</span>
+        <h4>{{ etiqueta }}</h4>
+        {% include "warehouse/partials/ranura_de_pedimento.html" with quitar=False subir=True envio=False %}
+      </div>
+      {% endfor %}
+      <div class="ranuras-grupo">{% trans "After payment" %}</div>
+      {% for clave, etiqueta, archivos in p.ranuras_posteriores %}
+      <div class="ranura{% if not archivos %} vacia{% endif %}">
+        <span class="est">{% if archivos %}✓{% else %}○{% endif %}</span>
+        <h4>{{ etiqueta }}</h4>
+        {% include "warehouse/partials/ranura_de_pedimento.html" with quitar=False subir=puede_editar envio=False %}
+      </div>
+      {% endfor %}
+      {% endif %}
     </div>
 
     {% comment %}
@@ -600,14 +625,22 @@
         </div>
         {% endif %}
       {% elif p.estado == 'APROBADO' %}
+        {% if not puede_editar and not p.tiene_mv %}
+        <div class="contestar"><p><b>{% trans "Upload the statement of value and its receipt above so we can validate this pedimento." %}</b></p></div>
+        {% endif %}
         <span class="ya-salio">
           {% trans "Approved" %}{% if p.revisado_por %} {% trans "by" %} {{ p.revisado_por.get_full_name|default:p.revisado_por.username }}{% endif %} · {{ p.aprobado_en|date:"d/m H:i" }}
         </span>
         {% if puede_editar %}
+        {% if p.tiene_mv %}
         <form method="post" action="{% url 'pedimento_marcar_validado' p.pk %}" style="margin:0">
           {% csrf_token %}
           <button class="btn btn-p" type="submit">{% trans "Mark as validated" %}</button>
         </form>
+        {% else %}
+        <span class="motivo">{% trans "Missing: the statement of value and its receipt, uploaded by the customer" %}</span>
+        <button class="btn btn-off" type="button" disabled>🔒 {% trans "Mark as validated" %}</button>
+        {% endif %}
         {% comment %}
         Para la tarea que se cancelo antes de validar y pagar: el pedimento
         vuelve a borrador, se cambian los papeles y el cliente lo revisa otra vez.
@@ -678,43 +711,6 @@
         {{ c.usuario.get_full_name|default:c.usuario.username|default:"?" }} ·
         {{ c.fecha|date:"d/m/y H:i" }}{% if c.marca_anterior %}
         · {% trans "it had been marked on" %} {{ c.marca_anterior|date:"d/m/y H:i" }}{% endif %}
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    {% comment %}
-    Lo que llega despues, ya con el pedimento fuera. Se enseña siempre para que
-    se vea el camino entero, y solo se puede llenar cuando el pedimento ya
-    salio: una manifestacion de valor de un pedimento que aun es borrador no
-    significa nada.
-    {% endcomment %}
-    {% if p.estado != 'BORRADOR' %}
-    <div class="ranuras" style="background:var(--bg-sutil)">
-      {% for clave, etiqueta, archivos in p.ranuras_posteriores %}
-      <div class="ranura{% if not archivos %} vacia{% endif %}">
-        <h4>{{ etiqueta }}</h4>
-        {% for d in archivos %}
-        <div class="archivo">
-          <a href="{% url 'pedimento_archivo' d.pk %}" target="_blank">{{ d.nombre }}</a>
-        </div>
-        {% empty %}
-        <div class="nada">{% trans "pending" %}</div>
-        {% endfor %}
-        {% comment %}
-        Estas ranuras se llenan con el pedimento ya fuera, asi que no se cierran
-        al enviarlo: la manifestacion de valor llega justo despues. Las dos
-        primeras las sube el cliente y las otras dos la casa, asi que a cada uno
-        se le pinta lo suyo: un campo que al usarlo da un error no es un campo.
-        {% endcomment %}
-        {% if puede_editar or clave == 'MANIFESTACION' or clave == 'ACUSE' %}
-        <form class="subir" method="post" enctype="multipart/form-data"
-              action="{% url 'pedimento_subir' p.pk %}">
-          {% csrf_token %}
-          <input type="hidden" name="ranura" value="{{ clave }}">
-          <input type="file" name="archivo" onchange="this.form.submit()">
-        </form>
-        {% endif %}
       </div>
       {% endfor %}
     </div>

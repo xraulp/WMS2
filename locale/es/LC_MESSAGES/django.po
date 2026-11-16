@@ -4423,3 +4423,46 @@ msgstr "Entregada. No queda nada pendiente."
 #, python-format
 msgid "Signed remision received: %(t)s is delivered."
 msgstr "Remisión firmada recibida: %(t)s quedó entregada."
+
+msgid "Pedimento documents"
+msgstr "Documentos del pedimento"
+
+msgid "From the customer · before validation"
+msgstr "Del cliente · antes de validar"
+
+msgid "missing"
+msgstr "faltan"
+
+msgid "After payment"
+msgstr "Después del pago"
+
+msgid "Missing: the statement of value and its receipt, uploaded by the customer"
+msgstr "Falta: la manifestación de valor y su acuse, que sube el cliente"
+
+msgid "Upload the statement of value and its receipt above so we can validate this pedimento."
+msgstr "Sube arriba la manifestación de valor y su acuse para que podamos validar este pedimento."
+
+msgid "Bundles and orders"
+msgstr "Bultos y pedidos"
+
+#, python-format
+msgid "%(ped)s cannot be validated yet: the customer has to upload the statement of value and its receipt."
+msgstr "%(ped)s todavía no se puede validar: el cliente tiene que subir la manifestación de valor y su acuse."
+
+msgid "MV pending"
+msgstr "Falta MV"
+
+msgid "To validate"
+msgstr "Por validar"
+
+msgid "upload the statement of value and its receipt"
+msgstr "subir la manifestación de valor y su acuse"
+
+msgid "More actions"
+msgstr "Más acciones"
+
+msgid "More"
+msgstr "Más"
+
+msgid "Does not cover goods"
+msgstr "No ampara mercancía"

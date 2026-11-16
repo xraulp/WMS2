@@ -2246,12 +2246,14 @@ class Pedimento(models.Model):
     # Por eso la abreviatura que lo acompaña es la de uno o la del otro.
     ELAB_PED = 'ELAB_PED'
     REV_CORR = 'REV_CORR'
+    FALTA_MV = 'FALTA_MV'
     ESTADOS_CORTOS = {
         ELAB_PED:     (_('Ped prep'),    'casa'),
         EN_REVISION:  (_('Under review'), 'cliente'),
         CORRECCIONES: (_('Corr'),        'casa'),
         REV_CORR:     (_('Corr review'), 'cliente'),
-        APROBADO:     (_('Approval'),    'cliente'),
+        FALTA_MV:     (_('MV pending'),  'cliente'),
+        APROBADO:     (_('To validate'), 'casa'),
         VALIDADO:     (_('Validated'),   'casa'),
         PAGADO:       (_("Ped paid"), "casa"),
     }
@@ -2262,6 +2264,8 @@ class Pedimento(models.Model):
             return self.ELAB_PED
         if self.estado == self.EN_REVISION and self.veces_con_correcciones:
             return self.REV_CORR
+        if self.estado == self.APROBADO and not self.tiene_mv:
+            return self.FALTA_MV
         return self.estado
 
     @classmethod
@@ -2286,6 +2290,14 @@ class Pedimento(models.Model):
     @property
     def es_turno_del_cliente(self):
         return self.estado == self.EN_REVISION
+
+    @property
+    def tiene_mv(self):
+        """Si ya estan la manifestacion de valor y su acuse."""
+        subidas = set(self.documentos.filter(
+            ranura__in=PedimentoDocument.RANURAS_DEL_CLIENTE)
+            .values_list('ranura', flat=True))
+        return subidas >= set(PedimentoDocument.RANURAS_DEL_CLIENTE)
 
     @property
     def numero_con_rectificacion(self):
@@ -2450,7 +2462,9 @@ class Pedimento(models.Model):
         Aqui se sellan los dos digitos del ano de validacion, que completan los
         quince del numero y no se pueden saber antes.
         """
-        if self.estado != self.APROBADO:
+        # Sin la manifestacion de valor y su acuse, que sube el cliente, no se
+        # valida: el agente aduanal las necesita antes.
+        if self.estado != self.APROBADO or not self.tiene_mv:
             return False
         self.estado = self.VALIDADO
         self.validado_en = timezone.now()
@@ -2761,7 +2775,10 @@ class PedimentoDocument(models.Model):
     # vive en la tarea de cruce (`DocumentoDeEntrega`), porque llega un solo
     # archivo con los de todos los pedimentos del camion. La clave se conserva
     # para no dejar sin nombre los que se hubieran subido antes.
-    RANURAS_POSTERIORES = (MANIFESTACION, ACUSE, PEDIMENTO_PAGADO)
+    RANURAS_POSTERIORES = (PEDIMENTO_PAGADO,)
+    # Las del cliente: la manifestacion de valor y su acuse. Las sube el
+    # cliente con el pedimento ya en revision, y sin ellas no se valida.
+    RANURAS_DEL_CLIENTE = (MANIFESTACION, ACUSE)
 
     pedimento = models.ForeignKey('Pedimento', on_delete=models.CASCADE,
                                   related_name='documentos')
@@ -3799,7 +3816,8 @@ class CrossingTask(models.Model):
                           'actual': False})
 
         paso(self.PASO_PEDIMENTOS,
-             peds and all(p.estado in aprobados for p in peds),
+             peds and all(p.estado in aprobados and p.clave_corta != Pedimento.FALTA_MV
+                          for p in peds),
              max((p.validado_en for p in peds if p.validado_en), default=None))
         paso(self.PASO_PAGADO,
              peds and all(p.estado == Pedimento.PAGADO for p in peds),
@@ -3875,6 +3893,9 @@ class CrossingTask(models.Model):
         if actual is None:
             return ''
         if self.le_toca_al_cliente:
+            if actual['clave'] == self.PASO_PEDIMENTOS and any(
+                    p.clave_corta == Pedimento.FALTA_MV for p in self.pedimentos)                     and not any(p.es_turno_del_cliente for p in self.pedimentos):
+                return _('upload the statement of value and its receipt')
             if actual['clave'] == self.PASO_PEDIMENTOS and not self.espera_confirmacion:
                 return _('review and approve the pedimentos')
             if actual['clave'] == self.PASO_PEDIMENTOS and any(

@@ -4807,6 +4807,10 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None,
             (clave, etiquetas[clave], cajones.get(clave, []))
             for clave in PedimentoDocument.RANURAS_POSTERIORES
         ]
+        ped.ranuras_del_cliente = [
+            (clave, etiquetas[clave], cajones.get(clave, []))
+            for clave in PedimentoDocument.RANURAS_DEL_CLIENTE
+        ]
         ped.faltan = ped.faltantes_para_revision
         # La tarea en que va, para nombrarla en su encabezado y volver a ella.
         ped.tareas = list(ped.tareas_de_cruce())
@@ -5538,9 +5542,12 @@ def pedimento_marcar_validado(request, pk):
         raise Http404
     ped = _pedimento_del_tenant(request, pk)
     if not ped.marcar_validado():
-        return _error_en_pedimento(request, ped,
-            _('%(ped)s can only be validated after the customer approves it.')
-            % {'ped': ped.etiqueta})
+        if ped.estado == Pedimento.APROBADO:
+            mensaje = _('%(ped)s cannot be validated yet: the customer has to '
+                        'upload the statement of value and its receipt.')
+        else:
+            mensaje = _('%(ped)s can only be validated after the customer approves it.')
+        return _error_en_pedimento(request, ped, mensaje % {'ped': ped.etiqueta})
     return _volver_al_pedimento(ped)
 
 
@@ -6845,6 +6852,11 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
         armados = {p.pk: p for fila in tarea.filas for p in fila.pedimentos}
         tarea.en_revision = sum(1 for p in armados.values()
                                 if p.estado == Pedimento.EN_REVISION)
+        # El aviso de "toca Ingresar" solo mientras haya un pedimento que la
+        # casa tenga que cargar y mandar: en borrador o con correcciones.
+        tarea.hay_que_mandar = any(
+            p.estado in (Pedimento.BORRADOR, Pedimento.CORRECCIONES)
+            for p in armados.values())
         tarea.sin_factura = tarea.operaciones_sin_factura
         tarea.dias = tarea.dias_para_el_cruce
         tarea.dias_de_atraso = max(-tarea.dias, 0)

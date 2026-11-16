@@ -29,7 +29,8 @@ sale mientras no haya nada.
   <div class="ent-grupos">
     {% for grupo, titulo, lista in t.entrega %}
     <div class="ent-grupo{% if not lista %} vacio{% endif %}">
-      <div class="ent-tit">{{ titulo }}{% if lista %} <span class="soft">· {{ lista|length }}</span>{% endif %}</div>
+      <div class="ent-tit">{{ titulo }}{% if lista|length > 1 %} <span class="soft">· {{ lista|length }}</span>{% endif %}</div>
+      <div class="ent-archs">
       {% for a in lista %}
       <div class="ent-arch">
         <label>
@@ -38,7 +39,7 @@ sale mientras no haya nada.
         </label>
         {% if not es_cliente %}
         <span class="ent-acc">
-          <button class="btn btn-sm" type="submit" form="ent-form-{{ t.pk }}"
+          <button class="btn btn-sm btn-ico" type="submit" form="ent-form-{{ t.pk }}"
                   formaction="{% url 'cruce_entrega_correo' t.pk %}" name="solo" value="{{ a.clave }}"
                   title="{% trans "Send only this file to the customer" %}">✉</button>
           {% if a.quitable %}
@@ -46,7 +47,7 @@ sale mientras no haya nada.
             {% csrf_token %}
             {% if en_pagina %}<input type="hidden" name="volver" value="pagina">{% endif %}
             <input type="hidden" name="documento" value="{{ a.quitable.pk }}">
-            <button class="btn btn-sm" type="submit" title="{% trans "Take out" %}">✕</button>
+            <button class="btn btn-sm btn-ico" type="submit" title="{% trans "Take out" %}">✕</button>
           </form>
           {% endif %}
         </span>
@@ -74,6 +75,9 @@ sale mientras no haya nada.
           <div class="nada">{% trans "The first photo generates the exit report (SD) and sends it to the customer with the photos." %}</div>
           {% endif %}
         {% endif %}
+      {% endif %}
+      </div>
+      {% if grupo != 'PAGADOS' and grupo != 'REMISION' %}
         {% if not es_cliente %}
         <form method="post" enctype="multipart/form-data"
               action="{% url 'cruce_entrega_subir' t.pk %}" class="ent-subir">
@@ -81,7 +85,7 @@ sale mientras no haya nada.
           {% if en_pagina %}<input type="hidden" name="volver" value="pagina">{% endif %}
           <input type="hidden" name="tipo" value="{{ grupo }}">
           <label class="btn btn-sm">
-            {% if grupo == 'SHIPPER' %}📎 {% trans "Upload PDFs" %}{% elif grupo == 'REMISION_FIRMADA' %}📷 {% trans "Take or upload photo" %}{% else %}📷 {% trans "Take or upload photos" %}{% endif %}
+            {% if grupo == 'SHIPPER' %}📎 {% if lista %}{% trans "Add" %}{% else %}{% trans "Upload" %}{% endif %}{% else %}📷 {% if lista %}{% trans "Add" %}{% else %}{% trans "Photo" %}{% endif %}{% endif %}
             <input type="file" name="archivo" multiple hidden onchange="this.form.submit()"
                    accept="{% if grupo == 'SHIPPER' %}.pdf,application/pdf{% else %}image/*,.jpg,.jpeg,.png,.heic,.heif,.webp{% endif %}">
           </label>

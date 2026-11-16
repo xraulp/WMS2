@@ -52,14 +52,15 @@
            border-radius:12px;margin-bottom:26px;overflow:hidden;
            background:var(--surface);box-shadow:0 2px 8px rgba(15,23,42,.10)}
     .tarea.par{border-left-color:var(--violet)}
-    .tarea-hd{padding:13px 15px;background:var(--th-bg-acento);color:var(--tb-ink);
+    .tarea-hd{padding:9px 12px;background:var(--th-bg-acento);color:var(--tb-ink);
               border-bottom:1px solid var(--bdr-fuerte);display:flex;gap:12px;
               flex-wrap:wrap;align-items:flex-start;justify-content:space-between}
-    .tarea-id{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;
+    .tarea-l1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+    .tarea-id{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;
               color:#fff}
     .tarea-sub{font-size:12px;color:var(--soft);margin-top:3px;line-height:1.5}
     .tarea-hd .tarea-sub{color:var(--tb-ink-suave)}
-    .tarea-pedidos{font-size:14px;font-weight:600;color:#fff;margin-top:2px}
+    .tarea-pedidos{font-size:13px;font-weight:700;color:#fff}
     .tarea-der{text-align:right}
     .tarea-hd .alerta-revision{margin:6px 0 2px}
     .tarea-hd .fase{color:#fff}
@@ -174,11 +175,18 @@
     .campo span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)}
 
     /* Los tres papeles de la tarea, uno al lado del otro. */
-    .papeles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
-             gap:10px;padding:12px 15px;border-top:1px solid var(--bdr)}
-    .papel{border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;
-           background:var(--surface)}
-    .papel h4{margin:0 0 6px;font-size:10px;text-transform:uppercase;
+    .papeles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+             gap:6px;padding:8px 10px;border-top:1px solid var(--bdr)}
+    .papel{border:1px solid var(--bdr);border-radius:8px;padding:7px 9px;
+           background:var(--surface);font-size:11px;min-width:0}
+    .papel .val{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;
+                overflow-wrap:anywhere}
+    .papel .val .soft{font-weight:400;font-size:11px}
+    .papel .det{font-size:10.5px;color:var(--soft);line-height:1.35}
+    .papel-acc{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:5px}
+    .papel-acc form{margin:0}
+    .papel .btn-sm{padding:3px 8px;font-size:11.5px}
+    .papel h4{margin:0 0 3px;font-size:10px;text-transform:uppercase;
               letter-spacing:.05em;color:var(--soft);font-weight:600}
     .papel .ok {color:var(--ok-ink-fuerte)}
     .papel .mal{color:var(--err-ink-fuerte);font-weight:600}
@@ -202,15 +210,21 @@
              flex-wrap:wrap;align-items:center}
     .mis-rem .campo span{margin-right:4px}
 
+    /* El menu ⋯ de la tarea: lo que se usa menos. */
+    .tarea-mas{position:relative}
+    .tarea-mas > summary{list-style:none;cursor:pointer;display:inline-flex}
+    .tarea-mas > summary::-webkit-details-marker{display:none}
+    .tarea-mas-caja{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+    .tarea-hd .tarea-acc .btn{padding:4px 9px;font-size:12px}
     /* El avance de la tarea (partials/avance_de_cruce.html). */
-  .avance{flex:1 0 100%;margin-top:4px}
+  .avance{flex:1 0 100%;margin-top:2px}
   .avance ol{list-style:none;margin:0;padding:0;display:flex;gap:6px}
-  .avance li{flex:1 1 0;min-width:0;position:relative;padding-top:16px;
-             font-size:11px;line-height:1.25;color:var(--tb-ink-suave)}
+  .avance li{flex:1 1 0;min-width:0;position:relative;padding-top:13px;
+             font-size:10.5px;line-height:1.2;color:var(--tb-ink-suave)}
   /* La raya que une los pasos, y el punto de cada uno encima. */
-  .avance li::before{content:"";position:absolute;top:5px;left:0;right:-6px;height:3px;
+  .avance li::before{content:"";position:absolute;top:4px;left:0;right:-6px;height:2px;
                      background:rgba(255,255,255,.22);border-radius:2px}
-  .avance li::after{content:"";position:absolute;top:0;left:0;width:13px;height:13px;
+  .avance li::after{content:"";position:absolute;top:0;left:0;width:10px;height:10px;
                     border-radius:50%;background:#64748b;border:2px solid rgba(255,255,255,.5);
                     box-sizing:border-box}
   .avance li.hecho::before{background:#16a34a}
@@ -221,7 +235,7 @@
   .avance li:not(.hecho):not(.actual) .p-txt{font-weight:500;color:var(--tb-ink-suave)}
   .avance .p-det{display:block;overflow-wrap:anywhere}
   .avance li.alerta .p-det{color:#fecaca;font-weight:700}
-  .avance .toca{margin-top:8px;font-size:13px;color:#fff}
+  .avance .toca{margin-top:6px;font-size:12px;color:#fff}
   .avance .toca b{background:rgba(255,255,255,.16);padding:1px 7px;border-radius:5px}
   .avance .toca.del-cliente b{background:var(--rev-bg);color:var(--rev-ink)}
 
@@ -329,30 +343,26 @@
   <div class="tarea{% if forloop.counter|divisibleby:2 %} par{% endif %}" id="tarea-{{ t.pk }}">
     <div class="tarea-hd">
       {% comment %}
-      Una cosa por linea, en el orden en que se lee en el telefono: el numero,
-      los pedidos, el aviso si lo hay, embarques y dia, quien la creo y en que
-      fase va. La cuenta atras y el status cierran, a la derecha en la PC.
+      Compacto: el numero y los pedidos en una linea; embarques, dia y quien la
+      creo en otra; el aviso y el camion si los hay. Debajo, el avance.
       {% endcomment %}
       <div class="tarea-izq">
-        <div class="tarea-id">{{ t.custom_id }}</div>
-        {% if t.pedidos %}
-        <div class="tarea-pedidos">{% trans "Orders:" %} {{ t.pedidos|join:" - " }}</div>
-        {% endif %}
+        <div class="tarea-l1"><span class="tarea-id">{{ t.custom_id }}</span>{% if t.pedidos %}<span class="tarea-pedidos">{{ t.pedidos|join:" - " }}</span>{% endif %}</div>
         {% if t.en_revision %}
         <div class="alerta-revision">
           ⚠ {% blocktrans count n=t.en_revision %}{{ n }} pedimento under review{% plural %}{{ n }} pedimentos under review{% endblocktrans %}
         </div>
         {% endif %}
-        <div class="tarea-sub">
-          {% blocktrans count n=t.grupos|length %}{{ n }} shipment{% plural %}{{ n }} shipments{% endblocktrans %}
-          - {% trans "crosses" %} {{ t.fecha_de_cruce|date:"l j F" }}
-        </div>
         {% comment %}
         Quien la creo se enseña siempre. El dia que alguien reclame que se pidio
         cruzar, esta linea es la respuesta; la persona y la hora salen al pasar
         por encima.
         {% endcomment %}
-        <div class="tarea-sub" title="{{ t.creada_por_quien }} · {{ t.created_at|date:"d/m/y H:i" }}">{{ t.creada_por|capfirst }}</div>
+        <div class="tarea-sub">
+          {% blocktrans count n=t.grupos|length %}{{ n }} shipment{% plural %}{{ n }} shipments{% endblocktrans %}
+          · {% trans "crosses" %} {{ t.fecha_de_cruce|date:"D j b" }}
+          · <span title="{{ t.creada_por_quien }} · {{ t.created_at|date:"d/m/y H:i" }}">{{ t.creada_por|capfirst }}</span>
+        </div>
         {% comment %}
         El camion compartido. Solo la casa: el cliente nunca se entera de que
         su mercancia va con la de otro.
@@ -390,36 +400,6 @@
       botones, y el formulario solo sale al pulsarlos.
       {% endcomment %}
       <div class="tarea-acc">
-        {% if not es_cliente %}
-        {% if t.camion %}{% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
-        <form method="post" action="{% url 'cruce_camion_salir' t.pk %}" style="margin:0"
-              data-aviso="{% blocktrans with c=t.camion.custom_id %}Take this crossing out of truck {{ c }}?{% endblocktrans %}"
-              onsubmit="return confirm(this.dataset.aviso)">
-          {% csrf_token %}
-          <button class="btn btn-sm" type="submit">🚚 {% trans "Leave the truck" %}</button>
-        </form>
-        {% endif %}{% elif t.candidatas_camion %}
-        <details class="camion-juntar">
-          <summary class="btn btn-sm">🚚 {% trans "Share a truck with…" %}</summary>
-          <form method="post" action="{% url 'cruce_camion_juntar' t.pk %}" class="camion-form">
-            {% csrf_token %}
-            <label class="campo"><span>{% trans "Crossings of the same day" %}</span>
-              <select name="otra" required>
-                {% for o in t.candidatas_camion %}
-                <option value="{{ o.pk }}">{{ o.customer.abbreviation|default:o.customer.name }} · {{ o.custom_id }}{% if o.camion %} · 🚚 {{ o.camion.custom_id }}{% endif %}</option>
-                {% endfor %}
-              </select></label>
-            <button class="btn btn-sm btn-p" type="submit">{% trans "Put them in the same truck" %}</button>
-          </form>
-        </details>
-        {% endif %}
-        {% endif %}
-        {% if t.libres %}
-        <button class="btn btn-sm btn-p" type="button" aria-expanded="false"
-                onclick="abrirPanelDeTarea(this, 'meter-{{ t.pk }}')">+ {% trans "Add shipment" %}</button>
-        {% endif %}
-        <button class="btn btn-sm" type="button" aria-expanded="false"
-                onclick="abrirPanelDeTarea(this, 'dia-{{ t.pk }}')">&#128197; {% trans "Move the day" %}</button>
         {% comment %}
         Lo que pasa despues de la remision no lo puede saber el sistema: lo
         marca la casa. En cruce, verde o rojo; despues del rojo, liberado;
@@ -466,6 +446,45 @@
         </form>
         {% endif %}
         {% endif %}
+        {% comment %}
+        Lo que se usa menos -- agregar un embarque, mover el dia, el camion
+        compartido -- va en el menu ⋯ para que el encabezado no crezca.
+        {% endcomment %}
+        <details class="tarea-mas">
+          <summary class="btn btn-sm" title="{% trans "More actions" %}">⋯ {% trans "More" %}</summary>
+          <div class="tarea-mas-caja">
+        {% if not es_cliente %}
+        {% if t.camion %}{% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
+        <form method="post" action="{% url 'cruce_camion_salir' t.pk %}" style="margin:0"
+              data-aviso="{% blocktrans with c=t.camion.custom_id %}Take this crossing out of truck {{ c }}?{% endblocktrans %}"
+              onsubmit="return confirm(this.dataset.aviso)">
+          {% csrf_token %}
+          <button class="btn btn-sm" type="submit">🚚 {% trans "Leave the truck" %}</button>
+        </form>
+        {% endif %}{% elif t.candidatas_camion %}
+        <details class="camion-juntar">
+          <summary class="btn btn-sm">🚚 {% trans "Share a truck with…" %}</summary>
+          <form method="post" action="{% url 'cruce_camion_juntar' t.pk %}" class="camion-form">
+            {% csrf_token %}
+            <label class="campo"><span>{% trans "Crossings of the same day" %}</span>
+              <select name="otra" required>
+                {% for o in t.candidatas_camion %}
+                <option value="{{ o.pk }}">{{ o.customer.abbreviation|default:o.customer.name }} · {{ o.custom_id }}{% if o.camion %} · 🚚 {{ o.camion.custom_id }}{% endif %}</option>
+                {% endfor %}
+              </select></label>
+            <button class="btn btn-sm btn-p" type="submit">{% trans "Put them in the same truck" %}</button>
+          </form>
+        </details>
+        {% endif %}
+        {% endif %}
+        {% if t.libres %}
+        <button class="btn btn-sm btn-p" type="button" aria-expanded="false"
+                onclick="abrirPanelDeTarea(this, 'meter-{{ t.pk }}')">+ {% trans "Add shipment" %}</button>
+        {% endif %}
+        <button class="btn btn-sm" type="button" aria-expanded="false"
+                onclick="abrirPanelDeTarea(this, 'dia-{{ t.pk }}')">&#128197; {% trans "Move the day" %}</button>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -578,7 +597,7 @@
     </div>
     {% endif %}
 
-    {% if t.con_pedimento_armado and not es_cliente %}
+    {% if t.hay_que_mandar and not es_cliente %}
     <div class="ped-ayuda">👉 {% trans "Tap Go in to upload the pedimento documents and send it to the customer for review." %}</div>
     {% endif %}
     <table>
@@ -832,34 +851,31 @@
       {% endcomment %}
       <div class="papel">
         <h4>{% trans "Picking list" %}</h4>
-        <div class="soft" style="font-size:11px;margin-bottom:6px">
-          {% trans "It does not cover goods. Print it whenever you need it." %}
-        </div>
-        <a class="btn btn-sm" href="{% url 'lista_de_preparacion_pdf' t.pk %}"
-           target="_blank">↓ {% trans "Print" %}</a>
+        <div class="det">{% trans "Does not cover goods" %}</div>
+        <div class="papel-acc"><a class="btn btn-sm" href="{% url 'lista_de_preparacion_pdf' t.pk %}"
+           target="_blank" title="{% trans "It does not cover goods. Print it whenever you need it." %}">🖨 {% trans "Print" %}</a></div>
       </div>
 
       <div class="papel">
         <h4>{% trans "Load order" %}</h4>
         {% if t.orden %}
-          <div class="mono" style="font-size:15px;font-weight:600">
-            {{ t.orden.custom_id }} <span class="soft">v{{ t.orden.version }}</span>
-          </div>
-          <div class="soft" style="font-size:11px">
+          <div class="val">{{ t.orden.custom_id }} <span class="soft">v{{ t.orden.version }}</span></div>
+          <div class="det">
             {% trans "issued" %} {{ t.orden.emitida_en|date:"d/m H:i" }}
             {% if t.orden.emitida_por %} · {{ t.orden.emitida_por.username }}{% endif %}
             {% if t.orden.version > 1 %}
             <br>{% blocktrans count n=t.orden.version %}version {{ n }}{% plural %}version {{ n }} — the earlier ones are obsolete{% endblocktrans %}
             {% endif %}
           </div>
-          <a class="btn btn-sm" style="margin-top:8px;display:inline-block"
-             href="{% url 'orden_de_carga_pdf' t.pk %}" target="_blank">↓ {% trans "Print" %}</a>
+          <div class="papel-acc">
+          <a class="btn btn-sm" href="{% url 'orden_de_carga_pdf' t.pk %}" target="_blank">🖨 {% trans "Print" %}</a>
           {% if not es_cliente %}
-          <form method="post" action="{% url 'orden_emitir' t.pk %}" style="margin-top:6px">
+          <form method="post" action="{% url 'orden_emitir' t.pk %}">
             {% csrf_token %}
-            <button class="btn btn-sm" type="submit">{% trans "Re-issue (new version)" %}</button>
+            <button class="btn btn-sm" type="submit" title="{% trans "Re-issue (new version)" %}">↻ {% trans "New version" %}</button>
           </form>
           {% endif %}
+          </div>
         {% elif t.faltan_para_orden %}
           {% comment %}
           Atenuado con el motivo escrito al lado. Si alguien de oficina pide
@@ -881,13 +897,11 @@
       <div class="papel">
         <h4>{% trans "Load check" %}</h4>
         {% if t.orden %}
-          <div style="font-size:15px;font-weight:600"
-               class="{% if t.cuadre.cuadra %}ok{% else %}mal{% endif %}">
+          <div class="val {% if t.cuadre.cuadra %}ok{% else %}mal{% endif %}">
             {{ t.cuadre.verificados }} / {{ t.cuadre.esperados }}
           </div>
-          <div class="soft" style="font-size:11px">{% trans "bundles scanned one by one" %}</div>
-          <a class="btn btn-sm" style="margin-top:8px;display:inline-block"
-             href="{% url 'carga_verificar' t.pk %}">{% trans "Scan" %}</a>
+          <div class="det">{% trans "bundles scanned one by one" %}</div>
+          <div class="papel-acc"><a class="btn btn-sm" href="{% url 'carga_verificar' t.pk %}">▦ {% trans "Scan" %}</a></div>
         {% else %}
           <div class="soft" style="font-size:12px">{% trans "there is nothing to check against yet" %}</div>
         {% endif %}
@@ -902,8 +916,8 @@
         {% endcomment %}
         {% for rem in t.remisiones_vigentes %}
           <div class="rem-item">
-            <div class="mono" style="font-size:15px;font-weight:600">{{ rem.custom_id }}</div>
-            <div class="soft" style="font-size:11px">
+            <div class="val">{{ rem.custom_id }}</div>
+            <div class="det">
               {% for p in rem.pedimentos_que_lleva %}{{ p|default:_("no pedimento") }}{% if not forloop.last %}, {% endif %}{% endfor %}
               · {{ rem.total_bultos }} {% trans "bdl" %}
               {% if rem.linea_de_enlace %}<br>→ {{ rem.linea_de_enlace }}{% endif %}
@@ -912,8 +926,7 @@
               <br><span class="mal">{% trans "ISSUED WITH A DIFFERENCE" %}</span>
               {% endif %}
             </div>
-            <a class="btn btn-sm" style="margin-top:6px;display:inline-block"
-               href="{% url 'remision_pdf' rem.pk %}" target="_blank">↓ {% trans "Print" %}</a>
+            <div class="papel-acc"><a class="btn btn-sm" href="{% url 'remision_pdf' rem.pk %}" target="_blank">🖨 {% trans "Print" %}</a></div>
           </div>
         {% endfor %}
         {% if not t.orden %}
