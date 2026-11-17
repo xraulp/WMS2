@@ -1723,3 +1723,103 @@ class LaHojaDeImpuestosSeParteConElMenosATests(BaseDeCruces):
         self.sacar(valor_usd='300')
         a = WarehouseOperation.objects.get(custom_id='ED261111-0901-A')
         self.assertFalse(a.documents.exists())
+
+
+class VariosClientesDesdeOperacionesTests(BaseDeCruces):
+    """
+    Lo seleccionado en Operaciones puede ser de varios clientes: sale un
+    cruce por cliente, todos el mismo dia, de un solo envio.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.otro = Catalog.objects.create(category='CUSTOMER', name='Aceros Norte',
+                                           tenant=self.tenant)
+        self.a = self.operacion('ED261101-0001', bundle_qty=5, po_order='PO-A')
+        self.b = self.operacion('ED261101-0002', bundle_qty=3, po_order='PO-B')
+        self.c = self.operacion('ED261101-0003', bundle_qty=2, po_order='PO-C')
+        self.c.customer = self.otro
+        self.c.save()
+
+    def test_la_pantalla_agrupa_por_cliente(self):
+        respuesta = self.client.get('/cruces/mark/', {
+            'ops': '%d,%d,%d' % (self.a.pk, self.b.pk, self.c.pk),
+            'desde': 'OPERACIONES'})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(respuesta.context['varios'])
+        grupos = {g['cliente'].pk: {op.pk for op in g['libres']}
+                  for g in respuesta.context['grupos']}
+        self.assertEqual(grupos, {self.cliente.pk: {self.a.pk, self.b.pk},
+                                  self.otro.pk: {self.c.pk}})
+        self.assertContains(respuesta, 'name="varios" value="1"')
+        self.assertContains(respuesta, 'Aceros Norte')
+        self.assertContains(respuesta, 'Ferreteria Lopez')
+
+    def test_crea_un_cruce_por_cliente(self):
+        respuesta = self.client.post('/cruces/mark/', {
+            'varios': '1', 'fecha_de_cruce': str(self.viernes),
+            'ops': [self.a.pk, self.b.pk, self.c.pk],
+            'bultos_%d' % self.a.pk: '4', 'desde': 'OPERACIONES'})
+        self.assertEqual(respuesta.status_code, 302)
+        tareas = CrossingTask.objects.order_by('customer__name')
+        self.assertEqual(tareas.count(), 2)
+        norte, lopez = tareas
+        self.assertEqual(norte.customer, self.otro)
+        self.assertEqual(lopez.customer, self.cliente)
+        self.assertEqual(set(norte.renglones.values_list('operation_id', flat=True)),
+                         {self.c.pk})
+        self.assertEqual(set(lopez.renglones.values_list('operation_id', flat=True)),
+                         {self.a.pk, self.b.pk})
+        self.assertEqual(lopez.renglones.get(operation=self.a).bultos, 4)
+        for t in tareas:
+            self.assertEqual(t.fecha_de_cruce, self.viernes)
+            self.assertEqual(t.origen, CrossingTask.LA_CREO_LA_CASA)
+            self.assertFalse(t.confirmada_por_el_cliente)
+
+    def test_todo_o_nada(self):
+        # Uno de los de Aceros Norte ya va en otro cruce: no se crea ninguno.
+        CrossingTaskItem.objects.create(task=self.tarea(customer=self.otro),
+                                        operation=self.c)
+        respuesta = self.client.post('/cruces/mark/', {
+            'varios': '1', 'fecha_de_cruce': str(self.viernes),
+            'ops': [self.a.pk, self.c.pk]})
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertEqual(CrossingTask.objects.count(), 1)
+
+    def test_sin_dia_no_crea_nada(self):
+        respuesta = self.client.post('/cruces/mark/', {
+            'varios': '1', 'ops': [self.a.pk, self.c.pk]})
+        self.assertEqual(respuesta.status_code, 422)
+        self.assertEqual(CrossingTask.objects.count(), 0)
+
+    def test_el_cliente_no_usa_varios(self):
+        # El cliente solo arma lo suyo: lo de otro cliente no entra.
+        self.client.force_login(self.duenio)
+        self.client.post('/cruces/mark/', {
+            'varios': '1', 'fecha_de_cruce': str(self.viernes),
+            'ops': [self.a.pk, self.c.pk]})
+        self.assertFalse(CrossingTask.objects.filter(customer=self.otro).exists())
+
+
+class CandadoEnOperacionesTests(BaseDeCruces):
+    """La casilla de Operaciones no deja marcar lo que no puede ir a cruce."""
+
+    def test_lo_que_va_en_cruce_o_ya_salio_lleva_candado(self):
+        libre = self.operacion('ED261102-0001', bundle_qty=1)
+        en_cruce = self.operacion('ED261102-0002', bundle_qty=1)
+        salio = self.operacion('ED261102-0003', bundle_qty=1, entry_dispatched='SD261102-0001')
+        t = self.tarea()
+        CrossingTaskItem.objects.create(task=t, operation=en_cruce)
+        respuesta = self.client.get('/dashboard/')
+        self.assertContains(respuesta, 'name="op_sel" value="%d"' % libre.pk)
+        self.assertNotContains(respuesta, 'name="op_sel" value="%d"' % en_cruce.pk)
+        self.assertNotContains(respuesta, 'name="op_sel" value="%d"' % salio.pk)
+        self.assertContains(respuesta, 'Already in crossing %s' % t.custom_id)
+        self.assertContains(respuesta, 'It already left the warehouse')
+
+    def test_un_cruce_cancelado_suelta_el_candado(self):
+        op = self.operacion('ED261102-0004', bundle_qty=1)
+        t = self.tarea(estado=CrossingTask.CANCELADA)
+        CrossingTaskItem.objects.create(task=t, operation=op)
+        respuesta = self.client.get('/dashboard/')
+        self.assertContains(respuesta, 'name="op_sel" value="%d"' % op.pk)

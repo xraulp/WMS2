@@ -352,7 +352,8 @@ class IndicadorEnElListadoTests(HiloBase):
             self._escribir(self.usuario_a, op, f'Mensaje {i}')
 
         muchas = list(WarehouseOperation.objects.filter(tenant=self.tenant))
-        with self.assertNumQueries(2):
+        # Tres fijas: hilos, mensajes sin leer y el candado de cruce.
+        with self.assertNumQueries(3):
             anotadas = anotar_hilos(self.staff, muchas)
 
         self.assertEqual(sum(op.sin_leer for op in anotadas), 6)

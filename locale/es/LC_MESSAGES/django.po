@@ -4477,3 +4477,32 @@ msgstr[1] "Embarques a mandar"
 
 msgid "None of the selected shipments can cross."
 msgstr "Ninguno de los embarques seleccionados puede cruzar."
+
+msgid "Already in crossing %(t)s"
+msgstr "Ya va en el cruce %(t)s"
+
+msgid "It is not a warehouse entry: it cannot cross"
+msgstr "No es una entrada a bodega: no puede cruzar"
+
+msgid "It already left the warehouse"
+msgstr "Ya salió de bodega"
+
+msgid "has no customer"
+msgstr "no tiene cliente"
+
+msgid "%(op)s has no customer."
+msgstr "%(op)s no tiene cliente."
+
+msgid "%(n)s customer"
+msgid_plural "%(n)s customers"
+msgstr[0] "%(n)s cliente"
+msgstr[1] "%(n)s clientes"
+
+msgid "one crossing for each"
+msgstr "un cruce para cada uno"
+
+msgid "A separate crossing is created for each customer, all on this day. Each customer will be asked to confirm theirs."
+msgstr "Se crea un cruce aparte para cada cliente, todos en este día. A cada cliente se le pedirá confirmar el suyo."
+
+msgid "crossings"
+msgstr "cruces"

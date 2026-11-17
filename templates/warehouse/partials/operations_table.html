@@ -145,8 +145,13 @@ donde se elige el dia y donde se dice lo que no puede ir y por que.
         <tr style="background:{% cycle 'var(--surface)' 'var(--bg-sutil)' %};">
           <td style="color:var(--faint); font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">
             {% if profile %}
+            {% if op.candado %}
+            <span class="op-candado" title="{{ op.candado }}" aria-label="{{ op.candado }}"
+                  style="display:inline-block;width:13px;text-align:center;vertical-align:middle;cursor:help;opacity:.75">&#128274;</span>
+            {% else %}
             <input type="checkbox" name="op_sel" value="{{ op.pk }}"
                    title="{% trans "Select" %}" style="vertical-align:middle">
+            {% endif %}
             {% endif %}
             {{ op.pk }}</td>
           <td style="white-space:nowrap; text-align:center;">

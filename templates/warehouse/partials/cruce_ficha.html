@@ -1,0 +1,33 @@
+{% load i18n %}
+      <label class="emb{% if op.marcado %} on{% endif %}"
+             data-buscar="{{ op.po_order|lower }} {{ op.custom_id|lower }} {{ op.get_shipper_display|lower }} {{ op.invoice|lower }} {{ op.description|lower }}"
+             data-bultos="{{ op.bundle_qty|default:0 }}"{% if cliente_pk %} data-cliente="{{ cliente_pk }}"{% endif %}>
+        <input type="checkbox" name="ops" value="{{ op.pk }}"{% if op.marcado %} checked{% endif %}>
+        <span class="emb-cuerpo">
+          {% comment %}
+          El numero de pedido va primero y grande: es el dato con el que el
+          cliente reconoce su mercancia. El folio interno va despues.
+          {% endcomment %}
+          <span class="emb-po">{{ op.po_order|default:"—" }}</span>
+          <span class="emb-sub" style="display:block">
+            <span class="mono">{{ op.custom_id }}</span>
+            · {{ op.bundle_qty|default:"?" }}
+            {% if op.get_bundle_type_display_name != '—' %}{{ op.get_bundle_type_display_name }}{% else %}{% trans "bundles" %}{% endif %}
+            {% if op.get_shipper_display != '—' %}· {{ op.get_shipper_display|truncatechars:28 }}{% endif %}
+            <br>
+            {% trans "in the warehouse since" %} {{ op.date|date:"d/m" }}
+            {% if op.pedimento %}<span class="chip chip-ok">{% trans "pedimento" %} {{ op.pedimento|truncatechars:22 }}</span>{% endif %}
+          </span>
+          {% comment %}
+          Cuantos bultos van. Vacio son todos, que es el caso normal; el numero
+          se teclea para el caso de los 19 de 20.
+          {% endcomment %}
+          <span class="emb-bultos">
+            <input type="number" name="bultos_{{ op.pk }}" min="1"
+                   {% if op.bundle_qty %}max="{{ op.bundle_qty }}"{% endif %}
+                   value="{{ op.bultos_pedidos }}" placeholder="{{ op.bundle_qty|default:'—' }}"
+                   inputmode="numeric" onclick="event.stopPropagation()">
+            <span class="soft">{% trans "bundles go (blank = all)" %}</span>
+          </span>
+        </span>
+      </label>
