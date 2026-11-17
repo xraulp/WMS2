@@ -149,6 +149,16 @@
        color:var(--soft);padding:7px 12px;border-bottom:1px solid var(--bdr);
        background:var(--bg-sutil);white-space:nowrap}
     td{padding:8px 12px;font-size:13px;border-bottom:1px solid var(--bg)}
+    /* Diez columnas en 1000 px: con 12 px por lado la tabla salia mas ancha
+       que la tarjeta, y como la tarjeta corta lo que sobra, el boton
+       Modificar quedaba en "Mod". Menos aire entre columnas, y la ultima
+       columna nunca se encoge. */
+    @media (min-width:701px){
+      .tarea th, .tarea td{padding-left:7px;padding-right:7px}
+      .tarea th:first-child, .tarea td:first-child{padding-left:12px}
+      .tarea th:last-child, .tarea td:last-child{padding-right:12px}
+      .td-agregado{min-width:70px}
+    }
     .importe{text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap}
     tfoot td{font-weight:600;border-top:1px solid var(--bdr);border-bottom:none}
     /* Un renglon por pedimento: sus entradas y pedidos, uno debajo del otro. */
@@ -669,7 +679,7 @@
           <td data-etq="{% trans "Approx. taxes" %}" class="importe">
             {% if g.impuesto %}${{ g.impuesto|pesos }}{% else %}<span class="soft">—</span>{% endif %}
           </td>
-          <td data-etq="{% trans "Added" %}" class="soft" style="font-size:11px">
+          <td data-etq="{% trans "Added" %}" class="soft td-agregado" style="font-size:11px">
             {{ g.ultima.added_by.username|default:"—" }} · {{ g.ultima.added_at|date:"d/m H:i" }}
             {% for r in g.filas %}{% if r.motivo %}<br>{{ r.motivo }}{% endif %}{% endfor %}
           </td>
