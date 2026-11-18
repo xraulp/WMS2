@@ -446,10 +446,8 @@ class LaHojaTraeLoQueElExcelTraeTests(BaseDeLaHoja):
 
 class LaHojaSeCierraSolaTests(BaseDeLaHoja):
     """
-    Lo que ya cruzo y esta pagado deja de salir en la hoja.
-
-    Las dos cosas hacen falta. Un pedimento pagado cuya mercancia sigue en
-    bodega es justo lo que el cliente quiere ver, asi que ese se queda.
+    Lo que ya tiene el pedimento pagado deja de salir en la hoja, haya cruzado
+    o no: la hoja es para lo que falta pagar.
     """
 
     def pedimento_pagado(self, operacion):
@@ -483,13 +481,23 @@ class LaHojaSeCierraSolaTests(BaseDeLaHoja):
         self.assertFalse(self.r.en_la_hoja)
         self.assertIsNotNone(self.r.cerrado_en)
 
-    def test_pagado_pero_sin_cruzar_se_queda(self):
+    def test_pagado_sin_cruzar_tambien_sale(self):
         self.pedimento_pagado(self.op)
         self.client.force_login(self.jefa)
         respuesta = self.client.get('/impuestos/', {'customer': self.cliente.pk})
-        self.assertEqual(len(respuesta.context['renglones']), 1)
+        self.assertEqual(list(respuesta.context['renglones']), [])
         self.r.refresh_from_db()
-        self.assertTrue(self.r.en_la_hoja)
+        self.assertFalse(self.r.en_la_hoja)
+        self.assertIsNotNone(self.r.cerrado_en)
+
+    def test_validado_pero_sin_pagar_se_queda(self):
+        from .models import Pedimento
+        ped = self.pedimento_pagado(self.op)
+        ped.estado = Pedimento.VALIDADO
+        ped.save(update_fields=['estado'])
+        self.client.force_login(self.jefa)
+        respuesta = self.client.get('/impuestos/', {'customer': self.cliente.pk})
+        self.assertEqual(len(respuesta.context['renglones']), 1)
 
     def test_cruzado_pero_sin_pagar_se_queda(self):
         self.cruce_cruzado(self.op)
@@ -514,24 +522,33 @@ class LaHojaSeCierraSolaTests(BaseDeLaHoja):
         respuesta = self.client.get('/impuestos/', {'customer': self.cliente.pk})
         self.assertEqual(respuesta.context['total'], Decimal('0'))
 
-    def test_se_puede_devolver_y_no_se_vuelve_a_cerrar_sin_motivo(self):
+    def test_devuelto_a_mano_se_queda_aunque_este_pagado(self):
         self.pedimento_pagado(self.op)
-        cruce = self.cruce_cruzado(self.op)
         self.client.force_login(self.jefa)
         self.client.get('/impuestos/', {'customer': self.cliente.pk})
-
-        # Se cancela el cruce: el embarque ya no esta cruzado, asi que al
-        # devolverlo a la hoja tiene que quedarse.
-        from .models import CrossingTask
-        cruce.estado = CrossingTask.CANCELADA
-        cruce.save(update_fields=['estado'])
 
         self.client.post('/impuestos/%d/restore/' % self.r.pk)
         self.r.refresh_from_db()
         self.assertTrue(self.r.en_la_hoja)
-        self.assertIsNone(self.r.cerrado_en)
         respuesta = self.client.get('/impuestos/', {'customer': self.cliente.pk})
         self.assertEqual(len(respuesta.context['renglones']), 1)
+
+    def test_devuelto_sin_pagar_se_cierra_al_pagarse(self):
+        from .models import Pedimento
+        ped = self.pedimento_pagado(self.op)
+        self.client.force_login(self.jefa)
+        self.client.get('/impuestos/', {'customer': self.cliente.pk})
+        # El pago se deshace (se corrigio el pedimento) y se devuelve.
+        ped.estado = Pedimento.VALIDADO
+        ped.save(update_fields=['estado'])
+        self.client.post('/impuestos/%d/restore/' % self.r.pk)
+        self.r.refresh_from_db()
+        self.assertIsNone(self.r.cerrado_en)
+        # Cuando se paga, sale solo otra vez.
+        ped.estado = Pedimento.PAGADO
+        ped.save(update_fields=['estado'])
+        respuesta = self.client.get('/impuestos/', {'customer': self.cliente.pk})
+        self.assertEqual(list(respuesta.context['renglones']), [])
 
     def test_el_pdf_tampoco_lleva_lo_cerrado(self):
         self.pedimento_pagado(self.op)

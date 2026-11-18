@@ -3391,15 +3391,15 @@ class RenglonDeImpuestos(models.Model):
         """
         Si este embarque ya no tiene nada que hacer en la hoja.
 
-        Las dos cosas a la vez: el pedimento pagado y la mercancia cruzada. Con
-        una sola no basta -- un pedimento pagado cuya mercancia sigue en bodega
-        es justo lo que el cliente quiere ver --, y por eso se comprueban las
-        dos.
+        La hoja contesta "cuanto vas a pagar"; con el pedimento pagado esa
+        pregunta ya no existe, y el renglon sale aunque la mercancia siga en
+        bodega -- lo que falte de ella se sigue en Operaciones y en Cruces.
+
+        Pagado de verdad: un pedimento validado todavia no se ha pagado, y
+        hasta entonces se queda.
         """
-        if self.status != self.PAGADO or self.operation_id is None:
-            return False
-        return self.operation.cruces.filter(
-            task__estado=CrossingTask.CRUZADA).exists()
+        ped = self.pedimento
+        return ped is not None and ped.estado == Pedimento.PAGADO
 
     @property
     def la_pelota_es_del_cliente(self):

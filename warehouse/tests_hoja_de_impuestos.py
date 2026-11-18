@@ -376,7 +376,8 @@ class MandarACruceDesdeLaHojaTests(BaseDeAlmacen):
 
     La hoja es donde se ve que un embarque ya esta listo, asi que el boton
     lleva a la pantalla de marcar con esos ya marcados: el pedimento aprobado
-    o pagado, y sin otro cruce. Los demas no, para no llegar con avisos de
+    y sin otro cruce. El pagado ya no esta en la hoja (sale solo al pagarse):
+    ese se manda desde Operaciones. Los demas no, para no llegar con avisos de
     "ya va en otro cruce" o con embarques que todavia no pueden salir.
     """
 
@@ -417,12 +418,12 @@ class MandarACruceDesdeLaHojaTests(BaseDeAlmacen):
         self.assertEqual(datos['desde'], ['IMPUESTOS'])
         self.assertEqual(datos['customer'], [str(self.cliente.pk)])
         marcados = {int(p) for p in datos['ops'][0].split(',')}
-        self.assertEqual(marcados, {self.ops['aprobado'].pk, self.ops['pagado'].pk})
+        self.assertEqual(marcados, {self.ops['aprobado'].pk})
 
     def test_la_otra_pantalla_llega_con_ellos_marcados(self):
         respuesta = self.client.get(self.enlace())
         marcados = {op.pk for op in respuesta.context['libres'] if op.marcado}
-        self.assertEqual(marcados, {self.ops['aprobado'].pk, self.ops['pagado'].pk})
+        self.assertEqual(marcados, {self.ops['aprobado'].pk})
         # Y sin avisos de "no puede ir": lo que no podia ir no se mando.
         self.assertEqual(respuesta.context['fuera'], [])
 

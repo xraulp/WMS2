@@ -6076,7 +6076,7 @@ def operaciones_a_impuestos(request):
 
 def _cerrar_los_que_ya_terminaron(renglones):
     """
-    Saca de la hoja los embarques que ya cruzaron y estan pagados.
+    Saca de la hoja los embarques cuyo pedimento ya esta pagado.
 
     Se hace al leer la hoja y no al ocurrir el pago o el cruce porque asi no
     depende de que alguien pase por la pantalla correcta: cualquiera que abra
@@ -6089,7 +6089,9 @@ def _cerrar_los_que_ya_terminaron(renglones):
     siguen = []
     cerrados = []
     for r in renglones:
-        if r.ya_termino:
+        # Con `cerrado_en` puesto y en la hoja es que alguien lo devolvio a
+        # mano despues de cerrarse: se respeta y no se vuelve a sacar.
+        if r.cerrado_en is None and r.ya_termino:
             r.en_la_hoja = False
             r.cerrado_en = ahora
             cerrados.append(r)
@@ -6580,9 +6582,12 @@ def renglon_devolver(request, pk):
     renglon.en_la_hoja  = True
     renglon.quitado_en  = None
     renglon.quitado_por = None
-    # Tambien la marca de cierre: sin esto, el renglon vuelve a la hoja y el
-    # siguiente que la abra lo cierra otra vez, y el boton parece roto.
-    renglon.cerrado_en  = None
+    # Si ya esta pagado, la marca de cierre se queda (o se pone): es la que
+    # dice "esto se devolvio a proposito", y sin ella el siguiente que abra la
+    # hoja lo sacaria otra vez y el boton pareceria roto. Si no esta pagado,
+    # se limpia y el renglon vuelve a cerrarse solo cuando se pague.
+    renglon.cerrado_en  = ((renglon.cerrado_en or timezone.now())
+                           if renglon.ya_termino else None)
     renglon.save(update_fields=['en_la_hoja', 'quitado_en', 'quitado_por',
                                 'cerrado_en', 'updated_at'])
     return redirect(f"{reverse('impuestos_panel')}?customer={renglon.customer_id}")
