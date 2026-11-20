@@ -205,18 +205,31 @@
         <label class="lbl" for="motivo-in" style="padding:0;border:none">{% trans "The load order is already out: why do these go in?" %}</label>
         <input type="text" id="motivo-in" name="motivo" value="{{ motivo_pedido }}" style="width:100%">
       </div>
-      {% if varios %}
+      {% if varios or solo and libres|length > 1 %}
+      {% comment %}
+      Como se reparten en tareas. Con un cliente: una por pedimento o todas
+      juntas. Con varios, ademas, todas en un camion compartido.
+      {% endcomment %}
       <p class="ct" style="margin:14px 0 6px">3 · {% trans "How do they cross?" %}</p>
       <label>
-        <input type="radio" name="modo" value="individual"{% if modo != 'consolidado' %} checked{% endif %}>
-        <span><b>{% trans "Individual crossings" %}</b>
-          <span class="soft" style="display:block;font-size:12px">{% trans "One crossing for each customer, each on its own." %}</span></span>
+        <input type="radio" name="modo" value="pedimento"{% if modo == 'pedimento' %} checked{% endif %}>
+        <span><b>{% trans "Individual" %}</b>
+          <span class="soft" style="display:block;font-size:12px">{% trans "One crossing for each pedimento: each one crosses on its own." %}</span></span>
       </label>
       <label>
-        <input type="radio" name="modo" value="consolidado"{% if modo == 'consolidado' %} checked{% endif %}>
-        <span><b>🚚 {% trans "Consolidated (shared truck)" %}</b>
+        <input type="radio" name="modo" value="cliente"{% if modo != 'pedimento' and modo != 'camion' %} checked{% endif %}>
+        <span><b>{% if varios %}{% trans "Consolidated per customer" %}{% else %}{% trans "Consolidated" %}{% endif %}</b>
+          <span class="soft" style="display:block;font-size:12px">{% if varios %}{% trans "One crossing for each customer, with all of its pedimentos." %}{% else %}{% trans "A single crossing with all the pedimentos." %}{% endif %}</span></span>
+      </label>
+      {% if varios %}
+      <label>
+        <input type="radio" name="modo" value="camion"{% if modo == 'camion' %} checked{% endif %}>
+        <span><b>🚚 {% trans "Consolidated of several customers" %}</b>
           <span class="soft" style="display:block;font-size:12px">{% trans "One crossing for each customer, all together in one shared truck (TCC). The customers never see it." %}</span></span>
       </label>
+      {% endif %}
+      {% endif %}
+      {% if varios %}
       <p class="soft" style="font-size:12px;margin:10px 0 0">
         {% trans "A separate crossing is created for each customer, all on this day. Each customer will be asked to confirm theirs." %}
       </p>
@@ -228,7 +241,7 @@
     </div>
 
     <div class="pie">
-      <span class="pie-cuenta"><b id="n-marcados">0</b> {% trans "marked" %} · <span id="n-bultos">0</span> {% trans "bundles" %}{% if varios %} · <span id="n-cruces">0</span> {% trans "crossings" %}{% endif %}</span>
+      <span class="pie-cuenta"><b id="n-marcados">0</b> {% trans "marked" %} · <span id="n-bultos">0</span> {% trans "bundles" %}{% if varios %}<span id="pie-cruces"> · <span id="n-cruces">0</span> {% trans "crossings" %}</span>{% endif %}</span>
       <button class="btn btn-p" type="submit" id="enviar" disabled>{% trans "Send to crossing" %}</button>
     </div>
     {% endif %}
@@ -257,6 +270,10 @@
     document.getElementById('n-bultos').textContent = b;
     var nc = document.getElementById('n-cruces');
     if (nc) nc.textContent = Object.keys(clientes).length;
+    // Una por pedimento: cuantas salen no se sabe aqui, asi que no se dice.
+    var pc = document.getElementById('pie-cruces');
+    var modo = form.querySelector('input[name=modo]:checked');
+    if (pc) pc.hidden = !!modo && modo.value === 'pedimento';
     document.getElementById('enviar').disabled = n === 0;
   }
 

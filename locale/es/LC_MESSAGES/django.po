@@ -4527,3 +4527,27 @@ msgstr "Consolidado (camión compartido)"
 
 msgid "One crossing for each customer, all together in one shared truck (TCC). The customers never see it."
 msgstr "Un cruce para cada cliente, todos juntos en un camión compartido (TCC). Los clientes no lo ven."
+
+msgid "Individual"
+msgstr "Individual"
+
+msgid "One crossing for each pedimento: each one crosses on its own."
+msgstr "Un cruce por cada pedimento: cada uno cruza por su lado."
+
+msgid "Consolidated per customer"
+msgstr "Consolidado por cliente"
+
+msgid "Consolidated"
+msgstr "Consolidado"
+
+msgid "One crossing for each customer, with all of its pedimentos."
+msgstr "Un cruce para cada cliente, con todos sus pedimentos."
+
+msgid "A single crossing with all the pedimentos."
+msgstr "Un solo cruce con todos los pedimentos."
+
+msgid "Consolidated of several customers"
+msgstr "Consolidado de varios clientes"
+
+msgid "Choose from the file"
+msgstr "Elegir del expediente"

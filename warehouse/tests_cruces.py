@@ -691,7 +691,7 @@ class AvisoDeCrucePorConfirmarTests(BaseDeCruces):
         self.assertEqual(self.bitacora().get().status, 'SENT')
 
     def test_el_correo_en_mayusculas_sale_en_minusculas(self):
-        # Resend en modo de prueba rechazo RAULDELUNAXP@GMAIL.COM.
+        # Resend en modo de prueba rechazo un correo capturado en mayusculas.
         from django.core import mail
         from .models import Catalog
         Catalog.objects.filter(pk=self.cliente.pk).update(
@@ -1830,23 +1830,57 @@ class VariosClientesDesdeOperacionesTests(BaseDeCruces):
             self.assertEqual(t.origen, CrossingTask.LA_CREO_LA_CASA)
             self.assertFalse(t.confirmada_por_el_cliente)
 
-    def test_la_pantalla_pregunta_individual_o_consolidado(self):
+    def test_la_pantalla_pregunta_como_cruzan(self):
         respuesta = self.client.get('/cruces/mark/', {
             'ops': '%d,%d' % (self.a.pk, self.c.pk), 'desde': 'OPERACIONES'})
-        self.assertContains(respuesta, 'name="modo" value="individual" checked')
-        self.assertContains(respuesta, 'name="modo" value="consolidado"')
+        self.assertContains(respuesta, 'name="modo" value="pedimento"')
+        self.assertContains(respuesta, 'name="modo" value="cliente" checked')
+        self.assertContains(respuesta, 'name="modo" value="camion"')
 
-    def test_individual_no_crea_camion(self):
-        self.client.post('/cruces/mark/', {
-            'varios': '1', 'modo': 'individual', 'fecha_de_cruce': str(self.viernes),
-            'ops': [self.a.pk, self.c.pk]})
+    def armar(self, modo, ops):
+        return self.client.post('/cruces/mark/', {
+            'varios': '1', 'modo': modo, 'fecha_de_cruce': str(self.viernes),
+            'ops': ops})
+
+    def test_por_cliente_no_crea_camion(self):
+        self.armar('cliente', [self.a.pk, self.b.pk, self.c.pk])
         self.assertEqual(CrossingTask.objects.count(), 2)
         self.assertFalse(Camion.objects.exists())
 
-    def test_consolidado_los_junta_en_un_camion(self):
-        respuesta = self.client.post('/cruces/mark/', {
-            'varios': '1', 'modo': 'consolidado', 'fecha_de_cruce': str(self.viernes),
-            'ops': [self.a.pk, self.b.pk, self.c.pk]})
+    def test_por_pedimento_una_tarea_por_pedimento(self):
+        # a y b comparten pedimento; c va sin pedimento: sale sola.
+        ped = self.con_pedimento(self.a)
+        PedimentoBundle.objects.create(pedimento=ped, operation=self.b, bultos=1)
+        otro = self.operacion('ED261101-0004', bundle_qty=1)
+        self.con_pedimento(otro, consecutivo='6005001')
+        self.armar('pedimento', [self.a.pk, self.b.pk, self.c.pk, otro.pk])
+        self.assertEqual(CrossingTask.objects.count(), 3)
+        juntos = CrossingTask.objects.get(renglones__operation=self.a)
+        self.assertEqual(set(juntos.renglones.values_list('operation_id', flat=True)),
+                         {self.a.pk, self.b.pk})
+        self.assertFalse(Camion.objects.exists())
+
+    def test_por_pedimento_con_un_solo_cliente(self):
+        self.con_pedimento(self.a)
+        self.con_pedimento(self.b, consecutivo='6005001')
+        r = self.client.post('/cruces/mark/', {
+            'customer': self.cliente.pk, 'solo': '1', 'tarea': '0',
+            'modo': 'pedimento', 'fecha_de_cruce': str(self.viernes),
+            'ops': [self.a.pk, self.b.pk]})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(CrossingTask.objects.filter(customer=self.cliente).count(), 2)
+
+    def test_un_solo_cliente_por_defecto_una_tarea(self):
+        self.con_pedimento(self.a)
+        self.con_pedimento(self.b, consecutivo='6005001')
+        self.client.post('/cruces/mark/', {
+            'customer': self.cliente.pk, 'solo': '1', 'tarea': '0',
+            'modo': 'cliente', 'fecha_de_cruce': str(self.viernes),
+            'ops': [self.a.pk, self.b.pk]})
+        self.assertEqual(CrossingTask.objects.filter(customer=self.cliente).count(), 1)
+
+    def test_camion_los_junta_en_un_tcc(self):
+        respuesta = self.armar('camion', [self.a.pk, self.b.pk, self.c.pk])
         camion = Camion.objects.get()
         self.assertTrue(camion.custom_id.startswith('TCC'))
         self.assertEqual(camion.fecha_de_cruce, self.viernes)
@@ -1855,12 +1889,10 @@ class VariosClientesDesdeOperacionesTests(BaseDeCruces):
         self.assertRedirects(respuesta, '/cruces/#camion-%d' % camion.pk,
                              fetch_redirect_response=False)
 
-    def test_consolidado_que_falla_no_deja_camion(self):
+    def test_camion_que_falla_no_deja_camion(self):
         CrossingTaskItem.objects.create(task=self.tarea(customer=self.otro),
                                         operation=self.c)
-        self.client.post('/cruces/mark/', {
-            'varios': '1', 'modo': 'consolidado', 'fecha_de_cruce': str(self.viernes),
-            'ops': [self.a.pk, self.c.pk]})
+        self.armar('camion', [self.a.pk, self.c.pk])
         self.assertFalse(Camion.objects.exists())
 
     def test_todo_o_nada(self):

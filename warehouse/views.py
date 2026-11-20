@@ -7230,6 +7230,7 @@ def _contexto_de_armar(request, cliente_pk=None, marcados=None, error=None):
         'hoy': timezone.localdate(),
         'marcados_crudo': ','.join(str(p) for p in marcados),
         'solo': solo,
+        'modo': request.POST.get('modo'),
         'desde': _desde_valido(request.GET.get('desde') or request.POST.get('desde'),
                                CrossingTaskItem.DESDE_LA_TAREA),
     }
@@ -7378,19 +7379,55 @@ def _meter_marcados(request, tarea, pks, libres, motivo, desde):
     _versionar_orden(tarea, request.user)
 
 
-def _armar_para_varios(request, tenant, marcados):
+# Como se reparten en tareas los embarques marcados:
+#   pedimento -- una tarea por pedimento: cada uno cruza por su lado;
+#   cliente   -- una tarea por cliente con todos sus pedimentos (lo de siempre);
+#   camion    -- una tarea por cliente, todas en un camion compartido (TCC).
+MODO_POR_PEDIMENTO, MODO_POR_CLIENTE, MODO_CAMION = 'pedimento', 'cliente', 'camion'
+
+
+def _modo_de_cruce(valor, varios_clientes):
+    modos = [MODO_POR_PEDIMENTO, MODO_POR_CLIENTE]
+    if varios_clientes:
+        modos.append(MODO_CAMION)
+    return valor if valor in modos else MODO_POR_CLIENTE
+
+
+def _separar_por_pedimento(pks):
     """
-    El envio de la pantalla de varios clientes: una tarea nueva por cliente,
-    todas el mismo dia. Todo o nada, como la de un cliente: si un embarque de
-    un cliente no entra, no se crea ninguna -- tres de cuatro cruces creados
-    se leen como cuatro.
+    Los embarques de un cliente, en grupos que cruzan juntos: los que comparten
+    pedimento van en el mismo grupo; uno sin pedimento va solo.
     """
-    def de_vuelta(mensaje):
-        contexto = _grupos_por_cliente(request, tenant, marcados) or {
-            'libres': [], 'solo': True, 'es_cliente': False}
-        contexto['error'] = str(mensaje)
-        contexto['modo'] = request.POST.get('modo')
-        return render(request, 'warehouse/cruce_armar.html', contexto, status=422)
+    pedimento_de = {}
+    for op_id, ped_id in (PedimentoBundle.objects
+                          .filter(operation_id__in=pks)
+                          .order_by('pedimento_id')
+                          .values_list('operation_id', 'pedimento_id')):
+        pedimento_de.setdefault(op_id, ped_id)
+    grupos = {}
+    for pk in pks:
+        clave = ('ped', pedimento_de[pk]) if pk in pedimento_de else ('op', pk)
+        grupos.setdefault(clave, []).append(pk)
+    return list(grupos.values())
+
+
+def _armar_para_varios(request, tenant, marcados, cliente_fijo=None, de_vuelta=None):
+    """
+    Crear tareas nuevas, todas el mismo dia, repartidas segun el modo elegido.
+
+    Sirve a la pantalla de varios clientes y, con `cliente_fijo`, a la de un
+    cliente cuando se pide una tarea por pedimento. Todo o nada: si un embarque
+    no entra, no se crea ninguna tarea ni el camion -- tres de cuatro cruces
+    creados se leen como cuatro.
+    """
+    profile = get_profile(request.user)
+    if de_vuelta is None:
+        def de_vuelta(mensaje):
+            contexto = _grupos_por_cliente(request, tenant, marcados) or {
+                'libres': [], 'solo': True, 'es_cliente': False}
+            contexto['error'] = str(mensaje)
+            contexto['modo'] = request.POST.get('modo')
+            return render(request, 'warehouse/cruce_armar.html', contexto, status=422)
 
     if not marcados:
         return de_vuelta(_('Mark at least one shipment.'))
@@ -7400,41 +7437,50 @@ def _armar_para_varios(request, tenant, marcados):
 
     desde = _desde_valido(request.POST.get('desde'), CrossingTaskItem.DESDE_LA_TAREA)
     por_cliente = {}
-    for op in WarehouseOperation.objects.filter(tenant=tenant, pk__in=marcados):
+    for op in WarehouseOperation.objects.filter(tenant=tenant, pk__in=marcados).order_by('pk'):
         if not op.customer_id:
             return de_vuelta(_('%(op)s has no customer.') % {'op': op.custom_id})
         por_cliente.setdefault(op.customer_id, []).append(op.pk)
-    clientes = list(Catalog.objects
-                    .filter(tenant=tenant, category='CUSTOMER', pk__in=por_cliente)
-                    .order_by('name'))
-    if not clientes or set(marcados) - {pk for pks in por_cliente.values() for pk in pks}:
+    if cliente_fijo is not None:
+        clientes = [cliente_fijo]
+    else:
+        clientes = list(Catalog.objects
+                        .filter(tenant=tenant, category='CUSTOMER', pk__in=por_cliente)
+                        .order_by('name'))
+    if (not clientes or set(por_cliente) - {c.pk for c in clientes}
+            or set(marcados) - {pk for pks in por_cliente.values() for pk in pks}):
         raise Http404
 
-    # Individuales: cada tarea por su lado. Consolidado: ademas van juntas en
-    # un camion compartido (TCC). Con un solo cliente no hay nada que juntar.
-    consolidado = request.POST.get('modo') == 'consolidado' and len(clientes) > 1
+    modo = _modo_de_cruce(request.POST.get('modo'), len(clientes) > 1)
+    lo_creo_el_cliente = profile.is_customer()
+    origen = (CrossingTask.LA_CREO_EL_CLIENTE if lo_creo_el_cliente
+              else CrossingTask.LA_CREO_LA_CASA)
 
     nuevas = []
     camion = None
     try:
         with transaction.atomic():
-            if consolidado:
+            if modo == MODO_CAMION:
                 camion = Camion.objects.create(
                     tenant=tenant, fecha_de_cruce=dia, created_by=request.user)
             for cliente in clientes:
                 libres = {op.pk: op for op in _libres_del_cliente(tenant, cliente)}
-                tarea = CrossingTask.objects.create(
-                    tenant=tenant, customer=cliente, fecha_de_cruce=dia,
-                    origen=CrossingTask.LA_CREO_LA_CASA,
-                    confirmada_por_el_cliente=False, confirmada_en=None,
-                    camion=camion, created_by=request.user)
-                _meter_marcados(request, tarea, por_cliente[cliente.pk],
-                                libres, '', desde)
-                nuevas.append(tarea)
+                pks = por_cliente[cliente.pk]
+                grupos = (_separar_por_pedimento(pks) if modo == MODO_POR_PEDIMENTO
+                          else [pks])
+                for grupo in grupos:
+                    tarea = CrossingTask.objects.create(
+                        tenant=tenant, customer=cliente, fecha_de_cruce=dia,
+                        origen=origen,
+                        confirmada_por_el_cliente=lo_creo_el_cliente,
+                        confirmada_en=timezone.now() if lo_creo_el_cliente else None,
+                        camion=camion, created_by=request.user)
+                    _meter_marcados(request, tarea, grupo, libres, '', desde)
+                    nuevas.append(tarea)
     except _NoEntra as e:
         return de_vuelta(e)
 
-    # La casa las armo: cada cliente recibe su "esto es lo que entendimos,
+    # Si las armo la casa, cada cliente recibe su "esto es lo que entendimos,
     # confirmalo", con lo suyo y nada de los demas.
     for tarea in nuevas:
         if tarea.espera_confirmacion:
@@ -7443,6 +7489,9 @@ def _armar_para_varios(request, tenant, marcados):
                 triggered_by=request.user)
     if camion:
         return redirect(f"{reverse('cruces_panel')}#camion-{camion.pk}")
+    if cliente_fijo is not None:
+        return redirect(f"{reverse('cruces_panel')}?customer={cliente_fijo.pk}"
+                        f"#tarea-{nuevas[0].pk}")
     return redirect(f"{reverse('cruces_panel')}#tarea-{nuevas[0].pk}")
 
 
@@ -7488,6 +7537,11 @@ def cruce_armar(request):
 
     tarea = None
     destino = request.POST.get('tarea') or ''
+    nueva_pedida = not (destino.isdigit() and int(destino))
+    # Una tarea por pedimento: se reparte en varias tareas nuevas.
+    if nueva_pedida and request.POST.get('modo') == MODO_POR_PEDIMENTO:
+        return _armar_para_varios(request, tenant, marcados,
+                                  cliente_fijo=cliente, de_vuelta=de_vuelta)
     if destino.isdigit() and int(destino):
         tarea = get_object_or_404(
             CrossingTask, pk=destino, tenant=tenant, customer=cliente,

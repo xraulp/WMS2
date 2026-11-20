@@ -125,13 +125,21 @@
     .ranura .subir{margin:0;flex:0 0 auto}
     .ranura .subir label.btn{cursor:pointer}
     .ranura .series{flex:1 0 100%;padding:2px 0 4px 22px}
+    /* "Elegir del expediente" de las fotos de series: cerrado no ocupa mas
+       que su boton; abierto, las miniaturas bajan debajo de la ranura. */
+    .elegir-fotos{flex:1 0 100%;padding-left:22px}
+    .elegir-fotos > summary{list-style:none;display:inline-block;cursor:pointer}
+    .elegir-fotos > summary::-webkit-details-marker{display:none}
+    .elegir-fotos[open] > summary{box-shadow:0 0 0 2px var(--asoft)}
+    .elegir-fotos .series{padding:8px 0 4px}
+    /* Arrastrar y soltar: la ranura se marca mientras el archivo pasa encima. */
+    .ranura.soltar{background:var(--asoft);box-shadow:inset 0 0 0 2px var(--accent)}
     /* En la PC cada ranura es una franja corta y todas del mismo ancho:
        "Archivo M3 · vacio · Subir" juntos, sin un hueco de toda la pantalla
        entre el nombre y el boton. La de fotos de series lleva miniaturas y
        sigue a todo lo ancho. En el telefono no cambia nada. */
     @media (min-width:701px){
       .ranura{width:400px;max-width:100%;border-right:1px solid var(--bdr)}
-      .ranura:has(.series){width:auto;border-right:none}
     }
     .btn-ico{padding:2px 7px;line-height:1.2}
     .subir input[type=file]{font-size:11px;max-width:100%}
@@ -485,39 +493,49 @@
         expediente y queda elegida.
         {% endcomment %}
         {% if clave == 'FOTOS_SERIES' and puede_editar and p.editable %}
-        <form class="series" method="post" enctype="multipart/form-data"
+        {% comment %}
+        Como las demas: los archivos elegidos y un boton para subir (o
+        arrastrar y soltar). Lo que se sube entra al expediente digital del
+        embarque y queda elegido. Las fotos que ya estan en el expediente se
+        eligen con "Elegir del expediente", que se abre solo si se pide.
+        {% endcomment %}
+        {% include "warehouse/partials/ranura_de_pedimento.html" with quitar=True subir=False envio=True %}
+        <form class="subir" method="post" enctype="multipart/form-data"
               action="{% url 'pedimento_fotos_de_series' p.pk %}">
           {% csrf_token %}
-          {% if p.fotos_candidatas %}
-          <div class="ayuda">{% trans "Tick the ones that show the serial number:" %}</div>
-          <div class="fotos">
-            {% for foto in p.fotos_candidatas %}
-            <label class="foto">
-              <input type="checkbox" name="documento" value="{{ foto.pk }}"
-                     {% if foto.pk in p.fotos_elegidas %}checked{% endif %}>
-              <img src="{% url 'document_file' foto.pk %}" alt="" loading="lazy">
-              <span class="mono">{{ foto.original_name|default:foto.pk }}</span>
-            </label>
+          {% for elegida in p.fotos_elegidas %}<input type="hidden" name="documento" value="{{ elegida }}">{% endfor %}
+          {% if p.operaciones_de_fotos|length > 1 %}
+          <select name="operacion" aria-label="{% trans "Shipment" %}">
+            {% for op in p.operaciones_de_fotos %}
+            <option value="{{ op.pk }}">{{ op.custom_id }}</option>
             {% endfor %}
-          </div>
-          <button class="btn btn-sm" type="submit">{% trans "Save the choice" %}</button>
-          {% else %}
-          <div class="nada">{% trans "The shipment file has no photos yet." %}</div>
+          </select>
           {% endif %}
-          <div class="subir">
-            {% if p.operaciones_de_fotos|length > 1 %}
-            <select name="operacion">
-              {% for op in p.operaciones_de_fotos %}
-              <option value="{{ op.pk }}">{{ op.custom_id }}</option>
-              {% endfor %}
-            </select>
-            {% endif %}
-            <label class="btn btn-sm">📷 {% trans "Take or upload photo" %}
-              <input type="file" name="archivo" accept="image/*" multiple hidden
-                     onchange="this.form.submit()">
-            </label>
-          </div>
+          <label class="btn btn-sm">📷 {% if archivos %}{% trans "Add" %}{% else %}{% trans "Upload" %}{% endif %}
+            <input type="file" name="archivo" accept="image/*" multiple hidden
+                   onchange="this.form.submit()">
+          </label>
         </form>
+        {% if p.fotos_candidatas %}
+        <details class="elegir-fotos">
+          <summary class="btn btn-sm">🖼 {% trans "Choose from the file" %} ({{ p.fotos_candidatas|length }})</summary>
+          <form class="series" method="post" action="{% url 'pedimento_fotos_de_series' p.pk %}">
+            {% csrf_token %}
+            <div class="ayuda">{% trans "Tick the ones that show the serial number:" %}</div>
+            <div class="fotos">
+              {% for foto in p.fotos_candidatas %}
+              <label class="foto">
+                <input type="checkbox" name="documento" value="{{ foto.pk }}"
+                       {% if foto.pk in p.fotos_elegidas %}checked{% endif %}>
+                <img src="{% url 'document_file' foto.pk %}" alt="" loading="lazy">
+                <span class="mono">{{ foto.original_name|default:foto.pk }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            <button class="btn btn-sm" type="submit">{% trans "Save the choice" %}</button>
+          </form>
+        </details>
+        {% endif %}
         {% else %}
         {% include "warehouse/partials/ranura_de_pedimento.html" with quitar=puede_editar subir=puede_editar envio=True %}
         {% endif %}
@@ -800,6 +818,49 @@ subida cancelaba la primera. Al volver con Atras se quita todo.
     document.body.classList.add('subiendo');
   }, true);
   window.addEventListener('pageshow', function (e) { if (e.persisted) limpiar(); });
+
+  // Arrastrar y soltar sobre cualquier ranura que tenga boton de subir: los
+  // archivos van a su selector y se envian igual que si se hubieran elegido.
+  document.querySelectorAll('.ranura').forEach(function (r) {
+    var input = r.querySelector('form.subir input[type=file]');
+    if (!input) return;
+    var dentro = 0;
+    function hayArchivos(e) {
+      return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0;
+    }
+    r.addEventListener('dragenter', function (e) {
+      if (!hayArchivos(e) || document.body.classList.contains('subiendo')) return;
+      e.preventDefault(); dentro += 1; r.classList.add('soltar');
+    });
+    r.addEventListener('dragover', function (e) {
+      if (!hayArchivos(e)) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+    });
+    r.addEventListener('dragleave', function () {
+      dentro = Math.max(dentro - 1, 0);
+      if (!dentro) r.classList.remove('soltar');
+    });
+    r.addEventListener('drop', function (e) {
+      if (!hayArchivos(e)) return;
+      e.preventDefault(); dentro = 0; r.classList.remove('soltar');
+      if (document.body.classList.contains('subiendo')) return;
+      var archivos = e.dataTransfer.files;
+      if (input.accept && input.accept.indexOf('image/') === 0) {
+        var dt = new DataTransfer();
+        Array.prototype.forEach.call(archivos, function (f) {
+          if (f.type.indexOf('image/') === 0) dt.items.add(f);
+        });
+        archivos = dt.files;
+      }
+      if (!archivos.length) return;
+      input.files = archivos;
+      input.dispatchEvent(new Event('change', {bubbles: true}));
+    });
+  });
+  // Un archivo soltado fuera de una ranura no debe abrirse en la pestana.
+  ['dragover', 'drop'].forEach(function (t) {
+    window.addEventListener(t, function (e) { e.preventDefault(); });
+  });
 })();
 </script>
 </body>
