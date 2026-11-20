@@ -141,7 +141,9 @@ def email_recipients(customer):
     recipients, seen = [], set()
 
     def add(addr):
-        addr = (addr or '').strip()
+        # En minusculas: un correo capturado en mayusculas truena el envio en
+        # Resend (modo de prueba) aunque sea la misma direccion.
+        addr = (addr or '').strip().lower()
         if addr and addr.lower() not in seen:
             seen.add(addr.lower())
             recipients.append(addr)
@@ -197,7 +199,7 @@ def get_cc_emails(tenant):
     for e in Catalog.objects.filter(category='CC_EMAIL', active=True, tenant=tenant).exclude(
             contact_email__isnull=True).exclude(contact_email=''):
         for addr in e.contact_email.split(','):
-            addr = addr.strip()
+            addr = addr.strip().lower()
             if addr:
                 cc.append(addr)
     return cc
@@ -864,7 +866,7 @@ def _operadores_con_correo(tenant):
     for perfil in perfiles:
         if not perfil.is_operator():
             continue
-        addr = (perfil.user.email or '').strip()
+        addr = (perfil.user.email or '').strip().lower()
         if addr and addr.lower() not in vistos:
             vistos.add(addr.lower())
             correos.append((addr, perfil.language or ''))

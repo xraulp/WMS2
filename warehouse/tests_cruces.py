@@ -690,6 +690,20 @@ class AvisoDeCrucePorConfirmarTests(BaseDeCruces):
         self.assertIn('/cruces/#tarea-%d' % t.pk, correo.body)
         self.assertEqual(self.bitacora().get().status, 'SENT')
 
+    def test_el_correo_en_mayusculas_sale_en_minusculas(self):
+        # Resend en modo de prueba rechazo RAULDELUNAXP@GMAIL.COM.
+        from django.core import mail
+        from .models import Catalog
+        Catalog.objects.filter(pk=self.cliente.pk).update(
+            contact_email='Compras@Lopez.COM')
+        self.armar()
+        self.assertEqual(mail.outbox[0].to, ['compras@lopez.com'])
+        # Y al guardarlo desde el catalogo ya queda en minusculas.
+        self.cliente.refresh_from_db()
+        self.cliente.save()
+        self.cliente.refresh_from_db()
+        self.assertEqual(self.cliente.contact_email, 'compras@lopez.com')
+
     def test_en_el_idioma_del_cliente(self):
         from django.core import mail
         self.cliente.language = 'es'

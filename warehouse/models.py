@@ -184,6 +184,13 @@ class Catalog(models.Model):
     class Meta:
         ordering = ['category', 'name']
 
+    def save(self, *args, **kwargs):
+        # Los correos se guardan en minusculas: Resend en modo de prueba compara
+        # letra por letra y rechazo un aviso capturado en mayusculas.
+        if self.contact_email:
+            self.contact_email = self.contact_email.lower()
+        super().save(*args, **kwargs)
+
     def wants_notification(self, channel, event):
         """
         True si este cliente quiere recibir `event` por `channel`.
@@ -833,14 +840,14 @@ class WarehouseOperation(models.Model):
 
     def get_customer_email(self):
         if self.customer and self.customer.contact_email:
-            return self.customer.contact_email.split(',')[0].strip()
+            return self.customer.contact_email.split(',')[0].strip().lower()
         if self.customer_name_manual:
             try:
                 entry = Catalog.objects.filter(
                     category='CUSTOMER', name__iexact=self.customer_name_manual.strip(),
                     active=True).first()
                 if entry and entry.contact_email:
-                    return entry.contact_email.split(',')[0].strip()
+                    return entry.contact_email.split(',')[0].strip().lower()
             except Exception:
                 pass
         return None
