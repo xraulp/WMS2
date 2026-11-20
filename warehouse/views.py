@@ -7006,6 +7006,13 @@ def _todos_los_cruces(tenant):
         else:
             dia['bloques'].append({'camion': None, 'tareas': [tarea]})
 
+    # El boton de cancelar del recuadro: solo si todas siguen sin cargar.
+    se_cancela = (CrossingTask.ABIERTA, CrossingTask.CON_ORDEN)
+    for dia in dias:
+        for bloque in dia['bloques']:
+            bloque['cancelable'] = all(t.estado in se_cancela
+                                       for t in bloque['tareas'])
+
     hoy = timezone.localdate()
     return {
         'maniana': hoy + timedelta(days=1),
@@ -8160,13 +8167,45 @@ def cruce_cancelar(request, pk):
     """
     profile = get_profile(request.user)
     tarea = _cruce_del_tenant(request, pk)
+    a_todos = request.POST.get('volver') == 'todos' and not profile.is_customer()
     if tarea.estado not in (CrossingTask.ABIERTA, CrossingTask.CON_ORDEN):
         return _cruces_con_error(
-            request, tarea.customer_id,
+            request, None if a_todos else tarea.customer_id,
             _('This crossing is already on its way; it cannot be cancelled.'))
     tarea.estado = CrossingTask.CANCELADA
     tarea.save(update_fields=['estado', 'updated_at'])
+    # Desde la lista de todos se cancela sin entrar a la tarea: se regresa ahi.
+    if a_todos:
+        return redirect('cruces_panel')
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+
+
+@login_required
+@require_POST
+def cruce_camion_cancelar(request, pk):
+    """
+    Cancelar un camion compartido entero: todas sus tareas, o ninguna.
+
+    Si alguna ya va cargada, no se toca nada -- cancelar medio camion desde la
+    lista seria una sorpresa. Esa se saca del camion entrando a ella.
+    """
+    if get_profile(request.user).is_customer():
+        raise Http404
+    tenant = get_tenant_or_404(request)
+    camion = get_object_or_404(Camion, pk=pk, tenant=tenant)
+    tareas = list(camion.tareas.exclude(estado=CrossingTask.CANCELADA))
+    trabadas = [t.custom_id for t in tareas
+                if t.estado not in (CrossingTask.ABIERTA, CrossingTask.CON_ORDEN)]
+    if trabadas:
+        return _cruces_con_error(
+            request, None,
+            _('%(camion)s cannot be cancelled: %(tareas)s is already on its way.')
+            % {'camion': camion.custom_id, 'tareas': ', '.join(trabadas)})
+    with transaction.atomic():
+        for t in tareas:
+            t.estado = CrossingTask.CANCELADA
+            t.save(update_fields=['estado', 'updated_at'])
+    return redirect('cruces_panel')
 
 
 # ═══════════════════════════════════════════════════════════════════════════

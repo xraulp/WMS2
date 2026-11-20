@@ -4506,3 +4506,9 @@ msgstr "Se crea un cruce aparte para cada cliente, todos en este día. A cada cl
 
 msgid "crossings"
 msgstr "cruces"
+
+msgid "Cancel %(c)s and all its crossings? Their shipments will be available again."
+msgstr "¿Cancelar %(c)s y todos sus cruces? Sus embarques volverán a quedar disponibles."
+
+msgid "%(camion)s cannot be cancelled: %(tareas)s is already on its way."
+msgstr "No se puede cancelar %(camion)s: %(tareas)s ya va en camino."

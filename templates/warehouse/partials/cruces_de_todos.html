@@ -53,13 +53,23 @@ la tarea completa, en la pantalla de su cliente.
   .fz-rojo{background:#dc2626;color:#fff;border-color:#dc2626}
   .fz-inspeccion{background:#b45309;color:#fff;border-color:#b45309}
   .fz-entregado{background:#16a34a;color:#fff;border-color:#16a34a}
-  .camion-bloque{margin:8px 10px;border:2px solid var(--ink);border-radius:10px;overflow:hidden}
-  .camion-bloque[hidden]{display:none}
-  .camion-bloque .linea:last-child{border-bottom:0}
-  .camion-hd{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:6px 12px;
+  /* Cada cruce en su recuadro: el camion compartido en negro, la tarea de un
+     solo cliente en gris, para que se distingan de un vistazo. */
+  .bloque{margin:8px 10px;border:2px solid var(--ink);border-radius:10px;overflow:hidden}
+  .bloque[hidden]{display:none}
+  .bloque .linea:last-child{border-bottom:0}
+  .bloque-hd{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:6px 12px;
              background:var(--ink);color:var(--surface);font-size:12px}
-  .camion-hd b{font-family:'IBM Plex Mono',monospace}
-  .camion-hd .sp{flex:1}
+  .bloque-hd b{font-family:'IBM Plex Mono',monospace}
+  .bloque-hd .sp{flex:1}
+  .bloque-hd form{margin:0}
+  .bloque-hd .cancelar{font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;
+             padding:3px 9px;border-radius:6px;border:1px solid currentColor;
+             background:transparent;color:inherit;opacity:.85}
+  .bloque-hd .cancelar:hover{opacity:1;background:#dc2626;border-color:#dc2626;color:#fff}
+  .bloque-hd .cancelar:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .bloque.solo{border-color:var(--bdr-fuerte)}
+  .bloque.solo .bloque-hd{background:var(--bg-sutil);color:var(--ink);border-bottom:1px solid var(--bdr)}
   .marca-metoca{color:var(--warn-ink-fuerte);font-weight:700}
   .vacio{padding:16px 14px;color:var(--soft);font-size:13px}
   @media (max-width:700px){
@@ -109,16 +119,42 @@ la tarea completa, en la pantalla de su cliente.
   Las tareas de un camion compartido, juntas en un recuadro. Solo la casa
   ve esta lista.
   {% endcomment %}
-  <div class="camion-bloque" id="camion-{{ b.camion.pk }}" data-en-dia="{{ d }}">
-    <div class="camion-hd">🚚 <b>{{ b.camion.custom_id }}</b>
+  <div class="bloque" id="camion-{{ b.camion.pk }}" data-en-dia="{{ d }}">
+    <div class="bloque-hd">🚚 <b>{{ b.camion.custom_id }}</b>
       {% if b.camion.transfer_empresa %}<span>{{ b.camion.transfer_empresa }}{% if b.camion.sello %} · {% trans "Seal" %} {{ b.camion.sello }}{% endif %}</span>{% endif %}
       <span class="sp"></span>
       <span>{% blocktrans count n=b.tareas|length %}{{ n }} crossing{% plural %}{{ n }} crossings{% endblocktrans %} · {{ b.bultos }} {% trans "bdl" %}</span>
+      {% if b.cancelable %}
+      <form method="post" action="{% url 'cruce_camion_cancelar' b.camion.pk %}"
+            data-aviso="{% blocktrans with c=b.camion.custom_id %}Cancel {{ c }} and all its crossings? Their shipments will be available again.{% endblocktrans %}"
+            onsubmit="return confirm(this.dataset.aviso)">
+        {% csrf_token %}
+        <button class="cancelar" type="submit">{% trans "Cancel" %}</button>
+      </form>
+      {% endif %}
     </div>
     {% for t in b.tareas %}{% include "warehouse/partials/cruces_linea.html" %}{% endfor %}
   </div>
   {% else %}
-  {% for t in b.tareas %}{% include "warehouse/partials/cruces_linea.html" %}{% endfor %}
+  {% for t in b.tareas %}
+  <div class="bloque solo" data-en-dia="{{ d }}">
+    <div class="bloque-hd"><b>{{ t.custom_id }}</b>
+      <span>{{ t.customer.abbreviation|default:t.customer.name }}</span>
+      <span class="sp"></span>
+      <span>{{ t.bultos }} {% trans "bdl" %}</span>
+      {% if b.cancelable %}
+      <form method="post" action="{% url 'cruce_cancelar' t.pk %}"
+            data-aviso="{% blocktrans with cruce=t.custom_id %}Cancel crossing {{ cruce }}? Its shipments will be available again.{% endblocktrans %}"
+            onsubmit="return confirm(this.dataset.aviso)">
+        {% csrf_token %}
+        <input type="hidden" name="volver" value="todos">
+        <button class="cancelar" type="submit">{% trans "Cancel" %}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% include "warehouse/partials/cruces_linea.html" %}
+  </div>
+  {% endfor %}
   {% endif %}
   {% endfor %}
   {% endwith %}
@@ -156,14 +192,14 @@ la tarea completa, en la pantalla de su cliente.
       if (ver) alguna = true;
     });
     // Un camion sin lineas visibles se esconde; un dia, igual.
-    lista.querySelectorAll('.camion-bloque').forEach(function (c) {
+    lista.querySelectorAll('.bloque').forEach(function (c) {
       c.hidden = !c.querySelector('.linea:not([hidden])');
     });
     var cabecera = null, conAlgo = false;
     function cerrar() { if (cabecera) cabecera.hidden = !conAlgo; }
     Array.prototype.forEach.call(lista.children, function (el) {
       if (el.hasAttribute('data-dia')) { cerrar(); cabecera = el; conAlgo = false; return; }
-      if (!el.hidden && (el.classList.contains('linea') || el.classList.contains('camion-bloque'))) conAlgo = true;
+      if (!el.hidden && (el.classList.contains('linea') || el.classList.contains('bloque'))) conAlgo = true;
     });
     cerrar();
     var nada = document.getElementById('sin-resultado');

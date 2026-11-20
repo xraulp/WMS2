@@ -208,6 +208,8 @@ urlpatterns = [
     path('cruces/<int:pk>/inspection/', views.cruce_inspeccion, name='cruce_inspeccion'),
     path('cruces/<int:pk>/delivered/', views.cruce_entregada, name='cruce_entregada'),
     path('cruces/<int:pk>/cancel/', views.cruce_cancelar, name='cruce_cancelar'),
+    path('cruces/truck/<int:pk>/cancel/', views.cruce_camion_cancelar,
+         name='cruce_camion_cancelar'),
 
     # La orden de carga, el escaneo y la remision.
     path('cruces/<int:pk>/order/', views.orden_emitir, name='orden_emitir'),

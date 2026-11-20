@@ -1655,8 +1655,48 @@ class ElCamionCompartidoTests(BaseDeCruces):
         self.assertContains(r, camion.custom_id)
         self.assertContains(r, 'TXN')
         r = self.client.get('/cruces/')
-        self.assertContains(r, 'camion-bloque')
+        self.assertContains(r, 'class="bloque"')
         self.assertContains(r, camion.custom_id)
+
+    def test_cada_tarea_suelta_va_en_su_recuadro_con_cancelar(self):
+        r = self.client.get('/cruces/')
+        self.assertContains(r, 'class="bloque solo"', count=2)
+        self.assertContains(r, '/cruces/%d/cancel/' % self.a.pk)
+
+    def test_cancelar_una_tarea_desde_la_lista_regresa_a_la_lista(self):
+        r = self.client.post('/cruces/%d/cancel/' % self.a.pk, {'volver': 'todos'})
+        self.assertRedirects(r, '/cruces/', fetch_redirect_response=False)
+        self.a.refresh_from_db()
+        self.assertEqual(self.a.estado, CrossingTask.CANCELADA)
+
+    def test_cancelar_el_camion_cancela_todas_sus_tareas(self):
+        self.juntar(self.a, self.b)
+        camion = Camion.objects.get()
+        self.assertContains(self.client.get('/cruces/'),
+                            '/cruces/truck/%d/cancel/' % camion.pk)
+        r = self.client.post('/cruces/truck/%d/cancel/' % camion.pk)
+        self.assertRedirects(r, '/cruces/', fetch_redirect_response=False)
+        self.a.refresh_from_db(); self.b.refresh_from_db()
+        self.assertEqual(self.a.estado, CrossingTask.CANCELADA)
+        self.assertEqual(self.b.estado, CrossingTask.CANCELADA)
+
+    def test_el_camion_con_una_cargada_no_se_cancela_nada(self):
+        self.juntar(self.a, self.b)
+        camion = Camion.objects.get()
+        CrossingTask.objects.filter(pk=self.b.pk).update(estado=CrossingTask.CARGADA)
+        self.assertNotContains(self.client.get('/cruces/'),
+                               '/cruces/truck/%d/cancel/' % camion.pk)
+        r = self.client.post('/cruces/truck/%d/cancel/' % camion.pk)
+        self.assertEqual(r.status_code, 422)
+        self.a.refresh_from_db()
+        self.assertNotEqual(self.a.estado, CrossingTask.CANCELADA)
+
+    def test_el_cliente_no_cancela_camiones(self):
+        self.juntar(self.a, self.b)
+        camion = Camion.objects.get()
+        self.client.force_login(self.duenio)
+        r = self.client.post('/cruces/truck/%d/cancel/' % camion.pk)
+        self.assertEqual(r.status_code, 404)
 
     def test_el_cliente_no_se_entera(self):
         self.juntar(self.a, self.b)
