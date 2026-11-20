@@ -7389,6 +7389,7 @@ def _armar_para_varios(request, tenant, marcados):
         contexto = _grupos_por_cliente(request, tenant, marcados) or {
             'libres': [], 'solo': True, 'es_cliente': False}
         contexto['error'] = str(mensaje)
+        contexto['modo'] = request.POST.get('modo')
         return render(request, 'warehouse/cruce_armar.html', contexto, status=422)
 
     if not marcados:
@@ -7409,16 +7410,24 @@ def _armar_para_varios(request, tenant, marcados):
     if not clientes or set(marcados) - {pk for pks in por_cliente.values() for pk in pks}:
         raise Http404
 
+    # Individuales: cada tarea por su lado. Consolidado: ademas van juntas en
+    # un camion compartido (TCC). Con un solo cliente no hay nada que juntar.
+    consolidado = request.POST.get('modo') == 'consolidado' and len(clientes) > 1
+
     nuevas = []
+    camion = None
     try:
         with transaction.atomic():
+            if consolidado:
+                camion = Camion.objects.create(
+                    tenant=tenant, fecha_de_cruce=dia, created_by=request.user)
             for cliente in clientes:
                 libres = {op.pk: op for op in _libres_del_cliente(tenant, cliente)}
                 tarea = CrossingTask.objects.create(
                     tenant=tenant, customer=cliente, fecha_de_cruce=dia,
                     origen=CrossingTask.LA_CREO_LA_CASA,
                     confirmada_por_el_cliente=False, confirmada_en=None,
-                    created_by=request.user)
+                    camion=camion, created_by=request.user)
                 _meter_marcados(request, tarea, por_cliente[cliente.pk],
                                 libres, '', desde)
                 nuevas.append(tarea)
@@ -7432,6 +7441,8 @@ def _armar_para_varios(request, tenant, marcados):
             notifications.en_segundo_plano(
                 notifications.avisar_cruce_por_confirmar, tarea,
                 triggered_by=request.user)
+    if camion:
+        return redirect(f"{reverse('cruces_panel')}#camion-{camion.pk}")
     return redirect(f"{reverse('cruces_panel')}#tarea-{nuevas[0].pk}")
 
 

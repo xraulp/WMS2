@@ -4512,3 +4512,18 @@ msgstr "¿Cancelar %(c)s y todos sus cruces? Sus embarques volverán a quedar di
 
 msgid "%(camion)s cannot be cancelled: %(tareas)s is already on its way."
 msgstr "No se puede cancelar %(camion)s: %(tareas)s ya va en camino."
+
+msgid "How do they cross?"
+msgstr "¿Cómo cruzan?"
+
+msgid "Individual crossings"
+msgstr "Cruces individuales"
+
+msgid "One crossing for each customer, each on its own."
+msgstr "Un cruce para cada cliente, cada uno por su lado."
+
+msgid "Consolidated (shared truck)"
+msgstr "Consolidado (camión compartido)"
+
+msgid "One crossing for each customer, all together in one shared truck (TCC). The customers never see it."
+msgstr "Un cruce para cada cliente, todos juntos en un camión compartido (TCC). Los clientes no lo ven."

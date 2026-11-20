@@ -125,6 +125,14 @@
     .ranura .subir{margin:0;flex:0 0 auto}
     .ranura .subir label.btn{cursor:pointer}
     .ranura .series{flex:1 0 100%;padding:2px 0 4px 22px}
+    /* En la PC cada ranura es una franja corta y todas del mismo ancho:
+       "Archivo M3 · vacio · Subir" juntos, sin un hueco de toda la pantalla
+       entre el nombre y el boton. La de fotos de series lleva miniaturas y
+       sigue a todo lo ancho. En el telefono no cambia nada. */
+    @media (min-width:701px){
+      .ranura{width:400px;max-width:100%;border-right:1px solid var(--bdr)}
+      .ranura:has(.series){width:auto;border-right:none}
+    }
     .btn-ico{padding:2px 7px;line-height:1.2}
     .subir input[type=file]{font-size:11px;max-width:100%}
 

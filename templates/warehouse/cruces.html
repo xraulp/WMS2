@@ -168,6 +168,12 @@
     /* Cada embarque en una sola linea: las acciones, detras de Modificar. */
     td.mono .lista, td .lista strong{white-space:nowrap}
     .td-modificar{text-align:right;white-space:nowrap}
+    /* Una entrada puede traer varios pedidos en el mismo campo ("OC1, OC2,
+       OC3"). En una sola linea empujaban la tabla fuera de la tarjeta y el
+       boton Modificar salia cortado: aqui bajan de renglon en cada coma. */
+    td.td-po .lista strong{white-space:normal;overflow-wrap:anywhere;max-width:170px}
+    /* Y si aun asi no cabe, la tabla se recorre de lado en vez de cortarse. */
+    .tabla-tarea{overflow-x:auto}
     tr.acc-fila{display:none}
     tr.acc-fila.abierta{display:table-row}
     tr.acc-fila td{border-bottom:1px solid var(--bdr)}
@@ -614,6 +620,7 @@
     {% if t.hay_que_mandar and not es_cliente %}
     <div class="ped-ayuda">👉 {% trans "Tap Go in to upload the pedimento documents and send it to the customer for review." %}</div>
     {% endif %}
+    <div class="tabla-tarea">
     <table>
       <thead>
         <tr>
@@ -641,7 +648,7 @@
           <td data-etq="{% trans "Entry" %}" class="mono">
             <span class="lista">{% for r in g.filas %}<span>{{ r.operation.custom_id }}{% if r.operation.subdivision %}<span class="sub">{{ r.operation.get_subdivision_display }}</span>{% endif %}</span>{% endfor %}</span>
           </td>
-          <td data-etq="{% trans "PO / Order" %}">
+          <td data-etq="{% trans "PO / Order" %}" class="td-po">
             <span class="lista">{% for r in g.filas %}<strong>{{ r.operation.po_order|default:"—" }}</strong>{% endfor %}</span>
           </td>
           <td data-etq="{% trans "Bundles" %}">
@@ -820,6 +827,7 @@
       </tfoot>
       {% endif %}
     </table>
+    </div>
 
     {% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
     <div class="acciones acciones-pie">

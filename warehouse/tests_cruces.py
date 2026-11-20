@@ -1830,6 +1830,39 @@ class VariosClientesDesdeOperacionesTests(BaseDeCruces):
             self.assertEqual(t.origen, CrossingTask.LA_CREO_LA_CASA)
             self.assertFalse(t.confirmada_por_el_cliente)
 
+    def test_la_pantalla_pregunta_individual_o_consolidado(self):
+        respuesta = self.client.get('/cruces/mark/', {
+            'ops': '%d,%d' % (self.a.pk, self.c.pk), 'desde': 'OPERACIONES'})
+        self.assertContains(respuesta, 'name="modo" value="individual" checked')
+        self.assertContains(respuesta, 'name="modo" value="consolidado"')
+
+    def test_individual_no_crea_camion(self):
+        self.client.post('/cruces/mark/', {
+            'varios': '1', 'modo': 'individual', 'fecha_de_cruce': str(self.viernes),
+            'ops': [self.a.pk, self.c.pk]})
+        self.assertEqual(CrossingTask.objects.count(), 2)
+        self.assertFalse(Camion.objects.exists())
+
+    def test_consolidado_los_junta_en_un_camion(self):
+        respuesta = self.client.post('/cruces/mark/', {
+            'varios': '1', 'modo': 'consolidado', 'fecha_de_cruce': str(self.viernes),
+            'ops': [self.a.pk, self.b.pk, self.c.pk]})
+        camion = Camion.objects.get()
+        self.assertTrue(camion.custom_id.startswith('TCC'))
+        self.assertEqual(camion.fecha_de_cruce, self.viernes)
+        self.assertEqual(camion.tareas.count(), 2)
+        self.assertEqual(CrossingTask.objects.filter(camion__isnull=True).count(), 0)
+        self.assertRedirects(respuesta, '/cruces/#camion-%d' % camion.pk,
+                             fetch_redirect_response=False)
+
+    def test_consolidado_que_falla_no_deja_camion(self):
+        CrossingTaskItem.objects.create(task=self.tarea(customer=self.otro),
+                                        operation=self.c)
+        self.client.post('/cruces/mark/', {
+            'varios': '1', 'modo': 'consolidado', 'fecha_de_cruce': str(self.viernes),
+            'ops': [self.a.pk, self.c.pk]})
+        self.assertFalse(Camion.objects.exists())
+
     def test_todo_o_nada(self):
         # Uno de los de Aceros Norte ya va en otro cruce: no se crea ninguno.
         CrossingTaskItem.objects.create(task=self.tarea(customer=self.otro),

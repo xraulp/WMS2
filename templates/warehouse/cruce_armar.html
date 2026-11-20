@@ -206,6 +206,17 @@
         <input type="text" id="motivo-in" name="motivo" value="{{ motivo_pedido }}" style="width:100%">
       </div>
       {% if varios %}
+      <p class="ct" style="margin:14px 0 6px">3 · {% trans "How do they cross?" %}</p>
+      <label>
+        <input type="radio" name="modo" value="individual"{% if modo != 'consolidado' %} checked{% endif %}>
+        <span><b>{% trans "Individual crossings" %}</b>
+          <span class="soft" style="display:block;font-size:12px">{% trans "One crossing for each customer, each on its own." %}</span></span>
+      </label>
+      <label>
+        <input type="radio" name="modo" value="consolidado"{% if modo == 'consolidado' %} checked{% endif %}>
+        <span><b>🚚 {% trans "Consolidated (shared truck)" %}</b>
+          <span class="soft" style="display:block;font-size:12px">{% trans "One crossing for each customer, all together in one shared truck (TCC). The customers never see it." %}</span></span>
+      </label>
       <p class="soft" style="font-size:12px;margin:10px 0 0">
         {% trans "A separate crossing is created for each customer, all on this day. Each customer will be asked to confirm theirs." %}
       </p>
