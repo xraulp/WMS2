@@ -7,7 +7,7 @@
   <span class="num">{{ t.custom_id }}</span>
   <span class="po">{% if t.pedidos %}{{ t.pedidos|join:" - " }}{% else %}<span class="soft">—</span>{% endif %}</span>
   {% with p=t.paso_actual %}
-  <span class="fz-c">{% if p %}<span class="fz fz-{{ p.clave|lower }}{% if p.alerta %} fz-rojo{% endif %}">{{ p.texto }}{% if p.alerta %} · {{ p.detalle }}{% endif %}</span>{% else %}<span class="fz fz-entregado">{% trans "Delivered" %}</span>{% endif %}{% if t.espera_confirmacion %} <span class="estado-ped">{% trans "waiting for the customer" %}</span>{% endif %}</span>
+  <span class="fz-c">{% if p %}<span class="fz fz-{{ p.clave|lower }}{% if p.alerta %} fz-rojo{% endif %}">{{ p.texto }}{% if p.alerta %} · {{ p.detalle }}{% endif %}</span>{% else %}<span class="fz fz-entregado">{% trans "Delivered" %}</span>{% endif %}</span>
   {% endwith %}
   <span class="bul">{% if t.me_toca %}<span class="marca-metoca" title="{% trans "On us" %}">●</span> {% endif %}{{ t.bultos }} {% trans "bdl" %}</span>
 </a>
