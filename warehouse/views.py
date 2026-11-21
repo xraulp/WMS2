@@ -41,6 +41,7 @@ from .almacen import url_firmada
 from .cuenta import revisar_el_correo
 from .context_processors import es_telefono
 from . import notifications, pedimentos, impuestos, bultos, papeles, entrega
+from .periodo import acotar_operaciones, acotar_cruces
 
 logger = logging.getLogger(__name__)
 
@@ -304,10 +305,16 @@ def dashboard(request):
             for e in Catalog.objects.filter(category=category, active=True, tenant=tenant).order_by('name')
         ])
 
-    ops = anotar_hilos(request.user, customer_ops_filter(request.user, ops)[:200])
+    # Lo reciente y lo que sigue en bodega; lo demas, en el historico
+    # (`periodo.py`). La tabla dice cuantas quedaron fuera y como verlas.
+    # `?q=` aqui es la busqueda del panel Digital (el QR), no la de la tabla.
+    ops, en_historico = acotar_operaciones(request, customer_ops_filter(request.user, ops),
+                                           con_busqueda=False)
+    ops = anotar_hilos(request.user, ops[:200])
 
     context = {
         'operations': ops,
+        'en_historico': en_historico,
         # El catalogo va en dos pantallas: la operativa, que mantiene quien
         # captura, y la de clientes, que es del administrador de la empresa.
         'operational_entries': _catalog_entries(tenant, 'operational'),
@@ -863,13 +870,20 @@ def operation_delete_confirm(request, pk):
     op = get_object_or_404(WarehouseOperation, pk=pk, tenant=tenant)
     ops_qs = WarehouseOperation.objects.filter(tenant=tenant).select_related(
         'customer', 'shipper', 'carrier', 'bundle_type')
-    ops_qs = customer_ops_filter(request.user, ops_qs)[:200]
+    ops_qs = customer_ops_filter(request.user, ops_qs)
+
+    def tabla(**extra):
+        # El queryset se evalua aqui, despues del borrado: asi la tabla y la
+        # cuenta del historico ya no incluyen la operacion que se fue.
+        recientes, en_historico = acotar_operaciones(request, ops_qs)
+        return render(request, 'warehouse/partials/operations_table.html', {
+            'operations': anotar_hilos(request.user, recientes[:200]),
+            'en_historico': en_historico,
+            'is_home': is_home(request.user), 'profile': profile, **extra,
+        })
 
     def negar(mensaje):
-        return render(request, 'warehouse/partials/operations_table.html', {
-            'operations': anotar_hilos(request.user, ops_qs), 'delete_error': mensaje,
-            'is_home': is_home(request.user), 'profile': profile,
-        })
+        return tabla(delete_error=mensaje)
 
     # La contrasena de borrado es ahora el control que autoriza a borrar, asi
     # que se exige siempre y sin salidas laterales. Antes, quien no la tuviera
@@ -886,10 +900,7 @@ def operation_delete_confirm(request, pk):
 
     _log_deletion(op, request.user, motivo)
     op.delete()
-    return render(request, 'warehouse/partials/operations_table.html', {
-        'operations': anotar_hilos(request.user, ops_qs), 'delete_success': _('Record deleted successfully.'),
-        'is_home': is_home(request.user), 'profile': profile,
-    })
+    return tabla(delete_success=_('Record deleted successfully.'))
 
 
 @login_required
@@ -1219,6 +1230,13 @@ def operations_search(request):
     # filtra en Python sobre lo que ya trajo el SQL. Solo lo tienen las
     # entradas -- una salida no esta "en almacen" ni "liberada", y la columna
     # de la tabla le pinta un guion.
+    # El periodo no se aplica cuando la tabla se pide acotada a una posicion
+    # (lo que hay en un estante es lo que hay, sea de cuando sea) ni a las
+    # vencidas, que son justo las viejas.
+    en_historico = None
+    if not filtro_posicion.isdigit() and request.GET.get('aging') != '1':
+        ops, en_historico = acotar_operaciones(request, ops)
+
     filtro_estado = request.GET.get('status', '').strip()
     ops_list = list(ops[:500])
     if filtro_estado in ('Released Goods', 'In Warehouse'):
@@ -1232,6 +1250,7 @@ def operations_search(request):
 
     return render(request, 'warehouse/partials/operations_table.html',
                   {'operations': anotar_hilos(request.user, ops_list[:200]),
+                   'en_historico': en_historico,
                    'search_query': q,
                    'is_home': is_home(request.user), 'profile': profile})
 
@@ -2893,7 +2912,10 @@ def mobile_dashboard(request):
     profile = get_profile(request.user)
     ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
         'customer','shipper','carrier','bundle_type')
-    ops = customer_ops_filter(request.user, ops)[:200]
+    # `?q=` aqui es la busqueda del panel Digital (el QR), no la de la tabla.
+    ops, en_historico = acotar_operaciones(request, customer_ops_filter(request.user, ops),
+                                           con_busqueda=False)
+    ops = ops[:200]
     def cat_json(category):
         return json.dumps([
             {'id': e.pk, 'name': e.name}
@@ -2904,6 +2926,7 @@ def mobile_dashboard(request):
         'is_home': profile.is_home(),
         'tenant': tenant,
         'operations': ops,
+        'en_historico': en_historico,
         'operational_entries': _catalog_entries(tenant, 'operational'),
         'customer_entries':    _catalog_entries(tenant, 'customers'),
         'can_edit_operational': profile.can_edit_catalog('SHIPPER'),
@@ -3392,13 +3415,15 @@ def operations_import(request):
 
         ops = WarehouseOperation.objects.filter(tenant=tenant).select_related(
             'customer', 'shipper', 'carrier', 'bundle_type')
-        ops = customer_ops_filter(request.user, ops)[:200]
+        ops, en_historico = acotar_operaciones(request, customer_ops_filter(request.user, ops))
+        ops = ops[:200]
         profile = get_profile(request.user)
         msg = _('%(cuantas)s operation(s) imported successfully.') % {'cuantas': created}
         if errors:
             msg += f' Errors: {"; ".join(errors[:3])}'
         return render(request, 'warehouse/partials/operations_table.html', {
             'operations': anotar_hilos(request.user, ops),
+            'en_historico': en_historico,
             'import_success' if not errors else 'import_error': msg,
             'is_home': is_home(request.user), 'profile': profile,
         })
@@ -7089,6 +7114,8 @@ def cruces_realizados(request):
             | Q(renglones__operation__renglones_de_pedimento__pedimento__ped_consecutivo__icontains=buscar)
         ).distinct()
 
+    tareas, en_historico = acotar_cruces(request, tareas)
+
     LIMITE = 200
     tareas = list(tareas[:LIMITE + 1])
     hay_mas = len(tareas) > LIMITE
@@ -7113,6 +7140,8 @@ def cruces_realizados(request):
         'tareas': tareas,
         'hay_mas': hay_mas,
         'buscar': buscar,
+        'en_historico': en_historico,
+        'periodo': request.GET.get('periodo', ''),
     })
 
 

@@ -80,6 +80,10 @@
         {% endfor %}
       </select>
       {% endif %}
+      <select name="periodo" onchange="this.form.submit()" aria-label="{% trans "Period" %}">
+        <option value="" {% if periodo != 'todo' %}selected{% endif %}>{% trans "Last 4 months" %}</option>
+        <option value="todo" {% if periodo == 'todo' %}selected{% endif %}>{% trans "All history" %}</option>
+      </select>
       <input type="search" name="q" value="{{ buscar }}"
              placeholder="{% trans "Task, order, shipment or pedimento" %}">
       <button class="btn" type="submit">{% trans "Search" %}</button>
@@ -87,6 +91,11 @@
     <p class="soft" style="font-size:12px;margin:10px 0 0">
       {% trans "A delivered crossing moves here the day after it was delivered." %}
     </p>
+    {% if en_historico %}
+    <p class="soft" style="font-size:12px;margin:6px 0 0">
+      {% blocktrans count n=en_historico %}Showing the crossings delivered in the last 4 months. {{ n }} older one is in the history; the search looks through everything.{% plural %}Showing the crossings delivered in the last 4 months. {{ n }} older ones are in the history; the search looks through everything.{% endblocktrans %}
+    </p>
+    {% endif %}
   </div>
 
   {% if tareas %}

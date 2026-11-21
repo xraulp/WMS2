@@ -633,6 +633,16 @@ capturar, se pintaban dos a la vez hasta que corria el guion.
       </div>
 
       <div class="cf-g">
+        <label>🗓 {% trans "Period" %}</label>
+        <select name="periodo" id="filter-periodo" class="cf-i" style="height:32px; min-width:150px"
+                hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"
+                hx-trigger="change" hx-include="#ops-filtros" hx-indicator="#s-spin">
+          <option value="">{% trans "Last 4 months" %}</option>
+          <option value="todo">{% trans "All history" %}</option>
+        </select>
+      </div>
+
+      <div class="cf-g">
         <label>◼ {% trans "Status" %}</label>
         <select name="status" id="status-filter-sel" class="cf-i" style="height:32px; min-width:140px"
                 hx-get="{% url 'operations_search' %}" hx-target="#ops-table" hx-swap="innerHTML"

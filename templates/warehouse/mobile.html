@@ -528,10 +528,23 @@ capturar, se pintaban dos a la vez hasta que corria el guion.
 <div class="panel" id="panel-database">
   <div class="card">
     <div class="card-title">{% trans "Operations" %}</div>
-    <input type="text" id="mob-db-q" class="form-input" placeholder="{% trans "Search..." %}"
-           style="margin-bottom:10px"
-           hx-get="{% url 'operations_search' %}" hx-target="#mob-ops-table"
-           hx-trigger="keyup changed delay:400ms" name="q">
+    {% comment %}
+    El buscador y el periodo van juntos en #mob-ops-filtros y cada uno manda
+    los dos, como la barra del tablero: cambiar uno no debe borrar el otro.
+    {% endcomment %}
+    <div id="mob-ops-filtros" style="display:flex;gap:8px;margin-bottom:10px">
+      <input type="text" id="mob-db-q" class="form-input" placeholder="{% trans "Search..." %}"
+             style="flex:1;margin:0"
+             hx-get="{% url 'operations_search' %}" hx-target="#mob-ops-table"
+             hx-trigger="keyup changed delay:400ms" hx-include="#mob-ops-filtros" name="q">
+      <select name="periodo" class="form-input" style="width:auto;margin:0"
+              aria-label="{% trans "Period" %}"
+              hx-get="{% url 'operations_search' %}" hx-target="#mob-ops-table"
+              hx-trigger="change" hx-include="#mob-ops-filtros">
+        <option value="">{% trans "Last 4 months" %}</option>
+        <option value="todo">{% trans "All history" %}</option>
+      </select>
+    </div>
     <div id="mob-ops-table">
       {% include 'warehouse/partials/operations_table.html' %}
     </div>

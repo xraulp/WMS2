@@ -4569,3 +4569,22 @@ msgstr "En qué va"
 
 msgid "Optimizing photos..."
 msgstr "Optimizando fotos..."
+
+msgid "Last 4 months"
+msgstr "Últimos 4 meses"
+
+msgid "All history"
+msgstr "Todo el histórico"
+
+msgid "View all history"
+msgstr "Ver todo el histórico"
+
+msgid "Showing the last 4 months and the entries still in the warehouse. %(n)s older operation is in the history; the search looks through everything."
+msgid_plural "Showing the last 4 months and the entries still in the warehouse. %(n)s older operations are in the history; the search looks through everything."
+msgstr[0] "Se muestran los últimos 4 meses y las entradas que siguen en bodega. %(n)s operación más antigua está en el histórico; la búsqueda recorre todo."
+msgstr[1] "Se muestran los últimos 4 meses y las entradas que siguen en bodega. %(n)s operaciones más antiguas están en el histórico; la búsqueda recorre todo."
+
+msgid "Showing the crossings delivered in the last 4 months. %(n)s older one is in the history; the search looks through everything."
+msgid_plural "Showing the crossings delivered in the last 4 months. %(n)s older ones are in the history; the search looks through everything."
+msgstr[0] "Se muestran los cruces entregados en los últimos 4 meses. %(n)s más antiguo está en el histórico; la búsqueda recorre todo."
+msgstr[1] "Se muestran los cruces entregados en los últimos 4 meses. %(n)s más antiguos están en el histórico; la búsqueda recorre todo."

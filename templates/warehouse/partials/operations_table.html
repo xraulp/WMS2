@@ -26,6 +26,25 @@ recordar que el buscador vacio las trae todas.
 {% endif %}
 
 {% comment %}
+El periodo (warehouse/periodo.py). La tabla trae los ultimos 4 meses y las
+entradas que siguen en bodega; lo demas queda en el historico. Se dice cuantas
+quedaron fuera y como verlas: una tabla que se acorta sin avisar se lee como
+que se perdieron. El boton cambia el selector del periodo y dispara su
+`change`, asi la peticion lleva los demas filtros puestos.
+{% endcomment %}
+{% if en_historico %}
+<div class="aviso-periodo" style="margin-bottom:10px;padding:8px 12px;background:var(--bg-sutil);border:1px solid var(--bdr);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+  <span style="font-size:12px;color:var(--soft)">
+    {% blocktrans count n=en_historico %}Showing the last 4 months and the entries still in the warehouse. {{ n }} older operation is in the history; the search looks through everything.{% plural %}Showing the last 4 months and the entries still in the warehouse. {{ n }} older operations are in the history; the search looks through everything.{% endblocktrans %}
+  </span>
+  <button type="button" class="btn btn-g btn-sm"
+          onclick="var s=document.querySelector('select[name=periodo]');if(s){s.value='todo';s.dispatchEvent(new Event('change',{bubbles:true}));}">
+    {% trans "View all history" %}
+  </button>
+</div>
+{% endif %}
+
+{% comment %}
 La barra de importar. `operations_import` ya rechaza a quien no puede crear
 operaciones, asi que a un cliente el boton solo le daba un 403: se pintaba una
 puerta que no abre. El permiso que se comprueba aqui es el mismo que el de la
