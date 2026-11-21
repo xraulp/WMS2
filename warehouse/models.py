@@ -13,6 +13,8 @@ from django.utils.text import slugify
 # importar el modulo, cuando todavia no hay peticion ni idioma que aplicar.
 from django.utils.translation import gettext_lazy as _, pgettext_lazy
 
+from .fotos import ComprimeFotosAlGuardar
+
 logger = logging.getLogger(__name__)
 
 # warehouse/models.py (al inicio, después de los imports)
@@ -1078,7 +1080,7 @@ class DocumentosVivosManager(models.Manager):
         return super().get_queryset().filter(deleted_at__isnull=True)
 
 
-class OperationDocument(models.Model):
+class OperationDocument(ComprimeFotosAlGuardar, models.Model):
     FILE_TYPE_CHOICES = [('PHOTO', _('Photo')), ('DOCUMENT', _('Document')),
                          ('VIDEO', _('Video')), ('OTHER', _('Other'))]
     tenant        = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True, blank=True, related_name='documents')
@@ -2770,7 +2772,7 @@ class PedimentoBundle(models.Model):
         return f'{self.bultos} de {self.operation.custom_id} a {self.pedimento.etiqueta}'
 
 
-class PedimentoDocument(models.Model):
+class PedimentoDocument(ComprimeFotosAlGuardar, models.Model):
     """
     Un archivo en una de las ranuras del pedimento.
 
@@ -4517,7 +4519,7 @@ class EscaneoDeBulto(models.Model):
         return _bultos.codigo(self.operation.custom_id, self.numero_de_bulto)
 
 
-class DocumentoDeEntrega(models.Model):
+class DocumentoDeEntrega(ComprimeFotosAlGuardar, models.Model):
     """
     Un archivo de la entrega de un cruce, que vive en la tarea y no en un
     pedimento.
