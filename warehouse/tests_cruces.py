@@ -1079,7 +1079,7 @@ class LosCrucesDeTodosLosClientesTests(BaseDeCruces):
         self.assertEqual({t.pk for t in r.context['todas']}, {a.pk, b.pk})
         self.assertContains(r, 'LBO')
         self.assertContains(r, 'TXN')
-        self.assertContains(r, '?customer=%d#tarea-%d' % (self.otro.pk, b.pk))
+        self.assertContains(r, '?customer=%d&amp;tarea=%d#tarea-%d' % (self.otro.pk, b.pk, b.pk))
         self.assertContains(r, 'PO-ED261111-0002')
 
     def test_la_cancelada_no_sale(self):
@@ -1690,6 +1690,23 @@ class ElCamionCompartidoTests(BaseDeCruces):
         self.assertEqual(r.status_code, 422)
         self.a.refresh_from_db()
         self.assertNotEqual(self.a.estado, CrossingTask.CANCELADA)
+
+    def test_entrar_a_una_tarea_enseña_solo_esa(self):
+        c = self.tarea_con('ED261111-0809', self.cliente)
+        r = self.client.get('/cruces/', {'customer': self.cliente.pk, 'tarea': self.a.pk})
+        self.assertContains(r, 'id="tarea-%d"' % self.a.pk)
+        self.assertNotContains(r, 'id="tarea-%d"' % c.pk)
+        # Sin el selector de cliente ni el cruce nuevo; con el regreso.
+        self.assertNotContains(r, 'name="customer" onchange')
+        self.assertNotContains(r, '/cruces/mark/?customer=')
+        self.assertContains(r, 'Go to crossing tasks')
+        r = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        self.assertContains(r, 'id="tarea-%d"' % c.pk)
+
+    def test_la_lista_lleva_a_la_tarea_sola(self):
+        r = self.client.get('/cruces/')
+        self.assertContains(r, '&amp;tarea=%d#tarea-%d' % (self.a.pk, self.a.pk))
+        self.assertContains(r, 'Ferreteria Lopez - <b>')
 
     def test_el_cliente_no_cancela_camiones(self):
         self.juntar(self.a, self.b)

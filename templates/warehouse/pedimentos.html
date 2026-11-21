@@ -195,9 +195,6 @@
                   background:var(--warn-bg-suave);color:var(--warn-ink);font-size:13px}
     .correcciones b{display:block;margin-bottom:3px;color:var(--warn-ink-fuerte)}
 
-    .factura{padding:10px 14px;border-top:1px solid var(--bdr);
-             background:var(--rsoft);font-size:12px}
-    .factura form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
 
     .casillas{display:flex;gap:6px;align-items:center}
     .casillas input{width:56px;text-align:center;font-family:'IBM Plex Mono',monospace;
@@ -230,7 +227,13 @@
   entonces solo esta la tarjeta de ese pedimento: ni el selector de cliente,
   ni los cuadritos, ni los demas pedimentos, ni lo que falta por repartir.
   {% endcomment %}
-  <a class="bs-volver" href="{% url 'cruces_panel' %}{% if cliente %}?customer={{ cliente.pk }}{% endif %}">← {% trans "Crossings" %}</a>
+  {% with tc=pedimentos.0.tareas.0 %}
+  {% if solo and tc and not tc.es_realizada %}
+  <a class="bs-volver" href="{% url 'cruces_panel' %}?customer={{ cliente.pk }}&amp;tarea={{ tc.pk }}#tarea-{{ tc.pk }}">← {{ tc.custom_id }}</a>
+  {% else %}
+  <a class="bs-volver" href="{% url 'cruces_panel' %}{% if cliente and not puede_editar %}?customer={{ cliente.pk }}{% endif %}">← {% trans "Crossing tasks" %}</a>
+  {% endif %}
+  {% endwith %}
 
   {% comment %}
   El candado saltando. Sale aqui arriba, dentro de la pantalla y con la pantalla
@@ -330,7 +333,7 @@
         {% endcomment %}
         {% for tc in p.tareas %}
         <div class="ped-tarea">{% trans "Crossing task" %}
-          <a href="{% if tc.es_realizada %}{% url 'cruces_realizados' %}?customer={{ cliente.pk }}&amp;q={{ tc.custom_id }}{% else %}{% url 'cruces_panel' %}?customer={{ cliente.pk }}#tarea-{{ tc.pk }}{% endif %}">{{ tc.custom_id }}</a>
+          <a href="{% if tc.es_realizada %}{% url 'cruces_realizados' %}?customer={{ cliente.pk }}&amp;q={{ tc.custom_id }}{% else %}{% url 'cruces_panel' %}?customer={{ cliente.pk }}&amp;tarea={{ tc.pk }}#tarea-{{ tc.pk }}{% endif %}">{{ tc.custom_id }}</a>
         </div>
         {% endfor %}
         <div class="ped-sub">
@@ -572,28 +575,40 @@
     {% endcomment %}
     {% if puede_editar and p.editable %}
       {% for op in p.sin_factura %}
-      <div class="factura">
-        <strong>{{ op.custom_id }}</strong> — {% trans "no commercial invoice loaded" %}
-        <form method="post" enctype="multipart/form-data"
+      {% comment %}
+      Con la misma forma de las ranuras: una franja corta con su boton de
+      subir (y arrastrar y soltar). Marcar una que ya esta en el expediente
+      va detras de su boton.
+      {% endcomment %}
+      <div class="ranura vacia pide ranura-factura">
+        <span class="est">*</span>
+        <h4>{% trans "Commercial invoice" %}<span class="soft mono" style="display:block;font-weight:400;font-size:11px">{{ op.custom_id }}</span></h4>
+        <div class="archivos"><span class="nada">{% trans "empty" %}</span></div>
+        <form class="subir" method="post" enctype="multipart/form-data"
               action="{% url 'operacion_subir_factura' op.pk %}">
           {% csrf_token %}
           <input type="hidden" name="customer" value="{{ cliente.pk }}">
           {% if solo %}<input type="hidden" name="solo" value="{{ solo }}">{% endif %}
-          <input type="file" name="archivo" onchange="this.form.submit()">
+          <label class="btn btn-sm">📎 {% trans "Upload" %}
+            <input type="file" name="archivo" hidden onchange="this.form.submit()">
+          </label>
         </form>
         {% if op.docs_del_expediente %}
-        <form method="post" action="{% url 'operacion_marcar_factura' op.pk %}">
-          {% csrf_token %}
-          <input type="hidden" name="customer" value="{{ cliente.pk }}">
-          {% if solo %}<input type="hidden" name="solo" value="{{ solo }}">{% endif %}
-          <select name="documento">
-            <option value="">— {% trans "or mark one already in the file" %} —</option>
-            {% for d in op.docs_del_expediente %}
-            <option value="{{ d.pk }}">{{ d.original_name|default:d.pk }}</option>
-            {% endfor %}
-          </select>
-          <button class="btn btn-sm" type="submit">{% trans "Mark as invoice" %}</button>
-        </form>
+        <details class="elegir-fotos">
+          <summary class="btn btn-sm">🗂 {% trans "Choose from the file" %} ({{ op.docs_del_expediente|length }})</summary>
+          <form class="series" method="post" action="{% url 'operacion_marcar_factura' op.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="customer" value="{{ cliente.pk }}">
+            {% if solo %}<input type="hidden" name="solo" value="{{ solo }}">{% endif %}
+            <select name="documento" required style="max-width:100%">
+              <option value="">— {% trans "or mark one already in the file" %} —</option>
+              {% for d in op.docs_del_expediente %}
+              <option value="{{ d.pk }}">{{ d.original_name|default:d.pk }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-sm" type="submit">{% trans "Mark as invoice" %}</button>
+          </form>
+        </details>
         {% endif %}
       </div>
       {% endfor %}

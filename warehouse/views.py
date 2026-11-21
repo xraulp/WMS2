@@ -6745,6 +6745,12 @@ def _cruce_del_tenant(request, pk):
     return tarea
 
 
+def _url_de_tarea(tarea, ancla='tarea'):
+    """La pantalla de una tarea de cruce: solo esa, no todas las del cliente."""
+    return (f"{reverse('cruces_panel')}?customer={tarea.customer_id}"
+            f"&tarea={tarea.pk}#{ancla}-{tarea.pk}")
+
+
 def _contexto_de_cruces(request, cliente_pk=None, error=None):
     tenant  = get_tenant_or_404(request)
     profile = get_profile(request.user)
@@ -6782,8 +6788,13 @@ def _contexto_de_cruces(request, cliente_pk=None, error=None):
             contexto.update(_todos_los_cruces(tenant))
         return contexto
 
+    # Al entrar a una tarea desde la lista se ve solo esa, no todas las del
+    # cliente.
+    una = request.GET.get('tarea') or ''
+    filtro = {'pk': int(una)} if una.isdigit() else {}
+    contexto['una_tarea'] = bool(filtro)
     tareas = list(CrossingTask.objects
-                  .filter(tenant=tenant, customer=cliente)
+                  .filter(tenant=tenant, customer=cliente, **filtro)
                   .exclude(estado=CrossingTask.CANCELADA)
                   # Las entregadas antes de hoy ya son cruces realizados.
                   .exclude(CrossingTask.filtro_realizadas())
@@ -7586,7 +7597,7 @@ def cruce_armar(request):
             notifications.avisar_cruce_por_confirmar, tarea,
             triggered_by=request.user)
 
-    return redirect(f"{reverse('cruces_panel')}?customer={cliente.pk}#tarea-{tarea.pk}")
+    return redirect(_url_de_tarea(tarea))
 
 
 @login_required
@@ -7613,7 +7624,7 @@ def cruce_confirmar(request, pk):
         notifications.en_segundo_plano(
             notifications.avisar_cruce_confirmado, tarea,
             triggered_by=request.user)
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+    return redirect(_url_de_tarea(tarea))
 
 
 @login_required
@@ -7674,7 +7685,7 @@ def cruce_meter(request, pk):
     volver = request.POST.get('volver')
     if volver == 'impuestos':
         return redirect(f"{reverse('impuestos_panel')}?customer={tarea.customer_id}")
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+    return redirect(_url_de_tarea(tarea))
 
 
 @login_required
@@ -7699,7 +7710,7 @@ def cruce_sacar(request, pk):
     renglon.delete()
     if not _desaparece_si_quedo_vacia(tarea):
         _versionar_orden(tarea, request.user)
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+    return redirect(_url_de_tarea(tarea))
 
 
 # ── Mover o quitar un pedimento ──────────────────────────────────────────────
@@ -7773,7 +7784,7 @@ def cruce_mover_pedimento(request, pk):
         return _cruces_con_error(request, tarea.customer_id,
                                  _('Say why the day is moving.'))
     if nuevo == tarea.fecha_de_cruce:
-        return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+        return redirect(_url_de_tarea(tarea))
 
     # La tarea nueva hereda si el cliente ya habia confirmado: es la misma
     # instruccion, solo en otro dia.
@@ -7820,9 +7831,9 @@ def cruce_quitar_pedimento(request, pk):
 
     CrossingTaskItem.objects.filter(pk__in=[r.pk for r in renglones]).delete()
     if _desaparece_si_quedo_vacia(tarea):
-        return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+        return redirect(_url_de_tarea(tarea))
     _versionar_orden(tarea, request.user)
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+    return redirect(_url_de_tarea(tarea))
 
 
 # ── Sacar un pedido de un pedimento ──────────────────────────────────────────
@@ -8057,7 +8068,7 @@ def cruce_sacar_pedido(request, pk):
                           request.user)
         _versionar_orden(tarea, request.user)
 
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}&separada={nueva.pk}#tarea-{tarea.pk}")
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}&tarea={tarea.pk}&separada={nueva.pk}#tarea-{tarea.pk}")
 
 
 
@@ -8101,7 +8112,7 @@ def cruce_camion_juntar(request, pk):
             otra.save(update_fields=['camion', 'updated_at'])
         tarea.camion = camion
         tarea.save(update_fields=['camion', 'updated_at'])
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+    return redirect(_url_de_tarea(tarea))
 
 
 @login_required
@@ -8116,7 +8127,7 @@ def cruce_camion_salir(request, pk):
             _('This crossing is already loaded; it can no longer change trucks.'))
     tarea.camion = None
     tarea.save(update_fields=['camion', 'updated_at'])
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+    return redirect(_url_de_tarea(tarea))
 
 
 @login_required
@@ -8130,7 +8141,7 @@ def cruce_rojo_aduana(request, pk):
         return _cruces_con_error(request, tarea.customer_id,
             _('%(tarea)s is not in crossing: issue its remision first.')
             % {'tarea': tarea.custom_id})
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+    return redirect(_url_de_tarea(tarea))
 
 
 def _marcar_fase(request, pk, metodo, error):
@@ -8141,7 +8152,7 @@ def _marcar_fase(request, pk, metodo, error):
     if not getattr(tarea, metodo)(request.user):
         return _cruces_con_error(request, tarea.customer_id,
                                  error % {'tarea': tarea.custom_id})
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+    return redirect(_url_de_tarea(tarea))
 
 
 @login_required
@@ -8181,7 +8192,7 @@ def cruce_entregada(request, pk):
             _('%(tarea)s cannot be delivered yet: customs has not let it go '
               '(green light or released).')
             % {'tarea': tarea.custom_id})
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}#tarea-{tarea.pk}")
+    return redirect(_url_de_tarea(tarea))
 
 
 @login_required
@@ -8207,7 +8218,7 @@ def cruce_cambiar_dia(request, pk):
         return _cruces_con_error(request, tarea.customer_id,
                                  _('Say why the day is moving.'))
     if nuevo == tarea.fecha_de_cruce:
-        return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+        return redirect(_url_de_tarea(tarea))
 
     CambioDeDiaDeCruce.objects.create(
         task=tarea, fecha_anterior=tarea.fecha_de_cruce, fecha_nueva=nuevo,
@@ -8218,7 +8229,7 @@ def cruce_cambiar_dia(request, pk):
     # dia con las demas, y esta queda en el suyo.
     tarea.camion = None
     tarea.save(update_fields=['fecha_de_cruce', 'camion', 'updated_at'])
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+    return redirect(_url_de_tarea(tarea))
 
 
 @login_required
@@ -8240,7 +8251,7 @@ def cruce_cancelar(request, pk):
     tarea.estado = CrossingTask.CANCELADA
     tarea.save(update_fields=['estado', 'updated_at'])
     # Desde la lista de todos se cancela sin entrar a la tarea: se regresa ahi.
-    if a_todos:
+    if a_todos or not profile.is_customer():
         return redirect('cruces_panel')
     return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
 
@@ -8373,7 +8384,7 @@ def orden_emitir(request, pk):
             % {'faltan': '; '.join(str(f) for f in faltan)})
 
     emitir_orden_de_carga(tarea, request.user)
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+    return redirect(_url_de_tarea(tarea))
 
 
 @login_required
@@ -8635,7 +8646,7 @@ def remision_emitir(request, pk):
     if tarea.estado in (CrossingTask.ABIERTA, CrossingTask.CON_ORDEN):
         tarea.estado = CrossingTask.CARGADA
         tarea.save(update_fields=['estado', 'updated_at'])
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}")
+    return redirect(_url_de_tarea(tarea))
 
 
 # ── Los tres papeles ─────────────────────────────────────────────────────────
@@ -8716,8 +8727,7 @@ def _volver_a_la_entrega(request, tarea, aviso=None, error=None):
         request.session['error_de_cruces'] = str(error)
     if request.POST.get('volver') == 'pagina':
         return redirect(reverse('cruce_documentos', args=[tarea.pk]))
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}"
-                    f"#entrega-{tarea.pk}")
+    return redirect(_url_de_tarea(tarea, ancla='entrega'))
 
 
 @login_required

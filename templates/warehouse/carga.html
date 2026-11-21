@@ -91,7 +91,7 @@
 
 <div class="tb">
   <span class="tb-brand">WMS — {% trans "Verify the load" %}</span>
-  <a href="{% url 'cruces_panel' %}?customer={{ tarea.customer_id }}">← {{ tarea.custom_id }}</a>
+  <a href="{% url 'cruces_panel' %}?customer={{ tarea.customer_id }}&amp;tarea={{ tarea.pk }}">← {{ tarea.custom_id }}</a>
 </div>
 
 <div class="wrap">

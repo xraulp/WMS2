@@ -4551,3 +4551,12 @@ msgstr "Consolidado de varios clientes"
 
 msgid "Choose from the file"
 msgstr "Elegir del expediente"
+
+msgid "Crossing tasks"
+msgstr "Tareas de cruce"
+
+msgid "Go to crossing tasks"
+msgstr "Ir a tareas de cruce"
+
+msgid "no pedimento yet"
+msgstr "sin pedimento todavía"

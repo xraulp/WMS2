@@ -5,7 +5,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% trans "Crossings" %} — WMS</title>
+  <title>{% trans "Crossing tasks" %} — WMS</title>
   {% include "warehouse/partials/tema.html" %}
   {% include "warehouse/partials/documentos_de_entrega_css.html" %}
   <style>
@@ -21,6 +21,7 @@
     .card{background:var(--surface);border:1px solid var(--bdr);border-radius:12px;
           padding:16px;margin-bottom:14px}
     .ct{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;margin:0 0 10px}
+    .titulo-cruces{font-size:20px;font-weight:700;margin:4px 0 12px;color:var(--ink);letter-spacing:-.01em}
     .mono{font-family:'IBM Plex Mono',monospace}
     .soft{color:var(--soft)}
     select,input[type=text],input[type=date],input[type=number],textarea{
@@ -309,8 +310,10 @@
   regreso del pedimento.
   {% endcomment %}
   {% if cliente and not es_cliente %}
-  <a class="bs-volver" style="margin-bottom:10px" href="{% url 'cruces_panel' %}">← {% trans "Crossings" %}</a>
+  <a class="bs-volver" style="margin-bottom:10px" href="{% url 'cruces_panel' %}">← {% trans "Go to crossing tasks" %}</a>
   {% endif %}
+
+  <h1 class="titulo-cruces">{% trans "Crossing tasks" %}</h1>
 
   {% if error %}<div class="msg-error">&#10007; {{ error }}</div>{% endif %}
   {% if aviso %}<div class="msg-ok">&#10003; {{ aviso }}</div>{% endif %}
@@ -325,7 +328,11 @@
   </div>
   {% endif %}
 
-  {% if not es_cliente %}
+  {% comment %}
+  El selector de cliente solo en la lista de todos. Dentro de una tarea
+  estorbaba: para cambiar de cliente se regresa a la lista.
+  {% endcomment %}
+  {% if not es_cliente and not cliente %}
   <div class="card">
     <p class="ct">{% trans "Customer" %}</p>
     <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -354,6 +361,7 @@
   final, en una pantalla aparte que sirve igual en el telefono. Antes aqui se
   creaba una tarea vacia y despues se metia un embarque por vuelta.
   {% endcomment %}
+  {% if es_cliente %}
   <div class="card" style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
     <div>
       <p class="ct" style="margin:0 0 3px">{% trans "New crossing" %}</p>
@@ -362,6 +370,7 @@
     <a class="btn btn-p" style="text-decoration:none"
        href="{% url 'cruce_armar' %}?customer={{ cliente.pk }}">+ {% trans "Send to crossing" %}</a>
   </div>
+  {% endif %}
 
   {% for t in tareas %}
   <div class="tarea{% if forloop.counter|divisibleby:2 %} par{% endif %}" id="tarea-{{ t.pk }}">
@@ -670,19 +679,15 @@
           <td data-etq="{% trans "Pedimento" %}" class="mono">
             <span class="lista">
             {% for p in g.pedimentos %}<span class="ped-num">{{ p.etiqueta }}</span>{% if p.rectificacion %}<span class="estado-ped">{% trans "Rect." %} {{ p.rectificacion }}</span>{% endif %}{% empty %}
-            {% if not es_cliente %}
-            <form method="post" action="{% url 'pedimento_create' %}" style="margin:0">
-              {% csrf_token %}
-              <input type="hidden" name="customer" value="{{ cliente.pk }}">
-              <input type="hidden" name="operation" value="{{ g.operation.pk }}">
-              <button class="ped-link" type="submit">{% if g.pedimento_texto %}{{ g.pedimento_texto }} ›{% else %}+ {% trans "Make the pedimento" %}{% endif %}</button>
-            </form>
-            {% elif g.pedimento_texto %}<a class="ped-link" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}">{{ g.pedimento_texto }} ›</a>
-            {% else %}<span class="soft">—</span>{% endif %}
+            {% if g.pedimento_texto %}<span class="ped-num">{{ g.pedimento_texto }}</span>{% else %}<span class="soft">{% trans "no pedimento yet" %}</span>{% endif %}
             {% endfor %}
             </span>
           </td>
-          <td data-etq="" class="td-entrar">{% for p in g.pedimentos %}<a class="ped-entrar" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{% trans "Go in" %} ›</a>{% if not forloop.last %} {% endif %}{% endfor %}</td>
+          {% comment %}
+          Entrar, igual en todos los renglones. Al que aun no tiene pedimento,
+          entrar se lo crea con su entrada dentro y lleva a el.
+          {% endcomment %}
+          <td data-etq="" class="td-entrar">{% for p in g.pedimentos %}<a class="ped-entrar" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}#ped-{{ p.pk }}">{% trans "Go in" %} ›</a>{% if not forloop.last %} {% endif %}{% empty %}{% if not es_cliente %}<form method="post" action="{% url 'pedimento_create' %}" style="margin:0">{% csrf_token %}<input type="hidden" name="customer" value="{{ cliente.pk }}"><input type="hidden" name="operation" value="{{ g.operation.pk }}"><button class="ped-entrar" type="submit" style="cursor:pointer;font-family:inherit" title="{% trans "Make the pedimento" %}">{% trans "Go in" %} ›</button></form>{% endif %}{% endfor %}</td>
           <td data-etq="{% trans "Approx. taxes" %}" class="importe">
             {% if g.impuesto %}${{ g.impuesto|pesos }}{% else %}<span class="soft">—</span>{% endif %}
           </td>
