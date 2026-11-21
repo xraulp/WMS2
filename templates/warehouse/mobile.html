@@ -870,15 +870,16 @@ function handleMobileQR() {
     console.log("Mobile QR detectado - tab:", tab, "q:", q);
 
     if (tab === 'digital' && q) {
-        // Pequeño retraso para asegurar que el DOM esté listo
-        setTimeout(function() {
-            const searchInput = document.getElementById('mob-digi-q');
-            if (searchInput) {
-                searchInput.value = q;
-                mobShowTab('digital');
-                mobDigiSearch();
-            }
-        }, 800);
+        // Sin retraso: esto corre en DOMContentLoaded, el DOM ya esta listo, y
+        // los 800 ms solo dejaban "Loading..." en pantalla al entrar por el QR.
+        // Y sin mobDigiSearch() despues: mobShowTab('digital') ya carga el
+        // panel con lo que diga el buscador. Las dos juntas eran dos
+        // peticiones al mismo hueco, y htmx fallaba al ejecutar los <script>
+        // de la primera ("Cannot read properties of null (reading
+        // 'insertBefore')").
+        const searchInput = document.getElementById('mob-digi-q');
+        if (searchInput) searchInput.value = q;
+        mobShowTab('digital');
     }
 }
 
@@ -1269,12 +1270,15 @@ function onMobAfterCatSave(e) {
 
 // Función para abrir Digital con un ID específico (desde QR o botón)
 function openDigitalWithId(customId) {
-    mobShowTab('digital');
+    // El valor va antes de abrir la pestana, y la pestana hace la unica
+    // peticion. Antes se abria (pidiendo el indice, con el buscador vacio) y
+    // luego se buscaba: dos peticiones al mismo hueco. Ganaba la que llegara
+    // ultima -- a veces el indice en vez del expediente -- y htmx tropezaba
+    // al ejecutar los <script> de la primera, que la segunda ya habia quitado
+    // ("Cannot read properties of null (reading 'insertBefore')").
     const searchInput = document.getElementById('mob-digi-q');
-    if (searchInput) {
-        searchInput.value = customId;
-        mobDigiSearch();
-    }
+    if (searchInput) searchInput.value = customId;
+    mobShowTab('digital');
 }
 
 

@@ -1587,12 +1587,15 @@ function submitOperationForm() {
 }
 
 function openDigitalWithId(customId) {
-    showTab('digital');
+    // El valor va antes de abrir la pestana, y la pestana hace la unica
+    // peticion. Antes se abria (pidiendo el indice, con el buscador vacio) y
+    // luego se buscaba: dos peticiones al mismo hueco. Ganaba la que llegara
+    // ultima -- a veces el indice en vez del expediente -- y htmx tropezaba
+    // al ejecutar los <script> de la primera, que la segunda ya habia quitado
+    // ("Cannot read properties of null (reading 'insertBefore')").
     const searchInput = document.getElementById('digital-q');
-    if (searchInput) {
-        searchInput.value = customId;
-        digitalSearch();
-    }
+    if (searchInput) searchInput.value = customId;
+    showTab('digital');
 }
 
 ///////////////////////////////////  061526 pm
