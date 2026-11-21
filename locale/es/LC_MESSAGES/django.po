@@ -4560,3 +4560,9 @@ msgstr "Ir a tareas de cruce"
 
 msgid "no pedimento yet"
 msgstr "sin pedimento todavía"
+
+msgid "Entries"
+msgstr "Entradas"
+
+msgid "Step"
+msgstr "En qué va"

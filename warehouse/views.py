@@ -4938,7 +4938,7 @@ def _volver_a_la_tarjeta(request, cliente_pk):
     url = f"{reverse('pedimentos_panel')}?customer={cliente_pk}"
     solo = request.POST.get('solo', '')
     if solo.isdigit():
-        url += f'&solo={solo}#ped-{solo}'
+        url += f'&solo={solo}'
     return redirect(url)
 
 
@@ -4957,7 +4957,7 @@ def _volver_al_pedimento(ped):
     pedimentos del cliente alrededor: se entro a este desde su tarea de cruce.
     """
     return redirect(f"{reverse('pedimentos_panel')}?customer={ped.customer_id}"
-                    f"&solo={ped.pk}#ped-{ped.pk}")
+                    f"&solo={ped.pk}")
 
 
 def _hermanos_en_curso(ped):
@@ -6435,7 +6435,7 @@ def pedimento_ranuras(request):
     if volver:
         regreso = f"{reverse('pedimentos_panel')}?customer={volver}"
         if solo:
-            regreso += f'&solo={solo}#ped-{solo}'
+            regreso += f'&solo={solo}'
     else:
         regreso = reverse('cruces_panel')
     return render(request, 'warehouse/pedimento_ranuras.html', {

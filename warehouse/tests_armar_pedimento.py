@@ -340,7 +340,7 @@ class ArmarDesdeLaTareaTests(Base):
         respuesta = self.armar()
         ped = Pedimento.objects.get()
         self.assertEqual(ped.renglones.get().bultos, 4)
-        self.assertIn(f'#ped-{ped.pk}', respuesta['Location'])
+        self.assertIn(f'solo={ped.pk}', respuesta['Location'])
 
     def test_solo_mete_lo_que_le_queda_libre(self):
         self.dentro(self.ped(orden=3), bultos=3)

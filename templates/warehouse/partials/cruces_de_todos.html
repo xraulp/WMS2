@@ -32,10 +32,12 @@ la tarea completa, en la pantalla de su cliente.
   /* `display:flex` le gana al atributo `hidden`. */
   .dia-hd[hidden], .vacio[hidden]{display:none}
   .dia-hd.hoy{background:var(--asoft);color:var(--accent-ink)}
-  /* Una linea por tarea. En la PC es una fila de columnas; en el telefono,
-     dos renglones: cliente y fase arriba, numero, pedido y estado abajo. */
+  /* Una linea por tarea, con las mismas columnas en todas -- sueltas y en
+     camion compartido --: cliente, entradas, tarea, pedidos, en que va y
+     bultos. Los pedidos salen completos aunque bajen de linea. En el
+     telefono, cuatro renglones. */
   .linea{--cc:hsl(var(--h,210) var(--cli-s) var(--cli-l));display:grid;
-         grid-template-columns:110px 118px minmax(0,1.2fr) 120px minmax(0,1.6fr) 64px;
+         grid-template-columns:90px minmax(0,1fr) 118px minmax(0,1.3fr) 150px 64px;
          gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--bdr);
          border-left:4px solid var(--cc);text-decoration:none;color:var(--ink);font-size:13px}
   /* Al pasar el mouse se nota bien cual se va a abrir. */
@@ -44,12 +46,17 @@ la tarea completa, en la pantalla de su cliente.
   .bloque.solo:hover .bloque-hd{background:var(--asoft)}
   .linea:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
   .linea[hidden]{display:none}
-  .linea .idpo{display:contents}
   .linea .num{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600}
-  .linea .po{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .linea .ents{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--soft);
+               min-width:0;overflow-wrap:anywhere}
+  .linea .po{font-weight:600;min-width:0;overflow-wrap:anywhere}
+  .linea .fz-c{display:flex;gap:4px;flex-wrap:wrap;min-width:0}
+  .linea .fz-c .estado-ped{margin-left:0}
   .linea .bul{text-align:right;font-variant-numeric:tabular-nums;color:var(--soft);font-size:12px}
-  .linea .eds{display:flex;gap:4px;flex-wrap:wrap;min-width:0}
-  .linea .eds .estado-ped, .linea .eds .en-revision{margin-left:0}
+  .cols{display:grid;grid-template-columns:90px minmax(0,1fr) 118px minmax(0,1.3fr) 150px 64px;
+        gap:10px;padding:6px 26px 6px 30px;font-size:10px;text-transform:uppercase;
+        letter-spacing:.05em;color:var(--soft);font-weight:600;border-bottom:1px solid var(--bdr)}
+  .cols span:last-child{text-align:right}
   .fz{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:5px;
       white-space:nowrap;background:var(--bg-sutil);color:var(--soft);border:1px solid var(--bdr)}
   .fz-salio, .fz-aduana{background:var(--asoft);color:var(--accent-ink);border-color:var(--accent)}
@@ -76,22 +83,15 @@ la tarea completa, en la pantalla de su cliente.
   .bloque.solo .bloque-hd{background:var(--bg-sutil);color:var(--ink);border-bottom:1px solid var(--bdr)}
   .marca-metoca{color:var(--warn-ink-fuerte);font-weight:700}
   .vacio{padding:16px 14px;color:var(--soft);font-size:13px}
-  /* En el camion compartido, de prueba: sin la columna del estado del
-     pedimento, con los pedidos completos aunque bajen de linea y con las
-     entradas de cada tarea. */
-  .linea.en-camion{grid-template-columns:110px 118px minmax(0,1.4fr) minmax(0,1.2fr) 120px 64px}
-  .linea.en-camion .po{white-space:normal;overflow:visible;overflow-wrap:anywhere}
-  .linea .ents{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--soft);
-               min-width:0;overflow-wrap:anywhere}
   @media (max-width:700px){
-    .linea.en-camion{grid-template-columns:minmax(0,1fr) auto}
-    .linea .ents{grid-column:1 / -1;grid-row:3}
+    .cols{display:none}
     .linea{grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:9px 12px}
     .linea .cli{grid-column:1;grid-row:1}
-    .linea .fz-c{grid-column:2;grid-row:1;justify-self:end}
-    .linea .idpo{display:flex;gap:10px;align-items:baseline;grid-column:1;grid-row:2;min-width:0}
+    .linea .fz-c{grid-column:2;grid-row:1;justify-content:flex-end}
+    .linea .num{grid-column:1;grid-row:2}
     .linea .bul{grid-column:2;grid-row:2}
-    .linea .eds{grid-column:1 / -1;grid-row:3}
+    .linea .ents{grid-column:1 / -1;grid-row:3}
+    .linea .po{grid-column:1 / -1;grid-row:4}
   }
 </style>
 
@@ -118,6 +118,12 @@ la tarea completa, en la pantalla de su cliente.
 </div>
 
 <div class="todas" id="todas">
+  {% if dias %}
+  <div class="cols" aria-hidden="true">
+    <span>{% trans "Customer" %}</span><span>{% trans "Entries" %}</span><span>{% trans "Crossing" %}</span>
+    <span>{% trans "Orders" %}</span><span>{% trans "Step" %}</span><span>{% trans "Bundles" %}</span>
+  </div>
+  {% endif %}
   {% for dia in dias %}
   <div class="dia-hd{% if dia.fecha == hoy %} hoy{% endif %}" data-dia="{{ forloop.counter }}">
     <span>
@@ -146,7 +152,7 @@ la tarea completa, en la pantalla de su cliente.
       </form>
       {% endif %}
     </div>
-    {% for t in b.tareas %}{% include "warehouse/partials/cruces_linea.html" with en_camion=True %}{% endfor %}
+    {% for t in b.tareas %}{% include "warehouse/partials/cruces_linea.html" %}{% endfor %}
   </div>
   {% else %}
   {% for t in b.tareas %}

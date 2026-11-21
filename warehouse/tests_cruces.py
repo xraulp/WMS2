@@ -441,8 +441,8 @@ class ElImpuestoEnLaTareaTests(BaseDeCruces):
         self.tarea_con(a)
         self.assertContains(
             self.pantalla(self.jefa),
-            '/pedimentos/?customer=%d&solo=%d#ped-%d'
-            % (self.cliente.pk, ped.pk, ped.pk))
+            '/pedimentos/?customer=%d&solo=%d"'
+            % (self.cliente.pk, ped.pk))
 
     def test_los_embarques_del_mismo_pedimento_llevan_el_mismo_color(self):
         a = self.operacion('ED261012-0001', bundle_qty=15)
@@ -1707,8 +1707,9 @@ class ElCamionCompartidoTests(BaseDeCruces):
     def test_en_el_camion_las_lineas_llevan_sus_entradas(self):
         self.juntar(self.a, self.b)
         r = self.client.get('/cruces/')
-        self.assertContains(r, 'class="linea en-camion"', count=2)
+        # Las mismas columnas en todas: entradas sin columna del pedimento.
         self.assertContains(r, '<span class="ents">ED261111-0801</span>')
+        self.assertContains(r, '<span class="ents">ED261111-0802</span>')
         self.assertNotContains(r, '<span class="eds">')
 
     def test_la_lista_lleva_a_la_tarea_sola(self):
