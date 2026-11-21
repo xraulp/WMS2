@@ -3945,10 +3945,13 @@ class CrossingTask(models.Model):
     @property
     def le_toca_al_cliente(self):
         """
-        Si lo que sigue es del cliente: revisar sus pedimentos o confirmar la
-        tarea. Lo que tenga pendiente la casa en los pedimentos va primero:
-        mientras falte preparar uno, le toca a la casa aunque el cliente
-        tampoco haya confirmado.
+        Si lo que sigue es del cliente: revisar sus pedimentos. Lo que tenga
+        pendiente la casa en los pedimentos va primero: mientras falte preparar
+        uno, le toca a la casa.
+
+        Confirmar la tarea que armo la casa no cuenta: es solo un aviso. Casi
+        nadie lo contesta y no frena nada, y contarlo sacaba la tarea de "lo que
+        me toca" aunque la casa tuviera trabajo en ella.
         """
         actual = self.paso_actual
         if actual is None:
@@ -3958,7 +3961,7 @@ class CrossingTask(models.Model):
                 return False
             peds = self.pedimentos
             return bool(peds) and not any(p.le_toca_a_la_casa for p in peds)
-        return bool(self.espera_confirmacion)
+        return False
 
     @property
     def lo_que_sigue(self):
@@ -3969,12 +3972,7 @@ class CrossingTask(models.Model):
             if actual['clave'] == self.PASO_PEDIMENTOS and any(
                     p.clave_corta == Pedimento.FALTA_MV for p in self.pedimentos)                     and not any(p.es_turno_del_cliente for p in self.pedimentos):
                 return _('upload the statement of value and its receipt')
-            if actual['clave'] == self.PASO_PEDIMENTOS and not self.espera_confirmacion:
-                return _('review and approve the pedimentos')
-            if actual['clave'] == self.PASO_PEDIMENTOS and any(
-                    p.es_turno_del_cliente for p in self.pedimentos):
-                return _('review and approve the pedimentos')
-            return _('confirm the crossing')
+            return _('review and approve the pedimentos')
         if actual['clave'] == self.PASO_ADUANA and actual['alerta']:
             return _('customs release')
         return self.LO_QUE_SIGUE[actual['clave']]

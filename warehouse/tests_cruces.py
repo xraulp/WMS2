@@ -675,6 +675,14 @@ class AvisoDeCrucePorConfirmarTests(BaseDeCruces):
         from .models import NotificationLog
         return NotificationLog.objects.filter(event='CROSSING_TO_CONFIRM')
 
+    def test_sin_confirmar_no_es_pendiente_del_cliente(self):
+        # La confirmacion es solo un aviso: la tarea sigue siendo de la casa.
+        self.armar()
+        t = CrossingTask.objects.get()
+        self.assertTrue(t.espera_confirmacion)
+        self.assertFalse(t.le_toca_al_cliente)
+        self.assertNotEqual(t.lo_que_sigue, 'confirm the crossing')
+
     def test_la_casa_lo_arma_y_al_cliente_le_llega(self):
         from django.core import mail
         self.armar()
