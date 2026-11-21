@@ -229,7 +229,7 @@
   {% endcomment %}
   {% with tc=pedimentos.0.tareas.0 %}
   {% if solo and tc and not tc.es_realizada %}
-  <a class="bs-volver" href="{% url 'cruces_panel' %}?customer={{ cliente.pk }}&amp;tarea={{ tc.pk }}#tarea-{{ tc.pk }}">← {{ tc.custom_id }}</a>
+  <a class="bs-volver" href="{% url 'cruces_panel' %}?customer={{ cliente.pk }}&amp;tarea={{ tc.pk }}">← {{ tc.custom_id }}</a>
   {% else %}
   <a class="bs-volver" href="{% url 'cruces_panel' %}{% if cliente and not puede_editar %}?customer={{ cliente.pk }}{% endif %}">← {% trans "Crossing tasks" %}</a>
   {% endif %}
@@ -333,7 +333,7 @@
         {% endcomment %}
         {% for tc in p.tareas %}
         <div class="ped-tarea">{% trans "Crossing task" %}
-          <a href="{% if tc.es_realizada %}{% url 'cruces_realizados' %}?customer={{ cliente.pk }}&amp;q={{ tc.custom_id }}{% else %}{% url 'cruces_panel' %}?customer={{ cliente.pk }}&amp;tarea={{ tc.pk }}#tarea-{{ tc.pk }}{% endif %}">{{ tc.custom_id }}</a>
+          <a href="{% if tc.es_realizada %}{% url 'cruces_realizados' %}?customer={{ cliente.pk }}&amp;q={{ tc.custom_id }}{% else %}{% url 'cruces_panel' %}?customer={{ cliente.pk }}&amp;tarea={{ tc.pk }}{% endif %}">{{ tc.custom_id }}</a>
         </div>
         {% endfor %}
         <div class="ped-sub">

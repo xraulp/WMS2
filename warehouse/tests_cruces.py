@@ -500,7 +500,8 @@ class MarcarYLuegoCrearTests(BaseDeCruces):
         # El caso de los 19 de 20 se teclea en el mismo envio.
         self.assertEqual(t.renglones.get(operation=self.b).bultos, 19)
         self.assertIsNone(t.renglones.get(operation=self.a).bultos)
-        self.assertIn('#tarea-%d' % t.pk, respuesta['Location'])
+        self.assertIn('tarea=%d' % t.pk, respuesta['Location'])
+        self.assertNotIn('#', respuesta['Location'])
 
     def test_el_cliente_la_crea_desde_su_telefono(self):
         self.client.force_login(self.duenio)
@@ -1039,7 +1040,7 @@ class ElPedimentoNombraSuTareaTests(BaseDeCruces):
         r = self.client.get('/pedimentos/', {'customer': self.cliente.pk,
                                              'solo': ped.pk})
         self.assertContains(r, t.custom_id)
-        self.assertContains(r, '#tarea-%d' % t.pk)
+        self.assertContains(r, '&amp;tarea=%d"' % t.pk)
 
     def test_la_cancelada_no_cuenta(self):
         op = self.operacion('ED261110-0012', bundle_qty=1)
@@ -1079,7 +1080,7 @@ class LosCrucesDeTodosLosClientesTests(BaseDeCruces):
         self.assertEqual({t.pk for t in r.context['todas']}, {a.pk, b.pk})
         self.assertContains(r, 'LBO')
         self.assertContains(r, 'TXN')
-        self.assertContains(r, '?customer=%d&amp;tarea=%d#tarea-%d' % (self.otro.pk, b.pk, b.pk))
+        self.assertContains(r, '?customer=%d&amp;tarea=%d"' % (self.otro.pk, b.pk))
         self.assertContains(r, 'PO-ED261111-0002')
 
     def test_la_cancelada_no_sale(self):
@@ -1705,8 +1706,8 @@ class ElCamionCompartidoTests(BaseDeCruces):
 
     def test_la_lista_lleva_a_la_tarea_sola(self):
         r = self.client.get('/cruces/')
-        self.assertContains(r, '&amp;tarea=%d#tarea-%d' % (self.a.pk, self.a.pk))
-        self.assertContains(r, 'Ferreteria Lopez - <b>')
+        self.assertContains(r, '&amp;tarea=%d"' % self.a.pk)
+        self.assertContains(r, 'Ferreteria Lopez - <b>ED261111-0801</b>')
 
     def test_el_cliente_no_cancela_camiones(self):
         self.juntar(self.a, self.b)

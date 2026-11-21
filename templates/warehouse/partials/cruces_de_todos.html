@@ -142,7 +142,7 @@ la tarea completa, en la pantalla de su cliente.
   {% else %}
   {% for t in b.tareas %}
   <div class="bloque solo" data-en-dia="{{ d }}">
-    <div class="bloque-hd"><span class="bloque-nombre">{{ t.customer.name }} - <b>{{ t.custom_id }}</b></span>
+    <div class="bloque-hd"><span class="bloque-nombre">{{ t.customer.name }}{% if t.entradas %} - <b>{{ t.entradas|join:", " }}</b>{% endif %}</span>
       <span class="sp"></span>
       <span>{{ t.bultos }} {% trans "bdl" %}</span>
       {% if b.cancelable %}

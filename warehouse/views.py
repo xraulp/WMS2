@@ -6745,10 +6745,16 @@ def _cruce_del_tenant(request, pk):
     return tarea
 
 
-def _url_de_tarea(tarea, ancla='tarea'):
-    """La pantalla de una tarea de cruce: solo esa, no todas las del cliente."""
-    return (f"{reverse('cruces_panel')}?customer={tarea.customer_id}"
-            f"&tarea={tarea.pk}#{ancla}-{tarea.pk}")
+def _url_de_tarea(tarea, ancla=None):
+    """
+    La pantalla de una tarea de cruce: solo esa, no todas las del cliente.
+
+    Sin ancla empieza arriba: como sale sola, saltar a ella bajaba la pantalla.
+    El ancla solo para volver a una parte de la tarea, como la entrega.
+    """
+    url = (f"{reverse('cruces_panel')}?customer={tarea.customer_id}"
+           f"&tarea={tarea.pk}")
+    return f"{url}#{ancla}-{tarea.pk}" if ancla else url
 
 
 def _contexto_de_cruces(request, cliente_pk=None, error=None):
@@ -6961,6 +6967,8 @@ def _todos_los_cruces(tenant):
         tarea.n_embarques = len(filas)
         tarea.bultos = sum(f.bultos_que_van for f in filas)
         tarea.pedidos = []
+        # Las entradas que lleva, para el titulo de su recuadro.
+        tarea.entradas = [f.operation.custom_id for f in filas]
         pedimentos = {}
         sin_pedimento = 0
         for fila in filas:
@@ -8068,7 +8076,7 @@ def cruce_sacar_pedido(request, pk):
                           request.user)
         _versionar_orden(tarea, request.user)
 
-    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}&tarea={tarea.pk}&separada={nueva.pk}#tarea-{tarea.pk}")
+    return redirect(f"{reverse('cruces_panel')}?customer={tarea.customer_id}&tarea={tarea.pk}&separada={nueva.pk}")
 
 
 
