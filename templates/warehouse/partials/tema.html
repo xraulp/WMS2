@@ -192,3 +192,8 @@ function pintarBotonDelTema() {
 }
 document.addEventListener('DOMContentLoaded', pintarBotonDelTema);
 </script>
+{% comment %}
+La compresion de fotos va aqui porque este parcial lo llevan todas las
+pantallas con sesion; asi cualquier input de archivo nuevo queda cubierto.
+{% endcomment %}
+{% include "warehouse/partials/comprimir_fotos.html" %}

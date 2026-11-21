@@ -60,7 +60,7 @@
     <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
              title="{% trans "It appears on the reports and labels this company sends to its customers" %}">{% trans "Logo (optional)" %}</label>
-      <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif"
+      <input type="file" name="logo" data-sin-comprimir accept=".png,.jpg,.jpeg,.gif"
              style="height:28px;padding:3px;border:1px solid var(--bdr);border-radius:6px;font-size:11px;width:200px">
     </div>
     <div style="width:100%;height:1px;background:var(--bdr);margin:4px 0"></div>
@@ -175,7 +175,7 @@
           <input type="hidden" name="tenant_id" value="{{ t.pk }}">
           <label class="btn btn-g btn-sm" style="cursor:pointer">
             {% if t.logo %}{% trans "Change logo" %}{% else %}{% trans "Add logo" %}{% endif %}
-            <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif" hidden
+            <input type="file" name="logo" data-sin-comprimir accept=".png,.jpg,.jpeg,.gif" hidden
                    onchange="this.form.requestSubmit ? this.form.requestSubmit() : htmx.trigger(this.form,'submit')">
           </label>
         </form>

@@ -198,7 +198,10 @@ function handleDrop(e) {
   const dt = new DataTransfer();
   for (const f of e.dataTransfer.files) dt.items.add(f);
   input.files = dt.files;
-  submitUpload();
+  // Por el evento y no llamando a submitUpload(): asi pasa antes por la
+  // compresion de fotos (partials/comprimir_fotos.html), y el onchange del
+  // input es el que sube.
+  input.dispatchEvent(new Event('change', {bubbles: true}));
 }
 function submitUpload() {
   const form = document.getElementById('digital-upload-form');

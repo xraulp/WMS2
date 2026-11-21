@@ -1,0 +1,164 @@
+{% load i18n %}{% comment %}
+Achica las fotos en el navegador, antes de que salgan del celular.
+
+El servidor ya las achica (warehouse/fotos.py), pero para entonces la foto de
+4 MB ya viajo por datos moviles. Aqui se hace lo mismo antes de mandarla: lado
+largo de 2000 px y JPEG al 82 %, las mismas cifras que el servidor, para que
+lo que llegue ya no tenga que volver a comprimirse.
+
+Como funciona: escucha el `change` de cualquier <input type="file"> en fase de
+captura, es decir, antes que los manejadores de cada pantalla
+(`this.form.submit()`, `submitUpload()`, `mobAddFiles(this)`...). Si hay fotos
+que achicar, detiene ese evento, cambia los archivos del input por los
+achicados y vuelve a disparar `change`. Las pantallas no se enteran: leen
+`input.files` como siempre y encuentran las fotos ya chicas. Por eso ninguna
+pantalla tuvo que cambiar.
+
+Reglas, iguales a las del servidor:
+* Solo JPEG y WEBP de mas de 600 kB. PNG, HEIC, video y PDF pasan tal cual;
+  si hace falta, el servidor se encarga.
+* Si el resultado no pesa menos, se manda el original.
+* Se conserva el EXIF (fecha y lugar de la toma, que son evidencia), con la
+  orientacion puesta en "normal" porque la rotacion ya va aplicada en los
+  pixeles; si no, el visor la giraria dos veces.
+* Cualquier fallo -- navegador viejo sin DataTransfer, foto que no decodifica --
+  deja los archivos como estaban y el evento sigue su camino.
+* Un input con `data-sin-comprimir` se deja en paz (los logos).
+{% endcomment %}
+<style>
+#cf-aviso{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;
+  background:var(--ink,#0f172a);color:var(--bg,#fff);padding:8px 14px;border-radius:999px;
+  font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none}
+</style>
+<script>
+(function () {
+  if (window.__comprimirFotos) return;   // por si la pagina lo incluye dos veces
+  window.__comprimirFotos = true;
+
+  var LADO_MAXIMO = 2000, CALIDAD = 0.82, PESO_QUE_NO_SE_TOCA = 600 * 1024;
+  var redisparados = new WeakSet();
+  {% trans "Optimizing photos..." as texto_del_aviso %}
+  var TEXTO_DEL_AVISO = "{{ texto_del_aviso|escapejs }}";
+
+  // El aviso se crea al usarlo: este parcial puede ir dentro del <head>, donde
+  // un <div> escrito a mano rompe el documento.
+  function aviso() {
+    var a = document.getElementById('cf-aviso');
+    if (!a && document.body) {
+      a = document.createElement('div');
+      a.id = 'cf-aviso';
+      a.setAttribute('role', 'status');
+      a.setAttribute('aria-live', 'polite');
+      a.textContent = TEXTO_DEL_AVISO;
+      document.body.appendChild(a);
+    }
+    return a;
+  }
+
+  function valeLaPena(f) {
+    return (f.type === 'image/jpeg' || f.type === 'image/webp') && f.size > PESO_QUE_NO_SE_TOCA;
+  }
+
+  // El segmento APP1 (EXIF) del JPEG original, con la orientacion en 1.
+  function exifDe(buffer) {
+    try {
+      var v = new DataView(buffer);
+      if (v.getUint16(0) !== 0xFFD8) return null;
+      var p = 2;
+      while (p + 4 <= v.byteLength) {
+        var marca = v.getUint16(p), largo = v.getUint16(p + 2);
+        if ((marca & 0xFF00) !== 0xFF00 || marca === 0xFFDA) return null;
+        if (marca === 0xFFE1 && v.getUint32(p + 4) === 0x45786966) {   // "Exif"
+          var seg = buffer.slice(p, p + 2 + largo);
+          var s = new DataView(seg), tiff = 10;
+          var le = s.getUint16(tiff) === 0x4949;
+          var ifd = tiff + s.getUint32(tiff + 4, le);
+          var n = s.getUint16(ifd, le);
+          for (var i = 0; i < n; i++) {
+            var e = ifd + 2 + i * 12;
+            if (s.getUint16(e, le) === 0x0112) s.setUint16(e + 8, 1, le);
+          }
+          return seg;
+        }
+        p += 2 + largo;
+      }
+    } catch (err) {}
+    return null;
+  }
+
+  function cargar(file) {
+    return new Promise(function (ok, mal) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () { ok({img: img, url: url}); };
+      img.onerror = function () { URL.revokeObjectURL(url); mal(new Error('decode')); };
+      img.src = url;   // el navegador aplica la orientacion del EXIF al pintar
+    });
+  }
+
+  function comprimir(file) {
+    return Promise.all([cargar(file), file.arrayBuffer()]).then(function (r) {
+      var img = r[0].img, ancho = img.naturalWidth, alto = img.naturalHeight;
+      var escala = Math.min(1, LADO_MAXIMO / Math.max(ancho, alto));
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.round(ancho * escala);
+      canvas.height = Math.round(alto * escala);
+      var ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(r[0].url);
+      var exif = file.type === 'image/jpeg' ? exifDe(r[1]) : null;
+      return new Promise(function (ok) {
+        canvas.toBlob(function (blob) { ok(blob); }, 'image/jpeg', CALIDAD);
+      }).then(function (blob) {
+        if (!blob) return file;
+        if (!exif) return blob;
+        return blob.arrayBuffer().then(function (b) {
+          // El EXIF va despues del SOI y, si lo hay, del segmento JFIF (APP0),
+          // que el estandar quiere pegado al principio.
+          var v = new DataView(b), corte = 2;
+          if (v.getUint16(2) === 0xFFE0) corte = 4 + v.getUint16(4);
+          return new Blob([b.slice(0, corte), exif, b.slice(corte)], {type: 'image/jpeg'});
+        });
+      }).then(function (final) {
+        if (final === file || final.size >= file.size) return file;
+        var nombre = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+        return new File([final], nombre, {type: 'image/jpeg', lastModified: file.lastModified});
+      });
+    }).catch(function () { return file; });
+  }
+
+  document.addEventListener('change', function (ev) {
+    var input = ev.target;
+    if (redisparados.has(ev)) return;
+    if (!input || input.type !== 'file' || !input.files || input.hasAttribute('data-sin-comprimir')) return;
+    var archivos = Array.prototype.slice.call(input.files);
+    if (!archivos.some(valeLaPena)) return;
+    if (typeof DataTransfer === 'undefined') return;
+
+    ev.stopImmediatePropagation();
+    var cartel = aviso();
+    if (cartel) cartel.style.display = 'block';
+
+    // Una por una: en un celular, varias fotos de 12 MP decodificadas a la vez
+    // pueden agotar la memoria de la pestaña.
+    var salida = [];
+    archivos.reduce(function (cadena, f) {
+      return cadena.then(function () {
+        return (valeLaPena(f) ? comprimir(f) : Promise.resolve(f))
+          .then(function (r) { salida.push(r); });
+      });
+    }, Promise.resolve()).then(function () {
+      try {
+        var dt = new DataTransfer();
+        salida.forEach(function (f) { dt.items.add(f); });
+        input.files = dt.files;
+      } catch (err) { /* se quedan los originales */ }
+    }).then(function () {
+      if (cartel) cartel.style.display = 'none';
+      var nuevo = new Event('change', {bubbles: true});
+      redisparados.add(nuevo);
+      input.dispatchEvent(nuevo);
+    });
+  }, true);
+})();
+</script>

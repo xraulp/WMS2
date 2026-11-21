@@ -4566,3 +4566,6 @@ msgstr "Entradas"
 
 msgid "Step"
 msgstr "En qué va"
+
+msgid "Optimizing photos..."
+msgstr "Optimizando fotos..."
