@@ -1704,6 +1704,13 @@ class ElCamionCompartidoTests(BaseDeCruces):
         r = self.client.get('/cruces/', {'customer': self.cliente.pk})
         self.assertContains(r, 'id="tarea-%d"' % c.pk)
 
+    def test_en_el_camion_las_lineas_llevan_sus_entradas(self):
+        self.juntar(self.a, self.b)
+        r = self.client.get('/cruces/')
+        self.assertContains(r, 'class="linea en-camion"', count=2)
+        self.assertContains(r, '<span class="ents">ED261111-0801</span>')
+        self.assertNotContains(r, '<span class="eds">')
+
     def test_la_lista_lleva_a_la_tarea_sola(self):
         r = self.client.get('/cruces/')
         self.assertContains(r, '&amp;tarea=%d"' % self.a.pk)
