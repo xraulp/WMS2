@@ -328,30 +328,6 @@
   </div>
   {% endif %}
 
-  {% comment %}
-  El selector de cliente solo en la lista de todos. Dentro de una tarea
-  estorbaba: para cambiar de cliente se regresa a la lista.
-  {% endcomment %}
-  {% if not es_cliente and not cliente %}
-  <div class="card">
-    <p class="ct">{% trans "Customer" %}</p>
-    <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <select name="customer" onchange="this.form.submit()">
-        <option value="">— {% trans "All customers" %} —</option>
-        {% for c in clientes %}
-        <option value="{{ c.pk }}" {% if cliente and c.pk == cliente.pk %}selected{% endif %}>
-          {{ c.name }}{% if c.abbreviation %} · {{ c.abbreviation }}{% endif %}
-        </option>
-        {% endfor %}
-      </select>
-      <noscript><button class="btn" type="submit">{% trans "Show" %}</button></noscript>
-      {% if cliente %}
-      <a class="btn btn-sm" style="text-decoration:none" href="{% url 'cruces_panel' %}">← {% trans "All customers" %}</a>
-      {% endif %}
-    </form>
-  </div>
-  {% endif %}
-
   {% if not cliente %}
   {% include "warehouse/partials/cruces_de_todos.html" %}
   {% else %}
