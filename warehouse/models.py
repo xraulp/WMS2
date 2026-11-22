@@ -2203,6 +2203,29 @@ class Pedimento(models.Model):
     def tiene_numero(self):
         return bool(self.numero)
 
+    def _de_sus_entradas(self, campo):
+        """
+        Los valores de `campo` en sus entradas, sin repetir y en el orden de
+        sus renglones. Lee `renglones.all()` para aprovechar el prefetch de la
+        pantalla de pedimentos.
+        """
+        vistos = []
+        for r in self.renglones.all():
+            v = (getattr(r.operation, campo, '') or '').strip()
+            if v and v not in vistos:
+                vistos.append(v)
+        return vistos
+
+    @property
+    def pedidos(self):
+        """Los numeros de pedido (PO) de sus entradas, para el encabezado."""
+        return self._de_sus_entradas('po_order')
+
+    @property
+    def facturas(self):
+        """Los numeros de factura de sus entradas, para el encabezado."""
+        return self._de_sus_entradas('invoice')
+
     @property
     def base_de_descarga(self):
         """

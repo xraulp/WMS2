@@ -60,6 +60,11 @@
             display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;justify-content:space-between}
     .ped-num{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600}
     .ped-sin{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--soft);font-style:italic}
+    .ped-linea{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px}
+    .ped-datos{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;font-size:13px}
+    .ped-dato{overflow-wrap:anywhere}
+    .ped-cliente{font-weight:600}
+    .ped-etq{color:var(--soft);font-size:12px}
     .ped-sub{font-size:12px;color:var(--soft);margin-top:3px}
     .ped-tarea{font-size:13px;font-weight:600;margin-top:3px}
     .ped-tarea a{font-family:'IBM Plex Mono',monospace;color:var(--accent-ink)}
@@ -322,11 +327,25 @@
         Solo el numero. "Pedimento 5" era el consecutivo de pedimentos del
         cliente, no su lugar en la tarea, y al lado del numero confundia.
         {% endcomment %}
-        {% if p.tiene_numero %}
-          <div class="ped-num">{{ p.numero }}</div>
-        {% else %}
-          <div class="ped-num ped-sin">{% trans "No number yet" %}</div>
-        {% endif %}
+        {% comment %}
+        A la derecha del numero, el cliente, sus pedidos y sus facturas: con lo
+        que el cliente reconoce su mercancia, sin abrir los bultos. Lo pidio
+        Diego el 22 nov 2026. En el telefono baja debajo del numero.
+        {% endcomment %}
+        <div class="ped-linea">
+          {% if p.tiene_numero %}
+            <div class="ped-num">{{ p.numero }}</div>
+          {% else %}
+            <div class="ped-num ped-sin">{% trans "No number yet" %}</div>
+          {% endif %}
+          <div class="ped-datos">
+            <span class="ped-dato ped-cliente">{{ cliente.name }}</span>
+            {% with pedidos=p.pedidos facturas=p.facturas %}
+            {% if pedidos %}<span class="ped-dato"><span class="ped-etq">{% if pedidos|length > 1 %}{% trans "Orders" %}{% else %}{% trans "Order" %}{% endif %}</span> <span class="mono">{{ pedidos|join:", " }}</span></span>{% endif %}
+            {% if facturas %}<span class="ped-dato"><span class="ped-etq">{% if facturas|length > 1 %}{% trans "Invoices" %}{% else %}{% trans "Invoice" %}{% endif %}</span> <span class="mono">{{ facturas|join:", " }}</span></span>{% endif %}
+            {% endwith %}
+          </div>
+        </div>
         {% comment %}
         La tarea de cruce a la que pertenece, con enlace para volver a ella. Si
         sus bultos van en dos camiones, salen las dos.

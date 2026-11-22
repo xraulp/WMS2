@@ -462,3 +462,44 @@ class ElNumeroLlegaAOperacionesTests(Base):
         self.entrada.save()
         self.client.post(f'/pedimentos/{ped.pk}/unassign/', {'renglon': renglon.pk})
         self.assertEqual(self.numero_en_operaciones()[0], 'PED viejo')
+
+
+class EncabezadoConClientePedidosYFacturasTests(Base):
+    """A la derecha del numero: cliente, pedidos y facturas, sin repetir."""
+
+    def test_salen_cliente_pedidos_y_facturas(self):
+        este = self.ped(ped_aduana='24', ped_patente='1780', ped_consecutivo='6003555')
+        self.entrada.po_order, self.entrada.invoice = 'PO-111', 'F-900'
+        self.entrada.save()
+        otra = self.operacion('ED261108-0002', bundle_qty=2,
+                              po_order='PO-222', invoice='F-900')
+        self.dentro(este)
+        self.dentro(este, op=otra, bultos=2)
+
+        respuesta = self.client.get(URL, {'customer': self.cliente.pk, 'solo': este.pk})
+        ped = respuesta.context['pedimentos'][0]
+        self.assertEqual(ped.pedidos, ['PO-111', 'PO-222'])
+        self.assertEqual(ped.facturas, ['F-900'])   # la misma factura, una vez
+        self.assertContains(respuesta, 'class="ped-dato ped-cliente">Acme<')
+        self.assertContains(respuesta, 'PO-111, PO-222')
+        self.assertContains(respuesta, '>Orders<')
+        self.assertContains(respuesta, '>Invoice<')
+
+    def test_sin_pedidos_ni_facturas_solo_el_cliente(self):
+        este = self.ped()
+        self.dentro(este)
+        respuesta = self.client.get(URL, {'customer': self.cliente.pk, 'solo': este.pk})
+        self.assertContains(respuesta, 'ped-cliente">Acme<')
+        self.assertNotContains(respuesta, 'class="ped-etq"')
+
+    def test_en_espanol(self):
+        from django.utils import translation
+        este = self.ped()
+        self.entrada.po_order, self.entrada.invoice = 'PO-1', 'F-1'
+        self.entrada.save()
+        self.dentro(este)
+        with translation.override('es'):
+            respuesta = self.client.get(URL, {'customer': self.cliente.pk, 'solo': este.pk},
+                                        HTTP_ACCEPT_LANGUAGE='es')
+        self.assertContains(respuesta, '>Pedido<')
+        self.assertContains(respuesta, '>Factura<')

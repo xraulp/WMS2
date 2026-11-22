@@ -4588,3 +4588,6 @@ msgid "Showing the crossings delivered in the last 4 months. %(n)s older one is 
 msgid_plural "Showing the crossings delivered in the last 4 months. %(n)s older ones are in the history; the search looks through everything."
 msgstr[0] "Se muestran los cruces entregados en los últimos 4 meses. %(n)s más antiguo está en el histórico; la búsqueda recorre todo."
 msgstr[1] "Se muestran los cruces entregados en los últimos 4 meses. %(n)s más antiguos están en el histórico; la búsqueda recorre todo."
+
+msgid "Invoices"
+msgstr "Facturas"
