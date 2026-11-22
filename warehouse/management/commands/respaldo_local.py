@@ -133,9 +133,12 @@ class Command(BaseCommand):
         try:
             if pg_dump and url:
                 archivo = carpeta / f'wms_{fecha}.dump'
+                # Solo `public`: la base vive en Supabase, que trae sus propios
+                # esquemas (auth, storage, realtime, vault) vacios y ajenos al
+                # WMS; con ellos la copia no se restaura en un Postgres normal.
                 resultado = subprocess.run(
                     [pg_dump, '--format=custom', '--no-owner', '--no-privileges',
-                     f'--file={archivo}', f'--dbname={url}'],
+                     '--schema=public', f'--file={archivo}', f'--dbname={url}'],
                     capture_output=True, text=True)
                 if resultado.returncode != 0:
                     archivo.unlink(missing_ok=True)
