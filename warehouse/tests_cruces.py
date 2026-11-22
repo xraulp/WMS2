@@ -1976,3 +1976,46 @@ class CandadoEnOperacionesTests(BaseDeCruces):
         CrossingTaskItem.objects.create(task=t, operation=op)
         respuesta = self.client.get('/dashboard/')
         self.assertContains(respuesta, 'name="op_sel" value="%d"' % op.pk)
+
+
+class LaFacturaEnLaTablaDeLaTareaTests(BaseDeCruces):
+    """La columna Factura, junto a la de pedidos, con o sin pedimento."""
+
+    def setUp(self):
+        super().setUp()
+        self.t = self.tarea()
+        self.a = self.operacion('ED261117-0002', bundle_qty=1,
+                                po_order='PO1559, PO1558', invoice='649785')
+        self.b = self.operacion('ED261117-0003', bundle_qty=1, po_order='PO2000')
+        CrossingTaskItem.objects.create(task=self.t, operation=self.a)
+        CrossingTaskItem.objects.create(task=self.t, operation=self.b)
+
+    def test_sale_la_factura_aunque_no_haya_pedimento(self):
+        respuesta = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        self.assertContains(respuesta, '<th>Invoice</th>')
+        self.assertContains(respuesta, '<span class="entero">649785</span>')
+        # La entrada sin factura enseña la raya, no un hueco.
+        self.assertContains(respuesta, '<span class="mono">—</span>')
+
+    def test_el_cliente_tambien_la_ve(self):
+        self.client.force_login(self.duenio)
+        respuesta = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        self.assertContains(respuesta, '649785')
+
+    def test_en_espanol(self):
+        from django.utils import translation
+        with translation.override('es'):
+            respuesta = self.client.get('/cruces/', {'customer': self.cliente.pk},
+                                        HTTP_ACCEPT_LANGUAGE='es')
+        self.assertContains(respuesta, '<th>Factura</th>')
+
+
+class PorComasTests(TestCase):
+
+    def test_parte_en_las_comas_y_deja_la_coma_pegada(self):
+        from .templatetags.wms_filters import por_comas
+        self.assertEqual(por_comas('INV-88123, INV-90777'), ['INV-88123,', 'INV-90777'])
+        self.assertEqual(por_comas('649785'), ['649785'])
+        self.assertEqual(por_comas('A,,B, '), ['A,', 'B'])
+        self.assertEqual(por_comas(None), [])
+        self.assertEqual(por_comas(''), [])

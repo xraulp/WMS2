@@ -172,7 +172,15 @@
     /* Una entrada puede traer varios pedidos en el mismo campo ("OC1, OC2,
        OC3"). En una sola linea empujaban la tabla fuera de la tarjeta y el
        boton Modificar salia cortado: aqui bajan de renglon en cada coma. */
-    td.td-po .lista strong{white-space:normal;overflow-wrap:anywhere;max-width:170px}
+    td.td-po .lista strong{white-space:normal;max-width:170px}
+    /* Las facturas igual. Cada pedido y cada factura va entero (filtro
+       `por_comas`): solo se baja de renglon entre uno y otro, nunca a media
+       cifra ni en el guion. */
+    td.td-fac .lista > span{white-space:normal;max-width:130px}
+    .lista .entero{white-space:nowrap}
+    /* "sin pedimento todavia" si puede bajar de renglon: en una sola linea era
+       la columna mas ancha y, con la de Factura, empujaba Modificar fuera. */
+    td.mono .lista .soft{white-space:normal}
     /* Y si aun asi no cabe, la tabla se recorre de lado en vez de cortarse. */
     .tabla-tarea{overflow-x:auto}
     tr.acc-fila{display:none}
@@ -612,6 +620,7 @@
           <th>{% trans "Customer" %}</th>
           <th>{% trans "Entry" %}</th>
           <th>{% trans "PO / Order" %}</th>
+          <th>{% trans "Invoice" %}</th>
           <th>{% trans "Bundles" %}</th>
           <th>{% trans "State" %}</th>
           <th>{% trans "Pedimento" %}</th>
@@ -634,7 +643,15 @@
             <span class="lista">{% for r in g.filas %}<span>{{ r.operation.custom_id }}{% if r.operation.subdivision %}<span class="sub">{{ r.operation.get_subdivision_display }}</span>{% endif %}</span>{% endfor %}</span>
           </td>
           <td data-etq="{% trans "PO / Order" %}" class="td-po">
-            <span class="lista">{% for r in g.filas %}<strong>{{ r.operation.po_order|default:"—" }}</strong>{% endfor %}</span>
+            <span class="lista">{% for r in g.filas %}<strong>{% for x in r.operation.po_order|por_comas %}<span class="entero">{{ x }}</span> {% empty %}—{% endfor %}</strong>{% endfor %}</span>
+          </td>
+          {% comment %}
+          La factura de cada entrada, en el mismo orden que sus pedidos. Lo pidio
+          Diego el 22 nov 2026. Varias facturas en el mismo campo bajan de
+          renglon igual que los pedidos.
+          {% endcomment %}
+          <td data-etq="{% trans "Invoice" %}" class="td-po td-fac">
+            <span class="lista">{% for r in g.filas %}<span class="mono">{% for x in r.operation.invoice|por_comas %}<span class="entero">{{ x }}</span> {% empty %}—{% endfor %}</span>{% endfor %}</span>
           </td>
           <td data-etq="{% trans "Bundles" %}">
             <span>{{ g.bultos }}{% if g.es_parcial %}
@@ -685,7 +702,7 @@
         </tr>
         {% if not es_cliente %}
         <tr class="acc-fila{% if g.color is not None %} pc pc-{{ g.color }}{% endif %}">
-          <td colspan="10">
+          <td colspan="11">
             <span class="ped-acc">
             {% if g.pedimentos and t.estado == 'ABIERTA' or g.pedimentos and t.estado == 'CON_ORDEN' %}
             {% with p=g.pedimentos.0 %}
@@ -792,13 +809,13 @@
         </tr>
         {% endif %}
         {% empty %}
-        <tr><td colspan="10" class="soft">{% trans "Nothing in this crossing yet." %}</td></tr>
+        <tr><td colspan="11" class="soft">{% trans "Nothing in this crossing yet." %}</td></tr>
         {% endfor %}
       </tbody>
       {% if t.grupos|length > 1 %}
       <tfoot>
         <tr class="total">
-          <td colspan="7" class="total-etq">
+          <td colspan="8" class="total-etq">
             {% trans "Approx. taxes total" %}
             {% if t.sin_impuesto %}<span class="soft">· {% blocktrans count n=t.sin_impuesto %}{{ n }} shipment without an amount yet{% plural %}{{ n }} shipments without an amount yet{% endblocktrans %}</span>{% endif %}
           </td>

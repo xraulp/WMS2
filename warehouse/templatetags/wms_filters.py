@@ -96,3 +96,16 @@ def tono_de_cliente(cliente):
     if not llave:
         return 210
     return int(hashlib.md5(llave.encode('utf-8')).hexdigest()[:6], 16) % 360
+
+
+# Un campo de pedidos o de facturas puede traer varios: "PO1559, PO1558" o
+# "INV-88123, INV-90777". En una columna angosta el navegador los partia por
+# donde podia -- a media cifra o en el guion --, y "INV-" en un renglon y
+# "88123" en el otro ya no se lee como un numero. Partidos aqui, cada uno va
+# entero y solo se baja de renglon entre uno y otro.
+@register.filter
+def por_comas(valor):
+    """Usage: {% for x in op.invoice|por_comas %} -> ['INV-88123,', 'INV-90777']"""
+    partes = [p.strip() for p in str(valor or '').split(',')]
+    partes = [p for p in partes if p]
+    return [p + ',' for p in partes[:-1]] + partes[-1:]
