@@ -503,3 +503,23 @@ class EncabezadoConClientePedidosYFacturasTests(Base):
                                         HTTP_ACCEPT_LANGUAGE='es')
         self.assertContains(respuesta, '>Pedido<')
         self.assertContains(respuesta, '>Factura<')
+
+
+class SinBotonDeSacarDentroDelPedimentoTests(Base):
+    """Se saca desde la tarea de cruce (Modificar), no desde el pedimento."""
+
+    def test_no_sale_el_boton(self):
+        este = self.ped()
+        self.dentro(este)
+        respuesta = self.client.get(URL, {'customer': self.cliente.pk, 'solo': este.pk})
+        self.assertContains(respuesta, 'ED261108-0001')
+        self.assertNotContains(respuesta, f'/pedimentos/{este.pk}/unassign/')
+
+    def test_entrar_desde_la_tarea_crea_el_pedimento_con_su_factura(self):
+        self.entrada.po_order, self.entrada.invoice = 'PO1559, PO1558', '649785'
+        self.entrada.save()
+        respuesta = self.client.post('/pedimentos/new/', {
+            'customer': self.cliente.pk, 'operation': self.entrada.pk}, follow=True)
+        self.assertContains(respuesta, 'ped-cliente">Acme<')
+        self.assertContains(respuesta, '649785')
+        self.assertContains(respuesta, 'PO1559, PO1558')

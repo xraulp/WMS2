@@ -416,7 +416,6 @@
           <th>{% trans "Type" %}</th>
           <th>{% trans "Shipper" %}</th>
           <th class="num">{% trans "Kgs" %}</th>
-          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -442,19 +441,14 @@
           asignar. Nunca el peso entero de una entrada partida: seria decir que
           los seis bultos de este renglon pesan lo que pesan los diez.
           {% endcomment %}
+          {% comment %}
+          Sin boton de Sacar aqui: se saca desde la tarea de cruce, con
+          "Modificar". Lo pidio Diego el 22 nov 2026.
+          {% endcomment %}
           <td data-etq="{% trans "Kgs" %}" class="num">{{ r.kilos|default:"—" }}</td>
-          <td data-etq="">
-            {% if puede_editar and p.editable %}
-            <form method="post" action="{% url 'pedimento_quitar' p.pk %}" style="margin:0">
-              {% csrf_token %}
-              <input type="hidden" name="renglon" value="{{ r.pk }}">
-              <button class="btn btn-sm" type="submit">{% trans "Take out" %}</button>
-            </form>
-            {% endif %}
-          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="soft">{% trans "Nothing assigned to this pedimento yet." %}</td></tr>
+        <tr><td colspan="6" class="soft">{% trans "Nothing assigned to this pedimento yet." %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
