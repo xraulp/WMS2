@@ -48,6 +48,9 @@
     .msg-error{background:var(--rsoft);color:var(--err-ink)}
     .msg-ok{background:var(--ok-bg);color:var(--ok-ink-fuerte)}
     .nota{font-size:12px;color:var(--soft);margin-top:12px;line-height:1.5}
+    .quien-etq{font-size:12px;color:var(--soft)}
+    .quien{display:flex;gap:6px;flex-wrap:wrap}
+    .casilla input[type=radio]{width:18px;height:18px;margin:0}
   </style>
 </head>
 <body>
@@ -58,6 +61,7 @@
   <a class="bs-volver" href="{{ regreso }}">← {% trans "Back" %}</a>
   <h1>{% trans "Pedimento slots" %}</h1>
   <p class="sub">{% trans "Choose which documents each pedimento carries before it goes to the customer for review. The required ones block sending it to review while they are empty, and are shown with a light red background." %}</p>
+  <p class="sub">{% trans "Your own slots can be uploaded by the company or by the customer. The customer's ones appear in the customer column of the pedimento and, if required, block the validation instead of the review." %}</p>
 
   {% if aviso %}<div class="msg msg-ok">&#10003; {{ aviso }}</div>{% endif %}
   {% for e in errores %}<div class="msg msg-error">&#10007; {{ e }}</div>{% endfor %}
@@ -80,6 +84,22 @@
           <span class="nombre">{{ r.etiqueta }}</span>
           {% endif %}
           {% if r.propia %}<span class="tag">{% trans "own" %}</span>{% endif %}
+        </div>
+        {% comment %}
+        Quien la sube. Las de fabrica son siempre de la empresa; las propias se
+        eligen. Las del cliente salen en su columna del pedimento y, si son
+        obligatorias, frenan la validacion en vez del envio a revision.
+        {% endcomment %}
+        <div class="fila">
+          <span class="quien-etq">{% trans "Uploaded by" %}</span>
+          {% if r.propia %}
+          <span class="quien" role="radiogroup" aria-label="{% trans "Uploaded by" %}">
+            <label class="casilla"><input type="radio" name="quien_{{ r.pk }}" value="empresa" {% if not r.de_cliente %}checked{% endif %}> {% trans "Company" %}</label>
+            <label class="casilla"><input type="radio" name="quien_{{ r.pk }}" value="cliente" {% if r.de_cliente %}checked{% endif %}> {% trans "Customer" %}</label>
+          </span>
+          {% else %}
+          <span class="tag">{% trans "Company" %}</span>
+          {% endif %}
         </div>
         <div class="fila">
           <label class="casilla">
@@ -105,6 +125,13 @@
       <div class="fila">
         <input type="text" name="nueva" maxlength="60" placeholder="{% trans "e.g. Bill of lading" %}"
                aria-label="{% trans "Slot name" %}">
+      </div>
+      <div class="fila" style="margin-top:10px">
+        <span class="quien-etq">{% trans "Uploaded by" %}</span>
+        <span class="quien" role="radiogroup" aria-label="{% trans "Uploaded by" %}">
+          <label class="casilla"><input type="radio" name="nueva_quien" value="empresa" checked> {% trans "Company" %}</label>
+          <label class="casilla"><input type="radio" name="nueva_quien" value="cliente"> {% trans "Customer" %}</label>
+        </span>
         <label class="casilla">
           <input type="checkbox" name="nueva_obligatoria">
           {% trans "Required" %}

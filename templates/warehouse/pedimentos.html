@@ -112,6 +112,16 @@
                    letter-spacing:.05em;color:var(--soft);font-weight:600;
                    background:var(--bg-sutil);border-top:1px solid var(--bdr)}
     .falta-mv{margin-left:6px;color:var(--err-ink);text-transform:none;letter-spacing:0}
+    /* Empresa a la izquierda, cliente a la derecha; en el telefono, apiladas. */
+    .ranuras-cols{display:grid;grid-template-columns:1fr}
+    .ranuras-col{min-width:0}
+    .ranuras-col .col-hd{border-top:none;color:var(--ink)}
+    .col-cliente{border-top:1px solid var(--bdr)}
+    .col-nota{margin:0;padding:8px 12px;font-size:12px;color:var(--soft);font-style:italic}
+    @media (min-width:760px){
+      .ranuras-cols{grid-template-columns:1fr 1fr}
+      .col-cliente{border-top:none;border-left:1px solid var(--bdr)}
+    }
     .ranura{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:5px 12px;
             min-height:38px;border-top:1px solid var(--bdr)}
     .ranuras-hd + .ranura, .instruccion + .ranura, .ranuras-grupo + .ranura{border-top:none}
@@ -145,6 +155,9 @@
        sigue a todo lo ancho. En el telefono no cambia nada. */
     @media (min-width:701px){
       .ranura{width:400px;max-width:100%;border-right:1px solid var(--bdr)}
+      /* Dentro de las dos columnas cada una ya es angosta: la franja llena
+         su columna, sin el hueco gris a la derecha. */
+      .ranuras-col .ranura{width:auto;border-right:none}
     }
     .btn-ico{padding:2px 7px;line-height:1.2}
     .subir input[type=file]{font-size:11px;max-width:100%}
@@ -487,15 +500,20 @@
     que falta y que el boton de revision se encienda solo. La de fotos de
     numeros de serie no esta cuando la mercancia no las trae.
 
-    Tres grupos, en el orden en que se llenan: lo que manda la casa a
-    revision; lo del cliente -- la manifestacion de valor y su acuse --, que
-    hace falta antes de validar; y el pedimento pagado.
+    Dos columnas, por quien sube cada cosa (lo pidio Diego el 22 nov 2026):
+    a la izquierda lo de la empresa -- lo que se manda a revision, la factura
+    comercial que falte y el pedimento pagado --; a la derecha lo del cliente
+    -- sus ranuras propias, la manifestacion de valor y su acuse --. En el
+    telefono, una debajo de la otra.
     {% endcomment %}
     <div class="ranuras">
       <div class="ranuras-hd">
         <span>{% trans "Pedimento documents" %}</span>
         {% if puede_editar and is_home and p.editable %}<a class="config-ranuras" href="{% url 'pedimento_ranuras' %}?customer={{ cliente.pk }}&amp;solo={{ p.pk }}">⚙ {% trans "Configure slots" %}</a>{% endif %}
       </div>
+      <div class="ranuras-cols">
+      <div class="ranuras-col">
+      <div class="ranuras-grupo col-hd">{% trans "Company documents" %}</div>
       {% if puede_editar and p.editable %}
       <p class="instruccion">📎 {% trans "Upload the pedimento documents to send it to the customer for review. Those marked with * are required." %}</p>
       {% endif %}
@@ -558,18 +576,48 @@
       </div>
       {% endfor %}
 
+      {% if puede_editar and p.editable %}
+        {% for op in p.sin_factura %}
+        {% comment %}
+        Con la misma forma de las ranuras: una franja corta con su boton de
+        subir (y arrastrar y soltar). Marcar una que ya esta en el expediente
+        va detras de su boton.
+        {% endcomment %}
+        <div class="ranura vacia pide ranura-factura">
+          <span class="est">*</span>
+          <h4>{% trans "Commercial invoice" %}<span class="soft mono" style="display:block;font-weight:400;font-size:11px">{{ op.custom_id }}</span></h4>
+          <div class="archivos"><span class="nada">{% trans "empty" %}</span></div>
+          <form class="subir" method="post" enctype="multipart/form-data"
+                action="{% url 'operacion_subir_factura' op.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="customer" value="{{ cliente.pk }}">
+            {% if solo %}<input type="hidden" name="solo" value="{{ solo }}">{% endif %}
+            <label class="btn btn-sm">📎 {% trans "Upload" %}
+              <input type="file" name="archivo" hidden onchange="this.form.submit()">
+            </label>
+          </form>
+          {% if op.docs_del_expediente %}
+          <details class="elegir-fotos">
+            <summary class="btn btn-sm">🗂 {% trans "Choose from the file" %} ({{ op.docs_del_expediente|length }})</summary>
+            <form class="series" method="post" action="{% url 'operacion_marcar_factura' op.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="customer" value="{{ cliente.pk }}">
+              {% if solo %}<input type="hidden" name="solo" value="{{ solo }}">{% endif %}
+              <select name="documento" required style="max-width:100%">
+                <option value="">— {% trans "or mark one already in the file" %} —</option>
+                {% for d in op.docs_del_expediente %}
+                <option value="{{ d.pk }}">{{ d.original_name|default:d.pk }}</option>
+                {% endfor %}
+              </select>
+              <button class="btn btn-sm" type="submit">{% trans "Mark as invoice" %}</button>
+            </form>
+          </details>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% endif %}
+
       {% if p.estado != 'BORRADOR' %}
-      <div class="ranuras-grupo">
-        {% trans "From the customer · before validation" %}
-        {% if p.estado == 'APROBADO' and not p.tiene_mv %}<span class="falta-mv">{% trans "missing" %}</span>{% endif %}
-      </div>
-      {% for clave, etiqueta, archivos in p.ranuras_del_cliente %}
-      <div class="ranura{% if not archivos %} vacia{% if p.estado == 'APROBADO' %} pide{% endif %}{% endif %}">
-        <span class="est">{% if archivos %}✓{% elif p.estado == 'APROBADO' %}*{% else %}○{% endif %}</span>
-        <h4>{{ etiqueta }}</h4>
-        {% include "warehouse/partials/ranura_de_pedimento.html" with quitar=False subir=True envio=False %}
-      </div>
-      {% endfor %}
       <div class="ranuras-grupo">{% trans "After payment" %}</div>
       {% for clave, etiqueta, archivos in p.ranuras_posteriores %}
       <div class="ranura{% if not archivos %} vacia{% endif %}">
@@ -579,53 +627,41 @@
       </div>
       {% endfor %}
       {% endif %}
-    </div>
+      </div>
 
-    {% comment %}
-    La factura comercial no es del pedimento sino del embarque, pero se marca
-    aqui porque es aqui donde estorba que falte: sin ella el cliente no tiene
-    contra que comparar el pedimento.
-    {% endcomment %}
-    {% if puede_editar and p.editable %}
-      {% for op in p.sin_factura %}
       {% comment %}
-      Con la misma forma de las ranuras: una franja corta con su boton de
-      subir (y arrastrar y soltar). Marcar una que ya esta en el expediente
-      va detras de su boton.
+      Lo del cliente. Sus ranuras propias salen desde el principio: la empresa
+      las creo para pedirle algo y puede subirlo en cuanto lo tenga. La
+      manifestacion de valor y su acuse, desde que el pedimento sale de
+      borrador. Lo obligatorio se pinta en rojo cuando ya frena: al quedar
+      aprobado, que es cuando falta para validar.
       {% endcomment %}
-      <div class="ranura vacia pide ranura-factura">
-        <span class="est">*</span>
-        <h4>{% trans "Commercial invoice" %}<span class="soft mono" style="display:block;font-weight:400;font-size:11px">{{ op.custom_id }}</span></h4>
-        <div class="archivos"><span class="nada">{% trans "empty" %}</span></div>
-        <form class="subir" method="post" enctype="multipart/form-data"
-              action="{% url 'operacion_subir_factura' op.pk %}">
-          {% csrf_token %}
-          <input type="hidden" name="customer" value="{{ cliente.pk }}">
-          {% if solo %}<input type="hidden" name="solo" value="{{ solo }}">{% endif %}
-          <label class="btn btn-sm">📎 {% trans "Upload" %}
-            <input type="file" name="archivo" hidden onchange="this.form.submit()">
-          </label>
-        </form>
-        {% if op.docs_del_expediente %}
-        <details class="elegir-fotos">
-          <summary class="btn btn-sm">🗂 {% trans "Choose from the file" %} ({{ op.docs_del_expediente|length }})</summary>
-          <form class="series" method="post" action="{% url 'operacion_marcar_factura' op.pk %}">
-            {% csrf_token %}
-            <input type="hidden" name="customer" value="{{ cliente.pk }}">
-            {% if solo %}<input type="hidden" name="solo" value="{{ solo }}">{% endif %}
-            <select name="documento" required style="max-width:100%">
-              <option value="">— {% trans "or mark one already in the file" %} —</option>
-              {% for d in op.docs_del_expediente %}
-              <option value="{{ d.pk }}">{{ d.original_name|default:d.pk }}</option>
-              {% endfor %}
-            </select>
-            <button class="btn btn-sm" type="submit">{% trans "Mark as invoice" %}</button>
-          </form>
-        </details>
-        {% endif %}
+      <div class="ranuras-col col-cliente">
+      <div class="ranuras-grupo col-hd">
+        {% trans "Customer documents" %}
+        {% if p.estado == 'APROBADO' and not p.tiene_mv %}<span class="falta-mv">{% trans "missing" %}</span>{% endif %}
+      </div>
+      {% for clave, etiqueta, archivos, obligatoria in p.ranuras_propias_del_cliente %}
+      <div class="ranura{% if not archivos %} vacia{% if obligatoria and p.estado == 'APROBADO' %} pide{% endif %}{% endif %}">
+        <span class="est">{% if archivos %}✓{% elif obligatoria %}*{% else %}○{% endif %}</span>
+        <h4>{{ etiqueta }}</h4>
+        {% include "warehouse/partials/ranura_de_pedimento.html" with quitar=False subir=True envio=False %}
       </div>
       {% endfor %}
-    {% endif %}
+      {% if p.estado != 'BORRADOR' %}
+      {% for clave, etiqueta, archivos in p.ranuras_del_cliente %}
+      <div class="ranura{% if not archivos %} vacia{% if p.estado == 'APROBADO' %} pide{% endif %}{% endif %}">
+        <span class="est">{% if archivos %}✓{% elif p.estado == 'APROBADO' %}*{% else %}○{% endif %}</span>
+        <h4>{{ etiqueta }}</h4>
+        {% include "warehouse/partials/ranura_de_pedimento.html" with quitar=False subir=True envio=False %}
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="col-nota">{% trans "The statement of value and its receipt are uploaded here by the customer once the pedimento is under review." %}</p>
+      {% endif %}
+      </div>
+      </div>
+    </div>
 
     {% comment %}
     El boton, en sus tres estados. Vive aqui dentro y no abajo del todo porque
@@ -680,7 +716,7 @@
         {% endif %}
       {% elif p.estado == 'APROBADO' %}
         {% if not puede_editar and not p.tiene_mv %}
-        <div class="contestar"><p><b>{% trans "Upload the statement of value and its receipt above so we can validate this pedimento." %}</b></p></div>
+        <div class="contestar"><p><b>{% blocktrans with lista=p.faltan_del_cliente|join:", " %}Upload in "Customer documents" what is missing so we can validate this pedimento: {{ lista }}.{% endblocktrans %}</b></p></div>
         {% endif %}
         <span class="ya-salio">
           {% trans "Approved" %}{% if p.revisado_por %} {% trans "by" %} {{ p.revisado_por.get_full_name|default:p.revisado_por.username }}{% endif %} · {{ p.aprobado_en|date:"d/m H:i" }}
@@ -692,7 +728,7 @@
           <button class="btn btn-p" type="submit">{% trans "Mark as validated" %}</button>
         </form>
         {% else %}
-        <span class="motivo">{% trans "Missing: the statement of value and its receipt, uploaded by the customer" %}</span>
+        <span class="motivo">{% blocktrans with lista=p.faltan_del_cliente|join:", " %}Missing from the customer: {{ lista }}{% endblocktrans %}</span>
         <button class="btn btn-off" type="button" disabled>🔒 {% trans "Mark as validated" %}</button>
         {% endif %}
         {% comment %}

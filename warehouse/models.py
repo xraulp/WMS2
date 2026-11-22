@@ -2366,12 +2366,31 @@ class Pedimento(models.Model):
         return self.estado == self.EN_REVISION
 
     @property
+    def faltan_del_cliente(self):
+        """
+        Lo que el cliente tiene que subir antes de validar, por su nombre.
+
+        La manifestacion de valor y su acuse siempre; y las ranuras propias del
+        cliente que la empresa marco obligatorias (`RanuraDePedimento.de_cliente`).
+        """
+        propias = [r for r in RanuraDePedimento.del_cliente(self.tenant) if r.obligatoria]
+        claves = list(PedimentoDocument.RANURAS_DEL_CLIENTE) + [r.clave for r in propias]
+        subidas = set(self.documentos.filter(ranura__in=claves)
+                      .values_list('ranura', flat=True))
+        etiquetas = dict(PedimentoDocument.RANURAS)
+        faltan = [etiquetas[c] for c in PedimentoDocument.RANURAS_DEL_CLIENTE
+                  if c not in subidas]
+        faltan += [r.etiqueta for r in propias if r.clave not in subidas]
+        return faltan
+
+    @property
     def tiene_mv(self):
-        """Si ya estan la manifestacion de valor y su acuse."""
-        subidas = set(self.documentos.filter(
-            ranura__in=PedimentoDocument.RANURAS_DEL_CLIENTE)
-            .values_list('ranura', flat=True))
-        return subidas >= set(PedimentoDocument.RANURAS_DEL_CLIENTE)
+        """
+        Si el cliente ya subio todo lo suyo: la manifestacion de valor, su
+        acuse y sus ranuras obligatorias. Conserva el nombre de cuando solo
+        eran las dos primeras.
+        """
+        return not self.faltan_del_cliente
 
     @property
     def numero_con_rectificacion(self):
@@ -2954,6 +2973,13 @@ class RanuraDePedimento(models.Model):
     activa      = models.BooleanField(default=True)
     obligatoria = models.BooleanField(default=False)
     orden       = models.PositiveIntegerField(default=0)
+    # Quien la llena. Las de la empresa se mandan a revision y, si son
+    # obligatorias, frenan ese envio. Las del cliente las sube el cliente --
+    # como la manifestacion de valor -- y, si son obligatorias, frenan la
+    # validacion. Solo las propias pueden ser del cliente: las de fabrica son
+    # todas de la empresa. Lo pidio Diego el 22 nov 2026.
+    de_cliente  = models.BooleanField(default=False,
+                                      verbose_name='La sube el cliente')
 
     class Meta:
         ordering = ['orden', 'pk']
@@ -2988,8 +3014,13 @@ class RanuraDePedimento(models.Model):
 
     @classmethod
     def de_envio(cls, tenant):
-        """Las activas, en el orden en que se enseñan."""
-        return [r for r in cls.de_tenant(tenant) if r.activa]
+        """Las activas de la empresa, en el orden en que se enseñan."""
+        return [r for r in cls.de_tenant(tenant) if r.activa and not r.de_cliente]
+
+    @classmethod
+    def del_cliente(cls, tenant):
+        """Las propias activas que sube el cliente, en su orden."""
+        return [r for r in cls.de_tenant(tenant) if r.activa and r.de_cliente]
 
     @classmethod
     def etiquetas(cls, tenant):

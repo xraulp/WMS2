@@ -1042,7 +1042,7 @@ class ElClienteContestaLaRevisionTests(BaseDeAlmacen):
         self.ped.estado = Pedimento.APROBADO
         self.ped.save()
         self.como(self.jefa)
-        self.assertContains(self.pantalla(), 'Missing: the statement of value')
+        self.assertContains(self.pantalla(), 'Missing from the customer: Statement of value, Statement of value receipt')
         self.assertEqual(self.post('validated').status_code, 422)
         self.assertEqual(self.estado(), Pedimento.APROBADO)
         # Con una sola de las dos tampoco.
@@ -1065,7 +1065,7 @@ class ElClienteContestaLaRevisionTests(BaseDeAlmacen):
     def test_el_cliente_sube_la_mv_en_revision(self):
         self.como(self.lopez)
         r = self.pantalla()
-        self.assertContains(r, 'From the customer')
+        self.assertContains(r, 'Customer documents')
         for ranura in PedimentoDocument.RANURAS_DEL_CLIENTE:
             self.client.post('/pedimentos/%d/upload/' % self.ped.pk, {
                 'ranura': ranura,

@@ -4841,6 +4841,7 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None,
     etiquetas = dict(PedimentoDocument.RANURAS)
     # Cuales ranuras hay y cuales son obligatorias lo configura el tenant.
     configuradas = RanuraDePedimento.de_envio(get_tenant_or_404(request))
+    del_cliente = RanuraDePedimento.del_cliente(get_tenant_or_404(request))
     for ped in lista:
         cajones = ped.documentos_por_ranura()
         ped.ranuras_envio = []
@@ -4867,6 +4868,13 @@ def _contexto_de_pedimentos(request, cliente_pk=None, error=None, intento=None,
         ped.ranuras_del_cliente = [
             (clave, etiquetas[clave], cajones.get(clave, []))
             for clave in PedimentoDocument.RANURAS_DEL_CLIENTE
+        ]
+        # Las propias que sube el cliente, con su marca de obligatoria. Van en
+        # la columna del cliente desde el principio: la empresa las creo para
+        # pedirle algo, y el cliente puede subirlo en cuanto lo tenga.
+        ped.ranuras_propias_del_cliente = [
+            (r.clave, r.etiqueta, cajones.get(r.clave, []), r.obligatoria)
+            for r in del_cliente
         ]
         ped.faltan = ped.faltantes_para_revision
         # La tarea en que va, para nombrarla en su encabezado y volver a ella.
@@ -5324,19 +5332,26 @@ def pedimento_subir(request, pk):
     ped = _pedimento_del_tenant(request, pk)
 
     ranura = request.POST.get('ranura', '')
-    propias = {r.clave for r in RanuraDePedimento.objects.filter(
-        tenant=ped.tenant, propia=True, activa=True)}
-    if ranura not in dict(PedimentoDocument.RANURAS) and ranura not in propias:
+    activas = RanuraDePedimento.objects.filter(
+        tenant=ped.tenant, propia=True, activa=True)
+    # Las propias se reparten: las de la empresa van con el envio a revision y
+    # se cierran con el; las del cliente las llena el, como la manifestacion.
+    propias_de_empresa = {r.clave for r in activas if not r.de_cliente}
+    propias_del_cliente = {r.clave for r in activas if r.de_cliente}
+    if ranura not in dict(PedimentoDocument.RANURAS) \
+            and ranura not in propias_de_empresa | propias_del_cliente:
         raise Http404
 
     if profile.is_customer():
         # El cliente solo llena lo suyo, y solo en sus pedimentos.
-        if ranura not in (PedimentoDocument.MANIFESTACION, PedimentoDocument.ACUSE):
+        if ranura not in PedimentoDocument.RANURAS_DEL_CLIENTE \
+                and ranura not in propias_del_cliente:
             raise Http404
         if ped.customer_id != getattr(profile.customer, 'pk', None):
             raise Http404
 
-    if (ranura in PedimentoDocument.RANURAS_DE_ENVIO or ranura in propias)             and not ped.se_puede_armar:
+    if (ranura in PedimentoDocument.RANURAS_DE_ENVIO or ranura in propias_de_empresa) \
+            and not ped.se_puede_armar:
         return _error_en_pedimento(request, ped,
             _('%(ped)s is already with the customer; its documents cannot be '
               'changed.') % {'ped': ped.etiqueta})
@@ -5601,10 +5616,13 @@ def pedimento_marcar_validado(request, pk):
     if not ped.marcar_validado():
         if ped.estado == Pedimento.APROBADO:
             mensaje = _('%(ped)s cannot be validated yet: the customer has to '
-                        'upload the statement of value and its receipt.')
+                        'upload %(lista)s.') % {
+                'ped': ped.etiqueta,
+                'lista': ', '.join(str(f) for f in ped.faltan_del_cliente)}
         else:
-            mensaje = _('%(ped)s can only be validated after the customer approves it.')
-        return _error_en_pedimento(request, ped, mensaje % {'ped': ped.etiqueta})
+            mensaje = _('%(ped)s can only be validated after the customer '
+                        'approves it.') % {'ped': ped.etiqueta}
+        return _error_en_pedimento(request, ped, mensaje)
     return _volver_al_pedimento(ped)
 
 
@@ -6399,7 +6417,12 @@ def pedimento_ranuras(request):
                 nombre = (p.get(f'nombre_{r.pk}') or '').strip()[:60]
                 if nombre:
                     r.nombre = nombre
-            r.save(update_fields=['activa', 'obligatoria', 'nombre'])
+                # Quien la sube: solo se cambia si el formulario lo trae, para
+                # que un POST viejo sin el campo no la regrese a la empresa.
+                quien = p.get(f'quien_{r.pk}')
+                if quien in ('empresa', 'cliente'):
+                    r.de_cliente = quien == 'cliente'
+            r.save(update_fields=['activa', 'obligatoria', 'nombre', 'de_cliente'])
 
         mover = p.get('mover', '')
         if ':' in mover:
@@ -6444,6 +6467,7 @@ def pedimento_ranuras(request):
                 RanuraDePedimento.objects.create(
                     tenant=tenant, clave=f'EXTRA_{n}', nombre=nombre, propia=True,
                     obligatoria=bool(p.get('nueva_obligatoria')),
+                    de_cliente=p.get('nueva_quien') == 'cliente',
                     orden=len(ranuras))
 
         if not errores:

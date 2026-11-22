@@ -4591,3 +4591,27 @@ msgstr[1] "Se muestran los cruces entregados en los últimos 4 meses. %(n)s más
 
 msgid "Invoices"
 msgstr "Facturas"
+
+msgid "Company documents"
+msgstr "Documentos de la empresa"
+
+msgid "Customer documents"
+msgstr "Documentos del cliente"
+
+msgid "The statement of value and its receipt are uploaded here by the customer once the pedimento is under review."
+msgstr "El cliente sube aquí la manifestación de valor y su acuse cuando el pedimento esté en revisión."
+
+msgid "Upload in \"Customer documents\" what is missing so we can validate this pedimento: %(lista)s."
+msgstr "Sube en \"Documentos del cliente\" lo que falta para que podamos validar este pedimento: %(lista)s."
+
+msgid "Missing from the customer: %(lista)s"
+msgstr "Falta del cliente: %(lista)s"
+
+msgid "%(ped)s cannot be validated yet: the customer has to upload %(lista)s."
+msgstr "%(ped)s todavía no se puede validar: el cliente tiene que subir %(lista)s."
+
+msgid "Uploaded by"
+msgstr "La sube"
+
+msgid "Your own slots can be uploaded by the company or by the customer. The customer's ones appear in the customer column of the pedimento and, if required, block the validation instead of the review."
+msgstr "Las ranuras propias las puede subir la empresa o el cliente. Las del cliente salen en su columna del pedimento y, si son obligatorias, frenan la validación en lugar del envío a revisión."
