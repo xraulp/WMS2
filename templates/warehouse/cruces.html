@@ -184,21 +184,26 @@
     .td-agregado .agr{display:block}
     /* "Impuesto aprox." puede bajar de renglon en el titulo de la columna. */
     @media (min-width:701px){ th.importe{white-space:normal;line-height:1.3} }
-    /* El titulo de cada pedimento: numero, estado, sus pasos con fecha y
-       Ingresar, en una linea que baja de renglon si no cabe. */
-    tr.ped-titulo td{padding-top:10px;padding-bottom:8px;border-bottom:1px solid var(--bdr)}
-    tbody tr.ped-titulo{background:var(--bg-sutil)}
-    tbody tr.ped-titulo.pc{background:var(--pc-bg)}
-    tbody tr.ped-titulo:not(:first-child) td{border-top:2px solid var(--bdr-fuerte)}
-    .pt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
-    .pt-ped .ped-num{font-size:14px}
-    .pt-etq{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft);margin-right:6px}
-    .pt-hitos{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--soft)}
-    .pt-hitos:empty{display:none}
-    .hito{white-space:nowrap}
-    .hito-etq{color:var(--accent-ink);font-weight:600}
-    .hito.pago .entero{color:var(--ink);font-weight:700}
-    .pt-entrar{margin-left:auto}
+    /* Cada pedimento, un bloque: sus titulos de columna y su renglon. Entre
+       un bloque y otro, aire y una raya, para que se lean aparte. */
+    tbody.ped-bloque + tbody.ped-bloque tr.ped-cab th{border-top:14px solid var(--surface);
+                                                     box-shadow:inset 0 1px 0 var(--bdr-fuerte)}
+    tr.ped-cab th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;
+                  color:var(--soft);padding:7px;border-bottom:1px solid var(--bdr);
+                  background:var(--bg-sutil);text-align:left;white-space:nowrap}
+    tr.ped-cab.pc th:first-child{border-left:5px solid var(--pc)}
+    tr.ped-cab th.importe{text-align:right}
+    /* El numero arriba y Ingresar debajo, en la misma celda. */
+    .td-ped .lista{gap:5px}
+    .td-ped .ped-num{font-family:'IBM Plex Mono',monospace}
+    /* Los pasos del pedimento en la columna Creado, cada uno con su fecha. */
+    .td-agregado .hito{margin-top:5px}
+    .hito-etq{color:var(--accent-ink);font-weight:600;display:block}
+    .td-agregado .hito .agr-sep{display:none}
+    .td-agregado .pago .entero{color:var(--ink);font-weight:700}
+    @media (min-width:701px){
+      .td-estado .en-revision, .td-estado .estado-ped{max-width:120px;white-space:normal}
+    }
     /* "sin pedimento todavia" si puede bajar de renglon: en una sola linea era
        la columna mas ancha y, con la de Factura, empujaba Modificar fuera. */
     td.mono .lista .soft{white-space:normal}
@@ -315,11 +320,13 @@
       .lista{align-items:flex-end;text-align:right}
       td.td-modificar{justify-content:flex-end}
       td.td-agregado .agr-lista{text-align:right}
-      /* El titulo del pedimento, como cabecera de su tarjeta. */
-      tr.ped-titulo{border-bottom:none;padding:0}
-      tr.ped-titulo td{display:block;padding:10px 14px 8px}
-      tr.ped-titulo td::before{content:none}
-      .pt{gap:6px 10px}
+      /* En el telefono cada celda ya lleva su etiqueta: los titulos de
+         columna sobran. Entre pedimento y pedimento, una raya gruesa. */
+      tr.ped-cab{display:none}
+      tbody.ped-bloque + tbody.ped-bloque{border-top:6px solid var(--bg)}
+      td.td-ped .lista{align-items:flex-end}
+      .hito-etq{display:inline}
+      .td-agregado .hito .agr-sep{display:inline}
       td.td-modificar::before{content:none}
       td.td-entrar{justify-content:flex-end}
       td.td-entrar::before{content:none}
@@ -642,51 +649,26 @@
     {% endif %}
     <div class="tabla-tarea">
     <table>
-      <thead>
-        <tr>
+      {% for g in t.grupos %}
+      {% comment %}
+      Cada pedimento es un bloque (pidio Diego el 22 nov 2026): su propio
+      renglon de titulos de columna y UN solo renglon de datos, que crece hacia
+      abajo con lo que traiga -- varias entradas, varios pedidos, los pasos del
+      pedimento --. Asi cada pedimento se lee aparte y entero.
+      {% endcomment %}
+      <tbody class="ped-bloque">
+        <tr class="ped-cab{% if g.color is not None %} pc pc-{{ g.color }}{% endif %}">
           <th>{% trans "Customer" %}</th>
           <th>{% trans "Entry" %}</th>
           <th>{% trans "PO / Order" %}</th>
           <th>{% trans "Invoice" %}</th>
           <th>{% trans "Bundles" %}</th>
+          <th>{% trans "State" %}</th>
+          <th>{% trans "Pedimento" %}</th>
           <th class="importe">{% trans "Approx. taxes" %}</th>
           <th>{% trans "Created" context "crossing task column" %}</th>
           <th></th>
         </tr>
-      </thead>
-      <tbody>
-        {% for g in t.grupos %}
-        {% comment %}
-        El titulo de cada pedimento (pidio Diego el 22 nov 2026): su numero, su
-        estado con de quien es la pelota, los pasos con su fecha y hora --enviado
-        a revision, el OK del cliente para validar y pagar y el dia de pago--, y
-        el boton para entrar. Asi cada pedimento de la tarea se lee aparte.
-        {% endcomment %}
-        <tr class="ped-titulo{% if g.color is not None %} pc pc-{{ g.color }}{% endif %}">
-          <td colspan="8">
-            <div class="pt">
-              <span class="pt-ped">
-                {% for p in g.pedimentos %}
-                {% if p.numero %}<span class="pt-etq">{% trans "Pedimento" %}</span>{% endif %}<span class="ped-num">{{ p.etiqueta }}</span>{% if p.rectificacion %} <span class="estado-ped">{% trans "Rect." %} {{ p.rectificacion }}</span>{% endif %}
-                {% empty %}
-                {% if g.pedimento_texto %}<span class="pt-etq">{% trans "Pedimento" %}</span><span class="ped-num">{{ g.pedimento_texto }}</span>{% else %}<span class="soft pt-sin">{% trans "no pedimento yet" %}</span>{% endif %}
-                {% endfor %}
-              </span>
-              <span class="pt-estado">{% for texto, del_cliente in g.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% endfor %}</span>
-              <span class="pt-hitos">{% for p in g.pedimentos %}{% if p.enviado_a_revision_en %}<span class="hito"><span class="hito-etq">{% trans "Sent to rev." %}</span> <span class="entero" title="{{ p.enviado_a_revision_en|date:"d/m/Y H:i" }}">{{ p.enviado_a_revision_en|date:"d/m H:i" }}</span></span>{% endif %}{% if p.aprobado_en %}<span class="hito"><span class="hito-etq">{% trans "Validate and pay" %}</span> <span class="entero" title="{{ p.aprobado_en|date:"d/m/Y H:i" }}">{{ p.aprobado_en|date:"d/m H:i" }}</span></span>{% endif %}{% if p.fecha_de_pago %}<span class="hito pago"><span class="hito-etq">{% trans "Payment" %}</span> <span class="entero">{{ p.fecha_de_pago|date:"d/m/y" }}</span></span>{% endif %}{% endfor %}</span>
-              {% comment %}
-              Entrar. Al que aun no tiene pedimento, entrar se lo crea con su
-              entrada dentro y lleva a el.
-              {% endcomment %}
-              <span class="pt-entrar">{% for p in g.pedimentos %}<a class="ped-entrar" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}">{% trans "Go in" %} ›</a>{% if not forloop.last %} {% endif %}{% empty %}{% if not es_cliente %}<form method="post" action="{% url 'pedimento_create' %}" style="margin:0">{% csrf_token %}<input type="hidden" name="customer" value="{{ cliente.pk }}"><input type="hidden" name="operation" value="{{ g.operation.pk }}"><button class="ped-entrar" type="submit" style="cursor:pointer;font-family:inherit" title="{% trans "Make the pedimento" %}">{% trans "Go in" %} ›</button></form>{% endif %}{% endfor %}</span>
-            </div>
-          </td>
-        </tr>
-        {% comment %}
-        Un renglon por pedimento. Sus entradas y sus pedidos van juntos en la
-        misma celda, uno debajo del otro; los bultos y el impuesto, sumados.
-        Las acciones del pedimento van al final del renglon.
-        {% endcomment %}
         <tr class="{% if g.color is not None %}pc pc-{{ g.color }}{% endif %}{% if not es_cliente %} con-acc{% endif %}">
           <td data-etq="{% trans "Customer" %}" class="td-cli" title="{{ t.customer.name }}">{{ t.customer.abbreviation|default:t.customer.name }}</td>
           <td data-etq="{% trans "Entry" %}" class="mono">
@@ -696,9 +678,8 @@
             <span class="lista">{% for r in g.filas %}<strong>{% for x in r.operation.po_order|por_comas %}<span class="entero">{{ x }}</span> {% empty %}—{% endfor %}</strong>{% endfor %}</span>
           </td>
           {% comment %}
-          La factura de cada entrada, en el mismo orden que sus pedidos. Lo pidio
-          Diego el 22 nov 2026. Varias facturas en el mismo campo bajan de
-          renglon igual que los pedidos.
+          La factura de cada entrada, en el mismo orden que sus pedidos. Varias
+          facturas en el mismo campo bajan de renglon igual que los pedidos.
           {% endcomment %}
           <td data-etq="{% trans "Invoice" %}" class="td-po td-fac">
             <span class="lista">{% for r in g.filas %}<span class="mono">{% for x in r.operation.invoice|por_comas %}<span class="entero">{{ x }}</span> {% empty %}—{% endfor %}</span>{% endfor %}</span>
@@ -707,25 +688,45 @@
             <span>{{ g.bultos }}{% if g.es_parcial %}
             <span class="soft">{% trans "of" %} {{ g.de }}</span>{% endif %}</span>
           </td>
+          {% comment %}
+          El estado del pedimento con la abreviatura de quien tiene la pelota.
+          Cuando le toca al cliente revisar, sale con el estilo de alarma.
+          {% endcomment %}
+          <td data-etq="{% trans "State" %}" class="td-estado">
+            <span>{% for texto, del_cliente in g.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% endfor %}</span>
+          </td>
+          {% comment %}
+          El numero y, debajo, el boton para entrar. Al que aun no tiene
+          pedimento, entrar se lo crea con su entrada dentro y lleva a el.
+          {% endcomment %}
+          <td data-etq="{% trans "Pedimento" %}" class="td-ped">
+            <span class="lista">
+            {% for p in g.pedimentos %}<span class="ped-num">{{ p.etiqueta }}</span>{% if p.rectificacion %}<span class="estado-ped">{% trans "Rect." %} {{ p.rectificacion }}</span>{% endif %}<a class="ped-entrar" href="{% url 'pedimentos_panel' %}?customer={{ cliente.pk }}&solo={{ p.pk }}">{% trans "Go in" %} ›</a>{% empty %}
+            {% if g.pedimento_texto %}<span class="ped-num">{{ g.pedimento_texto }}</span>{% else %}<span class="soft mono">{% trans "no pedimento yet" %}</span>{% endif %}
+            {% if not es_cliente %}<form method="post" action="{% url 'pedimento_create' %}" style="margin:0">{% csrf_token %}<input type="hidden" name="customer" value="{{ cliente.pk }}"><input type="hidden" name="operation" value="{{ g.operation.pk }}"><button class="ped-entrar" type="submit" style="cursor:pointer;font-family:inherit" title="{% trans "Make the pedimento" %}">{% trans "Go in" %} ›</button></form>{% endif %}
+            {% endfor %}
+            </span>
+          </td>
           <td data-etq="{% trans "Approx. taxes" %}" class="importe">
             {% if g.impuesto %}${{ g.impuesto|pesos }}{% else %}<span class="soft">—</span>{% endif %}
           </td>
           <td data-etq="{% trans "Created" context "crossing task column" %}" class="soft td-agregado" style="font-size:11px">
             {% comment %}
-            Quien metio la entrada a la tarea y cuando (dia/mes hora:min), cada
-            dato entero: en un solo renglon se partia donde caia y la hora
-            quedaba "15:" arriba y los minutos abajo. Los pasos del pedimento
-            van en su titulo.
+            Quien metio la entrada a la tarea y cuando (dia/mes hora:min), y
+            debajo los pasos de su pedimento con su fecha: enviado a revision,
+            el OK del cliente para validar y pagar, y el dia de pago que dio al
+            aprobar. Cada dato entero: la hora nunca se parte.
             {% endcomment %}
             <span class="agr-lista">
             <span class="agr"><span class="entero">{{ g.ultima.added_by.username|default:"—" }}</span><span class="agr-sep"> · </span><span class="entero" title="{{ g.ultima.added_at|date:"d/m/Y H:i" }}">{{ g.ultima.added_at|date:"d/m H:i" }}</span></span>
+            {% for p in g.pedimentos %}{% if p.enviado_a_revision_en %}<span class="agr hito"><span class="hito-etq">{% trans "Sent to rev." %}</span><span class="agr-sep"> </span><span class="entero" title="{{ p.enviado_a_revision_en|date:"d/m/Y H:i" }}">{{ p.enviado_a_revision_en|date:"d/m H:i" }}</span></span>{% endif %}{% if p.aprobado_en %}<span class="agr hito"><span class="hito-etq">{% trans "Validate and pay" %}</span><span class="agr-sep"> </span><span class="entero" title="{{ p.aprobado_en|date:"d/m/Y H:i" }}">{{ p.aprobado_en|date:"d/m H:i" }}</span></span>{% endif %}{% if p.fecha_de_pago %}<span class="agr hito pago"><span class="hito-etq">{% trans "Payment" %}</span><span class="agr-sep"> </span><span class="entero">{{ p.fecha_de_pago|date:"d/m/y" }}</span></span>{% endif %}{% endfor %}
             {% for r in g.filas %}{% if r.motivo %}<span class="agr">{{ r.motivo }}</span>{% endif %}{% endfor %}
             </span>
           </td>
           {% comment %}
-          Las acciones van escondidas detras de Modificar, para que cada
-          embarque quepa en una sola linea; abren en un renglon debajo, con el
-          color de su pedimento. En el telefono, al pie de su tarjeta.
+          Las acciones van escondidas detras de Modificar; abren en un renglon
+          debajo, con el color de su pedimento. En el telefono, al pie de su
+          tarjeta.
           {% endcomment %}
           <td data-etq="" class="td-modificar">
             {% if not es_cliente %}
@@ -736,7 +737,7 @@
         </tr>
         {% if not es_cliente %}
         <tr class="acc-fila{% if g.color is not None %} pc pc-{{ g.color }}{% endif %}">
-          <td colspan="8">
+          <td colspan="10">
             <span class="ped-acc">
             {% if g.pedimentos and t.estado == 'ABIERTA' or g.pedimentos and t.estado == 'CON_ORDEN' %}
             {% with p=g.pedimentos.0 %}
@@ -842,14 +843,14 @@
           </td>
         </tr>
         {% endif %}
-        {% empty %}
-        <tr><td colspan="8" class="soft">{% trans "Nothing in this crossing yet." %}</td></tr>
-        {% endfor %}
       </tbody>
+      {% empty %}
+      <tbody><tr><td colspan="10" class="soft">{% trans "Nothing in this crossing yet." %}</td></tr></tbody>
+      {% endfor %}
       {% if t.grupos|length > 1 %}
       <tfoot>
         <tr class="total">
-          <td colspan="5" class="total-etq">
+          <td colspan="7" class="total-etq">
             {% trans "Approx. taxes total" %}
             {% if t.sin_impuesto %}<span class="soft">· {% blocktrans count n=t.sin_impuesto %}{{ n }} shipment without an amount yet{% plural %}{{ n }} shipments without an amount yet{% endblocktrans %}</span>{% endif %}
           </td>

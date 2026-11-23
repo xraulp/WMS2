@@ -124,23 +124,31 @@ class LaColumnaCreadoTests(Base):
         self.assertIn(cuando, html)
         self.assertIn('>Pago</span>', html)
         self.assertIn(dia.strftime('%d/%m/%y'), html)
-        # En el titulo del pedimento, en ese orden: enviado, validar y pagar,
-        # pago.
-        celda = html[html.index('class="pt-hitos"'):]
+        # En la columna Creado, en ese orden: quien y cuando, enviado,
+        # validar y pagar, pago.
+        celda = html[html.index('class="agr-lista"'):]
+        celda = celda[:celda.index('</td>')]
+        self.assertLess(celda.index(self.jefa.username), celda.index('Env. rev.'))
         self.assertLess(celda.index('Env. rev.'), celda.index('Validar y pagar'))
         self.assertLess(celda.index('Validar y pagar'), celda.index('>Pago<'))
 
-    def test_cada_pedimento_lleva_su_titulo(self):
+    def test_cada_pedimento_es_un_bloque_con_sus_titulos_y_un_renglon(self):
+        otra = self.operacion('ED261122-0002', bundle_qty=1)
+        CrossingTaskItem.objects.create(task=self.t, operation=otra, added_by=self.jefa)
         html = self.tarea_html('es')
-        titulo = html[html.index('<tr class="ped-titulo'):]
-        titulo = titulo[:titulo.index('</tr>')]
-        self.assertIn('24-1780-6003555', titulo)
-        self.assertIn('Ingresar', titulo)
-        self.assertIn('>Env. rev.<', titulo)
-        # La columna Creado ya no repite los pasos: solo quien y cuando.
-        celda = html[html.index('class="agr-lista"'):]
-        celda = celda[:celda.index('</td>')]
-        self.assertNotIn('Env. rev.', celda)
+        # Dos pedimentos (uno armado, otro sin pedimento): dos bloques, cada
+        # uno con su renglon de titulos.
+        self.assertEqual(html.count('<tbody class="ped-bloque">'), 2)
+        self.assertEqual(html.count('<tr class="ped-cab'), 2)
+        bloque = html[html.index('<tbody class="ped-bloque">'):]
+        bloque = bloque[:bloque.index('</tbody>')]
+        cab = bloque[:bloque.index('</tr>')]
+        for titulo in ('Cliente', 'Entrada', 'Factura', 'Estado', 'Pedimento', 'Creado'):
+            self.assertIn(f'<th>{titulo}</th>', cab)
+        # Un solo renglon de datos (mas el de Modificar, escondido).
+        datos = bloque[bloque.index('</tr>') + 5:]
+        self.assertEqual(datos.count('<tr class="acc-fila'), 1)
+        self.assertEqual(datos.count('<tr'), 2)
 
     def test_sin_pedimento_solo_quien_y_cuando(self):
         Pedimento.objects.filter(pk=self.ped.pk).delete()
