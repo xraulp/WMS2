@@ -33,6 +33,7 @@
                 <div style="font-size:14px; line-height:1.7; color:#334155; margin-bottom:18px;">
                   {% blocktrans with quien=quien fecha=pedimento.aprobado_en|date:"d/m/Y H:i" %}<b>{{ quien }}</b> approved it on {{ fecha }}.{% endblocktrans %}
                   {% trans "It can now be validated and its taxes paid." %}
+                  {% if pedimento.fecha_de_pago %}<br>{% blocktrans with fecha=pedimento.fecha_de_pago|date:"d/m/Y" %}Payment date: <b>{{ fecha }}</b>.{% endblocktrans %}{% endif %}
                 </div>
 
                 {% include "warehouse/email/pedimento_renglones.html" %}

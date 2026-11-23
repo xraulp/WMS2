@@ -203,6 +203,11 @@
     .contestar{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
     .contestar p{flex:1 1 100%;margin:0;font-size:13px}
     .contestar details{flex:1 1 260px}
+    /* Aprobar: la fecha de pago y el boton, juntos; en el telefono bajan. */
+    .contestar form.aprobar{margin:0;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+    .fecha-pago{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--soft)}
+    .fecha-pago input{font:inherit;font-size:14px;padding:6px 8px;color:var(--ink);
+                      background:var(--surface);border:1px solid var(--bdr);border-radius:6px}
     .contestar summary{list-style:none;display:inline-block}
     .contestar summary::-webkit-details-marker{display:none}
     .contestar details form{display:flex;flex-direction:column;gap:8px;margin-top:8px}
@@ -702,8 +707,15 @@
         {% else %}
         <div class="contestar">
           <p>{% trans "Check the pedimento against your invoice. Approving it authorizes us to validate it and pay its taxes." %}</p>
-          <form method="post" action="{% url 'pedimento_aprobar' p.pk %}" style="margin:0">
+          {% comment %}
+          Al aprobar se pregunta el dia de pago: la casa lo lee en la tarea de
+          cruce, debajo de "Validar y pagar". No puede ser de antes de hoy.
+          {% endcomment %}
+          <form method="post" action="{% url 'pedimento_aprobar' p.pk %}" class="aprobar">
             {% csrf_token %}
+            <label class="fecha-pago">{% trans "Payment date" %}
+              <input type="date" name="fecha_de_pago" required min="{% now "Y-m-d" %}">
+            </label>
             <button class="btn btn-p" type="submit">✓ {% trans "Approve this pedimento" %}</button>
           </form>
           <details>
@@ -722,7 +734,7 @@
         <div class="contestar"><p><b>{% blocktrans with lista=p.faltan_del_cliente|join:", " %}Upload in "Customer documents" what is missing so we can validate this pedimento: {{ lista }}.{% endblocktrans %}</b></p></div>
         {% endif %}
         <span class="ya-salio">
-          {% trans "Approved" %}{% if p.revisado_por %} {% trans "by" %} {{ p.revisado_por.get_full_name|default:p.revisado_por.username }}{% endif %} · {{ p.aprobado_en|date:"d/m H:i" }}
+          {% trans "Approved" %}{% if p.revisado_por %} {% trans "by" %} {{ p.revisado_por.get_full_name|default:p.revisado_por.username }}{% endif %} · {{ p.aprobado_en|date:"d/m H:i" }}{% if p.fecha_de_pago %} · {% trans "Payment" %} {{ p.fecha_de_pago|date:"d/m/y" }}{% endif %}
         </span>
         {% if puede_editar %}
         {% if p.tiene_mv %}

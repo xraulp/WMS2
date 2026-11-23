@@ -4615,3 +4615,28 @@ msgstr "La sube"
 
 msgid "Your own slots can be uploaded by the company or by the customer. The customer's ones appear in the customer column of the pedimento and, if required, block the validation instead of the review."
 msgstr "Las ranuras propias las puede subir la empresa o el cliente. Las del cliente salen en su columna del pedimento y, si son obligatorias, frenan la validación en lugar del envío a revisión."
+
+msgctxt "crossing task column"
+msgid "Created"
+msgstr "Creado"
+
+msgid "Sent to rev."
+msgstr "Env. rev."
+
+msgid "Validate and pay"
+msgstr "Validar y pagar"
+
+msgid "Payment"
+msgstr "Pago"
+
+msgid "Payment date"
+msgstr "Fecha de pago"
+
+msgid "The payment date cannot be before today."
+msgstr "La fecha de pago no puede ser anterior a hoy."
+
+msgid "Tell us the payment date to approve %(ped)s."
+msgstr "Indica la fecha de pago para aprobar %(ped)s."
+
+msgid "Payment date: <b>%(fecha)s</b>."
+msgstr "Fecha de pago: <b>%(fecha)s</b>."

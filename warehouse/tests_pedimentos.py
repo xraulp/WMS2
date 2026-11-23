@@ -931,6 +931,10 @@ class ElClienteContestaLaRevisionTests(BaseDeAlmacen):
         self.client.force_login(usuario)
 
     def post(self, accion, datos=None):
+        if accion == 'approve' and datos is None:
+            # Aprobar pide el dia de pago (22 nov 2026).
+            from django.utils import timezone
+            datos = {'fecha_de_pago': timezone.localdate().isoformat()}
         return self.client.post('/pedimentos/%d/%s/' % (self.ped.pk, accion),
                                 datos or {})
 
@@ -1301,7 +1305,9 @@ class AvisoDeAprobacionTests(BaseDeAlmacen):
         self.client.force_login(self.lopez)
 
     def aprobar(self):
-        return self.client.post('/pedimentos/%d/approve/' % self.ped.pk)
+        from django.utils import timezone
+        return self.client.post('/pedimentos/%d/approve/' % self.ped.pk,
+                                {'fecha_de_pago': timezone.localdate().isoformat()})
 
     def bitacora(self):
         from .models import NotificationLog

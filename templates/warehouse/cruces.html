@@ -181,6 +181,23 @@
        cifra ni en el guion. */
     td.td-fac .lista > span{white-space:normal;max-width:130px}
     .lista .entero, .td-agregado .entero{white-space:nowrap}
+    /* Cada paso del pedimento, separado del anterior; el dia de pago, fuerte:
+       es el dato que la casa busca. */
+    .td-agregado .agr{display:block}
+    .td-agregado .hito{margin-top:5px}
+    .td-agregado .hito > .entero:first-child{color:var(--accent-ink);font-weight:600}
+    /* Con los pasos del pedimento la columna crecia y Modificar se salia de
+       la tarjeta: "Validar y pagar" puede bajar de renglon entre palabras
+       (la fecha y hora nunca), y el titulo "Impuesto aprox." tambien. */
+    @media (min-width:701px){
+      .td-agregado .hito > .entero:first-child{white-space:normal}
+      th.importe{white-space:normal;line-height:1.3}
+      /* "EN REVISIÓN - CTEST" en una linea era la etiqueta mas ancha y, con
+         la columna Factura, sacaba Modificar de la tarjeta: puede bajar de
+         renglon entre palabras. */
+      .td-estado .en-revision, .td-estado .estado-ped{max-width:120px;white-space:normal}
+    }
+    .td-agregado .pago > .entero:last-child{color:var(--ink);font-weight:600}
     /* "sin pedimento todavia" si puede bajar de renglon: en una sola linea era
        la columna mas ancha y, con la de Factura, empujaba Modificar fuera. */
     td.mono .lista .soft{white-space:normal}
@@ -296,6 +313,7 @@
                  letter-spacing:.05em;color:var(--soft);flex:0 0 auto}
       .lista{align-items:flex-end;text-align:right}
       td.td-modificar{justify-content:flex-end}
+      td.td-agregado .agr-lista{text-align:right}
       td.td-modificar::before{content:none}
       td.td-entrar{justify-content:flex-end}
       td.td-entrar::before{content:none}
@@ -629,7 +647,7 @@
           <th>{% trans "Pedimento" %}</th>
           <th></th>
           <th class="importe">{% trans "Approx. taxes" %}</th>
-          <th>{% trans "Added" %}</th>
+          <th>{% trans "Created" context "crossing task column" %}</th>
           <th></th>
         </tr>
       </thead>
@@ -664,7 +682,7 @@
           El estado del pedimento con la abreviatura de quien tiene la pelota.
           Cuando le toca al cliente revisar, sale con el estilo de alarma.
           {% endcomment %}
-          <td data-etq="{% trans "State" %}">
+          <td data-etq="{% trans "State" %}" class="td-estado">
             <span>{% for texto, del_cliente in g.estados %}<span class="{% if del_cliente %}en-revision{% else %}estado-ped{% endif %}">{{ texto }}</span>{% endfor %}</span>
           </td>
           {% comment %}
@@ -687,14 +705,23 @@
           <td data-etq="{% trans "Approx. taxes" %}" class="importe">
             {% if g.impuesto %}${{ g.impuesto|pesos }}{% else %}<span class="soft">—</span>{% endif %}
           </td>
-          <td data-etq="{% trans "Added" %}" class="soft td-agregado" style="font-size:11px">
+          <td data-etq="{% trans "Created" context "crossing task column" %}" class="soft td-agregado" style="font-size:11px">
             {% comment %}
-            Quien metio la entrada a la tarea y cuando (dia/mes hora:min). En
-            dos renglones fijos: en uno solo se partia donde caia y la hora
-            quedaba "15:" arriba y los minutos abajo.
+            Quien metio la entrada a la tarea y cuando (dia/mes hora:min), y
+            debajo los pasos de su pedimento con su fecha: enviado a revision,
+            el OK del cliente para validar y pagar, y el dia de pago que dio al
+            aprobar. Cada dato entero: en un solo renglon se partia donde caia
+            y la hora quedaba "15:" arriba y los minutos abajo.
             {% endcomment %}
+            <span class="agr-lista">
             <span class="agr"><span class="entero">{{ g.ultima.added_by.username|default:"—" }}</span><span class="agr-sep"> · </span><span class="entero" title="{{ g.ultima.added_at|date:"d/m/Y H:i" }}">{{ g.ultima.added_at|date:"d/m H:i" }}</span></span>
-            {% for r in g.filas %}{% if r.motivo %}<br>{{ r.motivo }}{% endif %}{% endfor %}
+            {% for p in g.pedimentos %}
+            {% if p.enviado_a_revision_en %}<span class="agr hito"><span class="entero">{% trans "Sent to rev." %}</span><span class="agr-sep"> </span><span class="entero" title="{{ p.enviado_a_revision_en|date:"d/m/Y H:i" }}">{{ p.enviado_a_revision_en|date:"d/m H:i" }}</span></span>{% endif %}
+            {% if p.aprobado_en %}<span class="agr hito"><span class="entero">{% trans "Validate and pay" %}</span><span class="agr-sep"> </span><span class="entero" title="{{ p.aprobado_en|date:"d/m/Y H:i" }}">{{ p.aprobado_en|date:"d/m H:i" }}</span></span>{% endif %}
+            {% if p.fecha_de_pago %}<span class="agr hito pago"><span class="entero">{% trans "Payment" %}</span><span class="agr-sep"> </span><span class="entero">{{ p.fecha_de_pago|date:"d/m/y" }}</span></span>{% endif %}
+            {% endfor %}
+            {% for r in g.filas %}{% if r.motivo %}<span class="agr">{{ r.motivo }}</span>{% endif %}{% endfor %}
+            </span>
           </td>
           {% comment %}
           Las acciones van escondidas detras de Modificar, para que cada

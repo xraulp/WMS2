@@ -2155,6 +2155,11 @@ class Pedimento(models.Model):
     aprobado_en           = models.DateTimeField(null=True, blank=True)
     validado_en           = models.DateTimeField(null=True, blank=True)
     pagado_en             = models.DateTimeField(null=True, blank=True)
+    # El dia en que el cliente dice que se pague, lo pregunta el sistema al
+    # aprobar. Es un dia y no una hora: es cuando el cliente tendra el dinero
+    # para los impuestos, y la casa lo lee en la tarea de cruce (pidio Diego
+    # el 22 nov 2026).
+    fecha_de_pago         = models.DateField(null=True, blank=True)
 
     # Lo que el cliente escribio al pedir correcciones. Se guarda el ultimo y
     # no el historial: quien lo lee esta arreglando el pedimento de ahora.
@@ -2516,15 +2521,20 @@ class Pedimento(models.Model):
     # siguiente, porque la orden de carga confia en que PAGADO quiere decir que
     # paso por todos.
 
-    def aprobar(self, usuario):
-        """El OK del cliente para validar y pagar. Devuelve si se pudo."""
+    def aprobar(self, usuario, fecha_de_pago=None):
+        """
+        El OK del cliente para validar y pagar, con el dia en que se paga.
+        Devuelve si se pudo. La pantalla siempre pide la fecha; aqui es
+        opcional para quien apruebe por otro camino.
+        """
         if self.estado != self.EN_REVISION:
             return False
         self.estado = self.APROBADO
         self.aprobado_en = timezone.now()
         self.revisado_por = usuario
+        self.fecha_de_pago = fecha_de_pago
         self.save(update_fields=['estado', 'aprobado_en', 'revisado_por',
-                                 'updated_at'])
+                                 'fecha_de_pago', 'updated_at'])
         for tarea in self.tareas_de_cruce():
             tarea.confirmar_si_aprobo_todo()
         return True
@@ -2665,10 +2675,11 @@ class Pedimento(models.Model):
         self.aprobado_en = None
         self.enviado_a_revision_en = None
         self.revisado_por = None
+        self.fecha_de_pago = None
         self.correcciones_pedidas = ''
         self.veces_con_correcciones = 0
         self.save(update_fields=['estado', 'aprobado_en', 'enviado_a_revision_en',
-                                 'revisado_por', 'correcciones_pedidas',
+                                 'revisado_por', 'fecha_de_pago', 'correcciones_pedidas',
                                  'veces_con_correcciones', 'updated_at'])
         CambioDePedimento.objects.create(
             pedimento=self, accion=CambioDePedimento.REABRIR,

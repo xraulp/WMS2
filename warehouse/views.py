@@ -5576,9 +5576,26 @@ def _pedimento_del_cliente(request, pk):
 @login_required
 @require_POST
 def pedimento_aprobar(request, pk):
-    """El OK del cliente: que se valide y se pague."""
+    """
+    El OK del cliente: que se valide y se pague, y el dia en que se paga.
+
+    La fecha de pago es obligatoria y no puede ser de antes de hoy: es cuando
+    el cliente tendra el dinero de los impuestos, y la casa la lee en la tarea
+    de cruce para saber cuando pagar.
+    """
     ped = _pedimento_del_cliente(request, pk)
-    if not ped.aprobar(request.user):
+    if ped.estado != Pedimento.EN_REVISION:
+        return _error_en_pedimento(request, ped,
+            _('%(ped)s is not waiting for your review.') % {'ped': ped.etiqueta})
+    try:
+        fecha_de_pago = date.fromisoformat((request.POST.get('fecha_de_pago') or '').strip())
+    except ValueError:
+        return _error_en_pedimento(request, ped,
+            _('Tell us the payment date to approve %(ped)s.') % {'ped': ped.etiqueta})
+    if fecha_de_pago < timezone.localdate():
+        return _error_en_pedimento(request, ped,
+            _('The payment date cannot be before today.'))
+    if not ped.aprobar(request.user, fecha_de_pago):
         return _error_en_pedimento(request, ped,
             _('%(ped)s is not waiting for your review.') % {'ped': ped.etiqueta})
     # La casa se entera por correo: es su señal para validar y pagar.
