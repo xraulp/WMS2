@@ -159,6 +159,9 @@
       .tarea th:first-child, .tarea td:first-child{padding-left:12px}
       .tarea th:last-child, .tarea td:last-child{padding-right:12px}
       .td-agregado{min-width:70px}
+      /* En la PC, quien arriba y la fecha y hora abajo, cada una entera. */
+      .td-agregado .agr .entero{display:block}
+      .td-agregado .agr-sep{display:none}
     }
     .importe{text-align:right;font-family:'IBM Plex Mono',monospace;white-space:nowrap}
     tfoot td{font-weight:600;border-top:1px solid var(--bdr);border-bottom:none}
@@ -177,7 +180,7 @@
        `por_comas`): solo se baja de renglon entre uno y otro, nunca a media
        cifra ni en el guion. */
     td.td-fac .lista > span{white-space:normal;max-width:130px}
-    .lista .entero{white-space:nowrap}
+    .lista .entero, .td-agregado .entero{white-space:nowrap}
     /* "sin pedimento todavia" si puede bajar de renglon: en una sola linea era
        la columna mas ancha y, con la de Factura, empujaba Modificar fuera. */
     td.mono .lista .soft{white-space:normal}
@@ -685,7 +688,12 @@
             {% if g.impuesto %}${{ g.impuesto|pesos }}{% else %}<span class="soft">—</span>{% endif %}
           </td>
           <td data-etq="{% trans "Added" %}" class="soft td-agregado" style="font-size:11px">
-            {{ g.ultima.added_by.username|default:"—" }} · {{ g.ultima.added_at|date:"d/m H:i" }}
+            {% comment %}
+            Quien metio la entrada a la tarea y cuando (dia/mes hora:min). En
+            dos renglones fijos: en uno solo se partia donde caia y la hora
+            quedaba "15:" arriba y los minutos abajo.
+            {% endcomment %}
+            <span class="agr"><span class="entero">{{ g.ultima.added_by.username|default:"—" }}</span><span class="agr-sep"> · </span><span class="entero" title="{{ g.ultima.added_at|date:"d/m/Y H:i" }}">{{ g.ultima.added_at|date:"d/m H:i" }}</span></span>
             {% for r in g.filas %}{% if r.motivo %}<br>{{ r.motivo }}{% endif %}{% endfor %}
           </td>
           {% comment %}

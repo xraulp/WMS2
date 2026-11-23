@@ -2019,3 +2019,20 @@ class PorComasTests(TestCase):
         self.assertEqual(por_comas('A,,B, '), ['A,', 'B'])
         self.assertEqual(por_comas(None), [])
         self.assertEqual(por_comas(''), [])
+
+
+
+class LaColumnaAgregadoTests(BaseDeCruces):
+    """Quien metio la entrada y cuando, cada dato entero (22 nov 2026: se veia
+    "dyser · 22/11 15:" con los minutos en otro renglon)."""
+
+    def test_quien_y_cuando_cada_uno_entero(self):
+        t = self.tarea()
+        op = self.operacion('ED261117-0002', bundle_qty=1)
+        item = CrossingTaskItem.objects.create(task=t, operation=op, added_by=self.jefa)
+        respuesta = self.client.get('/cruces/', {'customer': self.cliente.pk})
+        from django.utils import timezone
+        cuando = timezone.localtime(item.added_at).strftime('%d/%m %H:%M')
+        self.assertContains(respuesta, f'<span class="entero">{self.jefa.username}</span>'
+                                       '<span class="agr-sep"> · </span>')
+        self.assertContains(respuesta, f'>{cuando}</span></span>')
