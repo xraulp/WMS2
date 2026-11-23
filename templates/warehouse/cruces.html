@@ -125,6 +125,13 @@
     /* `.acciones` pone `display:flex`, que le gana al atributo `hidden`. */
     .panel-tarea[hidden]{display:none}
     .acciones-pie{justify-content:flex-end}
+    /* El pie de la tarea -- el total de impuestos y la barra de Cancelar --
+       con el fondo del encabezado de la tarea, para que la tarea se lea
+       cerrada arriba y abajo (pidio Diego el 22 nov 2026). */
+    tfoot tr.total, tfoot tr.total td{background:var(--th-bg-acento);color:var(--tb-ink)}
+    tfoot tr.total td{border-top:none}
+    tfoot tr.total .soft{color:var(--tb-ink-suave)}
+    .tarea .acciones-pie{background:var(--th-bg-acento);border-top:1px solid var(--tb-bdr)}
 
     /* La cuenta atras. El dia de cruce es la fecha contra la que se mide todo
        lo que falta, asi que se lee de un golpe y no leyendo una fecha. */
