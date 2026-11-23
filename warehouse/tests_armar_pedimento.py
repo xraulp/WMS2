@@ -523,3 +523,43 @@ class SinBotonDeSacarDentroDelPedimentoTests(Base):
         self.assertContains(respuesta, 'ped-cliente">Acme<')
         self.assertContains(respuesta, '649785')
         self.assertContains(respuesta, 'PO1559, PO1558')
+
+
+class LosBultosSeVenAbiertosTests(Base):
+    """La tabla de bultos (entrada, factura, pedido, tipo, remitente, kg) se ve
+    abierta en cualquier estado del pedimento, no solo mientras se arma."""
+
+    def abierta(self, ped):
+        respuesta = self.client.get(URL, {'customer': self.cliente.pk, 'solo': ped.pk})
+        self.assertContains(respuesta, '<details class="bultos" open>')
+
+    def test_en_borrador(self):
+        este = self.ped()
+        self.dentro(este)
+        self.abierta(este)
+
+    def test_ya_pagado(self):
+        este = self.pagado()
+        self.dentro(este)
+        self.abierta(este)
+
+    def test_tambien_para_el_cliente(self):
+        from django.contrib.auth.models import User
+        from .models import UserProfile
+        este = self.ped(estado=Pedimento.APROBADO)
+        self.dentro(este)
+        lopez = User.objects.create_user('lopez', password='x')
+        UserProfile.objects.create(user=lopez, tenant=self.tenant,
+                                   role='customer', customer=self.cliente)
+        self.client.force_login(lopez)
+        self.abierta(este)
+
+    def test_lleva_la_factura_entre_la_entrada_y_el_pedido(self):
+        self.entrada.po_order, self.entrada.invoice = 'PO1559', '649785'
+        self.entrada.save()
+        este = self.ped()
+        self.dentro(este)
+        html = self.client.get(URL, {'customer': self.cliente.pk, 'solo': este.pk}).content.decode()
+        fila = html[html.index('<details class="bultos" open>'):]
+        self.assertLess(fila.index('ED261108-0001'), fila.index('649785'))
+        self.assertLess(fila.index('649785'), fila.index('PO1559'))

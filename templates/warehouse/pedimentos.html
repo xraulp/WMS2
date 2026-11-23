@@ -415,16 +415,18 @@
     </div>
 
     {% comment %}
-    Los bultos del pedimento. Mientras se arma se ven abiertos, porque ahi se
-    asignan y se sacan; despues se pliegan: el encabezado ya dice bultos y kg.
+    Los bultos del pedimento (bultos, entrada, factura, pedido, tipo, remitente,
+    kg). Se ven siempre abiertos, en cualquier estado y para cualquiera; quien
+    quiera puede plegarlos con el resumen.
     {% endcomment %}
-    <details class="bultos"{% if puede_editar and p.editable %} open{% endif %}>
+    <details class="bultos" open>
     <summary>{% trans "Bundles and orders" %} · {{ p.renglones.all|length }}</summary>
     <table>
       <thead>
         <tr>
           <th>{% trans "Bundles" %}</th>
           <th>{% trans "Entry no." %}</th>
+          <th>{% trans "Invoice" %}</th>
           <th>{% trans "PO / Order" %}</th>
           <th>{% trans "Type" %}</th>
           <th>{% trans "Shipper" %}</th>
@@ -440,6 +442,7 @@
           {% endcomment %}
           <td data-etq="{% trans "Bundles" %}" class="mono">{{ r.bultos }}{% if not r.lleva_la_entrada_completa %} <span class="soft">{% trans "of" %} {{ r.operation.bundle_qty|default:"?" }}</span>{% endif %}</td>
           <td data-etq="{% trans "Entry no." %}" class="mono">{{ r.operation.custom_id }}</td>
+          <td data-etq="{% trans "Invoice" %}" class="mono">{{ r.operation.invoice|default:"—" }}</td>
           {% comment %}
           El numero de pedido es con lo que el cliente identifica su embarque,
           asi que va delante y completo: una entrada puede traer varios,
@@ -461,7 +464,7 @@
           <td data-etq="{% trans "Kgs" %}" class="num">{{ r.kilos|default:"—" }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="soft">{% trans "Nothing assigned to this pedimento yet." %}</td></tr>
+        <tr><td colspan="7" class="soft">{% trans "Nothing assigned to this pedimento yet." %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
