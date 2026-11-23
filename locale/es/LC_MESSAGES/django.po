@@ -4640,3 +4640,12 @@ msgstr "Indica la fecha de pago para aprobar %(ped)s."
 
 msgid "Payment date: <b>%(fecha)s</b>."
 msgstr "Fecha de pago: <b>%(fecha)s</b>."
+
+msgid "Left its crossing; documents removed, back to draft"
+msgstr "Salió de su cruce; se borraron sus documentos y volvió a borrador"
+
+msgid "The documents of its pedimentos will be deleted so updated ones are uploaded next time (validated or paid ones keep theirs)."
+msgstr "Se borrarán los documentos de sus pedimentos para que la próxima vez se suban actualizados (los validados o pagados conservan los suyos)."
+
+msgid "Its documents will be deleted so updated ones are uploaded next time (unless it is validated or paid)."
+msgstr "Se borrarán sus documentos para que la próxima vez se suban actualizados (salvo que esté validado o pagado)."

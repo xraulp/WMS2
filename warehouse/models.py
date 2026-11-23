@@ -2687,6 +2687,46 @@ class Pedimento(models.Model):
             marca_anterior=antes, usuario=usuario)
         return True
 
+    def limpiar_al_salir_del_cruce(self, usuario=None):
+        """
+        Lo deja como nuevo cuando su tarea de cruce se cancela o cuando se le
+        saca de ella (pidio Diego el 22 nov 2026).
+
+        Los papeles que llevaba se hicieron para ese cruce y traen sus fechas;
+        cuando vuelva a una tarea tienen que subirse otra vez, actualizados.
+        Igual que `reabrir`: se vacian todas las ranuras y vuelve a borrador,
+        sin la aprobacion del cliente ni su fecha de pago.
+
+        No toca el validado ni el pagado: esos ya se pagaron en aduana y sus
+        papeles -- el pedimento pagado entre ellos -- son los que valen.
+        Tampoco toca el que sigue en otra tarea viva. Devuelve si lo limpio.
+        """
+        if self.estado in (self.VALIDADO, self.PAGADO):
+            return False
+        if self.tareas_de_cruce().exists():
+            return False
+        antes_estado = self.estado
+        tenia_algo = self.documentos.exists() or antes_estado != self.BORRADOR
+        if not tenia_algo:
+            return False
+        antes = self.aprobado_en or self.enviado_a_revision_en
+        self.documentos.all().delete()
+        self.estado = self.BORRADOR
+        self.aprobado_en = None
+        self.enviado_a_revision_en = None
+        self.revisado_por = None
+        self.fecha_de_pago = None
+        self.correcciones_pedidas = ''
+        self.veces_con_correcciones = 0
+        self.save(update_fields=['estado', 'aprobado_en', 'enviado_a_revision_en',
+                                 'revisado_por', 'fecha_de_pago', 'correcciones_pedidas',
+                                 'veces_con_correcciones', 'updated_at'])
+        CambioDePedimento.objects.create(
+            pedimento=self, accion=CambioDePedimento.SALIO_DEL_CRUCE,
+            estado_anterior=antes_estado, estado_nuevo=self.BORRADOR,
+            marca_anterior=antes, usuario=usuario)
+        return True
+
     # -- El candado ----------------------------------------------------------
 
     def choque_con(self, otros):
@@ -2717,10 +2757,12 @@ class CambioDePedimento(models.Model):
     QUITAR_PAGADO   = 'QUITAR_PAGADO'
     QUITAR_VALIDADO = 'QUITAR_VALIDADO'
     REABRIR         = 'REABRIR'
+    SALIO_DEL_CRUCE = 'SALIO_DEL_CRUCE'
     ACCIONES = [
         (QUITAR_PAGADO,   _('Paid mark removed')),
         (QUITAR_VALIDADO, _('Validated mark removed')),
         (REABRIR,         _('Reopened to redo it; the approval was removed')),
+        (SALIO_DEL_CRUCE, _('Left its crossing; documents removed, back to draft')),
     ]
 
     pedimento = models.ForeignKey(Pedimento, on_delete=models.CASCADE,

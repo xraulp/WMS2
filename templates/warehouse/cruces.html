@@ -769,7 +769,7 @@
             <details>
               <summary class="btn btn-sm btn-d">{% trans "Take out of the crossing" %}</summary>
               <form method="post" action="{% url 'cruce_quitar_pedimento' t.pk %}" class="ped-acc-form"
-                    data-aviso="{% blocktrans with ped=p.etiqueta %}Take pedimento {{ ped }} out of this crossing? Its orders will be free for another crossing.{% endblocktrans %}"
+                    data-aviso="{% blocktrans with ped=p.etiqueta %}Take pedimento {{ ped }} out of this crossing? Its orders will be free for another crossing.{% endblocktrans %} {% trans "Its documents will be deleted so updated ones are uploaded next time (unless it is validated or paid)." %}"
                     onsubmit="return confirm(this.dataset.aviso)">
                 {% csrf_token %}
                 <input type="hidden" name="pedimento" value="{{ p.pk }}">
@@ -872,7 +872,7 @@
     {% if t.estado == 'ABIERTA' or t.estado == 'CON_ORDEN' %}
     <div class="acciones acciones-pie">
       <form method="post" action="{% url 'cruce_cancelar' t.pk %}" style="margin:0"
-            data-aviso="{% blocktrans with cruce=t.custom_id %}Cancel crossing {{ cruce }}? Its shipments will be available again.{% endblocktrans %}"
+            data-aviso="{% blocktrans with cruce=t.custom_id %}Cancel crossing {{ cruce }}? Its shipments will be available again.{% endblocktrans %} {% trans "The documents of its pedimentos will be deleted so updated ones are uploaded next time (validated or paid ones keep theirs)." %}"
             onsubmit="return confirm(this.dataset.aviso)">
         {% csrf_token %}
         <button class="btn btn-sm btn-d" type="submit">{% trans "Cancel this crossing" %}</button>

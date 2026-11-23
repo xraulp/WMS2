@@ -145,7 +145,7 @@ la tarea completa, en la pantalla de su cliente.
       <span>{% blocktrans count n=b.tareas|length %}{{ n }} crossing{% plural %}{{ n }} crossings{% endblocktrans %} · {{ b.bultos }} {% trans "bdl" %}</span>
       {% if b.cancelable %}
       <form method="post" action="{% url 'cruce_camion_cancelar' b.camion.pk %}"
-            data-aviso="{% blocktrans with c=b.camion.custom_id %}Cancel {{ c }} and all its crossings? Their shipments will be available again.{% endblocktrans %}"
+            data-aviso="{% blocktrans with c=b.camion.custom_id %}Cancel {{ c }} and all its crossings? Their shipments will be available again.{% endblocktrans %} {% trans "The documents of its pedimentos will be deleted so updated ones are uploaded next time (validated or paid ones keep theirs)." %}"
             onsubmit="return confirm(this.dataset.aviso)">
         {% csrf_token %}
         <button class="cancelar" type="submit">{% trans "Cancel" %}</button>
@@ -162,7 +162,7 @@ la tarea completa, en la pantalla de su cliente.
       <span>{{ t.bultos }} {% trans "bdl" %}</span>
       {% if b.cancelable %}
       <form method="post" action="{% url 'cruce_cancelar' t.pk %}"
-            data-aviso="{% blocktrans with cruce=t.custom_id %}Cancel crossing {{ cruce }}? Its shipments will be available again.{% endblocktrans %}"
+            data-aviso="{% blocktrans with cruce=t.custom_id %}Cancel crossing {{ cruce }}? Its shipments will be available again.{% endblocktrans %} {% trans "The documents of its pedimentos will be deleted so updated ones are uploaded next time (validated or paid ones keep theirs)." %}"
             onsubmit="return confirm(this.dataset.aviso)">
         {% csrf_token %}
         <input type="hidden" name="volver" value="todos">

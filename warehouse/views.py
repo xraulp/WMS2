@@ -7825,6 +7825,17 @@ def _desaparece_si_quedo_vacia(tarea):
     return True
 
 
+def _limpiar_pedimentos(pedimentos, usuario):
+    """
+    Al cancelar una tarea o sacarle un pedimento, sus pedimentos pierden los
+    documentos y vuelven a borrador, para que al volver a un cruce se suban
+    actualizados. Los validados y pagados no se tocan; el que sigue en otra
+    tarea, tampoco (lo decide `Pedimento.limpiar_al_salir_del_cruce`).
+    """
+    for p in pedimentos:
+        p.limpiar_al_salir_del_cruce(usuario)
+
+
 def _pedimento_de_la_tarea(request, tarea):
     try:
         pk = int(request.POST.get('pedimento') or 0)
@@ -7907,7 +7918,9 @@ def cruce_quitar_pedimento(request, pk):
             request, tarea.customer_id,
             _('The load order is already out: say why this pedimento comes out.'))
 
-    CrossingTaskItem.objects.filter(pk__in=[r.pk for r in renglones]).delete()
+    with transaction.atomic():
+        CrossingTaskItem.objects.filter(pk__in=[r.pk for r in renglones]).delete()
+        _limpiar_pedimentos([pedimento], request.user)
     if _desaparece_si_quedo_vacia(tarea):
         return redirect(_url_de_tarea(tarea))
     _versionar_orden(tarea, request.user)
@@ -8326,8 +8339,10 @@ def cruce_cancelar(request, pk):
         return _cruces_con_error(
             request, None if a_todos else tarea.customer_id,
             _('This crossing is already on its way; it cannot be cancelled.'))
-    tarea.estado = CrossingTask.CANCELADA
-    tarea.save(update_fields=['estado', 'updated_at'])
+    with transaction.atomic():
+        tarea.estado = CrossingTask.CANCELADA
+        tarea.save(update_fields=['estado', 'updated_at'])
+        _limpiar_pedimentos(tarea.pedimentos, request.user)
     # Desde la lista de todos se cancela sin entrar a la tarea: se regresa ahi.
     if a_todos or not profile.is_customer():
         return redirect('cruces_panel')
@@ -8359,6 +8374,8 @@ def cruce_camion_cancelar(request, pk):
         for t in tareas:
             t.estado = CrossingTask.CANCELADA
             t.save(update_fields=['estado', 'updated_at'])
+        for t in tareas:
+            _limpiar_pedimentos(t.pedimentos, request.user)
     return redirect('cruces_panel')
 
 
