@@ -124,10 +124,23 @@ class LaColumnaCreadoTests(Base):
         self.assertIn(cuando, html)
         self.assertIn('>Pago</span>', html)
         self.assertIn(dia.strftime('%d/%m/%y'), html)
-        # En ese orden: creado, enviado, validar y pagar, pago.
-        celda = html[html.index('class="agr-lista"'):]
+        # En el titulo del pedimento, en ese orden: enviado, validar y pagar,
+        # pago.
+        celda = html[html.index('class="pt-hitos"'):]
         self.assertLess(celda.index('Env. rev.'), celda.index('Validar y pagar'))
         self.assertLess(celda.index('Validar y pagar'), celda.index('>Pago<'))
+
+    def test_cada_pedimento_lleva_su_titulo(self):
+        html = self.tarea_html('es')
+        titulo = html[html.index('<tr class="ped-titulo'):]
+        titulo = titulo[:titulo.index('</tr>')]
+        self.assertIn('24-1780-6003555', titulo)
+        self.assertIn('Ingresar', titulo)
+        self.assertIn('>Env. rev.<', titulo)
+        # La columna Creado ya no repite los pasos: solo quien y cuando.
+        celda = html[html.index('class="agr-lista"'):]
+        celda = celda[:celda.index('</td>')]
+        self.assertNotIn('Env. rev.', celda)
 
     def test_sin_pedimento_solo_quien_y_cuando(self):
         Pedimento.objects.filter(pk=self.ped.pk).delete()
