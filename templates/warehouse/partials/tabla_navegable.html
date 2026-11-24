@@ -153,9 +153,31 @@ tablas en la misma pantalla no se pisan.
 
     wrap.addEventListener('scroll', actualizarBotones);
 
+    // La altura del marco sale del espacio que de verdad queda debajo de el, y
+    // no de un numero fijo: con `100vh - 230px` cualquier fila nueva encima de
+    // la tabla -- un aviso, una barra de botones -- empujaba el marco hacia
+    // abajo y su barra de scroll horizontal quedaba fuera de la pantalla, de
+    // modo que habia que bajar la pagina para encontrarla. Se mide con la
+    // pagina arriba del todo (top + scrollY) para que no cambie al bajar, y no
+    // baja de 300 px: en una pantalla muy corta es mejor bajar un poco la
+    // pagina que ver tres filas. En el telefono el marco no tiene tope.
+    const MARGEN_ABAJO = 16;
+    function ajustarAltura() {
+      if (window.matchMedia('(max-width: 700px)').matches) {
+        if (wrap.style.maxHeight) wrap.style.maxHeight = '';
+        return;
+      }
+      if (!wrap.offsetParent) return;  // pestana oculta: no hay nada que medir
+      const arriba = wrap.getBoundingClientRect().top + window.scrollY;
+      const alto = Math.max(300, Math.floor(
+        window.innerHeight - arriba - barra.offsetHeight - MARGEN_ABAJO));
+      if (wrap.style.maxHeight !== alto + 'px') wrap.style.maxHeight = alto + 'px';
+    }
+
     // La barra solo se pinta si la tabla no cabe de ancho: donde no hay a donde
     // ir, dos botones y un consejo son ruido.
     function recalcular() {
+      ajustarAltura();
       barra.style.opacity = (wrap.scrollWidth > wrap.clientWidth) ? '1' : '0';
       fijarColumnas();
       actualizarBotones();
