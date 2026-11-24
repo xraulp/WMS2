@@ -98,3 +98,26 @@ class LaEtiquetaImpresaTests(TestCase):
         datos = pdf.read() if hasattr(pdf, 'read') else pdf
         self.assertTrue(datos.startswith(b'%PDF'))
         self.assertGreater(len(datos), 2000)
+
+
+class DosPorHojaTests(LaEtiquetaImpresaTests):
+    """Una etiqueta por bulto, dos por hoja carta."""
+
+    def hojas(self, bultos_):
+        import re
+        self.op.bundle_qty = bultos_
+        return len(re.findall(rb'/Type /Page[^s]', generate_label_pdf(self.op)))
+
+    def test_dos_etiquetas_por_hoja(self):
+        self.assertEqual(self.hojas(1), 1)
+        self.assertEqual(self.hojas(2), 1)
+        self.assertEqual(self.hojas(3), 2)
+        self.assertEqual(self.hojas(12), 6)
+
+    def test_el_encabezado_se_achica_en_vez_de_cortarse(self):
+        from reportlab.pdfbase.pdfmetrics import stringWidth
+        from .utils import _letra_que_cabe
+        texto = 'ED261123-0001-SUB2-LARGUISIMO'
+        t = _letra_que_cabe(texto, 'Helvetica-Bold', 40, 300)
+        self.assertLess(t, 40)
+        self.assertLessEqual(stringWidth(texto, 'Helvetica-Bold', t), 300)

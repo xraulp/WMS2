@@ -103,7 +103,7 @@ def operation_digital_url(operation, path='/'):
     return f"{base}{path}?tab=digital&q={operation.custom_id}"
 
 
-def codigo_de_barras(texto, ancho_mm=48, alto_mm=9):
+def codigo_de_barras(texto, ancho_mm=48, alto_mm=9, llenar=False, letra=7):
     """
     Un Code 128 con el texto legible debajo.
 
@@ -117,6 +117,10 @@ def codigo_de_barras(texto, ancho_mm=48, alto_mm=9):
     Devuelve una tabla con el codigo arriba y el texto debajo. El codigo de
     ReportLab es un flowable, no una figura, asi que se apila en vez de
     dibujarse: da igual para el resultado y evita montar un lienzo.
+
+    Con `llenar` las barras tambien se ensanchan hasta ocupar todo el hueco:
+    en la etiqueta de media hoja sobra sitio, y una barra mas ancha la lee la
+    pistola desde mas lejos y con menos luz.
     """
     from reportlab.graphics.barcode import code128
     from reportlab.lib.units import mm
@@ -126,7 +130,7 @@ def codigo_de_barras(texto, ancho_mm=48, alto_mm=9):
                              quiet=False)
     # El ancho de barra se ajusta para que el codigo entre en el sitio que
     # tiene: un codigo cortado no lo lee ninguna pistola.
-    if codigo.width > ancho:
+    if codigo.width > ancho or llenar:
         codigo = code128.Code128(
             texto, barHeight=alto, humanReadable=False, quiet=False,
             barWidth=codigo.barWidth * (ancho / codigo.width))
@@ -135,7 +139,7 @@ def codigo_de_barras(texto, ancho_mm=48, alto_mm=9):
         [[codigo],
          [Paragraph(texto, ParagraphStyle(
              'codigo_legible', parent=getSampleStyleSheet()['Normal'],
-             fontName='Helvetica', fontSize=7, leading=8,
+             fontName='Helvetica', fontSize=letra, leading=letra + 1,
              textColor=colors.HexColor('#334155')))]],
         colWidths=[ancho])
     fila.setStyle(TableStyle([
@@ -494,277 +498,221 @@ def generate_pdf_report(operation):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# LABEL PDF  —  Full width labels, 2 columns, 3 labels per page
+# LABEL PDF  —  dos etiquetas por hoja carta, una por bulto
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# LABEL PDF  —  Full width labels, 2 columns, 3 labels per page
-# ═══════════════════════════════════════════════════════════════════════════════
+# Medidas de la hoja y de cada etiqueta. La hoja carta se parte por la mitad:
+# una etiqueta arriba, otra abajo, y la linea de corte justo en medio, para que
+# un corte a ojo con la guillotina deje las dos del mismo tamano.
+ETQ_MARGEN_LADO     = 0.40 * inch
+ETQ_MARGEN_FUERA    = 0.35 * inch   # entre la etiqueta y el borde de la hoja
+ETQ_MARGEN_CORTE    = 0.20 * inch   # entre la etiqueta y la linea de corte
+ETQ_ALTO_ENCABEZADO = 1.30 * inch
+ETQ_ANCHO_TIPO      = 0.30          # fraccion del encabezado para el bloque de color
+ETQ_QR_MAXIMO       = 2.20 * inch
+ETQ_QR_MINIMO       = 1.40 * inch
+MM_PT               = 72 / 25.4     # puntos por milimetro
 
-def generate_label_pdf(operation):
-    """
-    Generate labels with bordered header ONLY (2 rows).
-    2 columns for data.
-    3 labels per page - FULL WIDTH.
-    """
-    buffer = BytesIO()
 
-    # Calcular ancho disponible en la hoja carta (letter = 8.5 x 11 pulgadas)
-    page_width = 8.5 * inch
-    page_height = 11 * inch
+def _letra_que_cabe(texto, fuente, tamano, ancho, minimo=8):
+    """El tamano mas grande, sin pasar de `tamano`, con el que `texto` cabe en
+    `ancho`. Es lo que impide que el tipo o el numero salgan cortados: antes
+    "ENTRADA (ED)" no cabia en su celda y se partia en dos renglones, y el
+    segundo quedaba fuera de la caja."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    while tamano > minimo and stringWidth(texto, fuente, tamano) > ancho:
+        tamano -= 0.5
+    return tamano
 
-    # Márgenes
-    margin_left = 0.55 * inch #0.4
-    margin_right = 0.75 * inch #0.4
-    margin_top = 0.5 * inch
-    margin_bottom = 0.1 * inch
 
-    # Ancho total disponible para la etiqueta
-    label_width = page_width - margin_left - margin_right
+def _qr_vectorial(datos, lado):
+    """El QR dibujado con lineas y no como imagen: a 2 pulgadas una imagen de
+    pocos pixeles sale con los bordes borrosos, y lo que se busca al agrandarlo
+    es justo que la camara lo lea de lejos. Correccion de errores M: aguanta
+    una esquina rayada o una arruga del plastico del pallet."""
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from reportlab.graphics.shapes import Drawing
+    qr = QrCodeWidget(datos, barLevel='M', barBorder=2)
+    x0, y0, x1, y1 = qr.getBounds()
+    dibujo = Drawing(lado, lado, transform=[lado / (x1 - x0), 0, 0,
+                                            lado / (y1 - y0), 0, 0])
+    dibujo.add(qr)
+    return dibujo
 
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        topMargin=margin_top,
-        bottomMargin=margin_bottom,
-        leftMargin=margin_left,
-        rightMargin=margin_right,
-    )
 
-    story = []
+def _dibujar_etiqueta(c, operation, bundle_num, qty, x, y_arriba, ancho, alto):
+    """Una etiqueta, con su esquina superior izquierda en (x, y_arriba)."""
+    from reportlab.graphics import renderPDF
 
-    # Estilos
     def style(name, **kw):
         base = getSampleStyleSheet()['Normal']
         return ParagraphStyle(name, parent=base, **kw)
 
-    header_company_style = style('header_company', fontName='Helvetica-Bold', fontSize=15, textColor=colors.HexColor('#5b5b5b'), alignment=TA_LEFT)
-    header_type_style = style('header_type', fontName='Helvetica-Bold', fontSize=12, textColor=colors.white, alignment=TA_CENTER)
-    custom_id_style = style('custom_id', fontName='Helvetica-Bold', fontSize=18, textColor=colors.HexColor('#5b5b5b'), alignment=TA_LEFT)
-    bundle_style = style('bundle', fontName='Helvetica-Bold', fontSize=18, textColor=colors.HexColor('#ffffff'), alignment=TA_RIGHT)
-
-    label_style = style('label', fontName='Helvetica-Bold', fontSize=8, textColor=colors.HexColor('#64748b'))
-    value_style = style('value', fontName='Helvetica', fontSize=11, textColor=colors.HexColor('#0f172a'))
-
-    qty = operation.bundle_qty or 1
+    GRIS = colors.HexColor('#5b5b5b')
     tenant_name = (operation.tenant.name if operation.tenant else 'WMS').upper()
     type_color = color_del_tipo(operation.operation_type)
     type_label = operation.get_operation_type_display().upper()
 
-    # Anchos de columnas
-    col_left_width = label_width * 0.50
-    col_right_width = label_width * 0.50
+    # ── ENCABEZADO ────────────────────────────────────────────────────────────
+    # Dos partes: a la izquierda la empresa y el numero de entrada, grande y
+    # centrado, que es lo que se busca con la vista en el anden; a la derecha
+    # el bloque de color con el tipo y el bulto, centrados tambien. Cada texto
+    # se achica lo necesario para caber en su sitio y no se corta nunca.
+    alto_enc = ETQ_ALTO_ENCABEZADO
+    y_enc = y_arriba - alto_enc
+    ancho_tipo = ancho * ETQ_ANCHO_TIPO
+    ancho_id = ancho - ancho_tipo
+    radio = 8
+
+    c.saveState()
+    borde = c.beginPath()
+    borde.roundRect(x, y_enc, ancho, alto_enc, radio)
+    c.clipPath(borde, stroke=0, fill=0)
+    c.setFillColor(colors.white)
+    c.rect(x, y_enc, ancho_id, alto_enc, stroke=0, fill=1)
+    c.setFillColor(type_color)
+    c.rect(x + ancho_id, y_enc, ancho_tipo, alto_enc, stroke=0, fill=1)
+    c.restoreState()
+    c.setStrokeColor(colors.HexColor('#cfcccc'))
+    c.setLineWidth(1)
+    c.roundRect(x, y_enc, ancho, alto_enc, radio, stroke=1, fill=0)
+
+    hueco = 16  # aire a cada lado del texto dentro de su parte
+    centro_id = x + ancho_id / 2
+    t = _letra_que_cabe(tenant_name, 'Helvetica-Bold', 15, ancho_id - 2 * hueco)
+    c.setFillColor(GRIS)
+    c.setFont('Helvetica-Bold', t)
+    c.drawCentredString(centro_id, y_arriba - 0.36 * inch, tenant_name)
+    t = _letra_que_cabe(operation.custom_id, 'Helvetica-Bold', 40, ancho_id - 2 * hueco)
+    c.setFillColor(colors.HexColor('#0f172a'))
+    c.setFont('Helvetica-Bold', t)
+    c.drawCentredString(centro_id, y_enc + 0.28 * inch, operation.custom_id)
+
+    centro_tipo = x + ancho_id + ancho_tipo / 2
+    c.setFillColor(colors.white)
+    t = _letra_que_cabe(type_label, 'Helvetica-Bold', 16, ancho_tipo - 2 * hueco)
+    c.setFont('Helvetica-Bold', t)
+    c.drawCentredString(centro_tipo, y_arriba - 0.40 * inch, type_label)
+    bulto = f'{bundle_num} / {qty}'
+    t = _letra_que_cabe(bulto, 'Helvetica-Bold', 38, ancho_tipo - 2 * hueco)
+    c.setFont('Helvetica-Bold', t)
+    c.drawCentredString(centro_tipo, y_enc + 0.28 * inch, bulto)
+
+    # ── DATOS ─────────────────────────────────────────────────────────────────
+    label_style = style('label', fontName='Helvetica-Bold', fontSize=8.5,
+                        textColor=colors.HexColor('#64748b'))
+    value_style = style('value', fontName='Helvetica', fontSize=12, leading=14,
+                        textColor=colors.HexColor('#0f172a'))
+
+    def corto(texto, n=70):
+        texto = texto or '—'
+        return texto if len(texto) <= n else texto[:n - 1] + '…'
+
+    rows = [
+        [Paragraph(_('DATE:'), label_style),
+         Paragraph(operation.date.strftime('%Y-%m-%d'), value_style),
+         Paragraph(_('PO/ORDER:'), label_style),
+         Paragraph(str(operation.po_order or '—'), value_style)],
+        [Paragraph(_('CUSTOMER:'), label_style),
+         Paragraph(operation.get_customer_display(), value_style),
+         Paragraph(_('PRO:'), label_style),
+         Paragraph(str(operation.pro or '—'), value_style)],
+        [Paragraph(_('SHIPPER:'), label_style),
+         Paragraph(operation.get_shipper_display(), value_style),
+         Paragraph(_('WEIGHT:'), label_style),
+         Paragraph(f"{operation.weight_lbs or '—'} LBS", value_style)],
+        [Paragraph(_('CARRIER:'), label_style),
+         Paragraph(operation.get_carrier_display(), value_style),
+         Paragraph(_('BUNDLE TYPE:'), label_style),
+         Paragraph(operation.get_bundle_type_display_name(), value_style)],
+        [Paragraph(_('DESCRIPTION:'), label_style),
+         Paragraph(corto(operation.description), value_style),
+         Paragraph(_('NOTE:'), label_style),
+         Paragraph(corto(getattr(operation, 'note', '')), value_style)],
+    ]
+    ancho_etq = 1.25 * inch  # cabe TRANSPORTISTA: en un renglon
+    ancho_val = ancho / 2 - ancho_etq
+    tabla_datos = Table(rows, colWidths=[ancho_etq, ancho_val, ancho_etq, ancho_val])
+    tabla_datos.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('LINEBELOW', (0, 0), (-1, -2), 0.8, colors.HexColor('#e2e8f0')),
+    ]))
+    _w, alto_datos = tabla_datos.wrapOn(c, ancho, alto)
+    y_datos = y_enc - 0.10 * inch - alto_datos
+    tabla_datos.drawOn(c, x, y_datos)
+
+    # ── CODIGOS ───────────────────────────────────────────────────────────────
+    # La etiqueta se escanea con el telefono, asi que el QR apunta a /mobile/.
+    # Lleva el `&b=` del bulto: sin el, las seis etiquetas de una entrada de
+    # seis pallets decian lo mismo y pistolear seis veces el mismo pallet
+    # contaba como los seis. El QR ocupa todo el alto que queda: es lo que se
+    # lee desde lejos.
+    y_abajo = y_arriba - alto
+    lado_qr = max(ETQ_QR_MINIMO, min(ETQ_QR_MAXIMO, y_datos - 0.10 * inch - y_abajo))
+    qr_url = bultos.url_del_qr(
+        operation_digital_url(operation, '/mobile/'),
+        operation.custom_id, bundle_num)
+    renderPDF.draw(_qr_vectorial(qr_url, lado_qr), c,
+                   x + ancho - lado_qr, y_abajo)
+
+    # Y a su lado, el mismo dato en un codigo de rayas. No es un respaldo del
+    # QR: es lo que hace que sirvan las pistolas 1D que ya hay en la bodega, y
+    # el texto de abajo es para el dia que alguien tenga que teclearlo.
+    ancho_libre = ancho - lado_qr - 0.30 * inch
+    codigo_de_rayas = codigo_de_barras(
+        bultos.codigo(operation.custom_id, bundle_num),
+        ancho_mm=min(100, ancho_libre / MM_PT), alto_mm=18, llenar=True, letra=11)
+    _w, alto_rayas = codigo_de_rayas.wrapOn(c, ancho_libre, lado_qr)
+    codigo_de_rayas.drawOn(c, x, y_abajo + (lado_qr - alto_rayas) / 2 + 6)
+
+    c.setFillColor(colors.HexColor('#94a3b8'))
+    c.setFont('Helvetica', 7)
+    c.drawString(x, y_abajo + 2,
+                 f'{tenant_name} · {operation.custom_id} · {_("Bundle")} {bundle_num}/{qty}')
+
+
+def generate_label_pdf(operation):
+    """
+    Una etiqueta por bulto, dos por hoja carta.
+
+    Se dibuja en posiciones fijas y no con un flujo de parrafos: con el flujo
+    cada etiqueta media lo que le tocaba segun su contenido y la ultima de la
+    hoja quedaba donde cayera; aqui cada una ocupa exactamente media hoja y la
+    linea de corte va siempre en el mismo sitio.
+    """
+    from reportlab.pdfgen import canvas as lienzo
+
+    buffer = BytesIO()
+    c = lienzo.Canvas(buffer, pagesize=letter)
+    c.setTitle(f'{operation.custom_id} - labels')
+    ancho_hoja, alto_hoja = letter
+    mitad = alto_hoja / 2
+    ancho = ancho_hoja - 2 * ETQ_MARGEN_LADO
+    alto = mitad - ETQ_MARGEN_FUERA - ETQ_MARGEN_CORTE
+    qty = operation.bundle_qty or 1
 
     for bundle_num in range(1, qty + 1):
+        arriba = bundle_num % 2 == 1
+        y_arriba = (alto_hoja - ETQ_MARGEN_FUERA) if arriba else (mitad - ETQ_MARGEN_CORTE)
+        _dibujar_etiqueta(c, operation, bundle_num, qty,
+                          ETQ_MARGEN_LADO, y_arriba, ancho, alto)
+        # La linea de corte solo cuando hay etiqueta abajo: en la ultima hoja
+        # de un numero impar de bultos no hay nada que separar.
+        if not arriba:
+            c.saveState()
+            c.setStrokeColor(colors.HexColor('#a0aec0'))
+            c.setLineWidth(0.6)
+            c.setDash(4, 3)
+            c.line(ETQ_MARGEN_LADO, mitad, ancho_hoja - ETQ_MARGEN_LADO, mitad)
+            c.restoreState()
+        if not arriba or bundle_num == qty:
+            c.showPage()
 
-        # ── HEADER CON BORDE (SOLO ENCABEZADO) ──
-        # Primera fila del header
-        header_row1 = Table([
-            [
-                Paragraph(f'<b>{tenant_name.upper()}</b>', header_company_style),
-                Paragraph(f'<b>{type_label}</b>', header_type_style),
-            ]
-        ], colWidths=[label_width * 0.80, label_width * 0.20],
-           rowHeights=[0.25 * inch])
-
-        header_row1.setStyle(TableStyle([
-            # ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#cfcccc')),
-            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#ffffff')),
-            ('BACKGROUND', (1, 0), (1, 0), type_color),
-            ('TEXTCOLOR', (0, 0), (0, 0), colors.white),
-            ('TEXTCOLOR', (1, 0), (1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('PADDING', (0, 0), (-1, -1), 0),
-            ('LEFTPADDING', (0, 0), (-1, -1), 15),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 25),
-            ('TOPPADDING', (0, 0), (-1, -1), 1),
-            ('BOTTOMPADDING', (0, 0), (0, 0), 12),   # Solo columna 0
-            ('BOTTOMPADDING', (1, 0), (1, 0), 0),
-        ]))
-
-        # ===== CONFIGURACIÓN DE MÁRGENES PARA LA SEGUNDA FILA =====
-        MARGEN_IZQUIERDO_CUSTOM_ID_INCH = 0.3
-        MARGEN_DERECHO_CUSTOM_ID_INCH = 0.03
-        MARGEN_IZQUIERDO_BUNDLE_INCH = 0.05
-        MARGEN_DERECHO_BUNDLE_INCH = 0.5   # Ajusta este valor
-
-        margen_izquierdo_custom_pt = MARGEN_IZQUIERDO_CUSTOM_ID_INCH * 72
-        margen_derecho_custom_pt = MARGEN_DERECHO_CUSTOM_ID_INCH * 72
-        margen_izquierdo_bundle_pt = MARGEN_IZQUIERDO_BUNDLE_INCH * 72
-        margen_derecho_pt = MARGEN_DERECHO_BUNDLE_INCH * 72
-
-        header_row2 = Table([
-            [
-                Paragraph(f'<b> {operation.custom_id}</b>', custom_id_style),
-                Paragraph(f'<b> {bundle_num} / {qty}</b>', bundle_style),
-            ]
-        ], colWidths=[label_width * 0.80, label_width * 0.20],
-           rowHeights=[0.40 * inch])
-
-        header_row2.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#ffffff')),
-            ('BACKGROUND', (1, 0), (1, 0), type_color),
-            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-            ('ALIGN', (1, 0), (1, 0), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('PADDING', (0, 0), (-1, -1), 0),
-            ('LEFTPADDING', (0, 0), (0, 0), 15),
-            ('RIGHTPADDING', (0, 0), (0, 0), 1),
-            ('LEFTPADDING', (1, 0), (1, 0), 0),
-            ('RIGHTPADDING', (1, 0), (1, 0), margen_derecho_pt),
-            ('TOPPADDING', (0, 0), (-1, -1), 0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-        ]))
-
-        # HEADER COMPLETO CON BORDE
-        header_table = Table([
-            [header_row1],
-            [header_row2],
-        ], colWidths=[label_width])
-
-        header_table.setStyle(TableStyle([
-            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#cfcccc')),
-            ('ROUNDEDCORNERS', [6, 6, 6, 6]),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ]))
-
-        # ============================================
-        # DATOS ÚNICOS EN TABLA DE 4 COLUMNAS (incluye DESCRIPTION y NOTE)
-        # ============================================
-        ANCHO_ETIQUETA = 1.0 * inch   # Ajusta según necesites
-        ancho_valor_izquierdo = col_left_width - ANCHO_ETIQUETA - 0.05 * inch
-        ancho_valor_derecho = col_right_width - ANCHO_ETIQUETA - 0.05 * inch
-
-        note_text = getattr(operation, 'note', '—') or '—'
-        desc_text = (operation.description or '—')[:60]
-
-        rows = [
-            [Paragraph(_('DATE:'), label_style),
-             Paragraph(operation.date.strftime('%Y-%m-%d'), value_style),
-             Paragraph(_('PO/ORDER:'), label_style),
-             Paragraph(str(operation.po_order or '—'), value_style)],
-
-            [Paragraph(_('CUSTOMER:'), label_style),
-             Paragraph(operation.get_customer_display(), value_style),
-             Paragraph(_('PRO:'), label_style),
-             Paragraph(str(operation.pro or '—'), value_style)],
-
-            [Paragraph(_('SHIPPER:'), label_style),
-             Paragraph(operation.get_shipper_display(), value_style),
-             Paragraph(_('WEIGHT:'), label_style),
-             Paragraph(f"{operation.weight_lbs or '—'} LBS", value_style)],
-
-            [Paragraph(_('CARRIER:'), label_style),
-             Paragraph(operation.get_carrier_display(), value_style),
-             Paragraph(_('BUNDLE TYPE:'), label_style),
-             Paragraph(operation.get_bundle_type_display_name(), value_style)],
-
-            [Paragraph(_('DESCRIPTION:'), label_style),
-             Paragraph(desc_text, value_style),
-             Paragraph(_('NOTE:'), label_style),
-             Paragraph(note_text, value_style)],
-        ]
-
-        tabla_datos = Table(rows, colWidths=[ANCHO_ETIQUETA, ancho_valor_izquierdo, ANCHO_ETIQUETA, ancho_valor_derecho])
-        tabla_datos.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3.5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1),1),###3.5 061526
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-            ('LINEBELOW', (0, 0), (-1, -2), 0.9, colors.HexColor('#e2e8f0')),
-            ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-            ('ALIGN', (3, 0), (3, -1), 'LEFT'),
-        ]))
-
-        # ============================================
-        # CONFIGURACIÓN DE LÍNEA DE CORTE (Tijera)
-        # ============================================
-        CUT_LINE_CHAR = '‐'                     # Carácter para la línea (‐, -, ., •)
-        CUT_LINE_REPEAT = 328                    # Número de repeticiones a cada lado
-        CUT_LINE_SYMBOL = ' ✂️ '                # Símbolo central
-        CUT_LINE_FONTSIZE = 1                   # Tamaño de letra
-        CUT_LINE_COLOR = colors.HexColor('#a0aec0')  # Gris suave
-        CUT_LINE_SPACING = -0.20 * inch          # Espacio arriba y abajo
-        ESPACIO_ANTES_CORTE = CUT_LINE_SPACING
-
-        cut_line_text = (CUT_LINE_CHAR * CUT_LINE_REPEAT) + CUT_LINE_SYMBOL + (CUT_LINE_CHAR * CUT_LINE_REPEAT)
-        cut_line = Paragraph(cut_line_text,
-                             style('cutline',
-                                   fontSize=CUT_LINE_FONTSIZE,
-                                   alignment=TA_CENTER,
-                                   textColor=CUT_LINE_COLOR))
-
-        # ============================================
-        # CONFIGURACIÓN DE ESPACIOS ALREDEDOR DE LA LÍNEA DE CORTE
-        # ============================================
-        # ── CÓDIGOS DE LA ETIQUETA ────────────────────────────────────────────
-        # La etiqueta se escanea con el teléfono, así que el QR apunta a
-        # /mobile/. Lo nuevo es el `&b=`: hasta ahora las seis etiquetas de una
-        # entrada de seis pallets decían exactamente lo mismo, así que
-        # pistolear seis veces el mismo pallet daba el mismo resultado que
-        # pistolear los seis. Con el número de bulto dentro, el sistema no solo
-        # sabe que son 19: sabe cuáles 19.
-        qr_url = bultos.url_del_qr(
-            operation_digital_url(operation, '/mobile/'),
-            operation.custom_id, bundle_num)
-        qr_image = generate_qr_code(qr_url, size=30)
-
-        # Y debajo, el mismo dato en un código de barras de rayas. No es un
-        # respaldo del QR: es lo que hace que sirvan las pistolas que ya hay en
-        # la bodega. Con ese nombre se venden dos aparatos distintos, y las 1D
-        # no leen un QR — hoy no leerían nada de lo que está pegado.
-        codigo_de_rayas = codigo_de_barras(
-            bultos.codigo(operation.custom_id, bundle_num))
-
-        # Fila con footer + QR (reemplaza el footer simple)
-        footer_qr_row = Table([
-            [
-                Paragraph(f'{tenant_name} · {operation.custom_id} · Bundle {bundle_num}/{qty}',
-                          style('footer', fontSize=6, alignment=TA_LEFT, textColor=colors.HexColor('#94a3b8'))),
-                qr_image,
-            ]
-        ], colWidths=[label_width - 0.6*inch, 0.5*inch])
-        footer_qr_row.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ]))
-
-        label_container = Table([
-            [header_table],
-            [Spacer(1, 0.05*inch)],
-            [tabla_datos],                          # Datos
-            [Spacer(1, -0.10*inch)],                # Espacio entre datos y footer
-            [footer_qr_row],                        # ← Footer con QR (reemplaza el footer simple)
-            [codigo_de_rayas],                      # ← El mismo dato, en rayas
-            [Spacer(1, ESPACIO_ANTES_CORTE)],       # Espacio entre footer y línea de corte
-            [cut_line],                             # Línea de corte con tijera
-        ], colWidths=[label_width])
-
-        label_container.setStyle(TableStyle([
-            ('PADDING', (0, 0), (-1, -1), 0),
-        ]))
-
-        story.append(label_container)
-
-        # 3 etiquetas por página
-        if bundle_num % 3 == 0 and bundle_num < qty:
-            story.append(PageBreak())
-        elif bundle_num < qty:
-            story.append(Spacer(1, -0.09*inch))
-
-
-    # Construcción del PDF
-    doc.build(story)
+    c.save()
     buffer.seek(0)
     return buffer.read()
 

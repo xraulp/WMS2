@@ -4688,3 +4688,6 @@ msgstr "Creado por"
 
 msgid "Email sent"
 msgstr "Correo enviado"
+
+msgid "Bundle"
+msgstr "Bulto"
