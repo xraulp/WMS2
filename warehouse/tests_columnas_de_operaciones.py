@@ -96,3 +96,25 @@ class GruposTests(BaseDeColumnas):
         self.client.logout()
         respuesta = self.client.post('/preferencias/columnas/', {'ocultas': 'carga'})
         self.assertEqual(respuesta.status_code, 302)
+
+
+class MenuDeAccionesTests(BaseDeColumnas):
+
+    def test_ver_a_la_vista_y_lo_demas_en_el_menu(self):
+        html = self.tabla()
+        celda = html.split('class="acc"')[1].split('</td>')[0]
+        menu = celda.split('class="acc-menu"')[1]
+        antes_del_menu = celda.split('class="acc-menu"')[0]
+        self.assertIn("openModal('", antes_del_menu)
+        self.assertIn('acc-mas', antes_del_menu)
+        for accion in ['openEditModal(', '/pdf', 'openDigitalWithId(', 'confirmDelete(']:
+            self.assertIn(accion, menu, accion)
+            self.assertNotIn(accion, antes_del_menu, accion)
+
+    def test_el_cliente_no_ve_eliminar(self):
+        self.perfil.role = 'customer'
+        self.perfil.customer = WarehouseOperation.objects.get(pk=self.op.pk).customer
+        self.perfil.save()
+        html = self.tabla()
+        self.assertIn('class="acc-menu"', html)
+        self.assertNotIn('confirmDelete(', html.split('class="acc"')[1].split('</td>')[0])

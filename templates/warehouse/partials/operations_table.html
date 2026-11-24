@@ -175,10 +175,57 @@ boton dice cuantos grupos hay escondidos para que nadie crea que se perdieron.
   if (!window._colsMenuListo) {
     window._colsMenuListo = true;
     document.addEventListener('click', function (e) {
+      if (!e.target.closest('.acc')) cerrarAcciones();
       if (e.target.closest('.cols-ctl')) return;
       document.querySelectorAll('.cols-menu').forEach(function (m) { m.hidden = true; });
       document.querySelectorAll('.cols-btn').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
     });
+    // Un menu fijo no sigue solo a su fila: al moverse la tabla se recoloca
+    // junto a su boton, y se cierra si la fila ya salio de la vista.
+    document.addEventListener('scroll', function () { recolocarAcciones(); }, true);
+    window.addEventListener('resize', function () { recolocarAcciones(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cerrarAcciones(); });
+  }
+
+  // El menu ⋯ de cada fila. Se coloca junto al boton con coordenadas de la
+  // ventana, alineado a su borde derecho, y se abre hacia arriba si abajo no
+  // cabe.
+  function cerrarAcciones() {
+    document.querySelectorAll('.acc-menu').forEach(function (m) { m.hidden = true; });
+    document.querySelectorAll('.acc-mas').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+  }
+  function abrirAcciones(btn) {
+    var menu = btn.parentNode.querySelector('.acc-menu');
+    var abrir = menu.hidden;
+    cerrarAcciones();
+    if (!abrir) return;
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    colocarAcciones(btn, menu);
+    var primero = menu.querySelector('[role=menuitem]');
+    if (primero) primero.focus({preventScroll: true});
+  }
+  function recolocarAcciones() {
+    var btn = document.querySelector('.acc-mas[aria-expanded="true"]');
+    if (!btn) return;
+    var marco = btn.closest('.tabla-nav-marco');
+    var r = btn.getBoundingClientRect();
+    var v = marco ? marco.getBoundingClientRect()
+                  : {top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth};
+    if (r.bottom < v.top || r.top > v.bottom || r.right < v.left || r.left > v.right) {
+      cerrarAcciones();
+      return;
+    }
+    colocarAcciones(btn, btn.parentNode.querySelector('.acc-menu'));
+  }
+  function colocarAcciones(btn, menu) {
+    var r = btn.getBoundingClientRect();
+    var alto = menu.offsetHeight, ancho = menu.offsetWidth;
+    var top = r.bottom + 4;
+    if (top + alto > window.innerHeight - 8) top = Math.max(8, r.top - alto - 4);
+    var left = Math.min(Math.max(8, r.right - ancho), window.innerWidth - ancho - 8);
+    menu.style.top = top + 'px';
+    menu.style.left = left + 'px';
   }
 </script>
 
@@ -327,14 +374,24 @@ boton dice cuantos grupos hay escondidos para que nadie crea que se perdieron.
             {% if op.email_sent %}<span class="op-sub"><span class="badge b-sent">✓ {% trans "Email sent" %}</span></span>{% endif %}
           </td>
           <td style="white-space:nowrap;">
-            <div style="display:flex; gap:4px; align-items:center;">
+            {% comment %}
+            Ver queda a la vista porque es lo que mas se usa; lo demas va en el
+            menu del boton ⋯. El menu se abre con `position:fixed` desde el
+            guion: dentro del marco con scroll propio, uno absoluto quedaria
+            recortado en las ultimas filas.
+            {% endcomment %}
+            <div class="acc">
               <button class="btn-action" onclick="openModal('{% url 'operation_detail' op.pk %}')">{% trans "View" %}</button>
-              <button class="btn-action" onclick="openEditModal({{ op.pk }})">{% trans "Edit" %}</button>
-              <a class="btn-action" href="{% url 'operation_pdf' op.pk %}" target="_blank">{% trans "PDF" %}</a>
-              <button class="btn-action" onclick="openDigitalWithId('{{ op.custom_id }}')">📱 {% trans "Digital" %}</button> <!-- agregado 061026-->
-              {% if profile and not profile.is_customer %}
-              <button class="btn-action btn-action-danger" onclick="confirmDelete({{ op.pk }}, '{{ op.custom_id }}')">{% trans "Delete" %}</button>
-              {% endif %}
+              <button type="button" class="btn-action acc-mas" onclick="abrirAcciones(this)"
+                      aria-haspopup="menu" aria-expanded="false" title="{% trans "More actions" %}">&#8943;</button>
+              <div class="acc-menu" role="menu" hidden>
+                <button type="button" role="menuitem" onclick="cerrarAcciones(); openEditModal({{ op.pk }})">&#9998; {% trans "Edit" %}</button>
+                <a role="menuitem" href="{% url 'operation_pdf' op.pk %}" target="_blank" onclick="cerrarAcciones()">&#128196; {% trans "PDF" %}</a>
+                <button type="button" role="menuitem" onclick="cerrarAcciones(); openDigitalWithId('{{ op.custom_id }}')">📱 {% trans "Digital" %}</button>
+                {% if profile and not profile.is_customer %}
+                <button type="button" role="menuitem" class="acc-peligro" onclick="cerrarAcciones(); confirmDelete({{ op.pk }}, '{{ op.custom_id }}')">&#128465; {% trans "Delete" %}</button>
+                {% endif %}
+              </div>
             </div>
           </td>
           <td style="color:var(--faint); font-size:11px; font-family:'IBM Plex Mono',monospace; text-align:center; white-space:nowrap;">{{ op.pk }}</td>
@@ -416,6 +473,25 @@ boton dice cuantos grupos hay escondidos para que nadie crea que se perdieron.
   font-family:inherit;
   text-decoration:none;
 }
+/* La celda de acciones: Ver y el boton ⋯ con su menu. */
+.acc { display:flex; gap:4px; align-items:center; }
+.acc-mas { padding:3px 8px; font-weight:700; letter-spacing:.05em; }
+.acc-mas[aria-expanded="true"] { background:var(--asoft); border-color:var(--accent); color:var(--adark); }
+.acc-menu {
+  position:fixed; z-index:500; min-width:150px;
+  background:var(--surface); border:1px solid var(--bdr-fuerte); border-radius:8px;
+  box-shadow:0 8px 24px rgba(15,23,42,.18); padding:4px;
+}
+.acc-menu[hidden] { display:none; }
+.acc-menu [role=menuitem] {
+  display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box;
+  padding:7px 10px; border:none; border-radius:5px; background:none;
+  font-family:inherit; font-size:12px; color:var(--ink); text-align:left;
+  text-decoration:none; cursor:pointer; white-space:nowrap;
+}
+.acc-menu [role=menuitem]:hover, .acc-menu [role=menuitem]:focus { background:var(--bg-sutil); outline:none; }
+.acc-menu .acc-peligro { color:var(--red); border-top:1px solid var(--bdr); border-radius:0 0 5px 5px; margin-top:2px; }
+.acc-menu .acc-peligro:hover, .acc-menu .acc-peligro:focus { background:var(--err-bg); }
 .btn-action-danger {
   border-color:var(--err-bdr);
   color:var(--red);
