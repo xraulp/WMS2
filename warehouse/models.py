@@ -258,7 +258,20 @@ class UserProfile(models.Model):
     language        = models.CharField(max_length=5, blank=True, default='',
                                        choices=LANGUAGE_CHOICES,
                                        verbose_name='Idioma')
+    # Los grupos de columnas que esta persona escondio en la tabla de
+    # Operaciones, separados por comas. Vacio = se ven todas: esconder es algo
+    # que decide cada quien, no algo que el sistema le quite de entrada. Va en
+    # el perfil por lo mismo que el tema: se espera encontrarlo igual en otra
+    # computadora.
+    GRUPOS_DE_COLUMNAS = ['bodega', 'transporte', 'carga', 'aduana', 'auditoria']
+    columnas_ocultas = models.CharField(max_length=100, blank=True, default='',
+                                        verbose_name='Columnas ocultas en Operaciones')
     created_at      = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
+    def grupos_ocultos(self):
+        """Los grupos escondidos que siguen existiendo; un nombre viejo se ignora."""
+        return [g for g in self.columnas_ocultas.split(',')
+                if g in self.GRUPOS_DE_COLUMNAS]
 
     def is_superadmin(self):
         return self.role == 'superadmin'

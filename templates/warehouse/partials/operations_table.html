@@ -88,10 +88,44 @@ boton no crea nada: lleva a la pantalla de marcar con esto ya marcado, que es
 donde se elige el dia y donde se dice lo que no puede ir y por que.
 {% endcomment %}
 {% if operations %}
+{% comment %}
+Los grupos de columnas. Cada celda que no es de la base lleva la clase de su
+grupo (`g-carga`, `g-aduana`...) y la caja de afuera lleva `ocultar-<grupo>`
+por cada uno que la persona escondio; el CSS de abajo hace el resto. Las
+clases salen del perfil al pintar, asi que la tabla ya llega como la dejo --
+tambien cuando HTMX la repinta al filtrar -- y no da un salto al cargar.
+
+Esconder no borra: el dato sigue en la operacion, en el PDF y en Ver, y el
+boton dice cuantos grupos hay escondidos para que nadie crea que se perdieron.
+{% endcomment %}
+{% with ocultas=profile.grupos_ocultos %}
+<div class="ops-raiz{% for g in ocultas %} ocultar-{{ g }}{% endfor %}">
 <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
   <button type="button" class="btn btn-g btn-sm" style="color:var(--accent);border-color:var(--accent)"
           onclick="mandarACruce()">&#128667; {% trans "Send selection to crossing" %}</button>
   <span style="font-size:11px;color:var(--faint)">{% trans "Mark the entries that cross and pick the day on the next screen." %}</span>
+  <div class="cols-ctl">
+    <button type="button" class="btn btn-g btn-sm cols-btn" onclick="abrirColumnas(this)"
+            aria-haspopup="true" aria-expanded="false" data-texto-ocultos="{% trans "hidden" %}">
+      &#9638; {% trans "Columns" %}<span class="cols-n">{% if ocultas %} · {{ ocultas|length }} {% trans "hidden" %}{% endif %}</span> &#9662;</button>
+    <div class="cols-menu" hidden>
+      <div class="cols-menu-tit">{% trans "Show column groups" %}</div>
+      <label><input type="checkbox" data-grupo="bodega" onchange="cambiarGrupo(this)"{% if 'bodega' not in ocultas %} checked{% endif %}>
+        <span><b>{% trans "Warehouse" %}</b><small>{% trans "Entries disp., warehouse, location" %}</small></span></label>
+      <label><input type="checkbox" data-grupo="transporte" onchange="cambiarGrupo(this)"{% if 'transporte' not in ocultas %} checked{% endif %}>
+        <span><b>{% trans "Transport" %}</b><small>{% trans "Shipper, carrier, PRO, trailer, seal" %}</small></span></label>
+      <label><input type="checkbox" data-grupo="carga" onchange="cambiarGrupo(this)"{% if 'carga' not in ocultas %} checked{% endif %}>
+        <span><b>{% trans "Load" %}</b><small>{% trans "Packages, weight, description, note, damage" %}</small></span></label>
+      <label><input type="checkbox" data-grupo="aduana" onchange="cambiarGrupo(this)"{% if 'aduana' not in ocultas %} checked{% endif %}>
+        <span><b>{% trans "Customs" %}</b><small>REF AA, DYS, PED</small></span></label>
+      <label><input type="checkbox" data-grupo="auditoria" onchange="cambiarGrupo(this)"{% if 'auditoria' not in ocultas %} checked{% endif %}>
+        <span><b>{% trans "Audit" %}</b><small>{% trans "Created by, email sent" %}</small></span></label>
+      <div class="cols-menu-pie">
+        <span>{% trans "Date, Custom ID, type, status, customer, invoice and PO are always shown." %}</span>
+        <button type="button" class="btn btn-g btn-sm" onclick="mostrarTodosLosGrupos(this)">{% trans "Show all" %}</button>
+      </div>
+    </div>
+  </div>
 </div>
 <script>
   function mandarACruce() {
@@ -104,10 +138,50 @@ donde se elige el dia y donde se dice lo que no puede ir y por que.
     if (!ops.length && filtro && filtro.value) url += '&customer=' + filtro.value;
     window.location.href = url;
   }
-</script>
-{% endif %}
 
-{% if operations %}
+  // Los grupos de columnas. La tabla puede estar dos veces en el documento
+  // (escritorio y movil), asi que todo se busca desde el boton pulsado hacia
+  // su propia `.ops-raiz` y no por id.
+  function abrirColumnas(btn) {
+    var menu = btn.parentNode.querySelector('.cols-menu');
+    var abrir = menu.hidden;
+    document.querySelectorAll('.cols-menu').forEach(function (m) { m.hidden = true; });
+    document.querySelectorAll('.cols-btn').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+    menu.hidden = !abrir;
+    btn.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+  }
+  function aplicarGrupos(raiz) {
+    var ocultas = [];
+    raiz.querySelectorAll('.cols-menu input[data-grupo]').forEach(function (c) {
+      raiz.classList.toggle('ocultar-' + c.dataset.grupo, !c.checked);
+      if (!c.checked) ocultas.push(c.dataset.grupo);
+    });
+    var btn = raiz.querySelector('.cols-btn');
+    btn.querySelector('.cols-n').textContent =
+      ocultas.length ? ' · ' + ocultas.length + ' ' + btn.dataset.textoOcultos : '';
+    var datos = new FormData();
+    datos.append('ocultas', ocultas.join(','));
+    datos.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    fetch('{% url 'cambiar_columnas' %}', {method: 'POST', body: datos, credentials: 'same-origin'});
+  }
+  function cambiarGrupo(casilla) { aplicarGrupos(casilla.closest('.ops-raiz')); }
+  function mostrarTodosLosGrupos(btn) {
+    var raiz = btn.closest('.ops-raiz');
+    raiz.querySelectorAll('.cols-menu input[data-grupo]').forEach(function (c) { c.checked = true; });
+    aplicarGrupos(raiz);
+  }
+  // El menu se cierra al pulsar fuera de el, como cualquier desplegable. El
+  // listener se pone una sola vez aunque la tabla se repinte muchas.
+  if (!window._colsMenuListo) {
+    window._colsMenuListo = true;
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('.cols-ctl')) return;
+      document.querySelectorAll('.cols-menu').forEach(function (m) { m.hidden = true; });
+      document.querySelectorAll('.cols-btn').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+    });
+  }
+</script>
+
 <div class="tabla-navegable" data-columnas-fijas="4">
 
   {% comment %}
@@ -116,44 +190,45 @@ donde se elige el dia y donde se dice lo que no puede ir y por que.
   columnas son.
   {% endcomment %}
   <div class="tabla-nav-marco">
-    <table style="min-width:2200px; width:100%; border-collapse:collapse; table-layout:auto;">
+    {% comment %}
+    Sin ancho minimo: las celdas no se parten (`nowrap`), asi que la tabla mide
+    lo que pide su contenido, y al esconder grupos se encoge de verdad en lugar
+    de quedarse en 2200 px con huecos.
+
+    Varias columnas van juntas en una celda de dos o tres renglones -- bodega y
+    posicion, transportista con PRO, caja y sello, bultos con su tipo, los dos
+    pesos, las tres referencias de aduana, quien la creo y si salio el correo --.
+    Cada dato va con su etiqueta corta; el que esta vacio no ocupa renglon.
+    {% endcomment %}
+    <table style="width:100%; border-collapse:collapse; table-layout:auto;">
       <thead>
         <tr>
           <th style="color:var(--tb-ink); white-space:nowrap;">#</th>
           {% comment %}
           El aviso del hilo va aqui, junto al numero, y no al final con las
-          acciones: la tabla mide 2200 px y nadie cruza esa distancia para
-          descubrir si un cliente escribio. Lo que avisa tiene que verse sin
-          mover la barra horizontal.
+          acciones: la tabla es ancha y nadie la cruza para descubrir si un
+          cliente escribio. Lo que avisa tiene que verse sin mover la barra
+          horizontal.
           {% endcomment %}
           <th style="color:var(--tb-ink); white-space:nowrap;" title="Mensajes">💬</th>
           <th style="white-space:nowrap;">{% trans "Date" %}</th>
           <th style="white-space:nowrap;">Custom ID</th>
-          <th style="white-space:nowrap;">{% trans "Entries Disp." %}</th>
           <th style="white-space:nowrap;">{% trans "Type" %}</th>
           <th style="background:var(--th-bg-acento); color:var(--th-ink-acento); white-space:nowrap;">{% trans "Status" %}</th>
           <th style="white-space:nowrap;">{% trans "Customer" %}</th>
-          <th style="white-space:nowrap;">{% trans "Warehouse" %}</th>
-          <th style="white-space:nowrap;">{% trans "Location" %}</th>
-          <th style="white-space:nowrap;">{% trans "Shipper" %}</th>
           <th style="white-space:nowrap;">{% trans "Invoice" %}</th>
           <th style="white-space:nowrap;">PO/Order</th>
-          <th style="white-space:nowrap;">{% trans "Seal" %}</th>
-          <th style="white-space:nowrap;">{% trans "Carrier" %}</th>
-          <th style="white-space:nowrap;">PRO</th>
-          <th style="white-space:nowrap;">{% trans "Trailer" %}</th>
-          <th style="white-space:nowrap;">{% trans "Bundle Type" %}</th>
-          <th style="white-space:nowrap;">Qty</th>
-          <th style="white-space:nowrap;">LBS</th>
-          <th style="white-space:nowrap;">KGS</th>
-          <th style="white-space:nowrap;">{% trans "Description" %}</th>
-          <th style="white-space:nowrap;">{% trans "Note" %}</th>
-          <th style="white-space:nowrap;">{% trans "Damage" %}</th>
-          <th style="white-space:nowrap;">REF AA</th>
-          <th style="white-space:nowrap;">DYS</th>
-          <th style="white-space:nowrap;">PED</th>
-          <th style="white-space:nowrap;">{% trans "Email" %}</th>
-          <th style="white-space:nowrap;">Created By</th>
+          <th class="g-bodega" style="white-space:nowrap;">{% trans "Entries Disp." %}</th>
+          <th class="g-bodega" style="white-space:nowrap;" title="{% trans "Warehouse" %} · {% trans "Location" %}">{% trans "Warehouse" %} /<br>{% trans "Location" %}</th>
+          <th class="g-transporte" style="white-space:nowrap;">{% trans "Shipper" %}</th>
+          <th class="g-transporte" style="white-space:nowrap;" title="{% trans "Carrier" %} · PRO · {% trans "Trailer" %} · {% trans "Seal" %}">{% trans "Transport" %}</th>
+          <th class="g-carga" style="white-space:nowrap;" title="Qty · {% trans "Bundle Type" %}">{% trans "Packages" %}</th>
+          <th class="g-carga" style="white-space:nowrap;" title="LBS · KGS">{% trans "Weight" %}</th>
+          <th class="g-carga" style="white-space:nowrap;">{% trans "Description" %}</th>
+          <th class="g-carga" style="white-space:nowrap;">{% trans "Note" %}</th>
+          <th class="g-carga" style="white-space:nowrap;">{% trans "Damage" %}</th>
+          <th class="g-aduana" style="white-space:nowrap;" title="REF AA · DYS · PED">{% trans "Customs" %}</th>
+          <th class="g-auditoria" style="white-space:nowrap;" title="{% trans "Created by" %} · {% trans "Email" %}">{% trans "Created by" %}</th>
           <th style="background:var(--th-bg-fija); color:var(--tb-ink); white-space:nowrap;">{% trans "Actions" %}</th>
           <th style="background:var(--th-bg-fija); color:var(--tb-ink); white-space:nowrap;">#</th>
 
@@ -196,7 +271,6 @@ donde se elige el dia y donde se dice lo que no puede ir y por que.
             {% endif %}
           </td>
           <td class="mono" style="white-space:nowrap;">{{ op.custom_id }}{% if op.subdivision %} <span title="{% if op.subdivision == 'SUB2' %}{% trans "What stayed in the warehouse when an order came out of its pedimento" %}{% else %}{% trans "What crossed after an order came out of its pedimento" %}{% endif %}" style="font-size:10px;font-weight:700;padding:0 5px;border-radius:4px;border:1px solid currentColor;opacity:.7">{{ op.get_subdivision_display }}</span>{% endif %}</td>
-          <td style="white-space:nowrap;" title="{{ op.entry_dispatched }}">{{ op.entry_dispatched|default:"—"|truncatechars:20 }}</td>
           <td style="white-space:nowrap;">
             <span class="badge {{ op.operation_type|clase_de_tipo }}">{{ op.get_operation_type_display }}</span>
           </td>
@@ -212,29 +286,46 @@ donde se elige el dia y donde se dice lo que no puede ir y por que.
             {% endif %}
           </td>
           <td style="white-space:nowrap;" title="{{ op.get_customer_display }}">{{ op.get_customer_display|truncatechars:20 }}</td>
-          <td style="white-space:nowrap;">{{ op.warehouse.code|default:"—" }}</td>
-          <td style="white-space:nowrap;" title="{{ op.location.descripcion }}">
-            {% if op.location %}<span class="mono">{{ op.location.code }}</span>{% else %}—{% endif %}
-          </td>
-          <td style="white-space:nowrap;" title="{{ op.get_shipper_display }}">{{ op.get_shipper_display|truncatechars:20 }}</td>
           <td style="white-space:nowrap;">{{ op.invoice|default:"—" }}</td>
           <td style="white-space:nowrap;">{{ op.po_order|default:"—" }}</td>
-          <td style="white-space:nowrap;">{{ op.seal|default:"—" }}</td>
-          <td style="white-space:nowrap;" title="{{ op.get_carrier_display }}">{{ op.get_carrier_display|truncatechars:18 }}</td>
-          <td style="white-space:nowrap;">{{ op.pro|default:"—" }}</td>
-          <td style="white-space:nowrap;">{{ op.trailer|default:"—" }}</td>
-          <td style="white-space:nowrap;" title="{{ op.get_bundle_type_display_name }}">{{ op.get_bundle_type_display_name|truncatechars:18 }}</td>
-          <td style="white-space:nowrap;">{{ op.bundle_qty|default:"—" }}</td>
-          <td style="white-space:nowrap;">{{ op.weight_lbs|default:"—" }}</td>
-          <td style="white-space:nowrap;">{{ op.weight_kgs|default:"—" }}</td>
-          <td style="white-space:nowrap;" title="{{ op.description }}">{{ op.description|default:"—"|truncatechars:25 }}</td>
-          <td style="white-space:nowrap;" title="{{ op.note }}">{{ op.note|default:"—"|truncatechars:18 }}</td>
-          <td style="white-space:nowrap;">{% if op.damage %}<span class="badge" style="background:var(--rsoft);color:var(--err-ink);">⚠ {% trans "Yes" %}</span>{% else %}—{% endif %}</td>
-          <td style="white-space:nowrap;">{{ op.ref_aa|default:"—" }}</td>
-          <td style="white-space:nowrap;">{{ op.ref_dys|default:"—" }}</td>
-          <td style="white-space:nowrap;">{{ op.pedimento|default:"—" }}</td>
-          <td style="white-space:nowrap;">{% if op.email_sent %}<span class="badge b-sent">✓</span>{% else %}—{% endif %}</td>
-          <td style="white-space:nowrap;">{{ op.created_by.username|default:"—" }}</td>
+          <td class="g-bodega" style="white-space:nowrap;" title="{{ op.entry_dispatched }}">{{ op.entry_dispatched|default:"—"|truncatechars:20 }}</td>
+          <td class="g-bodega" style="white-space:nowrap;">
+            {% if op.warehouse or op.location %}
+              {{ op.warehouse.code|default:"—" }}
+              {% if op.location %}<span class="op-sub" title="{{ op.location.descripcion }}"><span class="mono">{{ op.location.code }}</span></span>{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td class="g-transporte" style="white-space:nowrap;" title="{{ op.get_shipper_display }}">{{ op.get_shipper_display|truncatechars:20 }}</td>
+          <td class="g-transporte" style="white-space:nowrap;">
+            {% comment %}El transportista puede venir del catalogo o escrito a mano; get_carrier_display cubre los dos.{% endcomment %}
+            <span title="{{ op.get_carrier_display }}">{{ op.get_carrier_display|truncatechars:18 }}</span>
+            {% if op.pro %}<span class="op-sub"><span class="op-et">PRO</span> {{ op.pro }}</span>{% endif %}
+            {% if op.trailer %}<span class="op-sub"><span class="op-et">{% trans "Trailer" %}</span> {{ op.trailer }}</span>{% endif %}
+            {% if op.seal %}<span class="op-sub"><span class="op-et">{% trans "Seal" %}</span> {{ op.seal }}</span>{% endif %}
+          </td>
+          <td class="g-carga" style="white-space:nowrap;" title="{{ op.get_bundle_type_display_name }}">
+            {% if op.bundle_qty or op.bundle_type or op.bundle_type_manual %}{{ op.bundle_qty|default:"—" }} <span class="op-et">{{ op.get_bundle_type_display_name|truncatechars:18 }}</span>{% else %}—{% endif %}
+          </td>
+          <td class="g-carga" style="white-space:nowrap;">
+            {% if op.weight_lbs or op.weight_kgs %}
+              <span class="op-lin">{{ op.weight_lbs|default:"—" }} <span class="op-et">lb</span></span>
+              <span class="op-sub">{{ op.weight_kgs|default:"—" }} <span class="op-et">kg</span></span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="g-carga" style="white-space:nowrap;" title="{{ op.description }}">{{ op.description|default:"—"|truncatechars:25 }}</td>
+          <td class="g-carga" style="white-space:nowrap;" title="{{ op.note }}">{{ op.note|default:"—"|truncatechars:18 }}</td>
+          <td class="g-carga" style="white-space:nowrap;">{% if op.damage %}<span class="badge" style="background:var(--rsoft);color:var(--err-ink);">⚠ {% trans "Yes" %}</span>{% else %}—{% endif %}</td>
+          <td class="g-aduana" style="white-space:nowrap;">
+            {% if op.ref_aa or op.ref_dys or op.pedimento %}
+              {% if op.ref_aa %}<span class="op-lin"><span class="op-et">AA</span> {{ op.ref_aa }}</span>{% endif %}
+              {% if op.ref_dys %}<span class="op-lin"><span class="op-et">DYS</span> {{ op.ref_dys }}</span>{% endif %}
+              {% if op.pedimento %}<span class="op-lin"><span class="op-et">PED</span> {{ op.pedimento }}</span>{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td class="g-auditoria" style="white-space:nowrap;">
+            {{ op.created_by.username|default:"—" }}
+            {% if op.email_sent %}<span class="op-sub"><span class="badge b-sent">✓ {% trans "Email sent" %}</span></span>{% endif %}
+          </td>
           <td style="white-space:nowrap;">
             <div style="display:flex; gap:4px; align-items:center;">
               <button class="btn-action" onclick="openModal('{% url 'operation_detail' op.pk %}')">{% trans "View" %}</button>
@@ -273,9 +364,44 @@ donde se elige el dia y donde se dice lo que no puede ir y por que.
     <button type="button" class="nav-h" data-ir="final" title="{% trans "Last column" %}">{% trans "End" %} &#9197;</button>
   </div>
 </div>
+</div>{% comment %}/.ops-raiz{% endcomment %}
+{% endwith %}
 {% include 'warehouse/partials/tabla_navegable.html' %}
 
 <style>
+/* Los grupos escondidos: una regla por grupo, la caja de afuera manda. */
+.ops-raiz.ocultar-bodega .g-bodega,
+.ops-raiz.ocultar-transporte .g-transporte,
+.ops-raiz.ocultar-carga .g-carga,
+.ops-raiz.ocultar-aduana .g-aduana,
+.ops-raiz.ocultar-auditoria .g-auditoria { display:none; }
+
+/* Las celdas de varios renglones: el dato principal arriba, lo demas debajo. */
+.op-lin { display:block; line-height:1.35; }
+.op-sub { display:block; font-size:10px; line-height:1.35; color:var(--soft); }
+.op-et  { font-size:9px; font-weight:600; letter-spacing:.03em; color:var(--faint); text-transform:uppercase; }
+
+/* El selector de grupos de columnas. */
+.cols-ctl { position:relative; margin-left:auto; }
+.cols-menu {
+  position:absolute; right:0; top:calc(100% + 4px); z-index:120; width:300px;
+  background:var(--surface); border:1px solid var(--bdr-fuerte); border-radius:8px;
+  box-shadow:0 8px 24px rgba(15,23,42,.18); padding:8px;
+}
+.cols-menu[hidden] { display:none; }
+.cols-menu-tit { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--soft); padding:2px 4px 6px; }
+.cols-menu label { display:flex; gap:8px; align-items:flex-start; padding:6px 4px; border-radius:6px; cursor:pointer; }
+.cols-menu label:hover { background:var(--bg-sutil); }
+.cols-menu label input { margin-top:2px; }
+.cols-menu label b { display:block; font-size:12px; color:var(--ink); }
+.cols-menu label small { display:block; font-size:10px; color:var(--faint); }
+.cols-menu-pie { display:flex; gap:8px; align-items:center; justify-content:space-between; border-top:1px solid var(--bdr); margin-top:6px; padding:8px 4px 2px; }
+.cols-menu-pie span { font-size:10px; color:var(--faint); }
+.cols-menu-pie .btn, .cols-btn { white-space:nowrap; }
+@media (max-width: 700px) {
+  .cols-ctl { margin-left:0; }
+  .cols-menu { left:0; right:auto; width:min(300px, calc(100vw - 32px)); }
+}
 .btn-action {
   display:inline-flex;
   align-items:center;

@@ -4676,6 +4676,25 @@ def cambiar_tema(request):
     return HttpResponse('')
 
 
+@login_required
+@require_POST
+def cambiar_columnas(request):
+    """
+    Guarda que grupos de columnas escondio el usuario en la tabla de Operaciones.
+
+    Como el tema, responde vacio: la pantalla ya escondio las columnas al
+    pulsar, y esto solo lo apunta para la proxima vez que se pinte la tabla.
+    Un nombre que no es de ningun grupo se descarta en vez de rechazar todo.
+    """
+    pedidos = request.POST.get('ocultas', '').split(',')
+    ocultas = [g for g in UserProfile.GRUPOS_DE_COLUMNAS if g in pedidos]
+    perfil = get_profile(request.user)
+    if perfil:
+        perfil.columnas_ocultas = ','.join(ocultas)
+        perfil.save(update_fields=['columnas_ocultas'])
+    return HttpResponse('')
+
+
 @require_POST
 def cambiar_idioma(request):
     """

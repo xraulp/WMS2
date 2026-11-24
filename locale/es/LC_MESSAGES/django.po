@@ -4649,3 +4649,42 @@ msgstr "Se borrarán los documentos de sus pedimentos para que la próxima vez s
 
 msgid "Its documents will be deleted so updated ones are uploaded next time (unless it is validated or paid)."
 msgstr "Se borrarán sus documentos para que la próxima vez se suban actualizados (salvo que esté validado o pagado)."
+
+msgid "hidden"
+msgstr "ocultos"
+
+msgid "Columns"
+msgstr "Columnas"
+
+msgid "Show column groups"
+msgstr "Mostrar grupos de columnas"
+
+msgid "Entries disp., warehouse, location"
+msgstr "Entradas desp., bodega, posición"
+
+msgid "Shipper, carrier, PRO, trailer, seal"
+msgstr "Remitente, transportista, PRO, caja, sello"
+
+msgid "Load"
+msgstr "Carga"
+
+msgid "Packages, weight, description, note, damage"
+msgstr "Bultos, peso, descripción, nota, daño"
+
+msgid "Audit"
+msgstr "Auditoría"
+
+msgid "Created by, email sent"
+msgstr "Creado por, correo enviado"
+
+msgid "Date, Custom ID, type, status, customer, invoice and PO are always shown."
+msgstr "Fecha, Custom ID, tipo, estado, cliente, factura y PO siempre se muestran."
+
+msgid "Packages"
+msgstr "Bultos"
+
+msgid "Created by"
+msgstr "Creado por"
+
+msgid "Email sent"
+msgstr "Correo enviado"
