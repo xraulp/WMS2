@@ -59,6 +59,12 @@
     </div>
     <div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
+             title="{% trans "An address on the company's own domain. It is only used once Resend has the domain verified; until then its notices go out from the platform's domain." %}">{% trans "Own sender (optional)" %}</label>
+      <input type="email" name="sender_email" placeholder="avisos@empresa.com"
+             style="height:28px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px;font-size:12px;width:180px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--soft)"
              title="{% trans "It appears on the reports and labels this company sends to its customers" %}">{% trans "Logo (optional)" %}</label>
       <input type="file" name="logo" data-sin-comprimir accept=".png,.jpg,.jpeg,.gif"
              style="height:28px;padding:3px;border:1px solid var(--bdr);border-radius:6px;font-size:11px;width:200px">
@@ -137,6 +143,36 @@
                 title="{% trans "Replies from this company's customers go nowhere" %}">↩ —</span>
           {% endif %}
         </div>
+        {% if t.sender_email %}
+        <div style="font-size:11px">
+          <span style="color:var(--faint)" title="{% trans "Own sender" %}">✉</span>
+          <span style="color:var(--soft)">{{ t.sender_email }}</span>
+          {% if t.sender_domain_verified %}
+          <span style="color:var(--ok-ink-fuerte)"
+                title="{% trans "Verified in Resend: its notices go out from this address" %}">✓ {% trans "domain verified" %}</span>
+          {% else %}
+          <span style="color:var(--warn-ink)"
+                title="{% trans "Not verified: its notices go out from the platform's domain" %}">⏳ {% if t.sender_domain_status == 'error' %}{% trans "could not check" %}{% elif t.sender_domain_status == 'not_found' %}{% trans "not in Resend" %}{% elif t.sender_domain_status %}{{ t.sender_domain_status }}{% else %}{% trans "not checked" %}{% endif %}</span>
+          {% endif %}
+          {% if is_platform_admin %}
+          {% comment %}
+            Aqui y no con los botones del final: alli empujaba "Deactivate"
+            fuera de la pantalla, y junto al estado se lee que es para ese
+            dominio.
+          {% endcomment %}
+          <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML"
+                style="display:inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="check_sender">
+            <input type="hidden" name="tenant_id" value="{{ t.pk }}">
+            <button type="submit"
+                    style="border:none;background:none;padding:0;margin-left:4px;font:inherit;font-size:11px;
+                           color:var(--accent);text-decoration:underline;cursor:pointer"
+                    title="{% trans "Ask Resend again whether this company's domain is verified" %}">{% trans "Check domain" %}</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
       </td>
       {% comment %}
         No se enseña el logo en si: el bucket es privado desde que los archivos
@@ -167,7 +203,8 @@
                 data-t-sub="{{ t.subdomain }}" data-t-plan="{{ t.plan }}"
                 data-t-short="{{ t.short_name }}"
                 data-t-mail="{{ t.billing_email|default:'' }}"
-                data-t-reply="{{ t.reply_to_email|default:'' }}">{% trans "Edit" %}</button>
+                data-t-reply="{{ t.reply_to_email|default:'' }}"
+                data-t-sender="{{ t.sender_email|default:'' }}">{% trans "Edit" %}</button>
         <form hx-post="{% url 'platform_tenant_list' %}" hx-target="#platform-content" hx-swap="innerHTML"
               hx-encoding="multipart/form-data" style="display:inline">
           {% csrf_token %}
@@ -283,6 +320,15 @@ Uno por fila repetiria los mismos id tantas veces como empresas haya.
         {% blocktrans %}Where this company's customers reply. Its notices go out from the platform's domain with the company's name showing, so without this a reply lands in a mailbox nobody reads.{% endblocktrans %}
       </div>
 
+      <label style="display:block;font-size:10px;font-weight:600;text-transform:uppercase;
+                    letter-spacing:.05em;color:var(--soft);margin-bottom:3px">{% trans "Own sender (optional)" %}</label>
+      <input type="email" name="sender_email" id="tenant-edit-sender" placeholder="avisos@empresa.com"
+             style="width:100%;padding:8px 10px;border:1px solid var(--bdr-fuerte);border-radius:8px;
+                    font-size:13px;margin-bottom:6px">
+      <div style="font-size:11px;color:var(--faint);margin-bottom:16px">
+        {% blocktrans %}An address on the company's own domain. Its notices go out from it only once Resend has that domain verified; until then they keep going out from the platform's domain. Password resets and platform billing never use it.{% endblocktrans %}
+      </div>
+
       <div style="display:flex;gap:10px">
         <button type="submit" class="btn btn-p" style="flex:1">{% trans "Save" %}</button>
         <button type="button" class="btn btn-g" style="flex:1"
@@ -302,6 +348,7 @@ function abrirEdicionDeEmpresa(boton){
   document.getElementById('tenant-edit-plan').value  = d.tPlan;
   document.getElementById('tenant-edit-mail').value  = d.tMail;
   document.getElementById('tenant-edit-reply').value = d.tReply;
+  document.getElementById('tenant-edit-sender').value = d.tSender || '';
   document.getElementById('tenant-edit-title').textContent = d.tName;
   document.getElementById('tenant-edit-modal').style.display = 'flex';
 }

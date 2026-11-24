@@ -1355,6 +1355,24 @@ class Tenant(models.Model):
         help_text="A donde contestan los clientes de esta empresa. "
                   "Vacio = las respuestas se pierden.")
 
+    # De donde salen los avisos y reportes de esta empresa a sus clientes,
+    # cuando tiene dominio propio: `avisos@dysergroup.com`. Solo se usa si
+    # Resend tiene el dominio verificado (`sender_domain_verified`, que anota
+    # `warehouse/dominios_de_correo.py` preguntandole a su API); mientras no,
+    # el correo sale del dominio de la plataforma como siempre. Nunca se usa
+    # para la recuperacion de contrasena ni para la facturacion del SaaS.
+    sender_email = models.EmailField(
+        blank=True, null=True, verbose_name="Remitente propio",
+        help_text="Direccion de su dominio, verificado en Resend. "
+                  "Vacio = sale del dominio de la plataforma.")
+    sender_domain_verified = models.BooleanField(
+        default=False, verbose_name="Dominio del remitente verificado")
+    sender_domain_status = models.CharField(
+        max_length=30, blank=True, default='',
+        verbose_name="Estado del dominio en Resend")
+    sender_domain_checked_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Ultima revision del dominio")
+
     # Como se nombra la empresa en los papeles que lee el cliente: en la hoja
     # de impuestos el status se escribe "ELAB PED · DYSER". Recortar la razon
     # social no sirve -- "DYSER Group LLC" daria "DYSER GROUP" -- porque lo que

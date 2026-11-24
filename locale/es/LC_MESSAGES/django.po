@@ -4691,3 +4691,51 @@ msgstr "Correo enviado"
 
 msgid "Bundle"
 msgstr "Bulto"
+
+msgid "An address on the company's own domain. It is only used once Resend has the domain verified; until then its notices go out from the platform's domain."
+msgstr "Una dirección del dominio propio de la empresa. Solo se usa cuando Resend tiene el dominio verificado; mientras tanto sus avisos salen del dominio de la plataforma."
+
+msgid "Own sender (optional)"
+msgstr "Remitente propio (opcional)"
+
+msgid "Own sender"
+msgstr "Remitente propio"
+
+msgid "Verified in Resend: its notices go out from this address"
+msgstr "Verificado en Resend: sus avisos salen de esta dirección"
+
+msgid "Not verified: its notices go out from the platform's domain"
+msgstr "Sin verificar: sus avisos salen del dominio de la plataforma"
+
+msgid "not checked"
+msgstr "sin revisar"
+
+msgid "Ask Resend again whether this company's domain is verified"
+msgstr "Volver a preguntar a Resend si el dominio de esta empresa está verificado"
+
+msgid "Check domain"
+msgstr "Verificar dominio"
+
+msgid "An address on the company's own domain. Its notices go out from it only once Resend has that domain verified; until then they keep going out from the platform's domain. Password resets and platform billing never use it."
+msgstr "Una dirección del dominio propio de la empresa. Sus avisos salen de ella solo cuando Resend tiene ese dominio verificado; mientras tanto siguen saliendo del dominio de la plataforma. La recuperación de contraseña y la facturación de la plataforma nunca la usan."
+
+msgid "Domain %(dominio)s is verified: notices from \"%(nombre)s\" now go out from %(correo)s."
+msgstr "El dominio %(dominio)s está verificado: los avisos de \"%(nombre)s\" ya salen de %(correo)s."
+
+msgid "Domain %(dominio)s is not added in Resend yet. Until it is added and verified, notices from \"%(nombre)s\" keep going out from the platform domain."
+msgstr "El dominio %(dominio)s todavía no está dado de alta en Resend. Hasta que se agregue y se verifique, los avisos de \"%(nombre)s\" siguen saliendo del dominio de la plataforma."
+
+msgid "Could not check domain %(dominio)s with Resend. Notices from \"%(nombre)s\" keep going out from the platform domain."
+msgstr "No se pudo revisar el dominio %(dominio)s con Resend. Los avisos de \"%(nombre)s\" siguen saliendo del dominio de la plataforma."
+
+msgid "Domain %(dominio)s is not verified yet (Resend: %(estado)s). Notices from \"%(nombre)s\" keep going out from the platform domain until it is."
+msgstr "El dominio %(dominio)s aún no está verificado (Resend: %(estado)s). Los avisos de \"%(nombre)s\" siguen saliendo del dominio de la plataforma hasta que lo esté."
+
+msgid "domain verified"
+msgstr "dominio verificado"
+
+msgid "could not check"
+msgstr "no se pudo revisar"
+
+msgid "not in Resend"
+msgstr "no está en Resend"

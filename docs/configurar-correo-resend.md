@@ -64,7 +64,12 @@ bitácora de notificaciones (`Resend HTTP 403: ... domain is not verified`).
 
 ### 2. Sacar la API key
 
-**API Keys → Create API Key**, permiso de envío. Se copia una sola vez.
+**API Keys → Create API Key**, permiso **Full access**. Se copia una sola vez.
+
+Con «Sending access» el correo sale, pero la llave no puede leer la lista de
+dominios, y el botón «Check domain» de cada empresa (ver más abajo) dirá
+siempre que no pudo revisar: sus avisos seguirán saliendo del dominio de la
+plataforma aunque el suyo ya esté verificado.
 
 ### 3. Variables en Render
 
@@ -163,36 +168,47 @@ usa tres, y cada una dice de qué va el correo antes de abrirlo:
 | Recuperación de contraseña, en los tres niveles | `DEFAULT_FROM_EMAIL` | nadie |
 | Factura de la plataforma a una empresa | `BILLING_FROM_EMAIL` | `PLATFORM_BILLING_EMAIL` |
 | Avisos, informes y hoja de impuestos que una empresa manda a sus clientes | `NOTIFICATIONS_FROM_EMAIL`, con el nombre de la empresa a la vista | `Tenant.reply_to_email` |
+| Lo mismo, si la empresa tiene dominio propio verificado | `Tenant.sender_email` (`avisos@sualmacen.com`), con su nombre | `Tenant.reply_to_email` |
 
 Las dos últimas caen en `DEFAULT_FROM_EMAIL` si no se definen, así que una
 instalación que no quiera separarlas no tiene que tocar nada.
 
-### Por qué no se manda desde el dominio de cada empresa
+### El dominio propio de cada empresa
 
-Es lo primero que se pide —que el cliente de un almacén reciba el correo de
-`reportes@sualmacen.com`— y para los avisos tendría sentido. Pero:
+Desde el 23 nov 2026 cada empresa puede tener el suyo y la plataforma el suyo.
+La ficha de la empresa (panel de plataforma → Companies → Edit) tiene el campo
+**Own sender**: una dirección de su dominio, `avisos@sualmacen.com`.
 
-* Un `From:` de un dominio ajeno **no sale** sin verificar antes su SPF y su
-  DKIM. Resend responde 403 y el motivo queda en la bitácora. O sea: no es una
-  casilla en el alta, es un trámite de DNS con la gente de sistemas de cada
-  empresa.
-* En el correo de **recuperación de contraseña** sería además peligroso. Lleva
-  un enlace a esta plataforma, y un dominio que no controla ese enlace
-  avalándolo es exactamente la forma de un fraude; los filtros lo tratan como
-  tal. Y una empresa recién dada de alta se quedaría sin recuperación hasta
-  terminar el trámite, justo la semana en que más gente se equivoca al entrar.
+Las reglas (`warehouse/dominios_de_correo.py`):
 
-Lo que sí viaja por empresa son dos cabeceras que no necesitan DNS de nadie: el
-**nombre visible** del remitente —el cliente lee «Almacenes del Norte», no el
-dominio— y el **Reply-To**, que hace que una respuesta llegue a su proveedor y
-no a un buzón de la plataforma que nadie abre. Se captura en la ficha de la
-empresa, en el panel de plataforma, y la tabla marca en ámbar a las que no lo
-tienen.
+* Sus avisos salen de esa dirección **solo si Resend tiene su dominio
+  verificado**. Mientras no, siguen saliendo de `NOTIFICATIONS_FROM_EMAIL` con
+  su nombre a la vista, como antes: un remitente sin verificar Resend lo
+  rechaza con 403 y el aviso no llegaría.
+* Quien dice si está verificado es la API de Resend (`GET /domains`), no una
+  casilla. Se le pregunta al guardar la ficha y con el enlace **Check domain**
+  de la lista de empresas; el resultado queda anotado y el envío solo lo lee.
+* Cambiar la dirección borra la verificación anterior y se vuelve a preguntar.
+* Una sucursal sin remitente propio usa el de su corporativo.
+* Por SMTP nunca se usa: desde el servidor de la plataforma sería suplantar a
+  la empresa.
+* La **recuperación de contraseña** y la **factura de la plataforma** nunca lo
+  usan. La recuperación lleva un enlace a esta plataforma, y un dominio ajeno
+  avalándolo es la forma exacta de un fraude; la factura es de quien cobra.
 
-Si algún día hace falta el dominio propio de verdad, el sitio es un campo más
-en la ficha de la empresa que solo afecte a los **avisos** —nunca a la
-recuperación ni a las facturas— y el plan de Resend correspondiente: el
-gratuito admite tres dominios, el Pro diez, y hay un complemento de cien.
+El trámite por empresa:
+
+1. En Resend, **Domains → Add Domain** con el dominio de la empresa (mejor un
+   subdominio como `mail.sualmacen.com` si su correo de oficina ya usa el
+   dominio raíz: así su SPF no se toca).
+2. Mandarle a su gente de sistemas los registros DNS que da Resend (SPF/MX en
+   `send.`, DKIM en `resend._domainkey`, y un DMARC si no tienen).
+3. Cuando Resend lo marque **Verified**, pulsar **Check domain** en la lista de
+   empresas. Desde ese momento sus avisos salen de su dominio.
+
+Cada plan de Resend admite un número limitado de dominios, y el de la
+plataforma cuenta como uno: revisar el límite vigente en su página de precios
+antes de dar de alta empresas.
 
 ## Qué falta verificar cuando el correo salga
 

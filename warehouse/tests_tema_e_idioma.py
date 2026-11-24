@@ -211,7 +211,8 @@ class PantallasDeAccionesTests(TestCase):
         respuesta = self.client.get('/operations/search/')
 
         self.assertContains(respuesta, '>Ver<')
-        self.assertContains(respuesta, '>Borrar<')
+        # En el menu de acciones lleva el icono delante: '🗑 Borrar'.
+        self.assertContains(respuesta, ' Borrar</button>')
 
     def test_el_pdf_del_informe_va_en_el_idioma_de_quien_lo_pide(self):
         """A diferencia del PDF de una operacion, que va en el idioma del

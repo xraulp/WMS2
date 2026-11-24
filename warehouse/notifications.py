@@ -181,10 +181,18 @@ def remitente_de(tenant):
 
     Sin empresa -- o antes de que nadie configure nada -- queda el remitente de
     siempre y ningun Reply-To, que es como funcionaba esto hasta ahora.
+
+    Si la empresa tiene dominio propio verificado en Resend, la direccion es la
+    suya (`avisos@dysergroup.com`) en vez de la de la plataforma. Mientras no
+    este verificado se sigue con la de la plataforma: un remitente sin
+    verificar lo rechaza Resend y el aviso no llegaria. Ver
+    `warehouse/dominios_de_correo.py`.
     """
     direccion = getattr(settings, 'NOTIFICATIONS_FROM_EMAIL', None)         or settings.DEFAULT_FROM_EMAIL
     if tenant is None:
         return direccion, []
+    from .dominios_de_correo import remitente_propio
+    direccion = remitente_propio(tenant) or direccion
     # Sin direccion configurada no hay nada que adornar: Django pondra el
     # remitente por defecto y anteponerle un nombre aqui seria inventarse una
     # cabecera a medias.

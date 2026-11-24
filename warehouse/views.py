@@ -3597,6 +3597,31 @@ FORMATOS_DE_LOGO = ('.png', '.jpg', '.jpeg', '.gif')
 MAX_LOGO_MB = 2
 
 
+from .dominios_de_correo import (  # noqa: E402
+    revisar_remitente, dominio_de, VERIFICADO, NO_DADO_DE_ALTA, SIN_CONSULTAR)
+
+
+def _mensaje_del_remitente(tenant, estado):
+    """Lo que el operador lee tras revisar el dominio del remitente propio."""
+    datos = {'nombre': tenant.name, 'correo': tenant.sender_email or '',
+             'dominio': dominio_de(tenant.sender_email)}
+    if not tenant.sender_email:
+        return ''
+    if estado == VERIFICADO:
+        return _('Domain %(dominio)s is verified: notices from "%(nombre)s" '
+                 'now go out from %(correo)s.') % datos
+    if estado == NO_DADO_DE_ALTA:
+        return _('Domain %(dominio)s is not added in Resend yet. Until it is '
+                 'added and verified, notices from "%(nombre)s" keep going out '
+                 'from the platform domain.') % datos
+    if estado == SIN_CONSULTAR:
+        return _('Could not check domain %(dominio)s with Resend. Notices from '
+                 '"%(nombre)s" keep going out from the platform domain.') % datos
+    return _('Domain %(dominio)s is not verified yet (Resend: %(estado)s). '
+             'Notices from "%(nombre)s" keep going out from the platform '
+             'domain until it is.') % dict(datos, estado=estado)
+
+
 def _guardar_logo(tenant, archivo):
     """
     Guarda el logo de una empresa. Devuelve el error, o cadena vacia si fue bien.
@@ -3659,6 +3684,9 @@ def platform_tenant_list(request):
             # aviso suyo. Sin esto las respuestas caen en el buzon de la
             # plataforma, que nadie lee.
             reply_to_email = request.POST.get('reply_to_email', '').strip()
+            # Su remitente propio, si tiene dominio. Se usa solo cuando Resend
+            # lo da por verificado; se le pregunta justo despues del alta.
+            sender_email = request.POST.get('sender_email', '').strip().lower()
             # La abreviatura con la que la casa firma sus estados: "Elab Ped -
             # DYSER". Se elige; recortar la razon social no sirve.
             short_name = request.POST.get('short_name', '').strip().upper()[:20]
@@ -3692,7 +3720,13 @@ def platform_tenant_list(request):
                     short_name=short_name,
                     is_active=True, plan=plan, billing_email=billing_email or None,
                     reply_to_email=reply_to_email or None,
+                    sender_email=sender_email or None,
                 )
+                if sender_email:
+                    msg_remitente = _mensaje_del_remitente(
+                        tenant, revisar_remitente(tenant))
+                else:
+                    msg_remitente = ''
                 # El logo sale en los reportes y etiquetas que la empresa manda
                 # a sus clientes. Es opcional: sin el, los documentos llevan su
                 # nombre en texto.
@@ -3704,6 +3738,8 @@ def platform_tenant_list(request):
                 # empresa quedo creada, que es lo primero que hay que leer.
                 if error_logo:
                     msg += ' ' + error_logo
+                if msg_remitente:
+                    msg += ' ' + msg_remitente
 
                 if admin_username and admin_password:
                     admin_user = User.objects.create_user(
@@ -3743,6 +3779,7 @@ def platform_tenant_list(request):
             plan     = request.POST.get('plan', t.plan)
             correo   = request.POST.get('billing_email', '').strip()
             responder = request.POST.get('reply_to_email', '').strip()
+            remitente = request.POST.get('sender_email', '').strip().lower() or None
             corto    = request.POST.get('short_name', '').strip().upper()[:20]
             subdom_in = request.POST.get('subdomain', '').strip()
             subdominio = re.sub(r'[^a-z0-9-]', '', slugify(subdom_in)) if subdom_in else t.subdomain
@@ -3763,9 +3800,18 @@ def platform_tenant_list(request):
                 t.reply_to_email = responder or None
                 t.subdomain = subdominio
                 t.short_name = corto
+                cambio_remitente = remitente != t.sender_email
+                t.sender_email = remitente
                 t.save(update_fields=['name', 'plan', 'billing_email',
                                       'reply_to_email', 'subdomain',
-                                      'short_name'])
+                                      'short_name', 'sender_email'])
+                # Un remitente nuevo no hereda la verificacion del anterior: se
+                # vuelve a preguntar a Resend antes de mandar nada con el.
+                msg_remitente = ''
+                if cambio_remitente:
+                    estado = revisar_remitente(t)
+                    if remitente:
+                        msg_remitente = _mensaje_del_remitente(t, estado)
 
                 # El plan vive en dos sitios -- la empresa y su suscripcion --
                 # y hasta ahora solo coincidian porque el alta los escribia a la
@@ -3774,12 +3820,21 @@ def platform_tenant_list(request):
                 Subscription.objects.filter(tenant=t).update(plan=plan)
 
                 msg = _('Tenant "%(nombre)s" updated.') % {'nombre': t.name}
+                if msg_remitente:
+                    msg += ' ' + msg_remitente
                 if cambio_subdominio:
                     # Es la direccion por la que entra su gente: cambiarla no es
                     # un detalle de captura.
                     msg += (f' The subdomain changed from "{anterior}" to '
                             f'"{subdominio}" — anyone using the old address will '
                             f'no longer reach this company.')
+
+        elif action == 'check_sender':
+            # Volver a preguntar a Resend: tras agregar los registros DNS el
+            # dominio tarda de minutos a horas en verificarse, y nadie va a
+            # editar la ficha solo para que se revise.
+            t = get_object_or_404(Tenant, pk=request.POST.get('tenant_id'))
+            msg = _mensaje_del_remitente(t, revisar_remitente(t))
 
         elif action == 'toggle_active':
             tid = request.POST.get('tenant_id')
