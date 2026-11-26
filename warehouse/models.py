@@ -167,6 +167,17 @@ class Catalog(models.Model):
     notify_on_documents = models.BooleanField(default=False,
                             verbose_name='Avisar al agregar documentos')
 
+    # ── Avisos push a los operadores de la empresa ───────────────────────────
+    # No le llegan al cliente: suenan en el telefono de los operadores. Van en
+    # la ficha del cliente y no en un ajuste general porque cada empresa los
+    # usa conforme lo acuerde con cada cliente: al que paga atencion inmediata
+    # se le prenden, y al resto no. Nacen apagados, como los demas eventos
+    # nuevos: se encienden cliente por cliente.
+    push_on_message     = models.BooleanField(default=False,
+                            verbose_name='Push a operadores: mensaje nuevo')
+    push_on_create      = models.BooleanField(default=False,
+                            verbose_name='Push a operadores: operacion nueva')
+
     # Los dias que la mercancia de este cliente puede estar en bodega antes de
     # que la pantalla avise. Vacio significa "lo que diga la empresa": asi el
     # plazo general se puede cambiar en un sitio sin repasar cliente por cliente.
@@ -1760,6 +1771,9 @@ class NotificationLog(models.Model):
     CHANNEL_CHOICES = [
         ('EMAIL',    'Email'),
         ('WHATSAPP', 'WhatsApp'),
+        # El aviso que suena en el telefono de los operadores. Un renglon por
+        # evento, con los usuarios a los que les llego en `recipient`.
+        ('PUSH',     'Push'),
     ]
     # Las etiquetas se escriben en ingles y el espanol es su traduccion, como el
     # resto: esta bitacora se lee en la pantalla de plataforma, que tiene su
@@ -4836,3 +4850,36 @@ class Remision(models.Model):
 
     def __str__(self):
         return self.custom_id or f'RM-{self.pk}'
+
+
+class PushSubscription(models.Model):
+    """
+    Un dispositivo en el que alguien activo los avisos push.
+
+    Es el navegador quien la crea, no el usuario: al pulsar «Activar avisos»
+    entrega un `endpoint` (la direccion del servicio de push de Google, Apple o
+    Mozilla para ese navegador) y dos llaves con las que se cifra el aviso.
+    Una persona puede tener varios -- el telefono y la computadora de la
+    oficina --, y cada uno se da de baja solo: cuando el servicio contesta que
+    la suscripcion ya no existe, se borra.
+    """
+    user       = models.ForeignKey(User, on_delete=models.CASCADE,
+                                   related_name='push_subscriptions')
+    tenant     = models.ForeignKey('Tenant', on_delete=models.CASCADE, null=True,
+                                   blank=True, related_name='push_subscriptions')
+    endpoint   = models.TextField(unique=True)
+    p256dh     = models.CharField(max_length=200)
+    auth       = models.CharField(max_length=100)
+    user_agent = models.CharField(max_length=300, blank=True)
+    # Con que pantalla se abre el aviso al tocarlo: la movil en el telefono y
+    # el tablero en la computadora.
+    es_movil   = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_ok_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Dispositivo con avisos push'
+        verbose_name_plural = 'Dispositivos con avisos push'
+
+    def __str__(self):
+        return f'{self.user} · {self.user_agent[:40]}'

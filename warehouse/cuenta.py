@@ -38,6 +38,7 @@ from django.template import loader
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 
+from . import avisos_push
 from .context_processors import es_telefono
 from .models import PlatformUser, UserProfile
 
@@ -177,6 +178,12 @@ def mi_cuenta(request):
         # El aviso de que la recuperacion no funcionara sin correo se pinta
         # aqui, en la pantalla donde se arregla, y no solo cuando ya es tarde.
         'correo_del_sistema': bool(settings.DEFAULT_FROM_EMAIL),
+        # Los avisos push, solo para operadores: los dos que existen son para
+        # ellos. Sin llaves en el entorno la tarjeta dice que falta configurarlo
+        # en vez de ofrecer un boton que no puede funcionar.
+        'push_para_mi': bool(perfil and perfil.is_operator()),
+        'push_llave': settings.VAPID_PUBLIC_KEY if avisos_push.push_disponible() else '',
+        'push_dispositivos': usuario.push_subscriptions.count(),
     })
 
 

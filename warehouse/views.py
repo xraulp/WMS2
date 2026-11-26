@@ -2505,6 +2505,8 @@ def catalog_edit(request, pk):
             entry.notify_on_create    = p.get('notify_on_create') == 'on'
             entry.notify_on_release   = p.get('notify_on_release') == 'on'
             entry.notify_on_documents = p.get('notify_on_documents') == 'on'
+            entry.push_on_message     = p.get('push_on_message') == 'on'
+            entry.push_on_create      = p.get('push_on_create') == 'on'
             # El plazo de permanencia. Vacio significa "el de la empresa", asi
             # que se guarda NULL y no un cero: un cero avisaria de todo desde el
             # primer dia.

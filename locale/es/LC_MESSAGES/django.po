@@ -4739,3 +4739,74 @@ msgstr "no se pudo revisar"
 
 msgid "not in Resend"
 msgstr "no está en Resend"
+
+msgid "New operation"
+msgstr "Operación nueva"
+
+msgid "Test notification"
+msgstr "Aviso de prueba"
+
+msgid "If you can read this, notifications work on this device."
+msgstr "Si lees esto, los avisos funcionan en este dispositivo."
+
+msgid "Notifications are not configured."
+msgstr "Los avisos push no están configurados."
+
+msgid "No device is active for your user."
+msgstr "Tu usuario no tiene ningún dispositivo con avisos activos."
+
+msgid "Notifications on this device"
+msgstr "Avisos en este dispositivo"
+
+msgid "Your phone rings when a customer writes in an operation thread or registers a new operation. Each customer has them on or off in its card, as your company agreed with them."
+msgstr "Tu teléfono suena cuando un cliente escribe en el hilo de una operación o cuando se registra una operación suya. Cada cliente los tiene prendidos o apagados en su ficha, según lo que tu empresa acordó con él."
+
+msgid "Notifications are not configured on this installation yet: the VAPID keys are missing."
+msgstr "Los avisos push todavía no están configurados en esta instalación: faltan las llaves VAPID."
+
+msgid "Turn on notifications"
+msgstr "Activar avisos"
+
+msgid "Send a test notification"
+msgstr "Mandar un aviso de prueba"
+
+msgid "Turn off on this device"
+msgstr "Desactivar en este dispositivo"
+
+msgid "Notifications are on for this device."
+msgstr "Los avisos están activos en este dispositivo."
+
+msgid "Notifications are off for this device."
+msgstr "Los avisos están apagados en este dispositivo."
+
+msgid "This browser blocked notifications for the WMS. Allow them in the browser or phone settings and reload this page."
+msgstr "Este navegador bloqueó los avisos del WMS. Permítelos en los ajustes del navegador o del teléfono y vuelve a cargar esta página."
+
+msgid "On iPhone, first add the WMS to the Home Screen: tap Share, then Add to Home Screen. Open the WMS from that icon and come back here."
+msgstr "En iPhone, primero agrega el WMS a la pantalla de inicio: toca Compartir y luego «Agregar a pantalla de inicio». Abre el WMS desde ese ícono y vuelve aquí."
+
+msgid "This browser cannot receive notifications. On Android use Chrome; on iPhone, iOS 16.4 or later."
+msgstr "Este navegador no puede recibir avisos. En Android usa Chrome; en iPhone, iOS 16.4 o posterior."
+
+msgid "Test sent. It should arrive in a few seconds."
+msgstr "Prueba enviada. Debe llegar en unos segundos."
+
+msgid "It did not work:"
+msgstr "No funcionó:"
+
+msgid "Push to our operators"
+msgstr "Push a nuestros operadores"
+
+msgid "When this customer writes a message"
+msgstr "Cuando este cliente escribe un mensaje"
+
+msgid "When an operation of this customer is registered"
+msgstr "Cuando se registra una operación de este cliente"
+
+msgid "Each operator turns them on in My account, on their phone."
+msgstr "Cada operador los activa en «Mi cuenta», desde su teléfono."
+
+msgid "You have %(n)s device with notifications on."
+msgid_plural "You have %(n)s devices with notifications on."
+msgstr[0] "Tienes %(n)s dispositivo con avisos activos."
+msgstr[1] "Tienes %(n)s dispositivos con avisos activos."

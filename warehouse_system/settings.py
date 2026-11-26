@@ -355,6 +355,16 @@ RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
 RESEND_WEBHOOK_SECRET = os.getenv('RESEND_WEBHOOK_SECRET', '')
 EMAIL_PROVIDER = os.getenv('EMAIL_PROVIDER', '').strip().lower()
 
+# Avisos push (Web Push, `warehouse/avisos_push.py`). Las dos llaves VAPID las
+# genera una sola vez `python manage.py generar_llaves_push` y se pegan en el
+# entorno. Sin ellas no hay push y todo lo demas funciona igual. **No se
+# cambian** una vez en produccion: cada dispositivo quedo suscrito con la
+# publica, y con otra tendria que volver a activar los avisos.
+# El `SUBJECT` es el contacto que exigen Google y Apple: `mailto:` o una URL.
+VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '').strip()
+VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '').strip()
+VAPID_SUBJECT = os.getenv('VAPID_SUBJECT', '').strip()
+
 if not EMAIL_PROVIDER:
     EMAIL_PROVIDER = 'resend' if RESEND_API_KEY else 'smtp'
 

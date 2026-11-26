@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, cuenta, webhooks, carga_por_enlace
+from . import views, cuenta, webhooks, carga_por_enlace, vistas_push
 
 urlpatterns = [
     path('', views.login_view, name='login'),
@@ -80,6 +80,13 @@ urlpatterns = [
     # demas, y a esta llega cualquiera -- incluido el administrador de
     # plataforma, que no pertenece a ninguna empresa.
     path('cuenta/', cuenta.mi_cuenta, name='mi_cuenta'),
+    # Avisos push. El service worker y el manifest van en la raiz: un service
+    # worker solo atiende las paginas que cuelgan de donde vive.
+    path('sw.js', vistas_push.service_worker, name='push_service_worker'),
+    path('manifest.webmanifest', vistas_push.manifest, name='push_manifest'),
+    path('push/suscribir/', vistas_push.suscribir, name='push_suscribir'),
+    path('push/quitar/', vistas_push.quitar, name='push_quitar'),
+    path('push/probar/', vistas_push.probar, name='push_probar'),
 
     # La recuperacion por correo, que se pide sin haber entrado.
     path('password/reset/', cuenta.PedirElEnlace.as_view(), name='password_reset'),

@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # Canales
 EMAIL    = 'EMAIL'
 WHATSAPP = 'WHATSAPP'
+PUSH     = 'PUSH'
 
 # Eventos
 EVENT_CREATED   = 'OPERATION_CREATED'
@@ -635,6 +636,14 @@ def notify_operation_created(operation, triggered_by=None, message_body='',
                           cuerpo_wa,
                           triggered_by=triggered_by)
 
+    # El push a los operadores va aparte y en segundo plano: el resultado que
+    # pinta la pantalla de alta es el del correo al cliente, y esperar a los
+    # servicios de push de cada telefono solo la dejaria quieta.
+    from . import avisos_push
+    if avisos_push.push_disponible():
+        en_segundo_plano(avisos_push.avisar_operacion_nueva, operation,
+                         triggered_by=triggered_by)
+
     return email_sent, email_error
 
 
@@ -908,6 +917,18 @@ def avisar_mensaje_nuevo(conversation, lado, mensaje=None, triggered_by=None):
     operation = conversation.operation
     customer  = resolve_customer(operation)
     ahora     = timezone.now()
+
+    # El push a los operadores sale antes de mirar la espera del correo: no la
+    # necesita, porque los avisos de un mismo hilo se reemplazan en el telefono
+    # en vez de apilarse. Esto ya corre en segundo plano. Un fallo del push no
+    # puede quitarle el correo a nadie.
+    if lado == LADO_CLIENTE:
+        try:
+            from . import avisos_push
+            avisos_push.avisar_mensaje_del_cliente(
+                conversation, mensaje=mensaje, triggered_by=triggered_by)
+        except Exception:
+            logger.exception('Fallo el push del mensaje de %s', operation.custom_id)
 
     # El aviso va en dos direcciones y el idioma es el del que lee. Si escribio
     # la empresa, lo recibe el cliente en el idioma de su ficha. Si escribio el

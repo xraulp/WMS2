@@ -20,6 +20,7 @@ de iPhone hace zoom al entrar en el campo y descoloca la pantalla.
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% trans "My account" %} — WMS</title>
+  {% include "warehouse/partials/app_instalable.html" %}
   {% include "warehouse/partials/tema.html" %}
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
@@ -49,6 +50,9 @@ de iPhone hace zoom al entrar en el campo y descoloca la pantalla.
            border-radius:var(--r);font-family:'IBM Plex Sans',sans-serif;font-size:15px;
            font-weight:500;cursor:pointer}
     button:hover{background:var(--adark)}
+    button.secundario{background:transparent;color:var(--soft);border:1px solid var(--bdr-fuerte);margin-top:10px}
+    button.secundario:hover{background:var(--bg-sutil);color:var(--ink)}
+    button:disabled{opacity:.6;cursor:wait}
     .aviso{padding:11px 14px;border-radius:var(--r);font-size:13px;line-height:1.5;margin-bottom:14px}
     .aviso.ok{background:var(--ok-bg);color:var(--ok-ink-fuerte);border:1px solid var(--green)}
     .aviso.mal{background:var(--err-bg);color:var(--err-ink);border:1px solid var(--err-bdr)}
@@ -136,7 +140,139 @@ de iPhone hace zoom al entrar en el campo y descoloca la pantalla.
     {% endif %}
   </div>
 
+  {% if push_para_mi %}
+  {% comment %}
+  Los avisos push se activan por dispositivo, no por usuario: es el navegador
+  de este telefono el que se suscribe. Por eso el estado lo decide el script al
+  cargar, preguntandole al navegador, y no el servidor.
+  {% endcomment %}
+  <div class="tarjeta" id="push">
+    <h2>{% trans "Notifications on this device" %}</h2>
+    <p class="pie">
+      {% blocktrans %}Your phone rings when a customer writes in an operation thread or registers a new operation. Each customer has them on or off in its card, as your company agreed with them.{% endblocktrans %}
+    </p>
+    {% if not push_llave %}
+      <div class="nota alerta" style="margin-top:0">
+        {% blocktrans %}Notifications are not configured on this installation yet: the VAPID keys are missing.{% endblocktrans %}
+      </div>
+    {% else %}
+      <div id="push-estado" class="nota" style="margin-top:0;margin-bottom:14px"></div>
+      <button type="button" id="push-activar" style="display:none">{% trans "Turn on notifications" %}</button>
+      <div id="push-activos" style="display:none">
+        <button type="button" id="push-probar">{% trans "Send a test notification" %}</button>
+        <button type="button" id="push-desactivar" class="secundario">{% trans "Turn off on this device" %}</button>
+      </div>
+      <p class="nota" id="push-cuantos">
+        {% blocktrans count n=push_dispositivos %}You have {{ n }} device with notifications on.{% plural %}You have {{ n }} devices with notifications on.{% endblocktrans %}
+      </p>
+    {% endif %}
+  </div>
+  {% endif %}
+
 </div>
+
+{% if push_para_mi and push_llave %}
+<script>
+(function () {
+  var LLAVE = '{{ push_llave|escapejs }}';
+  var CSRF = '{{ csrf_token }}';
+  var T = {
+    activos:     '{{ _("Notifications are on for this device.")|escapejs }}',
+    apagados:    '{{ _("Notifications are off for this device.")|escapejs }}',
+    bloqueados:  '{{ _("This browser blocked notifications for the WMS. Allow them in the browser or phone settings and reload this page.")|escapejs }}',
+    iphone:      '{{ _("On iPhone, first add the WMS to the Home Screen: tap Share, then Add to Home Screen. Open the WMS from that icon and come back here.")|escapejs }}',
+    sinsoporte:  '{{ _("This browser cannot receive notifications. On Android use Chrome; on iPhone, iOS 16.4 or later.")|escapejs }}',
+    enviada:     '{{ _("Test sent. It should arrive in a few seconds.")|escapejs }}',
+    fallo:       '{{ _("It did not work:")|escapejs }}'
+  };
+  var estado = document.getElementById('push-estado');
+  var bActivar = document.getElementById('push-activar');
+  var bloqueActivos = document.getElementById('push-activos');
+
+  function pinta(texto, activos) {
+    estado.textContent = texto;
+    bActivar.style.display = activos === false ? '' : 'none';
+    bloqueActivos.style.display = activos === true ? '' : 'none';
+  }
+  function llaveEnBytes(b64) {
+    var relleno = '='.repeat((4 - b64.length % 4) % 4);
+    var crudo = atob((b64 + relleno).replace(/-/g, '+').replace(/_/g, '/'));
+    var bytes = new Uint8Array(crudo.length);
+    for (var i = 0; i < crudo.length; i++) bytes[i] = crudo.charCodeAt(i);
+    return bytes;
+  }
+  function manda(url, datos) {
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+      body: JSON.stringify(datos || {})
+    }).then(function (r) { return r.json().catch(function () { return {ok: false}; }); });
+  }
+  function cuenta(n) {
+    if (typeof n !== 'number') return;
+    var p = document.getElementById('push-cuantos');
+    if (p) p.textContent = p.textContent.replace(/\d+/, n);
+  }
+
+  var iPhone = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  var instalada = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    pinta(iPhone && !instalada ? T.iphone : T.sinsoporte, null);
+    return;
+  }
+  if (Notification.permission === 'denied') { pinta(T.bloqueados, null); return; }
+
+  var registro = navigator.serviceWorker.register('{% url "push_service_worker" %}', {scope: '/'});
+  registro.then(function (reg) { return reg.pushManager.getSubscription(); })
+    .then(function (s) {
+      if (s) { manda('{% url "push_suscribir" %}', suscripcionComoDatos(s)); }
+      pinta(s ? T.activos : T.apagados, !!s);
+    })
+    .catch(function (e) { pinta(T.fallo + ' ' + e, null); });
+
+  function suscripcionComoDatos(s) {
+    var d = s.toJSON();
+    d.es_movil = /Android|iPhone|iPad|iPod|Mobile/.test(navigator.userAgent);
+    return d;
+  }
+
+  bActivar.addEventListener('click', function () {
+    bActivar.disabled = true;
+    // El permiso se pide aqui, al tocar el boton: los navegadores no dejan
+    // pedirlo al abrir la pagina.
+    Notification.requestPermission().then(function (permiso) {
+      if (permiso !== 'granted') { pinta(T.bloqueados, null); return; }
+      return registro.then(function (reg) {
+        return reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: llaveEnBytes(LLAVE)});
+      }).then(function (s) {
+        return manda('{% url "push_suscribir" %}', suscripcionComoDatos(s));
+      }).then(function (r) {
+        if (r.ok) { cuenta(r.dispositivos); pinta(T.activos, true); }
+        else { pinta(T.fallo + ' ' + (r.error || ''), false); }
+      });
+    }).catch(function (e) { pinta(T.fallo + ' ' + e, false); })
+      .then(function () { bActivar.disabled = false; });
+  });
+
+  document.getElementById('push-probar').addEventListener('click', function () {
+    manda('{% url "push_probar" %}').then(function (r) {
+      estado.textContent = r.ok ? T.enviada : (T.fallo + ' ' + (r.error || ''));
+    });
+  });
+
+  document.getElementById('push-desactivar').addEventListener('click', function () {
+    registro.then(function (reg) { return reg.pushManager.getSubscription(); })
+      .then(function (s) {
+        if (!s) return {ok: true};
+        var endpoint = s.endpoint;
+        return s.unsubscribe().then(function () {
+          return manda('{% url "push_quitar" %}', {endpoint: endpoint});
+        });
+      }).then(function (r) { cuenta(r && r.dispositivos); pinta(T.apagados, false); });
+  });
+})();
+</script>
+{% endif %}
 
 </body>
 </html>

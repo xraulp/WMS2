@@ -22,7 +22,7 @@ el viejo `#modal` -- y repinta la tabla de su categoria: los clientes viven en
 .ced-dos{grid-column:span 2}
 .ced-todo{grid-column:1/-1}
 .ced-cliente{margin-top:12px;border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;
-          background:var(--bg-sutil);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 18px}
+          background:var(--bg-sutil);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px}
 .ced-cliente .ced-op{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-bottom:5px}
 .ced-cliente input[type=number]{width:70px;padding:4px 6px;border:1px solid var(--bdr);border-radius:6px;font-size:12px}
 .ced-pie{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
@@ -107,6 +107,23 @@ el viejo `#modal` -- y repinta la tabla de su categoria: los clientes viven en
       <label class="ced-op">
         <input type="checkbox" name="notify_on_documents" {% if entry.notify_on_documents %}checked{% endif %}> {% trans "When documents are added" %}
       </label>
+    </div>
+    {% comment %}
+    Estos no le llegan al cliente: suenan en el telefono de los operadores de
+    la empresa. Van aqui, cliente por cliente, porque cada empresa los usa
+    segun lo que acuerde con cada uno.
+    {% endcomment %}
+    <div>
+      <span class="ced-titulo">{% trans "Push to our operators" %}</span>
+      <label class="ced-op">
+        <input type="checkbox" name="push_on_message" {% if entry.push_on_message %}checked{% endif %}> {% trans "When this customer writes a message" %}
+      </label>
+      <label class="ced-op">
+        <input type="checkbox" name="push_on_create" {% if entry.push_on_create %}checked{% endif %}> {% trans "When an operation of this customer is registered" %}
+      </label>
+      <span style="font-size:10px;color:var(--faint)">
+        {% trans "Each operator turns them on in My account, on their phone." %}
+      </span>
     </div>
     {% comment %}
     El plazo de permanencia de este cliente. Va aqui, en su ficha, y no en una
