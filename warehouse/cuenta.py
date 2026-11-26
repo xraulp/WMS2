@@ -184,7 +184,11 @@ def mi_cuenta(request):
         # puede funcionar.
         'push_para_mi': vistas_push.puede_recibir_push(perfil),
         'push_es_cliente': bool(perfil and perfil.is_customer()),
-        'push_llave': settings.VAPID_PUBLIC_KEY if avisos_push.push_disponible() else '',
+        'push_llave': avisos_push.llave_publica() if avisos_push.push_disponible() else '',
+        # Si las llaves de Render estan mal pegadas, se dice aqui, que es donde
+        # se nota: el aviso de prueba fallaria sin explicar por que.
+        'push_problema': (avisos_push.problema_con_las_llaves()
+                          if avisos_push.push_disponible() else ''),
         'push_dispositivos': usuario.push_subscriptions.count(),
     })
 

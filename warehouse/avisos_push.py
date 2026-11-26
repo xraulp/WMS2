@@ -54,8 +54,84 @@ YA_NO_EXISTE = (404, 410)
 
 def push_disponible():
     """Si hay llaves VAPID puestas. Sin ellas no se manda nada."""
-    return bool(getattr(settings, 'VAPID_PUBLIC_KEY', '')
-                and getattr(settings, 'VAPID_PRIVATE_KEY', ''))
+    return bool(llave_publica() and llave_privada())
+
+
+# ── LAS LLAVES ────────────────────────────────────────────────────────────────
+# Se pegan a mano en el panel de Render, y ahi es facil que se cuele algo: el
+# `VAPID_PRIVATE_KEY=` de la linea que imprime el comando, unas comillas, o la
+# llave equivocada. La biblioteca, con una privada que no mide 32 bytes, intenta
+# leerla como DER y contesta con un error de ASN.1 que no dice nada. Por eso lo
+# que se pueda limpiar se limpia aqui, y lo que no, se dice en palabras.
+
+def _limpiar(valor, nombre):
+    v = (valor or '').strip().strip('"\'').strip()
+    if v.startswith(nombre + '='):
+        v = v[len(nombre) + 1:].strip().strip('"\'').strip()
+    return v
+
+
+def llave_publica():
+    return _limpiar(getattr(settings, 'VAPID_PUBLIC_KEY', ''), 'VAPID_PUBLIC_KEY')
+
+
+def llave_privada():
+    return _limpiar(getattr(settings, 'VAPID_PRIVATE_KEY', ''), 'VAPID_PRIVATE_KEY')
+
+
+def _b64url_a_bytes(texto):
+    import base64
+    import binascii
+    try:
+        return base64.urlsafe_b64decode(texto + '=' * (-len(texto) % 4))
+    except (binascii.Error, ValueError):
+        return None
+
+
+def _publica_de(privada_32):
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    clave = ec.derive_private_key(int.from_bytes(privada_32, 'big'), ec.SECP256R1())
+    return clave.public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+
+
+def problema_con_las_llaves():
+    """
+    Lo que esta mal en las llaves VAPID del entorno, en palabras, o `None` si
+    sirven: que la privada mida lo que debe y que sea pareja de la publica.
+    """
+    publica, privada = llave_publica(), llave_privada()
+    if not publica or not privada:
+        return _('The VAPID keys are missing.')
+
+    cruda = _b64url_a_bytes(privada)
+    if cruda is None or len(cruda) != 32:
+        if privada == publica or len(privada) >= 80:
+            return _('VAPID_PRIVATE_KEY holds the public key. Paste the value of '
+                     'the VAPID_PRIVATE_KEY line (43 characters) there.')
+        return _('VAPID_PRIVATE_KEY must be 43 characters long and it has '
+                 '%(n)s. Paste only what comes after the = sign, without '
+                 'spaces or quotes.') % {'n': len(privada)}
+
+    esperada = _b64url_a_bytes(publica)
+    if esperada is None or len(esperada) != 65:
+        return _('VAPID_PUBLIC_KEY must be 87 characters long and it has '
+                 '%(n)s.') % {'n': len(publica)}
+    try:
+        pareja = _publica_de(cruda) == esperada
+    except ValueError:
+        pareja = False
+    if not pareja:
+        return _('The two VAPID keys are not a pair: they came from different '
+                 'runs of the command. Paste both values from the same run.')
+    return None
+
+
+def _firma():
+    """La llave privada lista para firmar, ya limpia."""
+    from py_vapid import Vapid02
+    return Vapid02.from_raw(llave_privada().encode())
 
 
 def contacto_vapid():
@@ -100,7 +176,7 @@ def ruta_de_la_operacion(operation, es_movil):
     return f'{base}?tab=digital&q={operation.custom_id}'
 
 
-def _enviar_uno(suscripcion, datos):
+def _enviar_uno(suscripcion, datos, firma):
     """
     Manda un aviso a un dispositivo. Devuelve `None` si salio, o el texto del
     error. Si el servicio dice que la suscripcion ya no existe, se borra.
@@ -114,7 +190,7 @@ def _enviar_uno(suscripcion, datos):
                 'keys': {'p256dh': suscripcion.p256dh, 'auth': suscripcion.auth},
             },
             data=json.dumps(datos),
-            vapid_private_key=settings.VAPID_PRIVATE_KEY,
+            vapid_private_key=firma,
             # Un dict nuevo en cada envio: `webpush` le agrega `aud` y `exp`, y
             # con uno compartido el segundo dispositivo heredaria el `aud` del
             # primero, que puede ser de otro fabricante.
@@ -155,11 +231,19 @@ def mandar(destinatarios, componer):
                      .filter(user_id__in=list(idioma_de))
                      .select_related('user'))
 
+    # Con llaves mal pegadas no sale ninguno, y el motivo se dice una vez en
+    # palabras en vez de repetir por dispositivo el error de la biblioteca.
+    problema = problema_con_las_llaves()
+    if problema:
+        logger.error('Push sin enviar: %s', problema)
+        return [], [problema]
+    firma = _firma()
+
     llego, errores = [], []
     for s in suscripciones:
         with en_idioma(idioma_de.get(s.user_id, '')):
             datos = componer(idioma_de.get(s.user_id, ''), s.es_movil)
-        error = _enviar_uno(s, datos)
+        error = _enviar_uno(s, datos, firma)
         if error:
             errores.append(error)
             logger.warning('Push a %s fallo: %s', s.user, error)

@@ -160,6 +160,12 @@ de iPhone hace zoom al entrar en el campo y descoloca la pantalla.
         {% blocktrans %}Notifications are not configured on this installation yet: the VAPID keys are missing.{% endblocktrans %}
       </div>
     {% else %}
+      {% if push_problema and not push_es_cliente %}
+      <div class="nota alerta" style="margin-top:0;margin-bottom:14px">
+        {% trans "The notification keys on the server are wrong, so no notification can be sent:" %}
+        {{ push_problema }}
+      </div>
+      {% endif %}
       <div id="push-estado" class="nota" style="margin-top:0;margin-bottom:14px"></div>
       <button type="button" id="push-activar" style="display:none">{% trans "Turn on notifications" %}</button>
       <div id="push-activos" style="display:none">

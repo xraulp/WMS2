@@ -4822,3 +4822,23 @@ msgstr "Cada usuario del cliente los activa en «Mi cuenta», desde su teléfono
 
 msgid "Your phone rings when the warehouse registers one of your operations, if the warehouse has turned it on for your company."
 msgstr "Tu teléfono suena cuando la bodega registra una de tus operaciones, si la bodega lo tiene activado para tu empresa."
+
+msgid "The VAPID keys are missing."
+msgstr "Faltan las llaves VAPID."
+
+msgid "VAPID_PRIVATE_KEY holds the public key. Paste the value of the VAPID_PRIVATE_KEY line (43 characters) there."
+msgstr "En VAPID_PRIVATE_KEY quedó la llave pública. Ahí va el valor de la línea VAPID_PRIVATE_KEY (43 caracteres)."
+
+#, python-format
+msgid "VAPID_PRIVATE_KEY must be 43 characters long and it has %(n)s. Paste only what comes after the = sign, without spaces or quotes."
+msgstr "VAPID_PRIVATE_KEY debe tener 43 caracteres y tiene %(n)s. Pega solo lo que va después del signo =, sin espacios ni comillas."
+
+#, python-format
+msgid "VAPID_PUBLIC_KEY must be 87 characters long and it has %(n)s."
+msgstr "VAPID_PUBLIC_KEY debe tener 87 caracteres y tiene %(n)s."
+
+msgid "The two VAPID keys are not a pair: they came from different runs of the command. Paste both values from the same run."
+msgstr "Las dos llaves VAPID no son pareja: salieron de corridas distintas del comando. Pega los dos valores de la misma corrida."
+
+msgid "The notification keys on the server are wrong, so no notification can be sent:"
+msgstr "Las llaves de los avisos en el servidor están mal, así que no puede salir ningún aviso:"

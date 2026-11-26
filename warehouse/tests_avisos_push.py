@@ -14,10 +14,11 @@ from .models import (Catalog, Conversation, LADO_CLIENTE, LADO_TENANT, Message,
                      NotificationLog, PushSubscription, Tenant, UserProfile,
                      WarehouseOperation)
 
-# Un par valido generado para las pruebas; no es el de ningun entorno real.
+# Un par valido generado solo para las pruebas; no es el de ningun entorno real.
+PUBLICA = 'BACv9VfzJMPFJ8onwnVsauH0HZrbSTyEqrwpY_N0F6CY0HmQTzgnNjkrPR9VNGVg1qj5wp4P2rC0vLo8GIZ5n7s'
+PRIVADA = 'iqn3ErJ-GBqrX8mgrp8kdIO6vJSumznqktyxOSpfS_w'
 CON_LLAVES = override_settings(
-    VAPID_PUBLIC_KEY='BCXyGh7BjammQr__GR5jrJdODpIcdO6U0oLSzkiVE6-23M2rBNvgKRM65_mvyPMw9AUjDMGsrz3peMYEhbD2hmA',
-    VAPID_PRIVATE_KEY='x' * 43,
+    VAPID_PUBLIC_KEY=PUBLICA, VAPID_PRIVATE_KEY=PRIVADA,
     VAPID_SUBJECT='mailto:pruebas@example.com',
 )
 SIN_LLAVES = override_settings(VAPID_PUBLIC_KEY='', VAPID_PRIVATE_KEY='')
@@ -201,6 +202,65 @@ class AlClienteTests(Base):
                                               push_cliente_on_create=True)
         avisos_push.avisar_al_cliente_operacion(self._operacion(sin_usuarios))
         self.assertEqual(self._logs().get().detail, 'no_customer_users')
+
+
+class LlavesMalPegadasTests(Base):
+    """
+    Lo que paso en produccion el 26 nov: la privada mal pegada hacia que la
+    biblioteca contestara con un error de ASN.1 que no decia que hacer.
+    """
+
+    def _problema(self, **llaves):
+        with override_settings(**llaves):
+            return avisos_push.problema_con_las_llaves()
+
+    def test_el_par_bueno_no_tiene_problema(self):
+        self.assertIsNone(self._problema(VAPID_PUBLIC_KEY=PUBLICA, VAPID_PRIVATE_KEY=PRIVADA))
+
+    def test_se_limpia_el_prefijo_las_comillas_y_los_espacios(self):
+        self.assertIsNone(self._problema(
+            VAPID_PUBLIC_KEY=f' VAPID_PUBLIC_KEY={PUBLICA} ',
+            VAPID_PRIVATE_KEY=f'"VAPID_PRIVATE_KEY={PRIVADA}"'))
+
+    def test_la_publica_pegada_como_privada(self):
+        problema = self._problema(VAPID_PUBLIC_KEY=PUBLICA, VAPID_PRIVATE_KEY=PUBLICA)
+        self.assertIn('public key', problema)
+
+    def test_la_privada_cortada(self):
+        problema = self._problema(VAPID_PUBLIC_KEY=PUBLICA, VAPID_PRIVATE_KEY=PRIVADA[:30])
+        self.assertIn('43', problema)
+        self.assertIn('30', problema)
+
+    def test_llaves_que_no_son_pareja(self):
+        # 32 bytes de 0x01: una privada valida inventada, que no es la de PUBLICA.
+        otra = 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE'
+        problema = self._problema(VAPID_PUBLIC_KEY=PUBLICA, VAPID_PRIVATE_KEY=otra)
+        self.assertIn('not a pair', problema)
+
+    def test_con_llaves_malas_no_se_intenta_y_queda_el_motivo(self):
+        self._dispositivo(self.beto)
+        with override_settings(VAPID_PUBLIC_KEY=PUBLICA, VAPID_PRIVATE_KEY=PUBLICA), \
+                patch('pywebpush.webpush') as webpush:
+            avisos_push.avisar_operacion_nueva(self._operacion())
+        webpush.assert_not_called()
+        log = self._logs().get()
+        self.assertEqual(log.status, 'FAILED')
+        self.assertIn('public key', log.detail)
+
+    def test_mi_cuenta_se_lo_dice_al_operador(self):
+        self.client.force_login(self.ana)
+        with override_settings(VAPID_PUBLIC_KEY=PUBLICA, VAPID_PRIVATE_KEY=PRIVADA[:30]):
+            r = self.client.get('/cuenta/')
+        self.assertContains(r, 'keys on the server are wrong')
+
+    def test_firma_de_verdad_con_la_llave_limpia(self):
+        """Sin doble: la firma real sale con la privada que traia el prefijo."""
+        with override_settings(VAPID_PUBLIC_KEY=PUBLICA,
+                               VAPID_PRIVATE_KEY='VAPID_PRIVATE_KEY=' + PRIVADA):
+            firma = avisos_push._firma()
+            encabezados = firma.sign({'sub': 'mailto:pruebas@example.com',
+                                      'aud': 'https://fcm.googleapis.com'})
+        self.assertIn(PUBLICA, encabezados['Authorization'])
 
 
 @SIN_LLAVES
