@@ -643,6 +643,8 @@ def notify_operation_created(operation, triggered_by=None, message_body='',
     if avisos_push.push_disponible():
         en_segundo_plano(avisos_push.avisar_operacion_nueva, operation,
                          triggered_by=triggered_by)
+        en_segundo_plano(avisos_push.avisar_al_cliente_operacion, operation,
+                         triggered_by=triggered_by)
 
     return email_sent, email_error
 

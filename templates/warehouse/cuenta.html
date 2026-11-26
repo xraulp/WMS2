@@ -149,7 +149,11 @@ de iPhone hace zoom al entrar en el campo y descoloca la pantalla.
   <div class="tarjeta" id="push">
     <h2>{% trans "Notifications on this device" %}</h2>
     <p class="pie">
+      {% if push_es_cliente %}
+      {% blocktrans %}Your phone rings when the warehouse registers one of your operations, if the warehouse has turned it on for your company.{% endblocktrans %}
+      {% else %}
       {% blocktrans %}Your phone rings when a customer writes in an operation thread or registers a new operation. Each customer has them on or off in its card, as your company agreed with them.{% endblocktrans %}
+      {% endif %}
     </p>
     {% if not push_llave %}
       <div class="nota alerta" style="margin-top:0">

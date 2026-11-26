@@ -177,6 +177,10 @@ class Catalog(models.Model):
                             verbose_name='Push a operadores: mensaje nuevo')
     push_on_create      = models.BooleanField(default=False,
                             verbose_name='Push a operadores: operacion nueva')
+    # Y el que si le llega al cliente: suena en el telefono de sus usuarios
+    # cuando se registra una operacion suya. Tambien nace apagado.
+    push_cliente_on_create = models.BooleanField(default=False,
+                            verbose_name='Push al cliente: operacion registrada')
 
     # Los dias que la mercancia de este cliente puede estar en bodega antes de
     # que la pantalla avise. Vacio significa "lo que diga la empresa": asi el

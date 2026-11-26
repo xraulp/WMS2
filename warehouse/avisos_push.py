@@ -8,14 +8,19 @@ su fabricante -- Google, Apple o Mozilla --; el servidor le manda ahi el aviso
 cifrado y firmado con las llaves VAPID de `settings`. Sin llaves no se manda
 nada y todo lo demas sigue igual.
 
-Hoy hay dos eventos, los dos hacia los operadores de la empresa:
+Hoy hay tres eventos. Dos van a los operadores de la empresa:
 
 - **Mensaje nuevo** de un cliente en el hilo de una operacion.
 - **Operacion nueva** de un cliente.
 
+Y uno a los usuarios del propio cliente:
+
+- **Operacion registrada**: la suya, igual que el correo de alta.
+
 Cada empresa decide en la ficha de cada cliente cuales suenan
-(`Catalog.push_on_message` y `Catalog.push_on_create`), porque es algo que
-acuerda con cada uno: al que paga atencion inmediata se le prenden.
+(`Catalog.push_on_message`, `push_on_create` y `push_cliente_on_create`),
+porque es algo que acuerda con cada uno: al que paga atencion inmediata se le
+prenden.
 
 Push es **un canal mas**, no el que reemplaza al correo: el servicio del
 fabricante no garantiza la entrega, y un telefono con ahorro de bateria puede
@@ -164,13 +169,14 @@ def mandar(destinatarios, componer):
 
 
 def _avisar_y_anotar(operation, customer, evento, destinatarios, componer,
-                     titulo_para_la_bitacora, triggered_by=None):
+                     titulo_para_la_bitacora, triggered_by=None,
+                     sin_nadie='no_operators'):
     """Manda y deja su renglon en la bitacora de avisos, salga o no."""
     from .notifications import FAILED, SENT, SKIPPED, log_notification
 
     if not destinatarios:
         log_notification(operation, customer, PUSH, evento, SKIPPED,
-                         subject=titulo_para_la_bitacora, detail='no_operators',
+                         subject=titulo_para_la_bitacora, detail=sin_nadie,
                          triggered_by=triggered_by)
         return False
     usuarios = [u.pk for u, _idioma in destinatarios]
@@ -222,6 +228,56 @@ def avisar_operacion_nueva(operation, triggered_by=None):
         operation, customer, EVENT_CREATED,
         operadores_de(operation.tenant, excepto=triggered_by), componer,
         f'{quien} · {operation.custom_id}', triggered_by=triggered_by)
+
+
+def usuarios_del_cliente(customer):
+    """
+    Los usuarios activos de ese cliente, con su idioma: el de su perfil, y si
+    no eligio, el de la ficha del cliente, que es en el que le llegan los
+    correos.
+    """
+    if customer is None:
+        return []
+    perfiles = (UserProfile.objects
+                .filter(customer=customer, role='customer', user__is_active=True)
+                .select_related('user'))
+    idioma_de_la_ficha = getattr(customer, 'language', '') or ''
+    return [(p.user, p.language or idioma_de_la_ficha) for p in perfiles]
+
+
+def avisar_al_cliente_operacion(operation, triggered_by=None):
+    """
+    Push a los usuarios del cliente de que se registro una operacion suya.
+
+    Es el mismo aviso que ya le llega por correo, en corto. Sale solo si la
+    empresa se lo prendio en su ficha (`push_cliente_on_create`).
+    """
+    from .notifications import EVENT_CREATED, nombre_del_tipo, resolve_customer
+    from .utils import nombre_corto
+
+    if not push_disponible():
+        return False
+    customer = resolve_customer(operation)
+    if customer is None or not customer.push_cliente_on_create:
+        return False
+
+    empresa = nombre_corto(operation.tenant.name) if operation.tenant else 'WMS'
+
+    def componer(_idioma, es_movil):
+        partes = [nombre_del_tipo(operation.operation_type), operation.custom_id]
+        if operation.po_order:
+            partes.append(f'PO {operation.po_order}')
+        return {
+            'title': f"{_('Operation registered')} · {empresa}",
+            'body':  ' · '.join(p for p in partes if p),
+            'tag':   f'op-{operation.pk}',
+            'url':   ruta_de_la_operacion(operation, es_movil),
+        }
+
+    return _avisar_y_anotar(
+        operation, customer, EVENT_CREATED, usuarios_del_cliente(customer),
+        componer, f'{_("Customer")}: {nombre_corto(customer.name)} · {operation.custom_id}',
+        triggered_by=triggered_by, sin_nadie='no_customer_users')
 
 
 def avisar_mensaje_del_cliente(conversation, mensaje=None, triggered_by=None):

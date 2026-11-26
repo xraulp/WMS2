@@ -8,6 +8,7 @@ Los avisos push suenan en el teléfono de los operadores de una empresa. Usan **
 |---|---|---|
 | Un cliente escribe en el hilo de una operación | Todos los operadores activos de la empresa | Ficha del cliente → «Push a nuestros operadores» → «Cuando este cliente escribe un mensaje» |
 | Se registra una operación de un cliente | Todos los operadores menos quien la registró | Ficha del cliente → «Cuando se registra una operación de este cliente» |
+| Se registra una operación de un cliente | Los usuarios de **ese cliente** | Ficha del cliente → «Push al cliente» → «Cuando se registra una operación suya» |
 
 - **Por cliente.** Cada empresa decide cliente por cliente, según lo que acuerde con cada uno. Las dos casillas nacen apagadas.
 - **El correo sigue saliendo igual.** Push es un canal más, porque el servicio del fabricante no garantiza la entrega.
@@ -30,7 +31,7 @@ Sin llaves, nada cambia: no se manda push, y «Mi cuenta» dice que falta config
 
 ## Activarlos en un teléfono
 
-Cada operador lo hace en su teléfono: **Mi cuenta → Avisos en este dispositivo → Activar avisos**, y luego acepta el permiso. Ahí mismo está «Mandar un aviso de prueba».
+Cada operador, y cada usuario de un cliente, lo hace en su teléfono: **Mi cuenta → Avisos en este dispositivo → Activar avisos**, y luego acepta el permiso. Ahí mismo está «Mandar un aviso de prueba».
 
 - **Android:** funciona en Chrome tal cual.
 - **iPhone:** necesita iOS 16.4 o posterior, y antes hay que **agregar el WMS a la pantalla de inicio** (Compartir → Agregar a pantalla de inicio). Después se abre el WMS desde ese ícono y se activan los avisos ahí. Desde Safari normal no se puede.

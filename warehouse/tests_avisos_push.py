@@ -146,6 +146,63 @@ class OperacionNuevaTests(Base):
         self.assertEqual(webpush.call_count, 1)
 
 
+@CON_LLAVES
+class AlClienteTests(Base):
+    """El push que si le llega al cliente: su operacion quedo registrada."""
+
+    def setUp(self):
+        Catalog.objects.filter(pk=self.cliente.pk).update(push_cliente_on_create=True)
+        self.cliente.refresh_from_db()
+
+    def test_le_suena_a_los_usuarios_del_cliente(self):
+        self._dispositivo(self.del_cliente)
+        op = self._operacion()
+        with patch('pywebpush.webpush') as webpush:
+            self.assertTrue(avisos_push.avisar_al_cliente_operacion(op, triggered_by=self.ana))
+        self.assertEqual(webpush.call_count, 1)
+        enviado = webpush.call_args.kwargs
+        self.assertIn('cli-1', enviado['subscription_info']['endpoint'])
+        datos = json.loads(enviado['data'])
+        self.assertIn('Almacenes del Norte', datos['title'])
+        self.assertIn('ED261125-0001', datos['body'])
+        self.assertEqual(self._logs().get().recipient, 'cli')
+
+    def test_no_le_llega_a_otro_cliente(self):
+        otro = Catalog.objects.create(tenant=self.tenant, category='CUSTOMER',
+                                      name='Otro', push_cliente_on_create=True)
+        de_otro = User.objects.create_user('otro_cli', password='x')
+        UserProfile.objects.create(user=de_otro, tenant=self.tenant,
+                                   role='customer', customer=otro)
+        self._dispositivo(de_otro)
+        with patch('pywebpush.webpush') as webpush:
+            avisos_push.avisar_al_cliente_operacion(self._operacion())
+        webpush.assert_not_called()
+
+    def test_apagado_en_la_ficha_no_suena(self):
+        Catalog.objects.filter(pk=self.cliente.pk).update(push_cliente_on_create=False)
+        self.cliente.refresh_from_db()
+        self._dispositivo(self.del_cliente)
+        with patch('pywebpush.webpush') as webpush:
+            self.assertFalse(avisos_push.avisar_al_cliente_operacion(self._operacion()))
+        webpush.assert_not_called()
+
+    def test_el_alta_le_avisa_al_cliente_y_a_los_operadores(self):
+        self._dispositivo(self.del_cliente)
+        self._dispositivo(self.beto)
+        with patch('pywebpush.webpush') as webpush:
+            notifications.notify_operation_created(self._operacion(), triggered_by=self.ana)
+        destinos = sorted(c.kwargs['subscription_info']['endpoint'].rsplit('/', 1)[1]
+                          for c in webpush.call_args_list)
+        self.assertEqual(destinos, ['beto-1', 'cli-1'])
+
+    def test_sin_usuarios_queda_anotado(self):
+        sin_usuarios = Catalog.objects.create(tenant=self.tenant, category='CUSTOMER',
+                                              name='Sin usuarios',
+                                              push_cliente_on_create=True)
+        avisos_push.avisar_al_cliente_operacion(self._operacion(sin_usuarios))
+        self.assertEqual(self._logs().get().detail, 'no_customer_users')
+
+
 @SIN_LLAVES
 class SinLlavesTests(Base):
 
@@ -229,8 +286,15 @@ class DispositivosTests(Base):
         self._post('/push/suscribir/', self.SUSCRIPCION)
         self.assertEqual(PushSubscription.objects.get().user, self.beto)
 
-    def test_el_cliente_no_puede_activarlos(self):
+    def test_el_usuario_del_cliente_tambien_puede_activarlos(self):
         self.client.force_login(self.del_cliente)
+        r = self._post('/push/suscribir/', self.SUSCRIPCION)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(PushSubscription.objects.get().user, self.del_cliente)
+
+    def test_quien_no_tiene_empresa_no_puede_activarlos(self):
+        sin_empresa = User.objects.create_user('suelto', password='x')
+        self.client.force_login(sin_empresa)
         r = self._post('/push/suscribir/', self.SUSCRIPCION)
         self.assertEqual(r.status_code, 403)
         self.assertFalse(PushSubscription.objects.exists())
@@ -273,10 +337,11 @@ class DispositivosTests(Base):
         r = self.client.get('/cuenta/')
         self.assertContains(r, 'push-activar')
 
-    def test_mi_cuenta_no_los_ofrece_al_cliente(self):
+    def test_mi_cuenta_los_ofrece_al_cliente_con_su_texto(self):
         self.client.force_login(self.del_cliente)
         r = self.client.get('/cuenta/')
-        self.assertNotContains(r, 'push-activar')
+        self.assertContains(r, 'push-activar')
+        self.assertContains(r, 'registers one of your operations')
 
     @SIN_LLAVES
     def test_sin_llaves_mi_cuenta_dice_que_falta_configurarlo(self):
@@ -292,9 +357,10 @@ class FichaDelClienteTests(Base):
         self.client.force_login(self.beto)
         self.client.post(f'/catalog/{self.cliente.pk}/edit/', {
             'name': self.cliente.name, 'notify_email': 'on',
-            'push_on_create': 'on'})
+            'push_on_create': 'on', 'push_cliente_on_create': 'on'})
         self.cliente.refresh_from_db()
         self.assertTrue(self.cliente.push_on_create)
+        self.assertTrue(self.cliente.push_cliente_on_create)
         self.assertFalse(self.cliente.push_on_message)
 
     def test_nacen_apagadas(self):

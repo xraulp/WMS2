@@ -4810,3 +4810,15 @@ msgid "You have %(n)s device with notifications on."
 msgid_plural "You have %(n)s devices with notifications on."
 msgstr[0] "Tienes %(n)s dispositivo con avisos activos."
 msgstr[1] "Tienes %(n)s dispositivos con avisos activos."
+
+msgid "Push to the customer"
+msgstr "Push al cliente"
+
+msgid "When one of its operations is registered"
+msgstr "Cuando se registra una operación suya"
+
+msgid "Each user of the customer turns them on in My account, on their phone."
+msgstr "Cada usuario del cliente los activa en «Mi cuenta», desde su teléfono."
+
+msgid "Your phone rings when the warehouse registers one of your operations, if the warehouse has turned it on for your company."
+msgstr "Tu teléfono suena cuando la bodega registra una de tus operaciones, si la bodega lo tiene activado para tu empresa."

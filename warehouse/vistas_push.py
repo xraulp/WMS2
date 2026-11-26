@@ -56,9 +56,20 @@ def manifest(request):
     return HttpResponse(json.dumps(datos), content_type='application/manifest+json')
 
 
-def _es_operador(usuario):
+def puede_recibir_push(perfil):
+    """
+    Quien tiene algun aviso push que recibir: los operadores de la empresa y
+    los usuarios de un cliente. El administrador de plataforma, que no
+    pertenece a ninguna empresa, no.
+    """
+    if perfil is None or perfil.tenant_id is None:
+        return False
+    return perfil.is_operator() or (perfil.is_customer() and perfil.customer_id is not None)
+
+
+def _perfil_con_push(usuario):
     perfil = UserProfile.objects.filter(user=usuario).first()
-    return perfil if (perfil and perfil.is_operator()) else None
+    return perfil if puede_recibir_push(perfil) else None
 
 
 @login_required
@@ -67,12 +78,11 @@ def suscribir(request):
     """
     Da de alta el dispositivo desde el que se pulso «Activar avisos».
 
-    Solo operadores, por ahora: los dos avisos que existen son para ellos, y
-    a un cliente suscrito no le llegaria nada. Si el mismo navegador ya estaba
+    Operadores y usuarios de cliente. Si el mismo navegador ya estaba
     suscrito -- otro usuario en la misma computadora, o el mismo que volvio a
     pulsar --, la suscripcion pasa a quien la pide ahora.
     """
-    perfil = _es_operador(request.user)
+    perfil = _perfil_con_push(request.user)
     if perfil is None:
         return JsonResponse({'ok': False, 'error': _('Permission denied.')}, status=403)
     if not avisos_push.push_disponible():

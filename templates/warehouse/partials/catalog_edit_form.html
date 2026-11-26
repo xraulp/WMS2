@@ -126,6 +126,19 @@ el viejo `#modal` -- y repinta la tabla de su categoria: los clientes viven en
       </span>
     </div>
     {% comment %}
+    Este si le llega al cliente: a los telefonos de sus usuarios, cuando cada
+    uno lo activa en su «Mi cuenta».
+    {% endcomment %}
+    <div>
+      <span class="ced-titulo">{% trans "Push to the customer" %}</span>
+      <label class="ced-op">
+        <input type="checkbox" name="push_cliente_on_create" {% if entry.push_cliente_on_create %}checked{% endif %}> {% trans "When one of its operations is registered" %}
+      </label>
+      <span style="font-size:10px;color:var(--faint)">
+        {% trans "Each user of the customer turns them on in My account, on their phone." %}
+      </span>
+    </div>
+    {% comment %}
     El plazo de permanencia de este cliente. Va aqui, en su ficha, y no en una
     pantalla de configuracion aparte, porque es una condicion suya: una semana
     para uno es lo normal y para otro ya es una factura de almacenaje.
