@@ -460,6 +460,16 @@ TWILIO_ACCOUNT_SID   = os.environ.get('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN    = os.environ.get('TWILIO_AUTH_TOKEN')
 TWILIO_WHATSAPP_FROM = os.environ.get('TWILIO_WHATSAPP_FROM')
 
+# WhatsApp por la Cloud API de Meta (`warehouse/whatsapp.py`), que sustituye a
+# Twilio. El token es el del usuario del sistema (permanente) y el Phone number
+# ID el del número que envía. El App Secret firma los avisos del webhook y el
+# verify token es una palabra cualquiera que se pone igual aquí y en la app de
+# Meta al dar de alta la URL. Sin el App Secret el webhook no acepta nada.
+WHATSAPP_TOKEN                = os.getenv('WHATSAPP_TOKEN', '')
+WHATSAPP_PHONE_NUMBER_ID      = os.getenv('WHATSAPP_PHONE_NUMBER_ID', '')
+WHATSAPP_APP_SECRET           = os.getenv('WHATSAPP_APP_SECRET', '')
+WHATSAPP_WEBHOOK_VERIFY_TOKEN = os.getenv('WHATSAPP_WEBHOOK_VERIFY_TOKEN', '')
+
 # ====================================================
 # CONFIGURACIÓN POR DEFECTO DE DJANGO
 # ====================================================

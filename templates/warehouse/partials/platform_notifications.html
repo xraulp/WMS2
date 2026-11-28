@@ -52,7 +52,7 @@
       <td style="font-size:11px">{{ r.get_channel_display }}</td>
       <td style="font-size:11px">{{ r.get_event_display }}</td>
       <td>
-        <span class="badge {% if r.status == 'SENT' or r.status == 'DELIVERED' %}b-entry{% elif r.status == 'FAILED' or r.status == 'BOUNCED' or r.status == 'COMPLAINED' %}b-exit{% else %}b-sent{% endif %}">
+        <span class="badge {% if r.status == 'SENT' or r.status == 'DELIVERED' or r.status == 'READ' %}b-entry{% elif r.status == 'FAILED' or r.status == 'BOUNCED' or r.status == 'COMPLAINED' %}b-exit{% else %}b-sent{% endif %}">
           {{ r.get_status_display }}
         </span>
       </td>

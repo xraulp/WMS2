@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, cuenta, webhooks, carga_por_enlace, vistas_push
+from . import views, cuenta, webhooks, carga_por_enlace, vistas_push, whatsapp
 
 urlpatterns = [
     path('', views.login_view, name='login'),
@@ -100,6 +100,7 @@ urlpatterns = [
     # Lo que Resend cuenta de un correo despues de aceptarlo: entregas y
     # rebotes. Lo llama Resend, no un navegador; lo protege la firma.
     path('webhooks/resend/', webhooks.resend_webhook, name='resend_webhook'),
+    path('webhooks/whatsapp/', whatsapp.whatsapp_webhook, name='whatsapp_webhook'),
 
     # Como quiere ver la pantalla cada quien.
     path('preferencias/tema/', views.cambiar_tema, name='cambiar_tema'),

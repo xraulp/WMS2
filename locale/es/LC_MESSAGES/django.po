@@ -1716,6 +1716,9 @@ msgstr "Hoja de impuestos"
 msgid "Delivered"
 msgstr "Entregada"
 
+msgid "Read"
+msgstr "Leída"
+
 msgid "Bounced"
 msgstr "Rebotada"
 

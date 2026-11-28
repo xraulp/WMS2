@@ -1824,6 +1824,8 @@ class NotificationLog(models.Model):
         ('FAILED',     _('Failed')),
         ('SKIPPED',    _('Skipped')),
         ('DELIVERED',  _('Delivered')),
+        # Solo WhatsApp lo cuenta: el correo no tiene acuse de lectura fiable.
+        ('READ',       _('Read')),
         ('BOUNCED',    _('Bounced')),
         ('COMPLAINED', _('Marked as spam')),
     ]
